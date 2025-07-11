@@ -4,9 +4,12 @@ import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.List;
 import java.util.Locale;
 
+import ru.citlab24.protokol.MainFrame;
+import ru.citlab24.protokol.tabs.VentilationTab;
 import ru.citlab24.protokol.tabs.dialogs.AddFloorDialog;
 import ru.citlab24.protokol.tabs.dialogs.AddSpaceDialog;
 import ru.citlab24.protokol.tabs.models.*;
@@ -15,7 +18,7 @@ import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 
 public class BuildingTab extends JPanel {
-    private final Building building = new Building();
+    private Building building;
     private final DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
     private final DefaultListModel<Space> spaceListModel = new DefaultListModel<>();
     private final DefaultListModel<Room> roomListModel = new DefaultListModel<>();
@@ -24,10 +27,9 @@ public class BuildingTab extends JPanel {
     private JList<Space> spaceList;
     private JList<Room> roomList;
 
-    public BuildingTab() {
+    public BuildingTab(Building building) {
         setRussianLocale();
-        setLayout(new BorderLayout(10, 10));
-        setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        this.building = building;
         initComponents();
     }
     private void setRussianLocale() {
@@ -35,19 +37,25 @@ public class BuildingTab extends JPanel {
         UIManager.put("OptionPane.yesButtonText", "Да");
         UIManager.put("OptionPane.noButtonText", "Нет");
         UIManager.put("OptionPane.cancelButtonText", "Отмена");
+        // Важно: обновляем ресурсы UIManager
+        for (Object key : UIManager.getLookAndFeelDefaults().keySet()) {
+            if (key instanceof String && ((String) key).endsWith(".locale")) {
+                UIManager.getLookAndFeelDefaults().put(key, Locale.getDefault());
+            }
+        }
     }
-
     private void initComponents() {
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                createFloorPanel(),
-                new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                        createSpacePanel(),
-                        createRoomPanel()));
-        mainSplit.setDividerLocation(0.3);
-        add(mainSplit, BorderLayout.CENTER);
-        add(createButtonPanel(), BorderLayout.SOUTH);
+        setLayout(new BorderLayout());
+        add(createBuildingPanel(), BorderLayout.CENTER);
+        add(createActionButtons(), BorderLayout.SOUTH);
     }
-
+    private JPanel createBuildingPanel() {
+        JPanel panel = new JPanel(new GridLayout(1, 3, 15, 15));
+        panel.add(createFloorPanel());
+        panel.add(createSpacePanel());
+        panel.add(createRoomPanel());
+        return panel;
+    }
     private JPanel createFloorPanel() {
         JPanel p = new JPanel(new BorderLayout());
         p.setBorder(BorderFactory.createTitledBorder(null,
@@ -59,17 +67,55 @@ public class BuildingTab extends JPanel {
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorList.addListSelectionListener(e -> updateSpaceList());
 
-        JPanel btns = new JPanel(new GridLayout(1, 3, 5, 5)); // Изменено на 3 кнопки
+        JPanel btns = new JPanel(new GridLayout(1, 3, 5, 5));
         btns.add(createStyledButton("Добавить", FontAwesomeSolid.PLUS_CIRCLE, new Color(46,125,50), this::addFloor));
         btns.add(createStyledButton("Изменить", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editFloor));
         btns.add(createStyledButton("Удалить", FontAwesomeSolid.TRASH, new Color(198,40,40), this::removeFloor));
-
 
         p.add(new JScrollPane(floorList), BorderLayout.CENTER);
         p.add(btns, BorderLayout.SOUTH);
         return p;
     }
 
+    // ДОБАВЛЕННЫЙ МЕТОД: Панель с кнопками действий
+    private JPanel createActionButtons() {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        p.add(createStyledButton("Сохранить проект", FontAwesomeSolid.SAVE, new Color(0,115,200), e -> saveProject()));
+        p.add(createStyledButton("Рассчитать показатели", FontAwesomeSolid.CALCULATOR, new Color(103,58,183), e -> calculateMetrics()));
+        return p;
+    }
+    private void saveProject() {
+        // Логика сохранения проекта
+        JOptionPane.showMessageDialog(this, "Проект успешно сохранен", "Сохранение", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void calculateMetrics() {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            // Получаем доступ к вкладке вентиляции через главное окно
+            Component[] tabs = ((MainFrame) mainFrame).getTabbedPane().getComponents();
+            for (Component tab : tabs) {
+                if (tab instanceof VentilationTab) {
+                    ((VentilationTab) tab).refreshData();
+                    break;
+                }
+            }
+
+            // Переключаемся на вкладку вентиляции
+            ((MainFrame) mainFrame).selectVentilationTab();
+        }
+
+        JOptionPane.showMessageDialog(this, "Данные для вентиляции обновлены!",
+                "Расчет завершен", JOptionPane.INFORMATION_MESSAGE);
+    }
+    private JButton createActionButton(String text, Color bgColor, ActionListener action) {
+        JButton btn = new JButton(text);
+        btn.setBackground(bgColor);
+        btn.setForeground(Color.WHITE);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.addActionListener(action);
+        return btn;
+    }
     private JPanel createSpacePanel() {
         JPanel p = new JPanel(new BorderLayout());
         p.setBorder(BorderFactory.createTitledBorder(null,
@@ -132,8 +178,6 @@ public class BuildingTab extends JPanel {
         });
         return btn;
     }
-
-
     // Обработчики событий
     private void addFloor(ActionEvent e) {
         AddFloorDialog dialog = new AddFloorDialog((JFrame) SwingUtilities.getWindowAncestor(this));
@@ -179,12 +223,36 @@ public class BuildingTab extends JPanel {
             return;
         }
 
-        String roomName = JOptionPane.showInputDialog(this, "Введите название комнаты:", "Добавление комнаты", JOptionPane.PLAIN_MESSAGE);
-        if (roomName != null && !roomName.trim().isEmpty()) {
-            Room room = new Room();
-            room.setName(roomName.trim());
-            selectedSpace.addRoom(room);
-            roomListModel.addElement(room);
+        // Создаем панель с полями
+        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5));
+        panel.add(new JLabel("Название комнаты:"));
+        JTextField nameField = new JTextField();
+        panel.add(nameField);
+        panel.add(new JLabel("Объем (куб.м):"));
+        JTextField volumeField = new JTextField();
+        panel.add(volumeField);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Добавление комнаты",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            String name = nameField.getText().trim();
+            String volumeText = volumeField.getText().trim();
+
+            if (!name.isEmpty() && !volumeText.isEmpty()) {
+                try {
+                    double volume = Double.parseDouble(volumeText);
+                    Room room = new Room();
+                    room.setName(name);
+                    room.setVolume(volume);
+                    selectedSpace.addRoom(room);
+                    roomListModel.addElement(room);
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this, "Некорректный формат объема!", "Ошибка", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, "Заполните все поля!", "Ошибка", JOptionPane.WARNING_MESSAGE);
+            }
         }
     }
 

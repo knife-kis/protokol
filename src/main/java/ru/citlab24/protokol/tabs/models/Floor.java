@@ -10,10 +10,10 @@ public class Floor {
     private List<Space> spaces = new ArrayList<>();
 
     public enum FloorType {
-        RESIDENTIAL("Жилой"),
-        OFFICE("Офисный"),
-        PUBLIC("Общественный"),
-        MIXED("Смешанный");
+        RESIDENTIAL("жилой"),
+        OFFICE("офисный"),
+        PUBLIC("общественный"),
+        MIXED("смешанный");
 
         private final String title;
 
