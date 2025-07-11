@@ -33,29 +33,10 @@ public class MainFrame extends JFrame {
                 FontIcon.of(FontAwesomeSolid.THERMOMETER_HALF, 24, new Color(76, 175, 80)),
                 new MicroclimateTab());
 
-
-        // Панель статуса с прогресс-баром
-        JPanel statusPanel = new JPanel(new BorderLayout(10, 10));
-        statusPanel.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15));
-        statusPanel.setBackground(UIManager.getColor("Panel.background"));
-
-        JProgressBar progressBar = new JProgressBar();
-        progressBar.setStringPainted(true);
-        progressBar.setString("Готово к работе");
-        progressBar.setValue(100);
-
-        JButton saveButton = new JButton("Сохранить проект");
-        saveButton.setIcon(FontIcon.of(FontAwesomeSolid.SAVE, 16, new Color(0, 115, 200)));
-        saveButton.setBackground(new Color(0, 115, 200));
-        saveButton.setForeground(Color.WHITE);
-        saveButton.setFocusPainted(false);
-
-        statusPanel.add(progressBar, BorderLayout.CENTER);
-        statusPanel.add(saveButton, BorderLayout.EAST);
+        // УБРАНА ПАНЕЛЬ СТАТУСА (прогресс-бар и кнопка "Сохранить проект")
 
         // Основная компоновка
         setLayout(new BorderLayout());
         add(tabbedPane, BorderLayout.CENTER);
-        add(statusPanel, BorderLayout.SOUTH);
     }
 }
