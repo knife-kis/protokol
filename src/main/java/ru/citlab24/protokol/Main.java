@@ -2,8 +2,11 @@ package ru.citlab24.protokol;
 
 import com.formdev.flatlaf.FlatLightLaf;
 import javax.swing.*;
+import java.util.Locale;
+
 public class Main {
     public static void main(String[] args) {
+        Locale.setDefault(new Locale("ru", "RU"));
         SwingUtilities.invokeLater(() -> {
             // Устанавливаем современную тему
             FlatLightLaf.setup();

@@ -5,6 +5,7 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.util.List;
+import java.util.Locale;
 
 import ru.citlab24.protokol.tabs.dialogs.AddFloorDialog;
 import ru.citlab24.protokol.tabs.dialogs.AddSpaceDialog;
@@ -24,9 +25,16 @@ public class BuildingTab extends JPanel {
     private JList<Room> roomList;
 
     public BuildingTab() {
+        setRussianLocale();
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
         initComponents();
+    }
+    private void setRussianLocale() {
+        Locale.setDefault(new Locale("ru", "RU"));
+        UIManager.put("OptionPane.yesButtonText", "Да");
+        UIManager.put("OptionPane.noButtonText", "Нет");
+        UIManager.put("OptionPane.cancelButtonText", "Отмена");
     }
 
     private void initComponents() {
@@ -51,9 +59,10 @@ public class BuildingTab extends JPanel {
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorList.addListSelectionListener(e -> updateSpaceList());
 
-        JPanel btns = new JPanel(new GridLayout(1,2,5,5));
-        btns.add(createStyledButton("Добавить этаж", FontAwesomeSolid.PLUS_CIRCLE, new Color(46,125,50), this::addFloor));
-        btns.add(createStyledButton("Удалить этаж", FontAwesomeSolid.TRASH, new Color(198,40,40), this::removeFloor));
+        JPanel btns = new JPanel(new GridLayout(1, 3, 5, 5)); // Изменено на 3 кнопки
+        btns.add(createStyledButton("Добавить", FontAwesomeSolid.PLUS_CIRCLE, new Color(46,125,50), this::addFloor));
+        btns.add(createStyledButton("Изменить", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editFloor));
+        btns.add(createStyledButton("Удалить", FontAwesomeSolid.TRASH, new Color(198,40,40), this::removeFloor));
 
 
         p.add(new JScrollPane(floorList), BorderLayout.CENTER);
@@ -72,9 +81,10 @@ public class BuildingTab extends JPanel {
         spaceList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         spaceList.addListSelectionListener(e -> updateRoomList());
 
-        JPanel btns = new JPanel(new GridLayout(1, 2, 5, 5));
-        btns.add(createStyledButton("Добавить помещение", FontAwesomeSolid.PLUS, new Color(46,125,50), this::addSpace));
-        btns.add(createStyledButton("Удалить помещение", FontAwesomeSolid.TRASH, new Color(198,40,40), this::removeSpace));
+        JPanel btns = new JPanel(new GridLayout(1, 3, 5, 5)); // Изменено на 3 кнопки
+        btns.add(createStyledButton("Добавить", FontAwesomeSolid.PLUS, new Color(46,125,50), this::addSpace));
+        btns.add(createStyledButton("Изменить", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editSpace));
+        btns.add(createStyledButton("Удалить", FontAwesomeSolid.TRASH, new Color(198,40,40), this::removeSpace));
         p.add(new JScrollPane(spaceList), BorderLayout.CENTER);
         p.add(btns, BorderLayout.SOUTH);
         return p;
@@ -89,9 +99,10 @@ public class BuildingTab extends JPanel {
         roomList = new JList<>(roomListModel);
         roomList.setCellRenderer(new RoomListRenderer());
 
-        JPanel btns = new JPanel(new GridLayout(1, 2, 5, 5));
-        btns.add(createStyledButton("Добавить комнату", FontAwesomeSolid.PLUS_SQUARE, new Color(46,125,50), this::addRoom));
-        btns.add(createStyledButton("Удалить комнату", FontAwesomeSolid.TRASH, new Color(198,40,40), this::removeRoom)); // Добавлено
+        JPanel btns = new JPanel(new GridLayout(1, 3, 5, 5));
+        btns.add(createStyledButton("Добавить", FontAwesomeSolid.PLUS_SQUARE, new Color(46,125,50), this::addRoom));
+        btns.add(createStyledButton("Изменить", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editRoom));
+        btns.add(createStyledButton("Удалить", FontAwesomeSolid.TRASH, new Color(198,40,40), this::removeRoom));
 
         p.add(new JScrollPane(roomList), BorderLayout.CENTER);
         p.add(btns, BorderLayout.SOUTH);
@@ -213,6 +224,64 @@ public class BuildingTab extends JPanel {
         if (space != null && index >= 0) {
             space.getRooms().remove(index);
             roomListModel.remove(index);
+        }
+    }
+    private void editFloor(ActionEvent e) {
+        int index = floorList.getSelectedIndex();
+        if (index < 0) {
+            JOptionPane.showMessageDialog(this, "Выберите этаж для редактирования", "Ошибка", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Floor floor = floorListModel.get(index);
+        AddFloorDialog dialog = new AddFloorDialog((JFrame) SwingUtilities.getWindowAncestor(this));
+        dialog.setFloorNumber(floor.getNumber());
+        dialog.setFloorType(String.valueOf(floor.getType()));
+
+        if (dialog.showDialog()) {
+            floor.setNumber(dialog.getFloorNumber());
+            floor.setType(dialog.getFloorType());
+            floorListModel.set(index, floor); // Обновляем элемент
+            updateSpaceList(); // Обновляем зависимые списки
+        }
+    }
+    private void editSpace(ActionEvent e) {
+        Floor floor = floorList.getSelectedValue();
+        int index = spaceList.getSelectedIndex();
+
+        if (floor == null || index < 0) {
+            JOptionPane.showMessageDialog(this, "Выберите помещение для редактирования", "Ошибка", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Space space = spaceListModel.get(index);
+        AddSpaceDialog dialog = new AddSpaceDialog((JFrame) SwingUtilities.getWindowAncestor(this), floor.getType());
+        dialog.setSpaceIdentifier(space.getIdentifier());
+        dialog.setSpaceType(String.valueOf(space.getType()));
+
+        if (dialog.showDialog()) {
+            space.setIdentifier(dialog.getSpaceIdentifier());
+            space.setType(dialog.getSpaceType());
+            spaceListModel.set(index, space); // Обновляем элемент
+            updateRoomList(); // Обновляем зависимые списки
+        }
+    }
+
+    private void editRoom(ActionEvent e) {
+        Space space = spaceList.getSelectedValue();
+        int index = roomList.getSelectedIndex();
+
+        if (space == null || index < 0) {
+            JOptionPane.showMessageDialog(this, "Выберите комнату для редактирования", "Ошибка", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Room room = roomListModel.get(index);
+        String newName = JOptionPane.showInputDialog(this, "Введите новое название комнаты:", room.getName());
+
+        if (newName != null && !newName.trim().isEmpty()) {
+            room.setName(newName.trim());
+            roomListModel.set(index, room); // Обновляем элемент
         }
     }
 }

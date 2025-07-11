@@ -14,7 +14,7 @@ public class FloorListRenderer extends DefaultListCellRenderer {
         super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
         if (value instanceof Floor) {
             Floor floor = (Floor) value;
-            // ИСПРАВЛЕНО: используем getNumber()
+            // Используем getNumber() вместо getName()
             setText(String.format("Этаж %s: %s", floor.getNumber(), floor.getType()));
             setIcon(FontIcon.of(FontAwesomeSolid.BUILDING, 16, new Color(0, 115, 200)));
         }

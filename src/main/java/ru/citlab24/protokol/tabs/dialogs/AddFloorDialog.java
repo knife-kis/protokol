@@ -7,7 +7,7 @@ import java.awt.*;
 
 public class AddFloorDialog extends JDialog {
     private boolean confirmed = false;
-    private JTextField floorNumberField; // Изменено с JSpinner на JTextField
+    private JTextField floorNumberField;
     private JComboBox<Floor.FloorType> floorTypeCombo;
 
     public AddFloorDialog(JFrame parent) {
@@ -63,5 +63,13 @@ public class AddFloorDialog extends JDialog {
 
     public Floor.FloorType getFloorType() {
         return (Floor.FloorType) floorTypeCombo.getSelectedItem();
+    }
+
+    public void setFloorNumber(String number) {
+        floorNumberField.setText(number);
+    }
+
+    public void setFloorType(String type) {
+        floorTypeCombo.setSelectedItem(type);
     }
 }
