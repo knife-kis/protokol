@@ -325,7 +325,7 @@ public class BuildingTab extends JPanel {
         Space space = spaceListModel.get(index);
         AddSpaceDialog dialog = new AddSpaceDialog((JFrame) SwingUtilities.getWindowAncestor(this), floor.getType());
         dialog.setSpaceIdentifier(space.getIdentifier());
-        dialog.setSpaceType(String.valueOf(space.getType()));
+        dialog.setSpaceType(space.getType());
 
         if (dialog.showDialog()) {
             space.setIdentifier(dialog.getSpaceIdentifier());

@@ -74,4 +74,11 @@ public class AddSpaceDialog extends JDialog {
     public Space.SpaceType getSpaceType() {
         return (Space.SpaceType) spaceTypeCombo.getSelectedItem();
     }
+    public void setSpaceIdentifier(String identifier) {
+        identifierField.setText(identifier);
+    }
+
+    public void setSpaceType(Space.SpaceType type) {
+        spaceTypeCombo.setSelectedItem(type);
+    }
 }
