@@ -36,16 +36,22 @@ public class Floor {
         return number;
     }
 
+    public FloorType getType() {
+        return type;
+    }
+
+    public void setType(FloorType type) {
+        this.type = type;
+    }
+
     public void setNumber(String number) {
         this.number = number;
     }
 
-    public FloorType getType() {
-        return type;
+    public void setSpaces(List<Space> spaces) {
+        this.spaces = spaces;
     }
-    public void setType(FloorType type) {
-        this.type = type;
-    }
+
     public List<Space> getSpaces() {
         return spaces;
     }

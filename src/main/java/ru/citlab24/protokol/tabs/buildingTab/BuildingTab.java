@@ -382,13 +382,13 @@ public class BuildingTab extends JPanel {
         Floor floor = floorListModel.get(index);
         AddFloorDialog dialog = new AddFloorDialog((JFrame) SwingUtilities.getWindowAncestor(this));
         dialog.setFloorNumber(floor.getNumber());
-        dialog.setFloorType(String.valueOf(floor.getType()));
+        dialog.setFloorType(floor.getType());
 
         if (dialog.showDialog()) {
             floor.setNumber(dialog.getFloorNumber());
             floor.setType(dialog.getFloorType());
-            floorListModel.set(index, floor); // Обновляем элемент
-            updateSpaceList(); // Обновляем зависимые списки
+            floorListModel.set(index, floor);
+            updateSpaceList();
         }
     }
     private void editSpace(ActionEvent e) {

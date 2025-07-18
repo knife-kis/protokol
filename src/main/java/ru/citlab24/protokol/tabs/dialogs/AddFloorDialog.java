@@ -64,6 +64,9 @@ public class AddFloorDialog extends JDialog {
     public Floor.FloorType getFloorType() {
         return (Floor.FloorType) floorTypeCombo.getSelectedItem();
     }
+    public void setFloorType(Floor.FloorType type) {
+        floorTypeCombo.setSelectedItem(type);
+    }
 
     public void setFloorNumber(String number) {
         floorNumberField.setText(number);

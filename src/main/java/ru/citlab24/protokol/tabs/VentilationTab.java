@@ -12,17 +12,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+
 public class VentilationTab extends JPanel {
     private final Building building;
     private final VentilationTableModel tableModel = new VentilationTableModel();
     private final JTable ventilationTable = new JTable(tableModel);
 
     private static final List<String> TARGET_ROOMS = List.of(
-            "кухня", "кухня-ниша", "санузел", "ванная", "совмещенный"
+            "кухня", "кухня-ниша",
+            "санузел", "сан узел", "сан. узел",
+            "ванная", "ванная комната",
+            "совмещенный", "совмещенный санузел"
     );
 
     private static final List<String> TARGET_FLOORS = List.of(
-            "жилой", "смешанный"
+            "жилой", "смешанный", "офисный", "офисный"
     );
 
     public VentilationTab(Building building) {
@@ -68,15 +72,13 @@ public class VentilationTab extends JPanel {
         tableModel.clearData();
 
         for (Floor floor : building.getFloors()) {
-            String floorType = floor.getType().name().toLowerCase(Locale.ROOT);
-
+            String floorType = floor.getType().toString().toLowerCase(Locale.ROOT);
             if (!containsAny(floorType, TARGET_FLOORS)) continue;
 
             for (Space space : floor.getSpaces()) {
                 for (Room room : space.getRooms()) {
-                    String roomName = room.getName().toLowerCase(Locale.ROOT);
-
-                    if (!containsAny(roomName, TARGET_ROOMS)) continue;
+                    String roomName = room.getName();
+                    if (!matchesRoomType(roomName)) continue;
 
                     tableModel.addRecord(new VentilationRecord(
                             floor.getNumber(),
@@ -92,9 +94,25 @@ public class VentilationTab extends JPanel {
         }
         tableModel.fireTableDataChanged();
     }
-
     private boolean containsAny(String source, List<String> targets) {
-        return targets.stream().anyMatch(source::contains);
+        String lowerSource = source.toLowerCase(Locale.ROOT);
+        for (String target : targets) {
+            if (lowerSource.contains(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesRoomType(String roomName) {
+        if (roomName == null) return false;
+
+        String normalized = roomName
+                .replaceAll("[\\s.-]+", " ") // Объединение всех замен
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        return TARGET_ROOMS.stream().anyMatch(normalized::contains);
     }
 
     private void saveCalculations() {
