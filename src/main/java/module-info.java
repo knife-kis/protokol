@@ -7,6 +7,7 @@ module ru.citlab24.protokol {
     requires com.formdev.flatlaf;
     requires org.kordamp.ikonli.swing;
     requires org.kordamp.ikonli.fontawesome5;
+    requires java.sql;
 
     opens ru.citlab24.protokol to javafx.fxml;
     exports ru.citlab24.protokol;

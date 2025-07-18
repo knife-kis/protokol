@@ -5,13 +5,16 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Locale;
 
 import ru.citlab24.protokol.MainFrame;
+import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.VentilationTab;
 import ru.citlab24.protokol.tabs.dialogs.AddFloorDialog;
 import ru.citlab24.protokol.tabs.dialogs.AddSpaceDialog;
+import ru.citlab24.protokol.tabs.dialogs.LoadProjectDialog;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.*;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
@@ -80,13 +83,98 @@ public class BuildingTab extends JPanel {
     // ДОБАВЛЕННЫЙ МЕТОД: Панель с кнопками действий
     private JPanel createActionButtons() {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        p.add(createStyledButton("Загрузить проект", FontAwesomeSolid.FOLDER_OPEN, new Color(33, 150, 243), e -> loadProject()));
         p.add(createStyledButton("Сохранить проект", FontAwesomeSolid.SAVE, new Color(0,115,200), e -> saveProject()));
         p.add(createStyledButton("Рассчитать показатели", FontAwesomeSolid.CALCULATOR, new Color(103,58,183), e -> calculateMetrics()));
         return p;
     }
+
+    private void loadProject() {
+        try {
+            List<Building> projects = DatabaseManager.getAllBuildings();
+
+            if (projects.isEmpty()) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Нет сохраненных проектов",
+                        "Информация",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+                return;
+            }
+
+            LoadProjectDialog dialog = new LoadProjectDialog(
+                    (JFrame) SwingUtilities.getWindowAncestor(this),
+                    projects
+            );
+            dialog.setVisible(true);
+
+            Building selectedProject = dialog.getSelectedProject();
+            if (selectedProject != null) {
+                Building loadedBuilding = DatabaseManager.loadBuilding(selectedProject.getId());
+                this.building = loadedBuilding;
+                refreshAllLists();
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Проект '" + loadedBuilding.getName() + "' успешно загружен",
+                        "Загрузка",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ошибка загрузки проектов: " + e.getMessage(),
+                    "Ошибка",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private void refreshAllLists() {
+        floorListModel.clear();
+        spaceListModel.clear();
+        roomListModel.clear();
+
+        for (Floor floor : building.getFloors()) {
+            floorListModel.addElement(floor);
+        }
+
+        // Обновляем выбранные элементы
+        if (!building.getFloors().isEmpty()) {
+            floorList.setSelectedIndex(0);
+        }
+    }
+
     private void saveProject() {
-        // Логика сохранения проекта
-        JOptionPane.showMessageDialog(this, "Проект успешно сохранен", "Сохранение", JOptionPane.INFORMATION_MESSAGE);
+        try {
+            String name = JOptionPane.showInputDialog(
+                    this,
+                    "Введите название проекта:",
+                    "Сохранение проекта",
+                    JOptionPane.PLAIN_MESSAGE
+            );
+
+            if (name != null && !name.trim().isEmpty()) {
+                building.setName(name.trim());
+                DatabaseManager.saveBuilding(building);
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Проект успешно сохранен",
+                        "Сохранение",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ошибка сохранения проекта: " + e.getMessage(),
+                    "Ошибка",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
     }
 
     private void calculateMetrics() {
@@ -223,35 +311,25 @@ public class BuildingTab extends JPanel {
             return;
         }
 
-        // Создаем панель с полями
-        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5));
+        // Упрощенная панель с одним полем (только название)
+        JPanel panel = new JPanel(new GridLayout(1, 2, 5, 5));
         panel.add(new JLabel("Название комнаты:"));
         JTextField nameField = new JTextField();
         panel.add(nameField);
-        panel.add(new JLabel("Объем (куб.м):"));
-        JTextField volumeField = new JTextField();
-        panel.add(volumeField);
 
         int result = JOptionPane.showConfirmDialog(this, panel, "Добавление комнаты",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
 
         if (result == JOptionPane.OK_OPTION) {
             String name = nameField.getText().trim();
-            String volumeText = volumeField.getText().trim();
 
-            if (!name.isEmpty() && !volumeText.isEmpty()) {
-                try {
-                    double volume = Double.parseDouble(volumeText);
-                    Room room = new Room();
-                    room.setName(name);
-                    room.setVolume(volume);
-                    selectedSpace.addRoom(room);
-                    roomListModel.addElement(room);
-                } catch (NumberFormatException ex) {
-                    JOptionPane.showMessageDialog(this, "Некорректный формат объема!", "Ошибка", JOptionPane.ERROR_MESSAGE);
-                }
+            if (!name.isEmpty()) {
+                Room room = new Room();
+                room.setName(name);
+                selectedSpace.addRoom(room);
+                roomListModel.addElement(room);
             } else {
-                JOptionPane.showMessageDialog(this, "Заполните все поля!", "Ошибка", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Введите название комнаты!", "Ошибка", JOptionPane.WARNING_MESSAGE);
             }
         }
     }
