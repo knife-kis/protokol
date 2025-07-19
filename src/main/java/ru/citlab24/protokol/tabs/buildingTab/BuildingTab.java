@@ -114,6 +114,9 @@ public class BuildingTab extends JPanel {
                 Building loadedBuilding = DatabaseManager.loadBuilding(selectedProject.getId());
                 this.building = loadedBuilding;
                 refreshAllLists();
+
+                // ОБНОВИТЬ ВЕНТИЛЯЦИОННУЮ ВКЛАДКУ
+                updateVentilationTab(loadedBuilding);
                 JOptionPane.showMessageDialog(
                         this,
                         "Проект '" + loadedBuilding.getName() + "' успешно загружен",
@@ -129,6 +132,18 @@ public class BuildingTab extends JPanel {
                     "Ошибка",
                     JOptionPane.ERROR_MESSAGE
             );
+        }
+    }
+    private void updateVentilationTab(Building building) {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            for (Component tab : ((MainFrame) mainFrame).getTabbedPane().getComponents()) {
+                if (tab instanceof VentilationTab) {
+                    ((VentilationTab) tab).setBuilding(building);
+                    ((VentilationTab) tab).refreshData();
+                    break;
+                }
+            }
         }
     }
 

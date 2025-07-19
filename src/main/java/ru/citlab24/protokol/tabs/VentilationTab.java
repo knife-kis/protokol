@@ -7,6 +7,8 @@ import ru.citlab24.protokol.tabs.models.Space;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.JTableHeader;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +16,7 @@ import java.util.Locale;
 
 
 public class VentilationTab extends JPanel {
-    private final Building building;
+    private Building building;
     private final VentilationTableModel tableModel = new VentilationTableModel();
     private final JTable ventilationTable = new JTable(tableModel);
 
@@ -32,7 +34,6 @@ public class VentilationTab extends JPanel {
     public VentilationTab(Building building) {
         this.building = building;
         initUI();
-        loadVentilationData();
     }
 
     private void initUI() {
@@ -50,6 +51,44 @@ public class VentilationTab extends JPanel {
         ventilationTable.getColumnModel().getColumn(4).setCellEditor(
                 new SpinnerEditor(0.008, 0.001, 0.1, 0.001));
 
+        // Стилизация
+        ventilationTable.setShowGrid(true);
+        ventilationTable.setGridColor(new Color(220, 220, 220));
+        ventilationTable.setIntercellSpacing(new Dimension(1, 1));
+
+        // Центрирование содержимого для всех столбцов
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        for (int i = 0; i < ventilationTable.getColumnCount(); i++) {
+            ventilationTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+        }
+
+        // Чередование цветов строк
+        ventilationTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+                if (!isSelected) {
+                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
+                }
+
+                ((JLabel) c).setHorizontalAlignment(JLabel.CENTER);
+                return c;
+            }
+        });
+
+        // Стилизация заголовка
+        JTableHeader header = ventilationTable.getTableHeader();
+        header.setBackground(new Color(70, 130, 180)); // SteelBlue
+        header.setForeground(Color.WHITE);
+        header.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        header.setReorderingAllowed(false);
+
+        DefaultTableCellRenderer headerRenderer = (DefaultTableCellRenderer) header.getDefaultRenderer();
+        headerRenderer.setHorizontalAlignment(JLabel.CENTER);
+
         add(new JScrollPane(ventilationTable), BorderLayout.CENTER);
         add(createButtonPanel(), BorderLayout.SOUTH);
     }
@@ -57,7 +96,20 @@ public class VentilationTab extends JPanel {
     private JPanel createButtonPanel() {
         JButton saveBtn = new JButton("Сохранить расчет");
         saveBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        saveBtn.setBackground(new Color(46, 125, 50)); // Зеленый
+        saveBtn.setForeground(Color.WHITE);
+        saveBtn.setFocusPainted(false);
         saveBtn.addActionListener(e -> saveCalculations());
+
+        // Эффект при наведении
+        saveBtn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                saveBtn.setBackground(new Color(35, 110, 40));
+            }
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                saveBtn.setBackground(new Color(46, 125, 50));
+            }
+        });
 
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         panel.add(saveBtn);
@@ -65,6 +117,13 @@ public class VentilationTab extends JPanel {
     }
 
     public void refreshData() {
+        // Добавить логирование для отладки
+        System.out.println("Обновление данных вентиляции...");
+        System.out.println("Ссылка на здание: " + (building != null ? "не null" : "null"));
+        if (building != null) {
+            System.out.println("Количество этажей: " + building.getFloors().size());
+        }
+
         loadVentilationData();
     }
 
@@ -73,13 +132,27 @@ public class VentilationTab extends JPanel {
 
         for (Floor floor : building.getFloors()) {
             String floorType = floor.getType().toString().toLowerCase(Locale.ROOT);
-            if (!containsAny(floorType, TARGET_FLOORS)) continue;
+            boolean floorMatches = containsAny(floorType, TARGET_FLOORS);
+
+            System.out.println("Этаж " + floor.getNumber() +
+                    " (тип: " + floorType + ") - " +
+                    (floorMatches ? "соответствует" : "не соответствует"));
+
+            if (!floorMatches) continue;
 
             for (Space space : floor.getSpaces()) {
+                System.out.println("  Помещение: " + space.getIdentifier());
+
                 for (Room room : space.getRooms()) {
                     String roomName = room.getName();
-                    if (!matchesRoomType(roomName)) continue;
+                    boolean roomMatches = matchesRoomType(roomName);
 
+                    System.out.println("    Комната: " + roomName + " - " +
+                            (roomMatches ? "соответствует" : "не соответствует"));
+
+                    if (!roomMatches) continue;
+
+                    System.out.println("      >>> ДОБАВЛЕНА В ТАБЛИЦУ");
                     tableModel.addRecord(new VentilationRecord(
                             floor.getNumber(),
                             space.getIdentifier(),
@@ -92,6 +165,7 @@ public class VentilationTab extends JPanel {
                 }
             }
         }
+        System.out.println("Загружено записей: " + tableModel.getRowCount());
         tableModel.fireTableDataChanged();
     }
     private boolean containsAny(String source, List<String> targets) {
@@ -122,6 +196,10 @@ public class VentilationTab extends JPanel {
             record.roomRef().setVentilationSectionArea(record.sectionArea());
         }
         JOptionPane.showMessageDialog(this, "Расчеты сохранены успешно!", "Сохранение", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    public void setBuilding(Building building) {
+        this.building = building;
     }
 
     // Модель таблицы

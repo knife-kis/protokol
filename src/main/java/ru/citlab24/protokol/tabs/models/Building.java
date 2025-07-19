@@ -8,6 +8,7 @@ public class Building {
     private String name;
     private List<Floor> floors = new ArrayList<>();
 
+
     // Геттеры и сеттеры
     public void addFloor(Floor floor) {
         floors.add(floor);

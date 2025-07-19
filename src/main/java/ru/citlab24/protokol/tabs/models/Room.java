@@ -1,8 +1,8 @@
 package ru.citlab24.protokol.tabs.models;
 
 public class Room {
-    private String name;
-    private double volume;
+    private String name = "";
+    private double volume = 0.0;
     private int ventilationChannels = 1;
     private double ventilationSectionArea = 0.008;
 
