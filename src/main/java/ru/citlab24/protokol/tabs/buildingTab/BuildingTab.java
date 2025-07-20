@@ -6,6 +6,8 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -29,6 +31,7 @@ public class BuildingTab extends JPanel {
     private JList<Floor> floorList;
     private JList<Space> spaceList;
     private JList<Room> roomList;
+    private JTextField projectNameField;
 
     public BuildingTab(Building building) {
         setRussianLocale();
@@ -49,6 +52,7 @@ public class BuildingTab extends JPanel {
     }
     private void initComponents() {
         setLayout(new BorderLayout());
+        add(createProjectNamePanel(), BorderLayout.NORTH);
         add(createBuildingPanel(), BorderLayout.CENTER);
         add(createActionButtons(), BorderLayout.SOUTH);
         floorList.addListSelectionListener(e -> {
@@ -62,6 +66,22 @@ public class BuildingTab extends JPanel {
                 updateRoomList();
             }
         });
+    }
+    private JPanel createProjectNamePanel() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
+
+        JLabel label = new JLabel("Название проекта:");
+        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
+
+        projectNameField = new JTextField(30);
+        projectNameField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        projectNameField.setText(building.getName());
+
+        panel.add(label);
+        panel.add(projectNameField);
+
+        return panel;
     }
     private JPanel createBuildingPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 3, 15, 15));
@@ -122,8 +142,10 @@ public class BuildingTab extends JPanel {
 
             Building selectedProject = dialog.getSelectedProject();
             if (selectedProject != null) {
+                // Загружаем полные данные проекта
                 Building loadedBuilding = DatabaseManager.loadBuilding(selectedProject.getId());
                 this.building = loadedBuilding;
+                projectNameField.setText(loadedBuilding.getName()); // Обновляем поле имени
                 refreshAllLists();
 
                 // ОБНОВИТЬ ВЕНТИЛЯЦИОННУЮ ВКЛАДКУ
@@ -177,26 +199,68 @@ public class BuildingTab extends JPanel {
 
     private void saveProject() {
         try {
-            String name = JOptionPane.showInputDialog(
-                    this,
-                    "Введите название проекта:",
-                    "Сохранение проекта",
-                    JOptionPane.PLAIN_MESSAGE
-            );
+            String baseName = projectNameField.getText().trim();
 
-            if (name != null && !name.trim().isEmpty()) {
-                building.setName(name.trim());
-                DatabaseManager.saveBuilding(building);
+            if (baseName.isEmpty()) {
                 JOptionPane.showMessageDialog(
                         this,
-                        "Проект успешно сохранен",
-                        "Сохранение",
-                        JOptionPane.INFORMATION_MESSAGE
+                        "Введите название проекта!",
+                        "Ошибка",
+                        JOptionPane.ERROR_MESSAGE
                 );
-
-                // ОБНОВЛЕНИЕ ВЕНТИЛЯЦИОННОЙ ВКЛАДКИ ПОСЛЕ СОХРАНЕНИЯ
-                updateVentilationTab(building);
+                return;
             }
+
+            // Получаем список всех проектов
+            List<Building> existingProjects = DatabaseManager.getAllBuildings();
+
+            // Форматируем текущую дату
+            SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy");
+            String currentDate = dateFormat.format(new Date());
+
+            // Проверяем, есть ли проект с таким именем
+            String finalName = baseName;
+            String finalName1 = finalName;
+            boolean nameExists = existingProjects.stream()
+                    .anyMatch(p -> p.getName().equals(finalName1));
+
+            // Если имя существует, добавляем суффикс с датой
+            if (nameExists) {
+                int version = 2;
+                while (true) {
+                    String candidateName = baseName + " ред." + version + " " + currentDate;
+                    boolean candidateExists = existingProjects.stream()
+                            .anyMatch(p -> p.getName().equals(candidateName));
+
+                    if (!candidateExists) {
+                        finalName = candidateName;
+                        break;
+                    }
+                    version++;
+                }
+            }
+
+            saveVentilationCalculations();
+            // Создаем новый проект (всегда новая запись)
+            Building newProject = createCopyOfBuilding(building);
+            newProject.setName(finalName);
+
+            // Сохраняем новый проект
+            DatabaseManager.saveBuilding(newProject);
+
+            // Обновляем текущий проект
+            this.building = newProject;
+            projectNameField.setText(finalName);
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Новая версия проекта сохранена как: " + finalName,
+                    "Сохранение",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+            // Обновляем вентиляционную вкладку
+            updateVentilationTab(newProject);
         } catch (SQLException e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(
@@ -206,6 +270,48 @@ public class BuildingTab extends JPanel {
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    private void saveVentilationCalculations() {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            for (Component tab : ((MainFrame) mainFrame).getTabbedPane().getComponents()) {
+                if (tab instanceof VentilationTab) {
+                    ((VentilationTab) tab).saveCalculationsToModel();
+                    break;
+                }
+            }
+        }
+    }
+
+    private Building createCopyOfBuilding(Building original) {
+        Building copy = new Building();
+        copy.setName(original.getName());
+
+        for (Floor originalFloor : original.getFloors()) {
+            Floor floorCopy = new Floor();
+            floorCopy.setNumber(originalFloor.getNumber());
+            floorCopy.setType(originalFloor.getType());
+
+            for (Space originalSpace : originalFloor.getSpaces()) {
+                Space spaceCopy = new Space();
+                spaceCopy.setIdentifier(originalSpace.getIdentifier());
+                spaceCopy.setType(originalSpace.getType());
+
+                for (Room originalRoom : originalSpace.getRooms()) {
+                    Room roomCopy = new Room();
+                    roomCopy.setName(originalRoom.getName());
+                    roomCopy.setVolume(originalRoom.getVolume());
+                    roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
+                    roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
+
+                    spaceCopy.addRoom(roomCopy);
+                }
+                floorCopy.addSpace(spaceCopy);
+            }
+            copy.addFloor(floorCopy);
+        }
+        return copy;
     }
 
     private void calculateMetrics() {
@@ -226,14 +332,6 @@ public class BuildingTab extends JPanel {
 
         JOptionPane.showMessageDialog(this, "Данные для вентиляции обновлены!",
                 "Расчет завершен", JOptionPane.INFORMATION_MESSAGE);
-    }
-    private JButton createActionButton(String text, Color bgColor, ActionListener action) {
-        JButton btn = new JButton(text);
-        btn.setBackground(bgColor);
-        btn.setForeground(Color.WHITE);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btn.addActionListener(action);
-        return btn;
     }
     private JPanel createSpacePanel() {
         JPanel p = new JPanel(new BorderLayout());

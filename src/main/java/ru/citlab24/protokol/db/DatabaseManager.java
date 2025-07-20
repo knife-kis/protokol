@@ -90,11 +90,76 @@ public class DatabaseManager {
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
                     int buildingId = rs.getInt(1);
+                    building.setId(buildingId);
                     for (Floor floor : building.getFloors()) {
                         saveFloor(buildingId, floor);
                     }
                 }
             }
+        }
+    }
+
+    private static void insertBuilding(Building building) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "INSERT INTO building (name) VALUES (?)",
+                Statement.RETURN_GENERATED_KEYS
+        )) {
+            stmt.setString(1, building.getName());
+            stmt.executeUpdate();
+
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                if (rs.next()) {
+                    int buildingId = rs.getInt(1);
+                    building.setId(buildingId);
+                    for (Floor floor : building.getFloors()) {
+                        saveFloor(buildingId, floor);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void updateBuilding(Building building) throws SQLException {
+        // Обновляем название здания
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "UPDATE building SET name = ? WHERE id = ?"
+        )) {
+            stmt.setString(1, building.getName());
+            stmt.setInt(2, building.getId());
+            stmt.executeUpdate();
+        }
+
+        // Удаляем старые данные и сохраняем заново
+        deleteBuildingData(building.getId());
+
+        // Сохраняем обновленные данные
+        for (Floor floor : building.getFloors()) {
+            saveFloor(building.getId(), floor);
+        }
+    }
+    private static void deleteBuildingData(int buildingId) throws SQLException {
+        // Сначала удаляем комнаты
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "DELETE FROM room WHERE space_id IN (SELECT id FROM space WHERE floor_id IN (SELECT id FROM floor WHERE building_id = ?))"
+        )) {
+            stmt.setInt(1, buildingId);
+            stmt.executeUpdate();
+        }
+
+        // Затем удаляем помещения
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "DELETE FROM space WHERE floor_id IN (SELECT id FROM floor WHERE building_id = ?)"
+        )) {
+            stmt.setInt(1, buildingId);
+            stmt.executeUpdate();
+        }
+
+        // Затем удаляем этажи
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "DELETE FROM floor WHERE building_id = ?"
+        )) {
+            stmt.setInt(1, buildingId);
+            stmt.executeUpdate();
         }
     }
 

@@ -101,6 +101,14 @@ public class VentilationTab extends JPanel {
         add(createButtonPanel(), BorderLayout.SOUTH);
     }
 
+    public void saveCalculationsToModel() {
+        // Сохранение данных обратно в модель
+        for (VentilationRecord record : tableModel.getRecords()) {
+            record.roomRef().setVentilationChannels(record.channels());
+            record.roomRef().setVentilationSectionArea(record.sectionArea());
+            record.roomRef().setVolume(record.volume());
+        }
+    }
     private JPanel createButtonPanel() {
         JButton saveBtn = new JButton("Сохранить расчет");
         saveBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -209,12 +217,7 @@ public class VentilationTab extends JPanel {
     }
 
     private void saveCalculations() {
-        // Сохранение данных обратно в модель
-        for (VentilationRecord record : tableModel.getRecords()) {
-            record.roomRef().setVentilationChannels(record.channels());
-            record.roomRef().setVentilationSectionArea(record.sectionArea());
-            record.roomRef().setVolume(record.volume()); // Сохраняем объем
-        }
+        saveCalculationsToModel();
         JOptionPane.showMessageDialog(this, "Расчеты сохранены успешно!", "Сохранение", JOptionPane.INFORMATION_MESSAGE);
     }
 

@@ -20,6 +20,19 @@ public class MainFrame extends JFrame {
         setSize(1000, 750);
         setLocationRelativeTo(null);
         initUI();
+        tabbedPane.addChangeListener(e -> {
+            Component selectedTab = tabbedPane.getSelectedComponent();
+            if (selectedTab instanceof VentilationTab) {
+                ((VentilationTab) selectedTab).refreshData();
+            } else if (selectedTab instanceof BuildingTab) {
+                // Сохраняем изменения при переходе на вкладку здания
+                for (Component tab : tabbedPane.getComponents()) {
+                    if (tab instanceof VentilationTab) {
+                        ((VentilationTab) tab).saveCalculationsToModel();
+                    }
+                }
+            }
+        });
     }
 
     private void initUI() {
