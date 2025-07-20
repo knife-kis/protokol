@@ -2,7 +2,7 @@ package ru.citlab24.protokol.tabs.models;
 
 public class Room {
     private String name = "";
-    private double volume = 0.0;
+    private Double volume = null;
     private int ventilationChannels = 1;
     private double ventilationSectionArea = 0.008;
 
@@ -31,11 +31,11 @@ public class Room {
         this.name = name;
     }
 
-    public double getVolume() {
+    public Double getVolume() {
         return volume;
     }
 
-    public void setVolume(double volume) {
+    public void setVolume(Double volume) {
         this.volume = volume;
     }
 }

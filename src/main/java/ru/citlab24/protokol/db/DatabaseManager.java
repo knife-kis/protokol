@@ -36,26 +36,26 @@ public class DatabaseManager {
     private static void createTables() throws SQLException {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS building (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY," + // Исправлено
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "name VARCHAR(255))");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS floor (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY," + // Исправлено
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "building_id INT," +
                     "number VARCHAR(50)," +
                     "type VARCHAR(50))");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS space (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY," + // Исправлено
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "floor_id INT," +
                     "identifier VARCHAR(50)," +
                     "type VARCHAR(50))");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS room (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY," + // Исправлено
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "space_id INT," +
                     "name VARCHAR(255)," +
-                    "volume DOUBLE," +
+                    "volume DOUBLE," + // Разрешено NULL значение
                     "ventilation_channels INT," +
                     "ventilation_section_area DOUBLE)");
 
@@ -65,6 +65,7 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "room", "ventilation_section_area", "DOUBLE");
         }
     }
+
     private static void addColumnIfMissing(Statement stmt, String table, String column, String type)
             throws SQLException {
         ResultSet rs = stmt.executeQuery(
@@ -111,15 +112,14 @@ public class DatabaseManager {
         }
         return buildings;
     }
+
     private static void saveFloor(int buildingId, Floor floor) throws SQLException {
-        // Убрали RETURNING id
         String sql = "INSERT INTO floor (building_id, number, type) VALUES (?, ?, ?)";
-        // Добавили RETURN_GENERATED_KEYS
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, buildingId);
             stmt.setString(2, floor.getNumber());
             stmt.setString(3, floor.getType().name());
-            stmt.executeUpdate(); // Используем executeUpdate вместо executeQuery
+            stmt.executeUpdate();
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -133,14 +133,12 @@ public class DatabaseManager {
     }
 
     private static void saveSpace(int floorId, Space space) throws SQLException {
-        // Убрали RETURNING id
         String sql = "INSERT INTO space (floor_id, identifier, type) VALUES (?, ?, ?)";
-        // Добавили RETURN_GENERATED_KEYS
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, floorId);
             stmt.setString(2, space.getIdentifier());
             stmt.setString(3, space.getType().name());
-            stmt.executeUpdate(); // Используем executeUpdate вместо executeQuery
+            stmt.executeUpdate();
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
@@ -156,10 +154,18 @@ public class DatabaseManager {
     private static void saveRoom(int spaceId, Room room) throws SQLException {
         String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, ventilation_section_area) " +
                 "VALUES (?, ?, ?, ?, ?)";
+
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setInt(1, spaceId);
             stmt.setString(2, room.getName());
-            stmt.setDouble(3, room.getVolume());
+
+            // Обработка NULL значения для объема
+            if (room.getVolume() != null) {
+                stmt.setDouble(3, room.getVolume());
+            } else {
+                stmt.setNull(3, Types.DOUBLE);
+            }
+
             stmt.setInt(4, room.getVentilationChannels());
             stmt.setDouble(5, room.getVentilationSectionArea());
             stmt.executeUpdate();
@@ -174,6 +180,7 @@ public class DatabaseManager {
             if (rs.next()) {
                 building.setId(rs.getInt("id"));
                 building.setName(rs.getString("name"));
+                System.out.println("Загружаем здание: " + building.getName());
                 loadFloors(building, buildingId);
             }
         }
@@ -188,6 +195,7 @@ public class DatabaseManager {
                 Floor floor = new Floor();
                 floor.setNumber(rs.getString("number"));
                 floor.setType(Floor.FloorType.valueOf(rs.getString("type")));
+                System.out.println("Загружен этаж: " + floor.getNumber());
                 building.addFloor(floor);
                 loadSpaces(floor, rs.getInt("id"));
             }
@@ -215,7 +223,15 @@ public class DatabaseManager {
             while (rs.next()) {
                 Room room = new Room();
                 room.setName(rs.getString("name"));
-                room.setVolume(rs.getDouble("volume"));
+
+                // Обработка NULL значения для объема
+                double volumeValue = rs.getDouble("volume");
+                if (rs.wasNull()) {
+                    room.setVolume(null);
+                } else {
+                    room.setVolume(volumeValue);
+                }
+
                 room.setVentilationChannels(rs.getInt("ventilation_channels"));
                 room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
                 space.addRoom(room);

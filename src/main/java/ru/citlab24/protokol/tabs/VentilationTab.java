@@ -50,6 +50,8 @@ public class VentilationTab extends JPanel {
                 new SpinnerEditor(1, 1, 10));
         ventilationTable.getColumnModel().getColumn(4).setCellEditor(
                 new SpinnerEditor(0.008, 0.001, 0.1, 0.001));
+        ventilationTable.getColumnModel().getColumn(5).setCellEditor(
+                new SpinnerEditor(0.0, 0.0, 1000.0, 0.1));
 
         // Стилизация
         ventilationTable.setShowGrid(true);
@@ -67,8 +69,14 @@ public class VentilationTab extends JPanel {
         ventilationTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
-                                                           boolean isSelected, boolean hasFocus, int row, int column) {
+                                                           boolean isSelected, boolean hasFocus,
+                                                           int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+                // Обработка пустых значений
+                if (value == null) {
+                    ((JLabel) c).setText("");
+                }
 
                 if (!isSelected) {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
@@ -130,6 +138,14 @@ public class VentilationTab extends JPanel {
     private void loadVentilationData() {
         tableModel.clearData();
 
+        if (building == null) {
+            System.out.println("Здание не загружено!");
+            return;
+        }
+
+        System.out.println("Загрузка данных вентиляции для здания: " + building.getName());
+        System.out.println("Количество этажей: " + building.getFloors().size());
+
         for (Floor floor : building.getFloors()) {
             String floorType = floor.getType().toString().toLowerCase(Locale.ROOT);
             boolean floorMatches = containsAny(floorType, TARGET_FLOORS);
@@ -140,8 +156,11 @@ public class VentilationTab extends JPanel {
 
             if (!floorMatches) continue;
 
+            System.out.println("  Помещений на этаже: " + floor.getSpaces().size());
             for (Space space : floor.getSpaces()) {
-                System.out.println("  Помещение: " + space.getIdentifier());
+                System.out.println("  Помещение: " + space.getIdentifier() +
+                        " (тип: " + space.getType() + ")");
+                System.out.println("  Комнат в помещении: " + space.getRooms().size());
 
                 for (Room room : space.getRooms()) {
                     String roomName = room.getName();
@@ -194,6 +213,7 @@ public class VentilationTab extends JPanel {
         for (VentilationRecord record : tableModel.getRecords()) {
             record.roomRef().setVentilationChannels(record.channels());
             record.roomRef().setVentilationSectionArea(record.sectionArea());
+            record.roomRef().setVolume(record.volume()); // Сохраняем объем
         }
         JOptionPane.showMessageDialog(this, "Расчеты сохранены успешно!", "Сохранение", JOptionPane.INFORMATION_MESSAGE);
     }
@@ -243,14 +263,15 @@ public class VentilationTab extends JPanel {
             return switch (columnIndex) {
                 case 0, 1, 2 -> String.class;
                 case 3 -> Integer.class;
-                case 4, 5 -> Double.class;
+                case 4 -> Double.class;
+                case 5 -> Object.class; // Изменено на Object.class
                 default -> Object.class;
             };
         }
 
         @Override
         public boolean isCellEditable(int rowIndex, int columnIndex) {
-            return columnIndex == 3 || columnIndex == 4;
+            return columnIndex == 3 || columnIndex == 4 || columnIndex == 5;
         }
 
         @Override
@@ -262,7 +283,7 @@ public class VentilationTab extends JPanel {
                 case 2 -> record.room();
                 case 3 -> record.channels();
                 case 4 -> record.sectionArea();
-                case 5 -> record.volume();
+                case 5 -> record.volume(); // Убрано преобразование 0.0 в null
                 default -> null;
             };
         }
@@ -273,6 +294,7 @@ public class VentilationTab extends JPanel {
             records.set(rowIndex, switch (columnIndex) {
                 case 3 -> record.withChannels((Integer) aValue);
                 case 4 -> record.withSectionArea((Double) aValue);
+                case 5 -> record.withVolume((Double) aValue);
                 default -> record;
             });
             fireTableCellUpdated(rowIndex, columnIndex);
@@ -286,9 +308,12 @@ public class VentilationTab extends JPanel {
             String room,
             int channels,
             double sectionArea,
-            double volume,
+            Double volume,
             Room roomRef
     ) {
+        public VentilationRecord withVolume(Double newVolume) {
+            return new VentilationRecord(floor, space, room, channels, sectionArea, newVolume, roomRef);
+        }
         public VentilationRecord withChannels(int newChannels) {
             return new VentilationRecord(floor, space, room, newChannels, sectionArea, volume, roomRef);
         }

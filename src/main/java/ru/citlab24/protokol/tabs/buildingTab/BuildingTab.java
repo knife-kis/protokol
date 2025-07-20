@@ -180,6 +180,9 @@ public class BuildingTab extends JPanel {
                         "Сохранение",
                         JOptionPane.INFORMATION_MESSAGE
                 );
+
+                // ОБНОВЛЕНИЕ ВЕНТИЛЯЦИОННОЙ ВКЛАДКИ ПОСЛЕ СОХРАНЕНИЯ
+                updateVentilationTab(building);
             }
         } catch (SQLException e) {
             e.printStackTrace();
