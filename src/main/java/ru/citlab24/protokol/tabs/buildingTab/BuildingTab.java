@@ -51,6 +51,17 @@ public class BuildingTab extends JPanel {
         setLayout(new BorderLayout());
         add(createBuildingPanel(), BorderLayout.CENTER);
         add(createActionButtons(), BorderLayout.SOUTH);
+        floorList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                updateSpaceList();
+            }
+        });
+
+        spaceList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                updateRoomList();
+            }
+        });
     }
     private JPanel createBuildingPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 3, 15, 15));
@@ -158,7 +169,9 @@ public class BuildingTab extends JPanel {
 
         // Обновляем выбранные элементы
         if (!building.getFloors().isEmpty()) {
-            floorList.setSelectedIndex(0);
+            floorList.setSelectedIndex(0);  // Выделяем первый этаж
+            updateSpaceList();  // Обновляем список помещений
+            updateRoomList();   // Обновляем список комнат
         }
     }
 
@@ -359,6 +372,11 @@ public class BuildingTab extends JPanel {
             for (Space space : selectedFloor.getSpaces()) {
                 spaceListModel.addElement(space);
             }
+
+            // Автоматически выделяем первое помещение
+            if (!spaceListModel.isEmpty()) {
+                spaceList.setSelectedIndex(0);
+            }
         }
     }
 
@@ -368,6 +386,11 @@ public class BuildingTab extends JPanel {
         if (selectedSpace != null) {
             for (Room room : selectedSpace.getRooms()) {
                 roomListModel.addElement(room);
+            }
+
+            // Автоматически выделяем первую комнату
+            if (!roomListModel.isEmpty()) {
+                roomList.setSelectedIndex(0);
             }
         }
     }
@@ -446,6 +469,14 @@ public class BuildingTab extends JPanel {
         if (newName != null && !newName.trim().isEmpty()) {
             room.setName(newName.trim());
             roomListModel.set(index, room); // Обновляем элемент
+        }
+    }
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        // Автоматически выделяем первый элемент при открытии вкладки
+        if (!floorListModel.isEmpty()) {
+            floorList.setSelectedIndex(0);
         }
     }
 }

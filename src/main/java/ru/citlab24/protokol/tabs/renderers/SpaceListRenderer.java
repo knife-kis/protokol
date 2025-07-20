@@ -13,7 +13,6 @@ public class SpaceListRenderer extends DefaultListCellRenderer {
         super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
         if (value instanceof Space) {
             Space space = (Space) value;
-            // Формат: "идентификатор_помещения (тип_помещения_в_нижнем_регистре)"
             setText(space.getIdentifier() + " (" + space.getType().toString().toLowerCase() + ")");
         }
         return this;
