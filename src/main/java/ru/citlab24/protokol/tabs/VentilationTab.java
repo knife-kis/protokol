@@ -6,11 +6,11 @@ import ru.citlab24.protokol.tabs.models.Room;
 import ru.citlab24.protokol.tabs.models.Space;
 
 import javax.swing.*;
-import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.JTableHeader;
 import java.awt.*;
-import java.util.ArrayList;
+import java.awt.Color;
+import java.awt.Font;
 import java.util.List;
 import java.util.Locale;
 
@@ -35,6 +35,7 @@ public class VentilationTab extends JPanel {
         this.building = building;
         initUI();
         loadVentilationData();
+        add(createButtonPanel(), BorderLayout.SOUTH);
     }
 
     private void initUI() {
@@ -107,11 +108,17 @@ public class VentilationTab extends JPanel {
         for (VentilationRecord record : tableModel.getRecords()) {
             record.roomRef().setVentilationChannels(record.channels());
             record.roomRef().setVentilationSectionArea(record.sectionArea());
-            record.roomRef().setVolume(record.volume());
         }
     }
     private JPanel createButtonPanel() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton saveBtn = new JButton("Сохранить расчет");
+        JButton exportBtn = new JButton("Экспорт в Excel");
+        exportBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        exportBtn.setBackground(new Color(0, 100, 0)); // Темно-зеленый
+        exportBtn.setForeground(Color.WHITE);
+        exportBtn.setFocusPainted(false);
+        exportBtn.addActionListener(e -> exportToExcel());
         saveBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
         saveBtn.setBackground(new Color(46, 125, 50)); // Зеленый
         saveBtn.setForeground(Color.WHITE);
@@ -127,12 +134,25 @@ public class VentilationTab extends JPanel {
                 saveBtn.setBackground(new Color(46, 125, 50));
             }
         });
+        exportBtn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                exportBtn.setBackground(new Color(0, 80, 0));
+            }
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                exportBtn.setBackground(new Color(0, 100, 0));
+            }
+        });
 
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         panel.add(saveBtn);
+        panel.add(exportBtn);
+
         return panel;
     }
 
+    // МЕТОД ЭКСПОРТА ДАННЫХ В EXCEL
+    private void exportToExcel() {
+        VentilationExcelExporter.export(tableModel.getRecords(), this);
+    }
     public void refreshData() {
         // Добавить логирование для отладки
         System.out.println("Обновление данных вентиляции...");
@@ -225,16 +245,17 @@ public class VentilationTab extends JPanel {
     public String getRoomCategory(String roomName) {
         if (roomName == null) return null;
         String normalized = normalizeRoomName(roomName);
-        return switch (normalized) {
-            case "кухня" -> "кухня";
-            case "кухня ниша" -> "кухня-ниша";
-            case "санузел", "сан узел", "сан. узел" -> "санузел";
-            case "туалет" -> "туалет";
-            case "ванная" -> "ванная";
-            case "ванная комната" -> "ванная комната";
-            case "совмещенный", "совмещенный санузел" -> "совмещенный санузел";
-            default -> null;
-        };
+        if (normalized.contains("кухня")) {
+            return "кухня";
+        } else if (normalized.contains("санузел") ||
+                normalized.contains("сан узел") ||
+                normalized.contains("туалет") ||
+                normalized.contains("совмещенный")) {
+            return "санузел";
+        } else if (normalized.contains("ванная")) {
+            return "ванная";
+        }
+        return null;
     }
 
     private String normalizeRoomName(String roomName) {
@@ -247,262 +268,7 @@ public class VentilationTab extends JPanel {
         this.building = building;
     }
 
-    // Модель таблицы
-    private static class VentilationTableModel extends AbstractTableModel {
-
-        private final String[] COLUMN_NAMES = {
-                "Этаж", "Помещение", "Комната",
-                "Кол-во каналов", "Сечение (кв.м)", "Объем (куб.м)"
-        };
-
-        private final VentilationTab ventilationTab;
-        private final List<VentilationRecord> records = new ArrayList<>();
-
-        public VentilationTableModel(VentilationTab ventilationTab) {
-            this.ventilationTab = ventilationTab;
-        }
-
-        public void clearData() {
-            records.clear();
-        }
-
-        public void addRecord(VentilationRecord record) {
-            records.add(record);
-        }
-
-        public List<VentilationRecord> getRecords() {
-            return records;
-        }
-
-        @Override
-        public int getRowCount() {
-            return records.size();
-        }
-
-        @Override
-        public int getColumnCount() {
-            return COLUMN_NAMES.length;
-        }
-
-        @Override
-        public String getColumnName(int column) {
-            return COLUMN_NAMES[column];
-        }
-
-        @Override
-        public Class<?> getColumnClass(int columnIndex) {
-            return switch (columnIndex) {
-                case 0, 1, 2 -> String.class;
-                case 3 -> Integer.class;
-                case 4 -> Double.class;
-                case 5 -> Object.class; // Изменено на Object.class
-                default -> Object.class;
-            };
-        }
-
-        @Override
-        public boolean isCellEditable(int rowIndex, int columnIndex) {
-            return columnIndex == 3 || columnIndex == 4 || columnIndex == 5;
-        }
-
-        @Override
-        public Object getValueAt(int rowIndex, int columnIndex) {
-            VentilationRecord record = records.get(rowIndex);
-            return switch (columnIndex) {
-                case 0 -> record.floor();
-                case 1 -> record.space();
-                case 2 -> record.room();
-                case 3 -> record.channels();
-                case 4 -> record.sectionArea();
-                case 5 -> record.volume(); // Убрано преобразование 0.0 в null
-                default -> null;
-            };
-        }
-
-        @Override
-        public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
-            if (aValue == null) return;
-
-            VentilationRecord record = records.get(rowIndex);
-            switch (columnIndex) {
-                case 3: // Кол-во каналов
-                    if (aValue instanceof Number) {
-                        int newValue = ((Number) aValue).intValue();
-                        int oldValue = record.channels();
-
-                        if (newValue == oldValue) return;
-
-                        String category = ventilationTab.getRoomCategory(record.room());
-
-                        // Если категория не определена, применяем только к текущей комнате
-                        if (category == null) {
-                            updateRecordAndRoom(record, rowIndex, newValue);
-                            return;
-                        }
-
-                        // Диалог подтверждения
-                        int option = JOptionPane.showOptionDialog(
-                                ventilationTab,
-                                "Вы хотите изменить количество каналов во всех комнатах типа '" + category + "'?",
-                                "Подтверждение",
-                                JOptionPane.YES_NO_CANCEL_OPTION,
-                                JOptionPane.QUESTION_MESSAGE,
-                                null,
-                                new String[]{"Да", "Нет", "Отмена"},
-                                "Нет"
-                        );
-
-                        // Обработка выбора
-                        switch (option) {
-                            case 0: // Да
-                                updateAllRoomsOfType(category, newValue, rowIndex);
-                                break;
-                            case 1: // Нет
-                                updateRecordAndRoom(record, rowIndex, newValue);
-                                break;
-                            case 2: // Отмена
-                                records.set(rowIndex, record.withChannels(oldValue));
-                                fireTableCellUpdated(rowIndex, columnIndex); // Обновляем без изменений
-                                break;
-                        }
-                    }
-                    break;
-                case 4: // Сечение
-                    if (aValue instanceof Number) {
-                        double newValue = ((Number) aValue).doubleValue();
-                        double oldValue = record.sectionArea();
-
-                        // Проверка на изменение значения
-                        if (Math.abs(newValue - oldValue) < 0.000001) return;
-
-                        String category = ventilationTab.getRoomCategory(record.room());
-
-                        // Если категория не определена - применяем только к текущей
-                        if (category == null) {
-                            updateRecordAndSection(record, rowIndex, newValue);
-                            return;
-                        }
-
-                        // Диалог подтверждения
-                        int option = showConfirmationDialog(
-                                "Вы хотите изменить сечение каналов во всех комнатах типа '" + category + "'?"
-                        );
-
-                        switch (option) {
-                            case 0: // Да
-                                updateAllRoomsOfTypeForSection(category, newValue);
-                                break;
-                            case 1: // Нет
-                                updateRecordAndSection(record, rowIndex, newValue);
-                                break;
-                            case 2: // Отмена
-                                fireTableCellUpdated(rowIndex, columnIndex);
-                                break;
-                        }
-                    }
-                    break;
-                case 5: // Объем
-                    if (aValue instanceof Number) {
-                        double doubleValue = ((Number) aValue).doubleValue();
-                        records.set(rowIndex, record.withVolume(doubleValue));
-                    }
-                    break;
-                default:
-                    return;
-            }
-            fireTableCellUpdated(rowIndex, columnIndex);
-        }
-        // Метод показа диалога подтверждения
-        private int showConfirmationDialog(String message) {
-            return JOptionPane.showOptionDialog(
-                    ventilationTab,
-                    message,
-                    "Подтверждение",
-                    JOptionPane.YES_NO_CANCEL_OPTION,
-                    JOptionPane.QUESTION_MESSAGE,
-                    null,
-                    new String[]{"Да", "Нет", "Отмена"},
-                    "Нет"
-            );
-        }
-
-        // Методы обновления сечения
-        private void updateAllRoomsOfTypeForSection(String category, double newValue) {
-            // Обновляем все комнаты в здании
-            for (Floor floor : ventilationTab.building.getFloors()) {
-                for (Space space : floor.getSpaces()) {
-                    for (Room room : space.getRooms()) {
-                        if (category.equals(ventilationTab.getRoomCategory(room.getName()))) {
-                            room.setVentilationSectionArea(newValue);
-                        }
-                    }
-                }
-            }
-
-            // Обновляем записи в таблице
-            for (int i = 0; i < records.size(); i++) {
-                VentilationRecord r = records.get(i);
-                if (category.equals(ventilationTab.getRoomCategory(r.room()))) {
-                    records.set(i, r.withSectionArea(newValue));
-                    fireTableCellUpdated(i, 4); // Обновляем столбец сечения
-                }
-            }
-        }
-
-        private void updateRecordAndSection(VentilationRecord record, int rowIndex, double newValue) {
-            records.set(rowIndex, record.withSectionArea(newValue));
-            record.roomRef().setVentilationSectionArea(newValue);
-            fireTableCellUpdated(rowIndex, 4);
-        }
-
-        private void updateAllRoomsOfType(String category, int newValue, int currentRow) {
-            // Обновляем все комнаты в здании
-            for (Floor floor : ventilationTab.building.getFloors()) {
-                for (Space space : floor.getSpaces()) {
-                    for (Room room : space.getRooms()) {
-                        if (category.equals(ventilationTab.getRoomCategory(room.getName()))) {
-                            room.setVentilationChannels(newValue);
-                        }
-                    }
-                }
-            }
-
-            // Обновляем записи в таблице (ВСЕ, включая текущую)
-            for (int i = 0; i < records.size(); i++) {
-                VentilationRecord r = records.get(i);
-                if (category.equals(ventilationTab.getRoomCategory(r.room()))) {
-                    records.set(i, r.withChannels(newValue));
-                    fireTableCellUpdated(i, 3);
-                }
-            }
-        }
-
-        private void updateRecordAndRoom(VentilationRecord record, int rowIndex, int newValue) {
-            records.set(rowIndex, record.withChannels(newValue));
-            record.roomRef().setVentilationChannels(newValue);
-            fireTableCellUpdated(rowIndex, 3);
-        }
-    }
-
-    // Record с ссылкой на модель
-    private record VentilationRecord(
-            String floor,
-            String space,
-            String room,
-            int channels,
-            double sectionArea,
-            Double volume,
-            Room roomRef
-    ) {
-        public VentilationRecord withVolume(Double newVolume) {
-            return new VentilationRecord(floor, space, room, channels, sectionArea, newVolume, roomRef);
-        }
-        public VentilationRecord withChannels(int newChannels) {
-            return new VentilationRecord(floor, space, room, newChannels, sectionArea, volume, roomRef);
-        }
-
-        public VentilationRecord withSectionArea(double newArea) {
-            return new VentilationRecord(floor, space, room, channels, newArea, volume, roomRef);
-        }
+    public Building getBuilding() {
+        return building;
     }
 }
