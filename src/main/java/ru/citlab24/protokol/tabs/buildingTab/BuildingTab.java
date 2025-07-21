@@ -138,6 +138,7 @@ public class BuildingTab extends JPanel {
     private JPanel createFloorButtons() {
         return createButtonPanel(
                 createStyledButton("", FontAwesomeSolid.PLUS, new Color(46, 125, 50), this::addFloor),
+                createStyledButton("", FontAwesomeSolid.CLONE, new Color(100, 181, 246), this::copyFloor),
                 createStyledButton("", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editFloor),
                 createStyledButton("", FontAwesomeSolid.TRASH, new Color(198, 40, 40), this::removeFloor)
         );
@@ -305,9 +306,23 @@ public class BuildingTab extends JPanel {
         Floor floorCopy = new Floor();
         floorCopy.setNumber(originalFloor.getNumber());
         floorCopy.setType(originalFloor.getType());
+        floorCopy.setName(originalFloor.getName()); // Копируем имя если нужно
 
+        // Глубокое копирование помещений
         for (Space originalSpace : originalFloor.getSpaces()) {
-            Space spaceCopy = createSpaceCopy(originalSpace);
+            Space spaceCopy = new Space();
+            spaceCopy.setIdentifier(originalSpace.getIdentifier());
+            spaceCopy.setType(originalSpace.getType());
+
+            // Глубокое копирование комнат
+            for (Room originalRoom : originalSpace.getRooms()) {
+                Room roomCopy = new Room();
+                roomCopy.setName(originalRoom.getName());
+                roomCopy.setVolume(originalRoom.getVolume());
+                roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
+                roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
+                spaceCopy.addRoom(roomCopy);
+            }
             floorCopy.addSpace(spaceCopy);
         }
         return floorCopy;
@@ -416,6 +431,115 @@ public class BuildingTab extends JPanel {
             building.addFloor(floor);
             floorListModel.addElement(floor);
         }
+    }
+    private void copyFloor(ActionEvent e) {
+        Floor selectedFloor = floorList.getSelectedValue();
+        if (selectedFloor == null) {
+            showMessage("Выберите этаж для копирования", "Ошибка", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // Создаем глубокую копию этажа
+        Floor copiedFloor = createFloorCopy(selectedFloor);
+
+        // Генерируем новый уникальный номер этажа
+        String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
+        copiedFloor.setNumber(newFloorNumber);
+
+        // Извлекаем цифры из нового номера этажа
+        String newFloorDigits = extractDigits(newFloorNumber);
+        if (newFloorDigits.isEmpty()) {
+            newFloorDigits = newFloorNumber; // Если цифр нет, используем всю строку
+        }
+
+        updateSpaceIdentifiers(copiedFloor, newFloorDigits);
+        building.addFloor(copiedFloor);
+        floorListModel.addElement(copiedFloor);
+        floorList.setSelectedValue(copiedFloor, true);
+    }
+    private String extractDigits(String input) {
+        return input.replaceAll("\\D", ""); // Удаляем все не-цифры
+    }
+    private String generateNextFloorNumber(String currentNumber) {
+        // Пытаемся извлечь число из названия этажа
+        Pattern p = Pattern.compile("\\d+");
+        Matcher m = p.matcher(currentNumber);
+
+        if (m.find()) {
+            int num = Integer.parseInt(m.group());
+            String prefix = currentNumber.substring(0, m.start());
+            String suffix = currentNumber.substring(m.end());
+
+            // Ищем максимальный существующий номер
+            int maxNumber = building.getFloors().stream()
+                    .map(Floor::getNumber)
+                    .mapToInt(n -> {
+                        Matcher matcher = p.matcher(n);
+                        return matcher.find() ? Integer.parseInt(matcher.group()) : Integer.MIN_VALUE;
+                    })
+                    .max()
+                    .orElse(num);
+
+            // Генерируем следующий номер
+            int nextNumber = (maxNumber != Integer.MIN_VALUE) ? maxNumber + 1 : num + 1;
+            return prefix + nextNumber + suffix;
+        }
+
+        // Для нечисловых названий
+        return generateUniqueNonNumericName(currentNumber);
+    }
+    private String findNextAvailableNumber(int baseNumber) {
+        int candidate = baseNumber + 1;
+        Set<Integer> existingNumbers = new HashSet<>();
+
+        // Собираем все числовые номера этажей
+        for (Floor f : building.getFloors()) {
+            try {
+                existingNumbers.add(Integer.parseInt(f.getNumber()));
+            } catch (NumberFormatException ignored) {
+                // Игнорируем нечисловые этажи
+            }
+        }
+
+        // Ищем ближайшее свободное число
+        while (existingNumbers.contains(candidate)) {
+            candidate++;
+        }
+        return String.valueOf(candidate);
+    }
+
+    private String generateUniqueNonNumericName(String base) {
+        Pattern pattern = Pattern.compile(Pattern.quote(base) + "(?: \\(копия (\\d+)\\))?");
+        int maxCopy = building.getFloors().stream()
+                .map(Floor::getNumber)
+                .map(pattern::matcher)
+                .filter(Matcher::matches)
+                .mapToInt(m -> m.group(1) != null ? Integer.parseInt(m.group(1)) : 0)
+                .max()
+                .orElse(0);
+
+        return base + (maxCopy == 0 ? "" : " (копия " + (maxCopy + 1) + ")");
+    }
+    private void updateSpaceIdentifiers(Floor floor, String newFloorDigits) {
+        for (Space space : floor.getSpaces()) {
+            String newId = updateIdentifier(space.getIdentifier(), newFloorDigits);
+            space.setIdentifier(newId);
+        }
+    }
+    private String updateIdentifier(String identifier, String newFloorDigits) {
+        // Шаблон для поиска формата "X-Y" (например: "кв 1-1")
+        Pattern pattern = Pattern.compile("(.*?)(\\d+)-(\\d+)(.*)");
+        Matcher matcher = pattern.matcher(identifier);
+
+        if (matcher.matches()) {
+            String prefix = matcher.group(1);  // Префикс (например, "кв ")
+            String roomNum = matcher.group(3);  // Номер помещения
+            String suffix = matcher.group(4);   // Суффикс (если есть)
+
+            // Формируем новый идентификатор: префикс + цифры этажа + номер помещения
+            return prefix + newFloorDigits + "-" + roomNum + suffix;
+        }
+        return identifier; // Возвращаем оригинал, если паттерн не совпал
     }
 
     private void editFloor(ActionEvent e) {

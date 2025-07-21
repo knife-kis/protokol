@@ -17,7 +17,7 @@ import java.util.Locale;
 
 public class VentilationTab extends JPanel {
     private Building building;
-    private final VentilationTableModel tableModel = new VentilationTableModel();
+    private final VentilationTableModel tableModel = new VentilationTableModel(this);
     private final JTable ventilationTable = new JTable(tableModel);
 
     private static final List<String> TARGET_ROOMS = List.of(
@@ -34,6 +34,7 @@ public class VentilationTab extends JPanel {
     public VentilationTab(Building building) {
         this.building = building;
         initUI();
+        loadVentilationData();
     }
 
     private void initUI() {
@@ -221,18 +222,45 @@ public class VentilationTab extends JPanel {
         JOptionPane.showMessageDialog(this, "Расчеты сохранены успешно!", "Сохранение", JOptionPane.INFORMATION_MESSAGE);
     }
 
+    public String getRoomCategory(String roomName) {
+        if (roomName == null) return null;
+        String normalized = normalizeRoomName(roomName);
+        return switch (normalized) {
+            case "кухня" -> "кухня";
+            case "кухня ниша" -> "кухня-ниша";
+            case "санузел", "сан узел", "сан. узел" -> "санузел";
+            case "туалет" -> "туалет";
+            case "ванная" -> "ванная";
+            case "ванная комната" -> "ванная комната";
+            case "совмещенный", "совмещенный санузел" -> "совмещенный санузел";
+            default -> null;
+        };
+    }
+
+    private String normalizeRoomName(String roomName) {
+        return roomName
+                .replaceAll("[\\s\\.-]+", " ")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+    }
     public void setBuilding(Building building) {
         this.building = building;
     }
 
     // Модель таблицы
     private static class VentilationTableModel extends AbstractTableModel {
+
         private final String[] COLUMN_NAMES = {
                 "Этаж", "Помещение", "Комната",
                 "Кол-во каналов", "Сечение (кв.м)", "Объем (куб.м)"
         };
 
+        private final VentilationTab ventilationTab;
         private final List<VentilationRecord> records = new ArrayList<>();
+
+        public VentilationTableModel(VentilationTab ventilationTab) {
+            this.ventilationTab = ventilationTab;
+        }
 
         public void clearData() {
             records.clear();
@@ -297,10 +325,46 @@ public class VentilationTab extends JPanel {
 
             VentilationRecord record = records.get(rowIndex);
             switch (columnIndex) {
-                case 3: // Количество каналов
+                case 3: // Кол-во каналов
                     if (aValue instanceof Number) {
-                        int intValue = ((Number) aValue).intValue();
-                        records.set(rowIndex, record.withChannels(intValue));
+                        int newValue = ((Number) aValue).intValue();
+                        int oldValue = record.channels();
+
+                        if (newValue == oldValue) return;
+
+                        String category = ventilationTab.getRoomCategory(record.room());
+
+                        // Если категория не определена, применяем только к текущей комнате
+                        if (category == null) {
+                            updateRecordAndRoom(record, rowIndex, newValue);
+                            return;
+                        }
+
+                        // Диалог подтверждения
+                        int option = JOptionPane.showOptionDialog(
+                                ventilationTab,
+                                "Вы хотите изменить количество каналов во всех комнатах типа '" + category + "'?",
+                                "Подтверждение",
+                                JOptionPane.YES_NO_CANCEL_OPTION,
+                                JOptionPane.QUESTION_MESSAGE,
+                                null,
+                                new String[]{"Да", "Нет", "Отмена"},
+                                "Нет"
+                        );
+
+                        // Обработка выбора
+                        switch (option) {
+                            case 0: // Да
+                                updateAllRoomsOfType(category, newValue, rowIndex);
+                                break;
+                            case 1: // Нет
+                                updateRecordAndRoom(record, rowIndex, newValue);
+                                break;
+                            case 2: // Отмена
+                                records.set(rowIndex, record.withChannels(oldValue));
+                                fireTableCellUpdated(rowIndex, columnIndex); // Обновляем без изменений
+                                break;
+                        }
                     }
                     break;
                 case 4: // Сечение
@@ -319,6 +383,34 @@ public class VentilationTab extends JPanel {
                     return;
             }
             fireTableCellUpdated(rowIndex, columnIndex);
+        }
+
+        private void updateAllRoomsOfType(String category, int newValue, int currentRow) {
+            // Обновляем все комнаты в здании
+            for (Floor floor : ventilationTab.building.getFloors()) {
+                for (Space space : floor.getSpaces()) {
+                    for (Room room : space.getRooms()) {
+                        if (category.equals(ventilationTab.getRoomCategory(room.getName()))) {
+                            room.setVentilationChannels(newValue);
+                        }
+                    }
+                }
+            }
+
+            // Обновляем записи в таблице (ВСЕ, включая текущую)
+            for (int i = 0; i < records.size(); i++) {
+                VentilationRecord r = records.get(i);
+                if (category.equals(ventilationTab.getRoomCategory(r.room()))) {
+                    records.set(i, r.withChannels(newValue));
+                    fireTableCellUpdated(i, 3);
+                }
+            }
+        }
+
+        private void updateRecordAndRoom(VentilationRecord record, int rowIndex, int newValue) {
+            records.set(rowIndex, record.withChannels(newValue));
+            record.roomRef().setVentilationChannels(newValue);
+            fireTableCellUpdated(rowIndex, 3);
         }
     }
 
