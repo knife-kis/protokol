@@ -47,7 +47,7 @@ public class VentilationTab extends JPanel {
 
         // Редакторы ячеек
         ventilationTable.getColumnModel().getColumn(3).setCellEditor(
-                new SpinnerEditor(1, 1, 10));
+                new SpinnerEditor(1, 1, 300, 1));
         ventilationTable.getColumnModel().getColumn(4).setCellEditor(
                 new SpinnerEditor(0.008, 0.001, 0.1, 0.001));
         ventilationTable.getColumnModel().getColumn(5).setCellEditor(
@@ -293,13 +293,31 @@ public class VentilationTab extends JPanel {
 
         @Override
         public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
+            if (aValue == null) return;
+
             VentilationRecord record = records.get(rowIndex);
-            records.set(rowIndex, switch (columnIndex) {
-                case 3 -> record.withChannels((Integer) aValue);
-                case 4 -> record.withSectionArea((Double) aValue);
-                case 5 -> record.withVolume((Double) aValue);
-                default -> record;
-            });
+            switch (columnIndex) {
+                case 3: // Количество каналов
+                    if (aValue instanceof Number) {
+                        int intValue = ((Number) aValue).intValue();
+                        records.set(rowIndex, record.withChannels(intValue));
+                    }
+                    break;
+                case 4: // Сечение
+                    if (aValue instanceof Number) {
+                        double doubleValue = ((Number) aValue).doubleValue();
+                        records.set(rowIndex, record.withSectionArea(doubleValue));
+                    }
+                    break;
+                case 5: // Объем
+                    if (aValue instanceof Number) {
+                        double doubleValue = ((Number) aValue).doubleValue();
+                        records.set(rowIndex, record.withVolume(doubleValue));
+                    }
+                    break;
+                default:
+                    return;
+            }
             fireTableCellUpdated(rowIndex, columnIndex);
         }
     }

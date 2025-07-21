@@ -99,25 +99,25 @@ public class DatabaseManager {
         }
     }
 
-    private static void insertBuilding(Building building) throws SQLException {
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "INSERT INTO building (name) VALUES (?)",
-                Statement.RETURN_GENERATED_KEYS
-        )) {
-            stmt.setString(1, building.getName());
-            stmt.executeUpdate();
-
-            try (ResultSet rs = stmt.getGeneratedKeys()) {
-                if (rs.next()) {
-                    int buildingId = rs.getInt(1);
-                    building.setId(buildingId);
-                    for (Floor floor : building.getFloors()) {
-                        saveFloor(buildingId, floor);
-                    }
-                }
-            }
-        }
-    }
+//    private static void insertBuilding(Building building) throws SQLException {
+//        try (PreparedStatement stmt = connection.prepareStatement(
+//                "INSERT INTO building (name) VALUES (?)",
+//                Statement.RETURN_GENERATED_KEYS
+//        )) {
+//            stmt.setString(1, building.getName());
+//            stmt.executeUpdate();
+//
+//            try (ResultSet rs = stmt.getGeneratedKeys()) {
+//                if (rs.next()) {
+//                    int buildingId = rs.getInt(1);
+//                    building.setId(buildingId);
+//                    for (Floor floor : building.getFloors()) {
+//                        saveFloor(buildingId, floor);
+//                    }
+//                }
+//            }
+//        }
+//    }
 
 //    private static void updateBuilding(Building building) throws SQLException {
 //        // Обновляем название здания
