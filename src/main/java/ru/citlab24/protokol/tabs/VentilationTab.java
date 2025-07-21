@@ -369,8 +369,36 @@ public class VentilationTab extends JPanel {
                     break;
                 case 4: // Сечение
                     if (aValue instanceof Number) {
-                        double doubleValue = ((Number) aValue).doubleValue();
-                        records.set(rowIndex, record.withSectionArea(doubleValue));
+                        double newValue = ((Number) aValue).doubleValue();
+                        double oldValue = record.sectionArea();
+
+                        // Проверка на изменение значения
+                        if (Math.abs(newValue - oldValue) < 0.000001) return;
+
+                        String category = ventilationTab.getRoomCategory(record.room());
+
+                        // Если категория не определена - применяем только к текущей
+                        if (category == null) {
+                            updateRecordAndSection(record, rowIndex, newValue);
+                            return;
+                        }
+
+                        // Диалог подтверждения
+                        int option = showConfirmationDialog(
+                                "Вы хотите изменить сечение каналов во всех комнатах типа '" + category + "'?"
+                        );
+
+                        switch (option) {
+                            case 0: // Да
+                                updateAllRoomsOfTypeForSection(category, newValue);
+                                break;
+                            case 1: // Нет
+                                updateRecordAndSection(record, rowIndex, newValue);
+                                break;
+                            case 2: // Отмена
+                                fireTableCellUpdated(rowIndex, columnIndex);
+                                break;
+                        }
                     }
                     break;
                 case 5: // Объем
@@ -383,6 +411,48 @@ public class VentilationTab extends JPanel {
                     return;
             }
             fireTableCellUpdated(rowIndex, columnIndex);
+        }
+        // Метод показа диалога подтверждения
+        private int showConfirmationDialog(String message) {
+            return JOptionPane.showOptionDialog(
+                    ventilationTab,
+                    message,
+                    "Подтверждение",
+                    JOptionPane.YES_NO_CANCEL_OPTION,
+                    JOptionPane.QUESTION_MESSAGE,
+                    null,
+                    new String[]{"Да", "Нет", "Отмена"},
+                    "Нет"
+            );
+        }
+
+        // Методы обновления сечения
+        private void updateAllRoomsOfTypeForSection(String category, double newValue) {
+            // Обновляем все комнаты в здании
+            for (Floor floor : ventilationTab.building.getFloors()) {
+                for (Space space : floor.getSpaces()) {
+                    for (Room room : space.getRooms()) {
+                        if (category.equals(ventilationTab.getRoomCategory(room.getName()))) {
+                            room.setVentilationSectionArea(newValue);
+                        }
+                    }
+                }
+            }
+
+            // Обновляем записи в таблице
+            for (int i = 0; i < records.size(); i++) {
+                VentilationRecord r = records.get(i);
+                if (category.equals(ventilationTab.getRoomCategory(r.room()))) {
+                    records.set(i, r.withSectionArea(newValue));
+                    fireTableCellUpdated(i, 4); // Обновляем столбец сечения
+                }
+            }
+        }
+
+        private void updateRecordAndSection(VentilationRecord record, int rowIndex, double newValue) {
+            records.set(rowIndex, record.withSectionArea(newValue));
+            record.roomRef().setVentilationSectionArea(newValue);
+            fireTableCellUpdated(rowIndex, 4);
         }
 
         private void updateAllRoomsOfType(String category, int newValue, int currentRow) {
