@@ -374,15 +374,111 @@ public class BuildingTab extends JPanel {
         spaceList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         spaceList.addListSelectionListener(e -> updateRoomList());
 
-        JPanel btns = new JPanel(new GridLayout(1, 3, 5, 5)); // Изменено на 3 кнопки
+        JPanel btns = new JPanel(new GridLayout(1, 4, 5, 5)); // Теперь 4 кнопки
         btns.add(createStyledButton("Добавить", FontAwesomeSolid.PLUS, new Color(46,125,50), this::addSpace));
+        btns.add(createStyledButton("", FontAwesomeSolid.CLONE, new Color(100, 181, 246), this::copySpace)); // Кнопка копирования
         btns.add(createStyledButton("Изменить", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editSpace));
         btns.add(createStyledButton("Удалить", FontAwesomeSolid.TRASH, new Color(198,40,40), this::removeSpace));
+
         p.add(new JScrollPane(spaceList), BorderLayout.CENTER);
         p.add(btns, BorderLayout.SOUTH);
         return p;
     }
 
+    private void copySpace(ActionEvent e) {
+        Floor selectedFloor = floorList.getSelectedValue();
+        Space selectedSpace = spaceList.getSelectedValue();
+
+        if (selectedFloor == null || selectedSpace == null) {
+            JOptionPane.showMessageDialog(this, "Выберите помещение для копирования", "Ошибка", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // Создаем глубокую копию помещения со всеми комнатами
+        Space copiedSpace = deepCopySpace(selectedSpace);
+
+        // Генерируем новый идентификатор для копии
+        String newIdentifier = generateNextSpaceId(selectedFloor, selectedSpace.getIdentifier());
+        copiedSpace.setIdentifier(newIdentifier);
+
+        // Добавляем новое помещение на этаж
+        selectedFloor.addSpace(copiedSpace);
+        spaceListModel.addElement(copiedSpace);
+
+        // Выделяем новое помещение
+        spaceList.setSelectedValue(copiedSpace, true);
+    }
+    private String generateNextSpaceId(Floor floor, String currentId) {
+        // Извлекаем префикс и базовый номер из текущего идентификатора
+        String prefix = "";
+        String baseNumber = "";
+        int lastDashIndex = currentId.lastIndexOf('-');
+
+        if (lastDashIndex != -1) {
+            prefix = currentId.substring(0, lastDashIndex).trim();
+            baseNumber = currentId.substring(lastDashIndex + 1).trim();
+        } else {
+            prefix = currentId;
+        }
+
+        // Если в базовом номере есть цифры, пробуем их распарсить
+        int currentNumber = 0;
+        try {
+            // Оставляем только цифры из baseNumber
+            String numericPart = baseNumber.replaceAll("\\D", "");
+            if (!numericPart.isEmpty()) {
+                currentNumber = Integer.parseInt(numericPart);
+            }
+        } catch (NumberFormatException ignored) {}
+
+        // Находим максимальный номер для этого префикса на этаже
+        int maxNumber = currentNumber;
+        for (Space space : floor.getSpaces()) {
+            String id = space.getIdentifier();
+            if (id.startsWith(prefix)) {
+                String suffix = id.substring(prefix.length()).trim();
+                if (suffix.startsWith("-")) {
+                    suffix = suffix.substring(1).trim();
+                }
+
+                try {
+                    // Оставляем только цифры из суффикса
+                    String numericSuffix = suffix.replaceAll("\\D", "");
+                    if (!numericSuffix.isEmpty()) {
+                        int num = Integer.parseInt(numericSuffix);
+                        if (num > maxNumber) maxNumber = num;
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        // Генерируем следующий номер
+        int nextNumber = maxNumber + 1;
+
+        // Формируем новый идентификатор
+        if (prefix.isEmpty()) {
+            return String.valueOf(nextNumber);
+        } else {
+            return prefix + "-" + nextNumber;
+        }
+    }
+    private Space deepCopySpace(Space original) {
+        Space copy = new Space();
+        copy.setIdentifier(original.getIdentifier()); // Временное значение, будет заменено
+        copy.setType(original.getType());
+
+        // Копируем все комнаты
+        for (Room originalRoom : original.getRooms()) {
+            Room roomCopy = new Room();
+            roomCopy.setName(originalRoom.getName());
+            roomCopy.setVolume(originalRoom.getVolume());
+            roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
+            roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
+            copy.addRoom(roomCopy);
+        }
+
+        return copy;
+    }
     private JPanel createRoomPanel() {
         JPanel p = new JPanel(new BorderLayout());
         p.setBorder(BorderFactory.createTitledBorder(null,
