@@ -24,7 +24,7 @@ public class VentilationTab extends JPanel {
             "кухня", "кухня-ниша",
             "санузел", "сан узел", "сан. узел",
             "ванная", "ванная комната",
-            "совмещенный", "совмещенный санузел"
+            "совмещенный", "совмещенный санузел", "туалет"
     );
 
     private static final List<String> TARGET_FLOORS = List.of(

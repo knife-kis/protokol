@@ -7,9 +7,12 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.db.DatabaseManager;
@@ -218,30 +221,47 @@ public class BuildingTab extends JPanel {
             SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy");
             String currentDate = dateFormat.format(new Date());
 
-            // Проверяем, есть ли проект с таким именем
-            String finalName = baseName;
-            String finalName1 = finalName;
-            boolean nameExists = existingProjects.stream()
-                    .anyMatch(p -> p.getName().equals(finalName1));
+            // Извлекаем базовое имя без суффиксов
+            String cleanBaseName = extractBaseName(baseName);
 
-            // Если имя существует, добавляем суффикс с датой
-            if (nameExists) {
-                int version = 2;
-                while (true) {
-                    String candidateName = baseName + " ред." + version + " " + currentDate;
-                    boolean candidateExists = existingProjects.stream()
-                            .anyMatch(p -> p.getName().equals(candidateName));
+            // Находим все версии этого проекта
+            List<String> versionedNames = new ArrayList<>();
+            Pattern versionPattern = Pattern.compile("^" + Pattern.quote(cleanBaseName) + "(?: ред\\.(\\d+) (\\d{2}\\.\\d{2}\\.\\d{4}))?$");
 
-                    if (!candidateExists) {
-                        finalName = candidateName;
-                        break;
-                    }
-                    version++;
+            for (Building project : existingProjects) {
+                Matcher matcher = versionPattern.matcher(project.getName());
+                if (matcher.find()) {
+                    versionedNames.add(project.getName());
                 }
             }
 
+            // Определяем следующую версию
+            int nextVersion = 2;
+            if (!versionedNames.isEmpty()) {
+                // Находим максимальную существующую версию
+                int maxVersion = 1;
+                for (String name : versionedNames) {
+                    Matcher matcher = versionPattern.matcher(name);
+                    if (matcher.find() && matcher.group(1) != null) {
+                        int version = Integer.parseInt(matcher.group(1));
+                        if (version >= maxVersion) {
+                            maxVersion = version + 1;
+                        }
+                    }
+                }
+                nextVersion = maxVersion;
+            }
+
+            String finalName;
+            // Если это первая версия - сохраняем без суффикса
+            if (nextVersion == 1) {
+                finalName = cleanBaseName;
+            } else {
+                finalName = cleanBaseName + " ред." + nextVersion + " " + currentDate;
+            }
+
             saveVentilationCalculations();
-            // Создаем новый проект (всегда новая запись)
+            // Создаем новый проект
             Building newProject = createCopyOfBuilding(building);
             newProject.setName(finalName);
 
@@ -250,7 +270,7 @@ public class BuildingTab extends JPanel {
 
             // Обновляем текущий проект
             this.building = newProject;
-            projectNameField.setText(finalName);
+            projectNameField.setText(cleanBaseName); // Возвращаем базовое имя
 
             JOptionPane.showMessageDialog(
                     this,
@@ -270,6 +290,17 @@ public class BuildingTab extends JPanel {
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    // Метод для извлечения базового имени без суффиксов
+    private String extractBaseName(String name) {
+        // Удаляем все суффиксы вида "ред.X дата"
+        Pattern pattern = Pattern.compile("(.+?) (?:ред\\.\\d+ \\d{2}\\.\\d{2}\\.\\d{4})$");
+        Matcher matcher = pattern.matcher(name);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return name;
     }
 
     private void saveVentilationCalculations() {
