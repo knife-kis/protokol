@@ -26,7 +26,7 @@ public class VentilationExcelExporter {
 
         // Стили
         CellStyle headerStyle = createHeaderStyle(workbook, baseFont);
-        CellStyle rotatedHeaderStyle = createRotatedHeaderStyle(workbook, baseFont); // Новый стиль для поворота
+        CellStyle rotatedHeaderStyle = createRotatedHeaderStyle(workbook, baseFont);
         CellStyle titleStyle = createTitleStyle(workbook, baseFont);
         CellStyle dataStyle = createDataStyle(workbook, baseFont);
         CellStyle floorHeaderStyle = createFloorHeaderStyle(workbook, baseFont);
@@ -36,7 +36,7 @@ public class VentilationExcelExporter {
         CellStyle leftInGroupStyle = createLeftInGroupStyle(workbook, baseFont);
         CellStyle rightInGroupStyle = createRightInGroupStyle(workbook, baseFont);
 
-        // Создаем стили с разным форматированием чисел
+        // Стили с разным форматированием чисел
         CellStyle twoDigitStyle = createNumberStyle(workbook, baseFont, "0.00");
         CellStyle integerStyle = createNumberStyle(workbook, baseFont, "0");
         CellStyle oneDigitStyle = createNumberStyle(workbook, baseFont, "0.0");
@@ -69,12 +69,12 @@ public class VentilationExcelExporter {
         style.setBorderRight(BorderStyle.THIN);
         style.setFont(baseFont);
         style.setWrapText(true);
-        style.setRotation((short) 90); // Поворот на 90° против часовой стрелки
+        style.setRotation((short) 90);
         setBlackBorderColor(style);
         return style;
     }
+
     private static void setColumnsWidth(Sheet sheet) {
-        // Устанавливаем фиксированные ширины колонок
         sheet.setColumnWidth(0, 31 * 256 / 7);
         sheet.setColumnWidth(1, 55 * 256 / 7);
         sheet.setColumnWidth(2, 231 * 256 / 7);
@@ -93,7 +93,6 @@ public class VentilationExcelExporter {
         sheet.getRow(0).setHeightInPoints(12);
         sheet.getRow(1).setHeightInPoints(6.75f);
         sheet.getRow(2).setHeightInPoints(111);
-
         if (sheet.getRow(3) != null) {
             sheet.getRow(3).setHeightInPoints(15);
         }
@@ -134,7 +133,6 @@ public class VentilationExcelExporter {
         return style;
     }
 
-    // Стиль для левой ячейки в группе (D)
     private static CellStyle createLeftInGroupStyle(Workbook workbook, Font baseFont) {
         CellStyle style = workbook.createCellStyle();
         style.setAlignment(HorizontalAlignment.CENTER);
@@ -142,14 +140,13 @@ public class VentilationExcelExporter {
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
-        style.setBorderRight(BorderStyle.NONE); // Нет правой границы
+        style.setBorderRight(BorderStyle.NONE);
         style.setFont(baseFont);
         style.setDataFormat(workbook.createDataFormat().getFormat("0.00"));
         setBlackBorderColor(style);
         return style;
     }
 
-    // Стиль для знака ± (E)
     private static CellStyle createPlusMinusStyle(Workbook workbook, Font baseFont) {
         CellStyle style = workbook.createCellStyle();
         style.setAlignment(HorizontalAlignment.CENTER);
@@ -163,14 +160,13 @@ public class VentilationExcelExporter {
         return style;
     }
 
-    // Стиль для правой ячейки в группе (F)
     private static CellStyle createRightInGroupStyle(Workbook workbook, Font baseFont) {
         CellStyle style = workbook.createCellStyle();
         style.setAlignment(HorizontalAlignment.CENTER);
         style.setVerticalAlignment(VerticalAlignment.CENTER);
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderBottom(BorderStyle.THIN);
-        style.setBorderLeft(BorderStyle.NONE); // Нет левой границы
+        style.setBorderLeft(BorderStyle.NONE);
         style.setBorderRight(BorderStyle.THIN);
         style.setFont(baseFont);
         style.setDataFormat(workbook.createDataFormat().getFormat("0.00"));
@@ -192,23 +188,19 @@ public class VentilationExcelExporter {
         return style;
     }
 
-    // Стиль для заголовка этажа (БЕЗ ЗАЛИВКИ)
     private static CellStyle createFloorHeaderStyle(Workbook workbook, Font baseFont) {
         CellStyle style = workbook.createCellStyle();
         style.setAlignment(HorizontalAlignment.CENTER);
         style.setVerticalAlignment(VerticalAlignment.CENTER);
         style.setFont(baseFont);
-        // Устанавливаем все границы
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
-        // Убрали серую заливку
         setBlackBorderColor(style);
         return style;
     }
 
-    // Установка черного цвета для всех границ
     private static void setBlackBorderColor(CellStyle style) {
         style.setTopBorderColor(IndexedColors.BLACK.getIndex());
         style.setBottomBorderColor(IndexedColors.BLACK.getIndex());
@@ -241,12 +233,7 @@ public class VentilationExcelExporter {
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
             cell.setCellValue(headers[i]);
-
-            if (i >= 6) {
-                cell.setCellStyle(rotatedHeaderStyle); // Поворот только здесь!
-            } else {
-                cell.setCellStyle(headerStyle);
-            }
+            cell.setCellStyle(i >= 6 ? rotatedHeaderStyle : headerStyle);
         }
         sheet.addMergedRegion(new CellRangeAddress(2, 2, 3, 5));
     }
@@ -255,7 +242,6 @@ public class VentilationExcelExporter {
         Row numberRow = sheet.createRow(3);
         for (int i = 0; i <= 11; i++) {
             Cell cell = numberRow.createCell(i);
-
             cell.setCellStyle(headerStyle);
         }
         numberRow.getCell(0).setCellValue("1");
@@ -270,8 +256,6 @@ public class VentilationExcelExporter {
         numberRow.getCell(11).setCellValue("10");
         sheet.addMergedRegion(new CellRangeAddress(3, 3, 3, 5));
     }
-
-    // Остальные методы без изменений до fillData...
 
     private static void fillData(List<VentilationRecord> records, Sheet sheet,
                                  CellStyle dataStyle, CellStyle twoDigitStyle,
@@ -298,12 +282,8 @@ public class VentilationExcelExporter {
             Cell floorCell = floorRow.createCell(0);
             floorCell.setCellValue(floor);
             floorCell.setCellStyle(floorHeaderStyle);
-
-            // Объединяем ячейки и устанавливаем границы для всей области
             CellRangeAddress mergedRegion = new CellRangeAddress(rowNum-1, rowNum-1, 0, 11);
             sheet.addMergedRegion(mergedRegion);
-
-            // Убедимся, что все границы видны в объединенной ячейке
             RegionUtil.setBorderTop(BorderStyle.THIN, mergedRegion, sheet);
             RegionUtil.setBorderBottom(BorderStyle.THIN, mergedRegion, sheet);
             RegionUtil.setBorderLeft(BorderStyle.THIN, mergedRegion, sheet);
@@ -314,75 +294,121 @@ public class VentilationExcelExporter {
             RegionUtil.setRightBorderColor(IndexedColors.BLACK.getIndex(), mergedRegion, sheet);
 
             for (VentilationRecord record : floorRecords) {
-                Row dataRow = sheet.createRow(rowNum++);
-                dataRow.setHeightInPoints(15);
+                int startRow = rowNum;
+                int numChannels = record.channels();
 
-                // Колонка A
-                dataRow.createCell(0).setCellValue(counter++);
-                dataRow.getCell(0).setCellStyle(dataStyle);
+                for (int i = 0; i < numChannels; i++) {
+                    Row dataRow = sheet.createRow(rowNum++);
+                    dataRow.setHeightInPoints(15);
 
-                // Колонка B
-                dataRow.createCell(1).setCellValue("-");
-                dataRow.getCell(1).setCellStyle(dataStyle);
+                    // Колонка A: порядковый номер (уникальный для каждой строки)
+                    dataRow.createCell(0).setCellValue(counter++);
+                    dataRow.getCell(0).setCellStyle(dataStyle);
 
-                // Колонка C
-                dataRow.createCell(2).setCellValue(record.space() + " " + record.room() + " (Вытяжка)");
-                dataRow.getCell(2).setCellStyle(dataStyle);
+                    // Колонка B: всегда "-"
+                    Cell cellB = dataRow.createCell(1);
+                    cellB.setCellValue("-");
+                    cellB.setCellStyle(dataStyle);
 
-                // Колонки D-F
-                double sectionArea = record.sectionArea();
+                    // Колонка C: название помещения (только для первого канала)
+                    if (i == 0) {
+                        dataRow.createCell(2).setCellValue(record.space() + " " + record.room() + " (Вытяжка)");
+                    } else {
+                        dataRow.createCell(2).setCellValue("");
+                    }
+                    dataRow.getCell(2).setCellStyle(dataStyle);
 
-                // ИСПРАВЛЕНИЕ 2: Случайная производительность в диапазоне 65-81
-                double targetFlow = ThreadLocalRandom.current().nextInt(65, 82);
-                double airSpeed = targetFlow / (sectionArea * 3600);
+                    // Колонки D-F
+                    double sectionArea = record.sectionArea();
+                    double targetFlow = ThreadLocalRandom.current().nextInt(65, 82);
+                    double airSpeed = targetFlow / (sectionArea * 3600);
 
-                // D: Значение скорости
-                Cell cellD = dataRow.createCell(3);
-                cellD.setCellValue(airSpeed);
-                cellD.setCellStyle(leftInGroupStyle);
+                    Cell cellD = dataRow.createCell(3);
+                    cellD.setCellValue(airSpeed);
+                    cellD.setCellStyle(leftInGroupStyle);
 
-                // E: Знак ±
-                Cell cellE = dataRow.createCell(4);
-                cellE.setCellValue("±");
-                cellE.setCellStyle(plusMinusStyle);
+                    Cell cellE = dataRow.createCell(4);
+                    cellE.setCellValue("±");
+                    cellE.setCellStyle(plusMinusStyle);
 
-                // F: Формула неопределенности
-                Cell cellF = dataRow.createCell(5);
-                cellF.setCellFormula("(0.1+0.05*D" + rowNum + ")*2/(3^0.5)");
-                cellF.setCellStyle(rightInGroupStyle);
+                    Cell cellF = dataRow.createCell(5);
+                    cellF.setCellFormula("(0.1+0.05*D" + rowNum + ")*2/(3^0.5)");
+                    cellF.setCellStyle(rightInGroupStyle);
 
-                // Остальные колонки
-                dataRow.createCell(6).setCellValue(sectionArea);
-                dataRow.getCell(6).setCellStyle(twoDigitStyle);
+                    // Колонка G: площадь сечения
+                    dataRow.createCell(6).setCellValue(sectionArea);
+                    dataRow.getCell(6).setCellStyle(twoDigitStyle);
 
-                Cell cellH = dataRow.createCell(7);
-                cellH.setCellFormula("ROUND(G" + rowNum + "*D" + rowNum + "*3600, 0)");
-                cellH.setCellStyle(integerStyle);
+                    // Колонка H: производительность
+                    Cell cellH = dataRow.createCell(7);
+                    cellH.setCellFormula("ROUND(G" + rowNum + "*D" + rowNum + "*3600, 0)");
+                    cellH.setCellStyle(integerStyle);
 
-                // Колонка I
-                if (record.volume() != null && record.volume() > 0) {
-                    dataRow.createCell(8).setCellValue(record.volume());
-                    dataRow.getCell(8).setCellStyle(oneDigitStyle);
-                } else {
-                    dataRow.createCell(8).setCellValue("-");
-                    dataRow.getCell(8).setCellStyle(dataStyle);
+                    // Колонка I: объем помещения (только для первого канала)
+                    if (i == 0) {
+                        if (record.volume() != null && record.volume() > 0) {
+                            dataRow.createCell(8).setCellValue(record.volume());
+                            dataRow.getCell(8).setCellStyle(oneDigitStyle);
+                        } else {
+                            dataRow.createCell(8).setCellValue("-");
+                            dataRow.getCell(8).setCellStyle(dataStyle);
+                        }
+                    } else {
+                        dataRow.createCell(8).setCellValue("");
+                        dataRow.getCell(8).setCellStyle(dataStyle);
+                    }
+
+                    // Колонка J: будет заполнена после цикла
+                    dataRow.createCell(9);
+
+                    // Колонки K-L
+                    if (i == 0) {
+                        dataRow.createCell(10).setCellValue("-");
+                        dataRow.getCell(10).setCellStyle(dataStyle);
+                        dataRow.createCell(11).setCellValue("-");
+                        dataRow.getCell(11).setCellStyle(dataStyle);
+                    } else {
+                        dataRow.createCell(10).setCellValue("");
+                        dataRow.getCell(10).setCellStyle(dataStyle);
+                        dataRow.createCell(11).setCellValue("");
+                        dataRow.getCell(11).setCellStyle(dataStyle);
+                    }
                 }
 
-                // Колонка J
+                int lastRow = rowNum - 1;
+
+                // Заполнение колонки J (кратность)
                 if (record.volume() != null && record.volume() > 0) {
-                    Cell cellJ = dataRow.createCell(9);
-                    cellJ.setCellFormula("ROUND(H" + rowNum + "/I" + rowNum + ", 1)");
+                    Row firstRow = sheet.getRow(startRow);
+                    Cell cellJ = firstRow.getCell(9);
+
+                    if (numChannels == 1) {
+                        String sumFormula = "H" + (startRow+1);
+                        cellJ.setCellFormula("ROUND(" + sumFormula + "/I" + (startRow+1) + ", 1)");
+                    } else {
+                        StringBuilder sumFormula = new StringBuilder("SUM(H" + (startRow+1));
+                        for (int i = startRow+2; i <= lastRow+1; i++) {
+                            sumFormula.append(",H").append(i);
+                        }
+                        sumFormula.append(")");
+                        cellJ.setCellFormula("ROUND(" + sumFormula + "/I" + (startRow+1) + ", 1)");
+                    }
                     cellJ.setCellStyle(oneDigitStyle);
                 } else {
-                    dataRow.createCell(9).setCellValue("-");
-                    dataRow.getCell(9).setCellStyle(dataStyle);
+                    Row firstRow = sheet.getRow(startRow);
+                    Cell cellJ = firstRow.getCell(9);
+                    cellJ.setCellValue("-");
+                    cellJ.setCellStyle(dataStyle);
                 }
 
-                // Колонки K-L
-                dataRow.createCell(10).setCellValue("-");
-                dataRow.getCell(10).setCellStyle(dataStyle);
-                dataRow.createCell(11).setCellValue("-");
-                dataRow.getCell(11).setCellStyle(dataStyle);
+                // Объединение ячеек
+                int[] columnsToMerge = {2, 8, 9, 10, 11}; // C, I, J, K, L
+                if (lastRow > startRow) {
+                    for (int col : columnsToMerge) {
+                        CellRangeAddress mergedRegionRecord = new CellRangeAddress(startRow, lastRow, col, col);
+                        sheet.addMergedRegion(mergedRegionRecord);
+                    }
+                }
             }
         }
     }
