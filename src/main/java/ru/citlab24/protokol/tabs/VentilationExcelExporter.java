@@ -10,6 +10,7 @@ import java.io.FileOutputStream;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 public class VentilationExcelExporter {
@@ -25,6 +26,7 @@ public class VentilationExcelExporter {
 
         // Стили
         CellStyle headerStyle = createHeaderStyle(workbook, baseFont);
+        CellStyle rotatedHeaderStyle = createRotatedHeaderStyle(workbook, baseFont); // Новый стиль для поворота
         CellStyle titleStyle = createTitleStyle(workbook, baseFont);
         CellStyle dataStyle = createDataStyle(workbook, baseFont);
         CellStyle floorHeaderStyle = createFloorHeaderStyle(workbook, baseFont);
@@ -41,8 +43,8 @@ public class VentilationExcelExporter {
 
         // Создаем структуру документа
         createDocumentStructure(sheet, titleStyle);
-        createTableHeaders(sheet, headerStyle);
-        createColumnNumbers(sheet, headerStyle);
+        createTableHeaders(sheet, headerStyle, rotatedHeaderStyle);
+        createColumnNumbers(sheet, headerStyle, rotatedHeaderStyle);
 
         // Устанавливаем ширину колонок
         setColumnsWidth(sheet);
@@ -57,6 +59,20 @@ public class VentilationExcelExporter {
         saveWorkbook(workbook, parent);
     }
 
+    private static CellStyle createRotatedHeaderStyle(Workbook workbook, Font baseFont) {
+        CellStyle style = workbook.createCellStyle();
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setFont(baseFont);
+        style.setWrapText(true);
+        style.setRotation((short) 90); // Поворот на 90° против часовой стрелки
+        setBlackBorderColor(style);
+        return style;
+    }
     private static void setColumnsWidth(Sheet sheet) {
         // Устанавливаем фиксированные ширины колонок
         sheet.setColumnWidth(0, 31 * 256 / 7);
@@ -209,7 +225,7 @@ public class VentilationExcelExporter {
         sheet.createRow(1);
     }
 
-    private static void createTableHeaders(Sheet sheet, CellStyle headerStyle) {
+    private static void createTableHeaders(Sheet sheet, CellStyle headerStyle, CellStyle rotatedHeaderStyle) {
         Row headerRow = sheet.createRow(2);
         String[] headers = {
                 "№ п/п", "№точки измерения",
@@ -223,16 +239,24 @@ public class VentilationExcelExporter {
         };
 
         for (int i = 0; i < headers.length; i++) {
-            headerRow.createCell(i).setCellValue(headers[i]);
-            headerRow.getCell(i).setCellStyle(headerStyle);
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+
+            if (i >= 6) {
+                cell.setCellStyle(rotatedHeaderStyle); // Поворот только здесь!
+            } else {
+                cell.setCellStyle(headerStyle);
+            }
         }
         sheet.addMergedRegion(new CellRangeAddress(2, 2, 3, 5));
     }
 
-    private static void createColumnNumbers(Sheet sheet, CellStyle headerStyle) {
+    private static void createColumnNumbers(Sheet sheet, CellStyle headerStyle, CellStyle rotatedHeaderStyle) {
         Row numberRow = sheet.createRow(3);
         for (int i = 0; i <= 11; i++) {
-            numberRow.createCell(i).setCellStyle(headerStyle);
+            Cell cell = numberRow.createCell(i);
+
+            cell.setCellStyle(headerStyle);
         }
         numberRow.getCell(0).setCellValue("1");
         numberRow.getCell(1).setCellValue("2");
@@ -246,6 +270,8 @@ public class VentilationExcelExporter {
         numberRow.getCell(11).setCellValue("10");
         sheet.addMergedRegion(new CellRangeAddress(3, 3, 3, 5));
     }
+
+    // Остальные методы без изменений до fillData...
 
     private static void fillData(List<VentilationRecord> records, Sheet sheet,
                                  CellStyle dataStyle, CellStyle twoDigitStyle,
@@ -305,7 +331,9 @@ public class VentilationExcelExporter {
 
                 // Колонки D-F
                 double sectionArea = record.sectionArea();
-                double targetFlow = 73;
+
+                // ИСПРАВЛЕНИЕ 2: Случайная производительность в диапазоне 65-81
+                double targetFlow = ThreadLocalRandom.current().nextInt(65, 82);
                 double airSpeed = targetFlow / (sectionArea * 3600);
 
                 // D: Значение скорости
