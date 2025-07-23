@@ -1,5 +1,6 @@
 package ru.citlab24.protokol;
 
+import ru.citlab24.protokol.tabs.RadiationTab;
 import ru.citlab24.protokol.tabs.VentilationTab;
 import ru.citlab24.protokol.tabs.buildingTab.BuildingTab;
 import ru.citlab24.protokol.tabs.microclimateTab.MicroclimateTab;
@@ -20,6 +21,7 @@ public class MainFrame extends JFrame {
         setSize(1000, 750);
         setLocationRelativeTo(null);
         initUI();
+        add(tabbedPane);
         tabbedPane.addChangeListener(e -> {
             Component selectedTab = tabbedPane.getSelectedComponent();
             if (selectedTab instanceof VentilationTab) {
@@ -47,8 +49,9 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Вентиляция",
                 FontIcon.of(FontAwesomeSolid.WIND, 24, new Color(41, 182, 246)), // Иконка вентиляции
                 new VentilationTab(building)); // Прямо в главной панели
-
-        add(tabbedPane, BorderLayout.CENTER);
+        tabbedPane.addTab("Радиация",
+                FontIcon.of(FontAwesomeSolid.RADIATION_ALT, 24, new Color(255, 152, 0)),
+                new RadiationTab());
     }
     public void selectVentilationTab() {
         tabbedPane.setSelectedIndex(2); // 2 - индекс вкладки "Вентиляция"

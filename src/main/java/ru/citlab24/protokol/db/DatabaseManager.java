@@ -303,4 +303,70 @@ public class DatabaseManager {
             }
         }
     }
+    public static List<Building> getBuildings() {
+        try {
+            return getAllBuildings();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null,
+                    "Ошибка загрузки зданий: " + e.getMessage(),
+                    "Database Error", JOptionPane.ERROR_MESSAGE);
+            return new ArrayList<>();
+        }
+    }
+
+    public static List<Floor> getFloors(int buildingId) {
+        List<Floor> floors = new ArrayList<>();
+        String sql = "SELECT * FROM floor WHERE building_id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, buildingId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Floor floor = new Floor();
+                    floor.setId(rs.getInt("id"));
+                    floor.setNumber(rs.getString("number"));
+                    floor.setType(Floor.FloorType.valueOf(rs.getString("type")));
+                    floors.add(floor);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null,
+                    "Ошибка загрузки этажей: " + e.getMessage(),
+                    "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+        return floors;
+    }
+
+    public static List<Room> getRooms(int floorId) {
+        List<Room> rooms = new ArrayList<>();
+        String sql = "SELECT r.* FROM room r " +
+                "JOIN space s ON r.space_id = s.id " +
+                "JOIN floor f ON s.floor_id = f.id " +
+                "WHERE f.id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, floorId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Room room = new Room();
+                    room.setId(rs.getInt("id"));
+                    room.setName(rs.getString("name"));
+
+                    // Обработка NULL значения для объема
+                    double volume = rs.getDouble("volume");
+                    room.setVolume(rs.wasNull() ? null : volume);
+
+                    room.setVentilationChannels(rs.getInt("ventilation_channels"));
+                    room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
+                    rooms.add(room);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null,
+                    "Ошибка загрузки помещений: " + e.getMessage(),
+                    "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+        return rooms;
+    }
 }

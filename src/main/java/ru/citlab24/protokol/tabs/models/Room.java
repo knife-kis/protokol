@@ -1,12 +1,15 @@
 package ru.citlab24.protokol.tabs.models;
 
 public class Room {
+    private int id;
     private String name = "";
     private Double volume = null;
     private int ventilationChannels = 1;
     private double ventilationSectionArea = 0.008;
 
     // Геттеры и сеттеры
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
     public int getVentilationChannels() {
         return ventilationChannels;
     }
