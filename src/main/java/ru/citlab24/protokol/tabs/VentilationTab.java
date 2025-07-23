@@ -49,7 +49,7 @@ public class VentilationTab extends JPanel {
 
         // Редакторы ячеек
         ventilationTable.getColumnModel().getColumn(3).setCellEditor(
-                new SpinnerEditor(1, 1, 300, 1));
+                new SpinnerEditor(1, 0, 300, 1));
         ventilationTable.getColumnModel().getColumn(4).setCellEditor(
                 new SpinnerEditor(0.008, 0.001, 0.1, 0.001));
         ventilationTable.getColumnModel().getColumn(5).setCellEditor(
@@ -264,7 +264,9 @@ public class VentilationTab extends JPanel {
 
     private void saveCalculations() {
         saveCalculationsToModel();
-        JOptionPane.showMessageDialog(this, "Расчеты сохранены успешно!", "Сохранение", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this, "Расчеты сохранены успешно! " +
+                        "Записи с нулевыми каналами не будут экспортированы в Excel.",
+                "Сохранение", JOptionPane.INFORMATION_MESSAGE);
     }
 
     public String getRoomCategory(String roomName) {

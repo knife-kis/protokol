@@ -16,6 +16,10 @@ import java.util.stream.Collectors;
 public class VentilationExcelExporter {
 
     public static void export(List<VentilationRecord> records, java.awt.Component parent) {
+        // Фильтруем записи: оставляем только те, у которых количество каналов > 0
+        List<VentilationRecord> filteredRecords = records.stream()
+                .filter(record -> record.channels() > 0)
+                .collect(Collectors.toList());
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Вентиляция");
 
@@ -52,7 +56,7 @@ public class VentilationExcelExporter {
         // Устанавливаем высоту строк
         setRowsHeight(sheet);
 
-        fillData(records, sheet, dataStyle, twoDigitStyle, integerStyle, oneDigitStyle,
+        fillData(filteredRecords, sheet, dataStyle, twoDigitStyle, integerStyle, oneDigitStyle,
                 floorHeaderStyle, plusMinusStyle, leftInGroupStyle, rightInGroupStyle);
 
         // Сохранение файла
