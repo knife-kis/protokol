@@ -4,6 +4,7 @@ import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.models.Floor;
 import ru.citlab24.protokol.tabs.models.Room;
 import ru.citlab24.protokol.tabs.models.Space;
+import ru.citlab24.protokol.tabs.utils.RoomUtils;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -20,12 +21,7 @@ public class VentilationTab extends JPanel {
     private final VentilationTableModel tableModel = new VentilationTableModel(this);
     private final JTable ventilationTable = new JTable(tableModel);
 
-    private static final List<String> TARGET_ROOMS = List.of(
-            "кухня", "кухня-ниша",
-            "санузел", "сан узел", "сан. узел",
-            "ванная", "ванная комната",
-            "совмещенный", "совмещенный санузел", "туалет"
-    );
+    private static final List<String> TARGET_ROOMS = RoomUtils.RESIDENTIAL_ROOM_KEYWORDS;
 
     private static final List<String> TARGET_FLOORS = List.of(
             "жилой", "смешанный", "офисный", "офисный"

@@ -4,6 +4,8 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import ru.citlab24.protokol.tabs.utils.RoomUtils;
+
 import javax.swing.*;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -314,9 +316,30 @@ public class VentilationExcelExporter {
                     cellB.setCellValue("-");
                     cellB.setCellStyle(dataStyle);
 
-                    // Колонка C: ВСЕГДА только название комнаты + (Вытяжка)
+                    // Колонка C: формат в зависимости от типа помещения
                     if (i == 0) {
-                        dataRow.createCell(2).setCellValue(record.room() + " (Вытяжка)");
+                        String displayName;
+                        // Определяем тип помещения по названию комнаты
+                        if (RoomUtils.isResidentialRoom(record.room())) {
+                            String space = record.space();
+                            String room = record.room();
+
+                            // Нормализация строк для сравнения
+                            String spaceNormalized = (space != null) ? space.trim().toLowerCase() : "";
+                            String roomNormalized = (room != null) ? room.trim().toLowerCase() : "";
+
+                            if (spaceNormalized.equals(roomNormalized)) {
+                                // Если названия идентичны - используем только помещение
+                                displayName = space + " (Вытяжка)";
+                            } else {
+                                // Иначе объединяем помещение и комнату
+                                displayName = space + " " + room + " (Вытяжка)";
+                            }
+                        } else {
+                            // Для нежилых помещений используем только комнату
+                            displayName = record.room() + " (Вытяжка)";
+                        }
+                        dataRow.createCell(2).setCellValue(displayName);
                     } else {
                         dataRow.createCell(2).setCellValue("");
                     }
