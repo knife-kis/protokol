@@ -314,9 +314,9 @@ public class VentilationExcelExporter {
                     cellB.setCellValue("-");
                     cellB.setCellStyle(dataStyle);
 
-                    // Колонка C: название помещения (только для первого канала)
+                    // Колонка C: ВСЕГДА только название комнаты + (Вытяжка)
                     if (i == 0) {
-                        dataRow.createCell(2).setCellValue(record.space() + " " + record.room() + " (Вытяжка)");
+                        dataRow.createCell(2).setCellValue(record.room() + " (Вытяжка)");
                     } else {
                         dataRow.createCell(2).setCellValue("");
                     }
