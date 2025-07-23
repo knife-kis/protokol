@@ -172,6 +172,11 @@ public class VentilationTab extends JPanel {
             return;
         }
 
+        // Добавляем типы жилых помещений
+        final List<String> RESIDENTIAL_SPACE_TYPES = List.of(
+                "квартира", "жилое помещение", "жилая ячейка"
+        );
+
         System.out.println("Загрузка данных вентиляции для здания: " + building.getName());
         System.out.println("Количество этажей: " + building.getFloors().size());
 
@@ -187,13 +192,33 @@ public class VentilationTab extends JPanel {
 
             System.out.println("  Помещений на этаже: " + floor.getSpaces().size());
             for (Space space : floor.getSpaces()) {
+                String spaceType = space.getType().toString().toLowerCase(Locale.ROOT);
                 System.out.println("  Помещение: " + space.getIdentifier() +
-                        " (тип: " + space.getType() + ")");
+                        " (тип: " + spaceType + ")");
                 System.out.println("  Комнат в помещении: " + space.getRooms().size());
+
+                // Определяем режим фильтрации для комнат
+                boolean filterRooms;
+                if (floorType.contains("жилой")) {
+                    filterRooms = true;
+                } else if (floorType.contains("смешанный")) {
+                    // Для смешанного этажа фильтруем только квартиры
+                    filterRooms = containsAny(spaceType, RESIDENTIAL_SPACE_TYPES);
+                } else {
+                    // Для офисного этажа - без фильтрации
+                    filterRooms = false;
+                }
 
                 for (Room room : space.getRooms()) {
                     String roomName = room.getName();
-                    boolean roomMatches = matchesRoomType(roomName);
+                    boolean roomMatches;
+
+                    if (filterRooms) {
+                        roomMatches = matchesRoomType(roomName);
+                    } else {
+                        // Без фильтра - добавляем все комнаты
+                        roomMatches = true;
+                    }
 
                     System.out.println("    Комната: " + roomName + " - " +
                             (roomMatches ? "соответствует" : "не соответствует"));
