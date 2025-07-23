@@ -3,6 +3,7 @@ package ru.citlab24.protokol.tabs;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import ru.citlab24.protokol.tabs.utils.RoomUtils;
 
@@ -36,6 +37,7 @@ public class VentilationExcelExporter {
         CellStyle titleStyle = createTitleStyle(workbook, baseFont);
         CellStyle dataStyle = createDataStyle(workbook, baseFont);
         CellStyle floorHeaderStyle = createFloorHeaderStyle(workbook, baseFont);
+        CellStyle wrappedDataStyle = createWrappedDataStyle(workbook, baseFont);
 
         // Стили для группы D-F
         CellStyle plusMinusStyle = createPlusMinusStyle(workbook, baseFont);
@@ -59,13 +61,91 @@ public class VentilationExcelExporter {
         // Устанавливаем высоту строк
         setRowsHeight(sheet);
 
-        fillData(filteredRecords, sheet, dataStyle, twoDigitStyle, integerStyle, oneDigitStyle,
+        fillData(filteredRecords, sheet, dataStyle, wrappedDataStyle, threeDigitStyle, integerStyle, oneDigitStyle,
                 floorHeaderStyle, plusMinusStyle, leftInGroupStyle, rightInGroupStyle);
+
+        // Автоматическая высота строк для текста в столбце C
+        adjustRowsWithText((XSSFSheet) sheet);
 
         // Сохранение файла
         saveWorkbook(workbook, parent);
     }
 
+    private static void adjustRowsWithText(XSSFSheet sheet) {
+        final float BASE_ROW_HEIGHT_POINTS = 15.0f; // 20 пикселей
+        final float LARGE_TOTAL_HEIGHT_POINTS = 45.0f; // 60 пикселей
+        final int COLUMN_C_WIDTH_PX = 231;
+        final float CHAR_WIDTH_POINTS = 6.0f;
+
+        for (int rowIndex = 4; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) continue;
+
+            Cell cell = row.getCell(2);
+            if (cell == null || cell.getCellType() != CellType.STRING) continue;
+
+            String text = cell.getStringCellValue();
+            if (text == null || text.isEmpty()) continue;
+
+            // Определение объединенной области
+            int mergedHeight = 1;
+            boolean isFirstMerged = true;
+            for (CellRangeAddress mergedRegion : sheet.getMergedRegions()) {
+                if (mergedRegion.isInRange(rowIndex, 2)) {
+                    mergedHeight = mergedRegion.getLastRow() - mergedRegion.getFirstRow() + 1;
+                    isFirstMerged = (rowIndex == mergedRegion.getFirstRow());
+                    break;
+                }
+            }
+            if (!isFirstMerged) continue;
+
+            // Расчет кол-ва строк текста
+            int charsPerLine = (int) (COLUMN_C_WIDTH_PX / CHAR_WIDTH_POINTS);
+            String[] lines = text.split("\r?\n");
+            int lineCount = 0;
+            for (String line : lines) {
+                lineCount += Math.max(1, (int) Math.ceil((double) line.length() / charsPerLine));
+            }
+
+            // Определение общей высоты
+            float totalHeightPoints;
+            if (lineCount <= 1) {
+                totalHeightPoints = BASE_ROW_HEIGHT_POINTS * mergedHeight;
+            } else {
+                totalHeightPoints = LARGE_TOTAL_HEIGHT_POINTS;
+            }
+
+            // Установка новой высоты
+            float heightPerRow = totalHeightPoints / mergedHeight;
+            for (int i = 0; i < mergedHeight; i++) {
+                Row currentRow = sheet.getRow(rowIndex + i);
+                if (currentRow == null) continue;
+                currentRow.setHeightInPoints(heightPerRow);
+            }
+        }
+    }
+
+    private static void setRowsHeight(Sheet sheet) {
+        sheet.getRow(0).setHeightInPoints(12);
+        sheet.getRow(1).setHeightInPoints(6.75f);
+        sheet.getRow(2).setHeightInPoints(111);
+        if (sheet.getRow(3) != null) {
+            sheet.getRow(3).setHeightInPoints(15); // 20 пикселей
+        }
+    }
+    private static CellStyle createWrappedDataStyle(Workbook workbook, Font baseFont) {
+        CellStyle style = workbook.createCellStyle();
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setFont(baseFont);
+        style.setWrapText(true); // Включаем перенос текста
+        setBlackBorderColor(style);
+        return style;
+    }
     private static CellStyle createRotatedHeaderStyle(Workbook workbook, Font baseFont) {
         CellStyle style = workbook.createCellStyle();
         style.setAlignment(HorizontalAlignment.CENTER);
@@ -94,15 +174,6 @@ public class VentilationExcelExporter {
         sheet.setColumnWidth(9, 78 * 256 / 7);
         sheet.setColumnWidth(10, 99 * 256 / 7);
         sheet.setColumnWidth(11, 114 * 256 / 7);
-    }
-
-    private static void setRowsHeight(Sheet sheet) {
-        sheet.getRow(0).setHeightInPoints(12);
-        sheet.getRow(1).setHeightInPoints(6.75f);
-        sheet.getRow(2).setHeightInPoints(111);
-        if (sheet.getRow(3) != null) {
-            sheet.getRow(3).setHeightInPoints(15);
-        }
     }
 
     private static CellStyle createHeaderStyle(Workbook workbook, Font baseFont) {
@@ -265,8 +336,8 @@ public class VentilationExcelExporter {
     }
 
     private static void fillData(List<VentilationRecord> records, Sheet sheet,
-                                 CellStyle dataStyle, CellStyle threeDigitStyle,
-                                 CellStyle integerStyle, CellStyle oneDigitStyle,
+                                 CellStyle dataStyle, CellStyle wrappedDataStyle,
+                                 CellStyle threeDigitStyle, CellStyle integerStyle, CellStyle oneDigitStyle,
                                  CellStyle floorHeaderStyle, CellStyle plusMinusStyle,
                                  CellStyle leftInGroupStyle, CellStyle rightInGroupStyle) {
         int rowNum = 4;
@@ -285,7 +356,7 @@ public class VentilationExcelExporter {
 
             // Заголовок этажа
             Row floorRow = sheet.createRow(rowNum++);
-            floorRow.setHeightInPoints(15);
+            floorRow.setHeightInPoints(15); // 20 пикселей
             Cell floorCell = floorRow.createCell(0);
             floorCell.setCellValue(floor);
             floorCell.setCellStyle(floorHeaderStyle);
@@ -331,10 +402,12 @@ public class VentilationExcelExporter {
                             displayName = record.room() + " (Вытяжка)";
                         }
                         dataRow.createCell(2).setCellValue(displayName);
+                        dataRow.getCell(2).setCellStyle(wrappedDataStyle);
                     } else {
                         dataRow.createCell(2).setCellValue("");
+//                        dataRow.getCell(2).setCellStyle(dataStyle);
                     }
-                    dataRow.getCell(2).setCellStyle(dataStyle);
+//                    dataRow.getCell(2).setCellStyle(dataStyle);
 
                     // Колонки D-F
                     double sectionArea = record.sectionArea();
