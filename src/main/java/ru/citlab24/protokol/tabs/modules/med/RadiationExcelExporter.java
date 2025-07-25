@@ -1,4 +1,4 @@
-package ru.citlab24.protokol.tabs;
+package ru.citlab24.protokol.tabs.modules.med;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 public class RadiationExcelExporter {
 
     public static void export(List<RadiationRecord> records, java.awt.Component parent) {
+
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("МЭД");
 
@@ -49,9 +50,12 @@ public class RadiationExcelExporter {
 
     private static void setColumnsWidth(Sheet sheet) {
         sheet.setColumnWidth(0, 31 * 256 / 7); // № п/п
-        sheet.setColumnWidth(1, 150 * 256 / 7); // Помещение
-        sheet.setColumnWidth(2, 100 * 256 / 7); // Результат измерения
-        sheet.setColumnWidth(3, 100 * 256 / 7); // Допустимый уровень
+        sheet.setColumnWidth(1, 100 * 256 / 7); // Здание
+        sheet.setColumnWidth(2, 80 * 256 / 7);  // Этаж
+        sheet.setColumnWidth(3, 100 * 256 / 7); // Помещение
+        sheet.setColumnWidth(4, 150 * 256 / 7); // Комната
+        sheet.setColumnWidth(5, 100 * 256 / 7); // Результат измерения
+        sheet.setColumnWidth(6, 100 * 256 / 7); // Допустимый уровень
     }
 
     private static void setRowsHeight(Sheet sheet) {
@@ -142,7 +146,8 @@ public class RadiationExcelExporter {
     private static void createTableHeaders(Sheet sheet, CellStyle headerStyle) {
         Row headerRow = sheet.createRow(2);
         String[] headers = {
-                "№ п/п", "Помещение", "Результат измерения, мкЗв/ч", "Допустимый уровень, мкЗв/ч"
+                "№ п/п", "Здание", "Этаж", "Помещение", "Комната",
+                "Результат измерения, мкЗв/ч", "Допустимый уровень, мкЗв/ч"
         };
 
         for (int i = 0; i < headers.length; i++) {
@@ -167,60 +172,47 @@ public class RadiationExcelExporter {
         int rowNum = 4;
         int counter = 1;
 
-        // Группировка записей по этажам
-        Map<String, List<RadiationRecord>> recordsByFloor = records.stream()
-                .collect(Collectors.groupingBy(
-                        r -> r.getBuilding() + "|" + r.getFloor(), // Уникальный ключ
-                        Collectors.toList()
-                ));
+        for (RadiationRecord record : records) {
+            Row dataRow = sheet.createRow(rowNum++);
+            dataRow.setHeightInPoints(15);
 
-        for (Map.Entry<String, List<RadiationRecord>> entry : recordsByFloor.entrySet()) {
-            String floor = entry.getKey();
-            List<RadiationRecord> floorRecords = entry.getValue();
+            // Колонка A
+            dataRow.createCell(0).setCellValue(counter++);
+            dataRow.getCell(0).setCellStyle(dataStyle);
 
-            // Заголовок этажа
-            Row floorRow = sheet.createRow(rowNum++);
-            floorRow.setHeightInPoints(15);
-            Cell floorCell = floorRow.createCell(0);
-            floorCell.setCellValue(floor);
-            floorCell.setCellStyle(floorHeaderStyle);
-            CellRangeAddress mergedRegion = new CellRangeAddress(rowNum-1, rowNum-1, 0, 3);
-            sheet.addMergedRegion(mergedRegion);
-            RegionUtil.setBorderTop(BorderStyle.THIN, mergedRegion, sheet);
-            RegionUtil.setBorderBottom(BorderStyle.THIN, mergedRegion, sheet);
-            RegionUtil.setBorderLeft(BorderStyle.THIN, mergedRegion, sheet);
-            RegionUtil.setBorderRight(BorderStyle.THIN, mergedRegion, sheet);
+            // Колонка B
+            dataRow.createCell(1).setCellValue(record.getBuilding());
+            dataRow.getCell(1).setCellStyle(dataStyle);
 
-            for (RadiationRecord record : floorRecords) {
-                Row dataRow = sheet.createRow(rowNum++);
-                dataRow.setHeightInPoints(15);
+            // Колонка C
+            dataRow.createCell(2).setCellValue(record.getFloor());
+            dataRow.getCell(2).setCellStyle(dataStyle);
 
-                // Колонка A
-                dataRow.createCell(0).setCellValue(counter++);
-                dataRow.getCell(0).setCellStyle(dataStyle);
+            // Колонка D - Помещение
+            dataRow.createCell(3).setCellValue(record.getSpace());
+            dataRow.getCell(3).setCellStyle(dataStyle);
 
-                // Колонка B
-                dataRow.createCell(1).setCellValue(record.getRoom());
-                dataRow.getCell(1).setCellStyle(dataStyle);
+            // Колонка E - Комната
+            dataRow.createCell(4).setCellValue(record.getRoom());
+            dataRow.getCell(4).setCellStyle(dataStyle);
 
-                // Колонка C
-                Cell resultCell = dataRow.createCell(2);
-                if (record.getMeasurementResult() != null) {
-                    resultCell.setCellValue(record.getMeasurementResult());
-                } else {
-                    resultCell.setCellValue("-");
-                }
-                resultCell.setCellStyle(numberStyle);
-
-                // Колонка D
-                Cell levelCell = dataRow.createCell(3);
-                if (record.getPermissibleLevel() != null) {
-                    levelCell.setCellValue(record.getPermissibleLevel());
-                } else {
-                    levelCell.setCellValue("-");
-                }
-                levelCell.setCellStyle(numberStyle);
+            // Колонка F
+            Cell resultCell = dataRow.createCell(5);
+            if (record.getMeasurementResult() != null) {
+                resultCell.setCellValue(record.getMeasurementResult());
+            } else {
+                resultCell.setCellValue("-");
             }
+            resultCell.setCellStyle(numberStyle);
+
+            // Колонка G
+            Cell levelCell = dataRow.createCell(6);
+            if (record.getPermissibleLevel() != null) {
+                levelCell.setCellValue(record.getPermissibleLevel());
+            } else {
+                levelCell.setCellValue("-");
+            }
+            levelCell.setCellStyle(numberStyle);
         }
     }
 

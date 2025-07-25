@@ -1,9 +1,9 @@
 package ru.citlab24.protokol;
 
-import ru.citlab24.protokol.tabs.RadiationTab;
-import ru.citlab24.protokol.tabs.VentilationTab;
+import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
+import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.buildingTab.BuildingTab;
-import ru.citlab24.protokol.tabs.microclimateTab.MicroclimateTab;
+import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 
 import javax.swing.*;
 import java.awt.*;
@@ -49,7 +49,7 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Вентиляция",
                 FontIcon.of(FontAwesomeSolid.WIND, 24, new Color(41, 182, 246)), // Иконка вентиляции
                 new VentilationTab(building)); // Прямо в главной панели
-        tabbedPane.addTab("Радиация",
+        tabbedPane.addTab("МЭД",
                 FontIcon.of(FontAwesomeSolid.RADIATION_ALT, 24, new Color(255, 152, 0)),
                 new RadiationTab());
     }

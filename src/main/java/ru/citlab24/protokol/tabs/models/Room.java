@@ -1,12 +1,20 @@
 package ru.citlab24.protokol.tabs.models;
 
 public class Room {
+    private static int nextTempId = -1; // Начинаем с отрицательных значений
+    private int tempId; // Временный ID
     private int id;
     private String name = "";
     private Double volume = null;
     private int ventilationChannels = 1;
     private double ventilationSectionArea = 0.008;
 
+    public Room() {
+        this.tempId = nextTempId--;
+    }
+    public int getTempId() {
+        return (id != 0) ? id : tempId; // Используем БД id если есть
+    }
     // Геттеры и сеттеры
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }

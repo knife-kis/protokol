@@ -10,7 +10,10 @@ public class Space {
 
     public enum SpaceType {
         APARTMENT("Квартира"),
-        OFFICE("Офис");
+        OFFICE("Офис"),
+        PUBLIC_SPACE("Общественный");    // Общественное пространство
+
+        // Другое
 
         private final String title;
 

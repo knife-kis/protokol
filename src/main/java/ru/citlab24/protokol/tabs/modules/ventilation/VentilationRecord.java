@@ -1,4 +1,4 @@
-package ru.citlab24.protokol.tabs;
+package ru.citlab24.protokol.tabs.modules.ventilation;
 
 import ru.citlab24.protokol.tabs.models.Room;
 

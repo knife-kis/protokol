@@ -1,4 +1,4 @@
-package ru.citlab24.protokol.tabs.microclimateTab;
+package ru.citlab24.protokol.tabs.modules.microclimateTab;
 
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;

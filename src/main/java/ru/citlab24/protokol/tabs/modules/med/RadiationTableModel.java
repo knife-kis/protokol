@@ -1,4 +1,4 @@
-package ru.citlab24.protokol.tabs;
+package ru.citlab24.protokol.tabs.modules.med;
 
 import javax.swing.table.AbstractTableModel;
 import java.util.ArrayList;

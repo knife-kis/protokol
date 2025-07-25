@@ -4,7 +4,8 @@ import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.db.DatabaseManager;
-import ru.citlab24.protokol.tabs.VentilationTab;
+import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
+import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.dialogs.AddFloorDialog;
 import ru.citlab24.protokol.tabs.dialogs.AddSpaceDialog;
 import ru.citlab24.protokol.tabs.dialogs.LoadProjectDialog;
@@ -227,6 +228,7 @@ public class BuildingTab extends JPanel {
         projectNameField.setText(loadedBuilding.getName());
         refreshAllLists();
         updateVentilationTab(loadedBuilding);
+        updateRadiationTab(loadedBuilding); // Добавлено обновление RadiationTab
         showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен", "Загрузка", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -353,6 +355,7 @@ public class BuildingTab extends JPanel {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
             updateVentilationTab(building);
+            updateRadiationTab(building); // Добавлено обновление RadiationTab
             ((MainFrame) mainFrame).selectVentilationTab();
         }
         showMessage("Данные для вентиляции обновлены!", "Расчет завершен", JOptionPane.INFORMATION_MESSAGE);
@@ -428,8 +431,22 @@ public class BuildingTab extends JPanel {
             Floor floor = new Floor();
             floor.setNumber(dialog.getFloorNumber());
             floor.setType(dialog.getFloorType());
+
+            // Устанавливаем имя этажа как комбинацию типа и номера
+            String floorName = floor.getType().title + " " + floor.getNumber();
+            floor.setName(floorName);
+
             building.addFloor(floor);
             floorListModel.addElement(floor);
+        }
+    }
+    private void updateRadiationTab(Building building) {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            Arrays.stream(((MainFrame) mainFrame).getTabbedPane().getComponents())
+                    .filter(tab -> tab instanceof RadiationTab)
+                    .findFirst()
+                    .ifPresent(tab -> ((RadiationTab) tab).setBuilding(building));
         }
     }
     private void copyFloor(ActionEvent e) {
@@ -557,6 +574,10 @@ public class BuildingTab extends JPanel {
         if (dialog.showDialog()) {
             floor.setNumber(dialog.getFloorNumber());
             floor.setType(dialog.getFloorType());
+            // При смене типа на PUBLIC - создать помещение при необходимости
+            if (floor.getType() == Floor.FloorType.PUBLIC) {
+                createDefaultSpaceIfMissing(floor);
+            }
             floorListModel.set(index, floor);
             updateSpaceList();
         }
@@ -611,6 +632,11 @@ public class BuildingTab extends JPanel {
     }
 
     private void removeSpace(ActionEvent e) {
+        Space space = spaceList.getSelectedValue();
+        if (space != null && "-".equals(space.getIdentifier())) {
+            showMessage("Нельзя удалить системное помещение", "Ошибка", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         Floor floor = floorList.getSelectedValue();
         int index = spaceList.getSelectedIndex();
 
@@ -668,9 +694,42 @@ public class BuildingTab extends JPanel {
     private void updateSpaceList() {
         spaceListModel.clear();
         Floor selectedFloor = floorList.getSelectedValue();
+
         if (selectedFloor != null) {
+            // Для общественных этажей: проверяем и создаем помещение "-" при необходимости
+            if (selectedFloor.getType() == Floor.FloorType.PUBLIC) {
+                createDefaultSpaceIfMissing(selectedFloor);
+            }
+
+            // Заполняем список помещений
             selectedFloor.getSpaces().forEach(spaceListModel::addElement);
-            if (!spaceListModel.isEmpty()) spaceList.setSelectedIndex(0);
+
+            // Автоматически выбираем помещение "-" для общественных этажей
+            if (selectedFloor.getType() == Floor.FloorType.PUBLIC && !spaceListModel.isEmpty()) {
+                selectDefaultSpace(selectedFloor);
+            } else if (!spaceListModel.isEmpty()) {
+                spaceList.setSelectedIndex(0);
+            }
+        }
+    }
+    private void createDefaultSpaceIfMissing(Floor floor) {
+        boolean hasDefaultSpace = floor.getSpaces().stream()
+                .anyMatch(space -> "-".equals(space.getIdentifier()));
+
+        if (!hasDefaultSpace) {
+            Space defaultSpace = new Space();
+            defaultSpace.setIdentifier("-");
+            defaultSpace.setType(Space.SpaceType.PUBLIC_SPACE); // Используем соответствующий тип
+            floor.addSpace(defaultSpace);
+        }
+    }
+
+    private void selectDefaultSpace(Floor floor) {
+        for (int i = 0; i < spaceListModel.size(); i++) {
+            if ("-".equals(spaceListModel.get(i).getIdentifier())) {
+                spaceList.setSelectedIndex(i);
+                break;
+            }
         }
     }
 

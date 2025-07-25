@@ -217,10 +217,13 @@ public class DatabaseManager {
     }
 
     private static void saveRoom(int spaceId, Room room) throws SQLException {
+//        if (room.getId() == 0) { // Если комната новая
+//            room.setId(rs.getInt(1)); // Сохраняем ID из БД
+//        }
         String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, ventilation_section_area) " +
                 "VALUES (?, ?, ?, ?, ?)";
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, spaceId);
             stmt.setString(2, room.getName());
 
@@ -260,7 +263,13 @@ public class DatabaseManager {
                 Floor floor = new Floor();
                 floor.setNumber(rs.getString("number"));
                 floor.setType(Floor.FloorType.valueOf(rs.getString("type")));
-                System.out.println("Загружен этаж: " + floor.getNumber());
+
+                // Если имя не загружено из БД, создаем его
+                if (floor.getName() == null) {
+                    String floorName = floor.getType().title + " " + floor.getNumber();
+                    floor.setName(floorName);
+                }
+
                 building.addFloor(floor);
                 loadSpaces(floor, rs.getInt("id"));
             }

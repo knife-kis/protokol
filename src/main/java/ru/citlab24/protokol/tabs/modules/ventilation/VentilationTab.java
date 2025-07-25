@@ -1,5 +1,6 @@
-package ru.citlab24.protokol.tabs;
+package ru.citlab24.protokol.tabs.modules.ventilation;
 
+import ru.citlab24.protokol.tabs.SpinnerEditor;
 import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.models.Floor;
 import ru.citlab24.protokol.tabs.models.Room;
