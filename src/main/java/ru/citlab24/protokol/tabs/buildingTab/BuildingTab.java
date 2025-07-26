@@ -234,6 +234,9 @@ public class BuildingTab extends JPanel {
 
     private void saveProject(ActionEvent e) {
         try {
+            // Сохраняем состояния чекбоксов ДО создания копии
+            Map<String, Boolean> radiationSelections = saveRadiationSelections();
+
             String baseName = projectNameField.getText().trim();
             if (baseName.isEmpty()) {
                 showMessage("Введите название проекта!", "Ошибка", JOptionPane.ERROR_MESSAGE);
@@ -249,14 +252,18 @@ public class BuildingTab extends JPanel {
 
             this.building = newProject;
             projectNameField.setText(extractBaseName(finalName));
+
+            // Обновляем вкладку с новым зданием
             updateRadiationTab(newProject);
+
+            // Восстанавливаем состояния ПОСЛЕ обновления
+            restoreRadiationSelections(radiationSelections);
 
             showMessage("Новая версия проекта сохранена как: " + finalName, "Сохранение", JOptionPane.INFORMATION_MESSAGE);
             updateVentilationTab(newProject);
         } catch (SQLException ex) {
             handleError("Ошибка сохранения проекта: " + ex.getMessage(), "Ошибка");
         }
-
     }
 
     private String generateProjectVersionName(String baseName) {
@@ -458,37 +465,25 @@ public class BuildingTab extends JPanel {
 
             if (tab != null) {
                 tab.setBuilding(building);
-                tab.refreshData(); // Добавить этот метод в RadiationTab
+//                tab.refreshData(); // Добавить этот метод в RadiationTab
             }
         }
     }
     private void copyFloor(ActionEvent e) {
         Map<String, Boolean> savedSelections = saveRadiationSelections();
         Floor selectedFloor = floorList.getSelectedValue();
-        if (selectedFloor == null) {
-            showMessage("Выберите этаж для копирования", "Ошибка", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+        if (selectedFloor == null) return;
 
-        // Создаем глубокую копию этажа
         Floor copiedFloor = createFloorCopy(selectedFloor);
-
-        updateRadiationTab(building);
-
-        // Генерируем новый уникальный номер этажа
         String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
         copiedFloor.setNumber(newFloorNumber);
 
-        // Извлекаем цифры из нового номера этажа
-        String newFloorDigits = extractDigits(newFloorNumber);
-        if (newFloorDigits.isEmpty()) {
-            newFloorDigits = newFloorNumber; // Если цифр нет, используем всю строку
-        }
-
-        updateSpaceIdentifiers(copiedFloor, newFloorDigits);
+        updateSpaceIdentifiers(copiedFloor, extractDigits(newFloorNumber));
         building.addFloor(copiedFloor);
         floorListModel.addElement(copiedFloor);
         floorList.setSelectedValue(copiedFloor, true);
+
+        // Восстанавливаем ПОСЛЕ добавления этажа
         restoreRadiationSelections(savedSelections);
         updateRadiationTab(building);
     }

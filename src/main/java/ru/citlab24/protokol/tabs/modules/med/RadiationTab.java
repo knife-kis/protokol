@@ -213,17 +213,23 @@ public class RadiationTab extends JPanel {
     }
 
     public void restoreSelections(Map<String, Boolean> savedSelections) {
-        // Не очищаем глобальную карту полностью, а обновляем только для текущих комнат
+        // Временная карта для новых состояний
+        Map<Integer, Boolean> newSelectionMap = new HashMap<>();
+
         for (Room room : getAllRooms()) {
             String key = generateRoomKey(room);
-            int roomId = room.getId();
-
             if (savedSelections.containsKey(key)) {
-                // Обновляем состояние только если комната есть в сохраненных данных
-                globalRoomSelectionMap.put(roomId, savedSelections.get(key));
+                newSelectionMap.put(room.getId(), savedSelections.get(key));
+            } else {
+                // Сохраняем текущее состояние, если оно есть
+                Boolean currentState = globalRoomSelectionMap.get(room.getId());
+                newSelectionMap.put(room.getId(), currentState != null ? currentState : true);
             }
-            // Если комнаты нет в сохраненных данных - оставляем текущее состояние без изменений
         }
+
+        // Заменяем глобальную карту
+        globalRoomSelectionMap.clear();
+        globalRoomSelectionMap.putAll(newSelectionMap);
         roomsTableModel.fireTableDataChanged();
     }
 
