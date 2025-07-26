@@ -72,9 +72,18 @@ public class VentilationTab extends JPanel {
                                                            int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
-                // Обработка пустых значений
-                if (value == null) {
-                    ((JLabel) c).setText("");
+                // Столбец объема (индекс 5)
+                if (column == 5) {
+                    if (value == null) {
+                        ((JLabel) c).setText("");
+                    } else if (value instanceof Number) {
+                        double dValue = ((Number) value).doubleValue();
+                        if (dValue == 0.0) {
+                            ((JLabel) c).setText("");
+                        } else {
+                            ((JLabel) c).setText(String.format("%.1f", dValue));
+                        }
+                    }
                 }
 
                 if (!isSelected) {
@@ -105,6 +114,7 @@ public class VentilationTab extends JPanel {
         for (VentilationRecord record : tableModel.getRecords()) {
             record.roomRef().setVentilationChannels(record.channels());
             record.roomRef().setVentilationSectionArea(record.sectionArea());
+            record.roomRef().setVolume(record.volume());
         }
     }
     private JPanel createButtonPanel() {
@@ -229,7 +239,7 @@ public class VentilationTab extends JPanel {
                             room.getName(),
                             room.getVentilationChannels(),
                             room.getVentilationSectionArea(),
-                            room.getVolume(),
+                            (room.getVolume() != null && room.getVolume() == 0.0) ? null : room.getVolume(),
                             room
                     ));
                 }

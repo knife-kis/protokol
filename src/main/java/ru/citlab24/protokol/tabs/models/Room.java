@@ -49,6 +49,7 @@ public class Room {
     }
 
     public void setVolume(Double volume) {
-        this.volume = volume;
+        this.volume = (volume != null && volume == 0.0) ? null : volume;
     }
+
 }

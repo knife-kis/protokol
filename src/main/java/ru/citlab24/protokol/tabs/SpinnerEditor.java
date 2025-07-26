@@ -8,51 +8,49 @@ import java.util.EventObject;
 
 public class SpinnerEditor extends AbstractCellEditor implements TableCellEditor {
     private final JSpinner spinner;
+    private final SpinnerNumberModel model;
+    private Double originalValue;
+    private final double minValue;
 
-    // Конструктор для целых чисел
-    public SpinnerEditor(int min, int max, int step) {
-        spinner = new JSpinner(new SpinnerNumberModel(min, min, max, step));
-        initSpinner();
-    }
-
-    // Конструктор для дробных чисел
-    public SpinnerEditor(double min, double max, double step) {
-        spinner = new JSpinner(new SpinnerNumberModel(min, min, max, step));
-        initSpinner();
-    }
-
-    // Общий конструктор с шагом
-    public SpinnerEditor(double min, double max, double step, double initial) {
-        spinner = new JSpinner(new SpinnerNumberModel(min, max, step, initial));
-        initSpinner();
-    }
-
-    private void initSpinner() {
-        // Завершаем редактирование при любом изменении значения
-        spinner.addChangeListener(e -> fireEditingStopped());
-
-        // Настраиваем редактор для правильного отображения чисел
-        JSpinner.NumberEditor editor = new JSpinner.NumberEditor(spinner);
-        spinner.setEditor(editor);
+    public SpinnerEditor(double initial, double min, double max, double step) {
+        model = new SpinnerNumberModel(initial, min, max, step);
+        spinner = new JSpinner(model);
+        spinner.setBorder(BorderFactory.createEmptyBorder());
+        minValue = min;
     }
 
     @Override
     public Component getTableCellEditorComponent(JTable table, Object value,
-                                                 boolean isSelected,
-                                                 int row, int column) {
-        spinner.setValue(value);
+                                                 boolean isSelected, int row, int column) {
+        if (value == null) {
+            originalValue = null;
+            spinner.setValue(minValue);
+        } else {
+            originalValue = (value instanceof Number) ? ((Number) value).doubleValue() : 0.0;
+            spinner.setValue(originalValue);
+        }
         return spinner;
     }
 
     @Override
     public Object getCellEditorValue() {
-        return spinner.getValue();
+        Object value = spinner.getValue();
+        if (value instanceof Number) {
+            double newValue = ((Number) value).doubleValue();
+
+            // Возвращаем null если значение сброшено до минимума
+            if (originalValue == null && Math.abs(newValue - minValue) < 0.000001) {
+                return null;
+            }
+            return newValue;
+        }
+        return originalValue;
     }
 
     @Override
     public boolean isCellEditable(EventObject evt) {
         if (evt instanceof MouseEvent) {
-            return ((MouseEvent)evt).getClickCount() >= 1;
+            return ((MouseEvent) evt).getClickCount() >= 1;
         }
         return true;
     }

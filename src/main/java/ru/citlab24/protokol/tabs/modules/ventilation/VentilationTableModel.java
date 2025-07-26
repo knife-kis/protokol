@@ -136,11 +136,16 @@ public class VentilationTableModel extends AbstractTableModel {
     }
 
     private void updateVolume(Object aValue, int rowIndex, VentilationRecord record) {
-        if (aValue instanceof Number numberValue) {
-            double doubleValue = numberValue.doubleValue();
-            records.set(rowIndex, record.withVolume(doubleValue));
-            fireTableCellUpdated(rowIndex, 5);
+        Double newValue = null;
+
+        if (aValue instanceof Number) {
+            double doubleValue = ((Number) aValue).doubleValue();
+            // Сохраняем 0.0 как null
+            newValue = (doubleValue != 0.0) ? doubleValue : null;
         }
+
+        records.set(rowIndex, record.withVolume(newValue));
+        fireTableCellUpdated(rowIndex, 5);
     }
 
     private int showConfirmationDialog(String message) {
