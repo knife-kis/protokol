@@ -321,6 +321,7 @@ public class BuildingTab extends JPanel {
             // Глубокое копирование комнат
             for (Room originalRoom : originalSpace.getRooms()) {
                 Room roomCopy = new Room();
+                roomCopy.setId(originalRoom.getId());
                 roomCopy.setName(originalRoom.getName());
                 roomCopy.setVolume(originalRoom.getVolume());
                 roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
@@ -346,7 +347,7 @@ public class BuildingTab extends JPanel {
 
     private Room createRoomCopy(Room originalRoom) {
         Room roomCopy = new Room();
-        roomCopy.setId(generateUniqueRoomId());
+        roomCopy.setId(originalRoom.getId()); // Сохраняем оригинальный ID!
         roomCopy.setName(originalRoom.getName());
         roomCopy.setVolume(originalRoom.getVolume());
         roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
@@ -462,6 +463,7 @@ public class BuildingTab extends JPanel {
         }
     }
     private void copyFloor(ActionEvent e) {
+        Map<String, Boolean> savedSelections = saveRadiationSelections();
         Floor selectedFloor = floorList.getSelectedValue();
         if (selectedFloor == null) {
             showMessage("Выберите этаж для копирования", "Ошибка", JOptionPane.WARNING_MESSAGE);
@@ -470,6 +472,8 @@ public class BuildingTab extends JPanel {
 
         // Создаем глубокую копию этажа
         Floor copiedFloor = createFloorCopy(selectedFloor);
+
+        updateRadiationTab(building);
 
         // Генерируем новый уникальный номер этажа
         String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
@@ -485,6 +489,7 @@ public class BuildingTab extends JPanel {
         building.addFloor(copiedFloor);
         floorListModel.addElement(copiedFloor);
         floorList.setSelectedValue(copiedFloor, true);
+        restoreRadiationSelections(savedSelections);
         updateRadiationTab(building);
     }
     private String extractDigits(String input) {
@@ -595,6 +600,27 @@ public class BuildingTab extends JPanel {
             updateSpaceList();
         }
         updateRadiationTab(building);
+    }
+
+    private Map<String, Boolean> saveRadiationSelections() {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            RadiationTab tab = ((MainFrame) mainFrame).getRadiationTab();
+            if (tab != null) {
+                return tab.saveSelections();
+            }
+        }
+        return new HashMap<>();
+    }
+
+    private void restoreRadiationSelections(Map<String, Boolean> savedSelections) {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            RadiationTab tab = ((MainFrame) mainFrame).getRadiationTab();
+            if (tab != null) {
+                tab.restoreSelections(savedSelections);
+            }
+        }
     }
 
     private void removeFloor(ActionEvent e) {

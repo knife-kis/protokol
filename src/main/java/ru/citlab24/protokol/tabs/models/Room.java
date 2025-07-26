@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.tabs.models;
 
 public class Room {
+    private static int nextId = 1;
     private int id;
     private String name = "";
     private Double volume = null;
@@ -8,6 +9,7 @@ public class Room {
     private double ventilationSectionArea = 0.008;
 
     public Room() {
+        this.id = nextId++;
     }
 
     // Геттеры и сеттеры

@@ -33,14 +33,12 @@ public class RadiationTab extends JPanel {
     private DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
     private JTable roomTable;
     private RadiationRoomsTableModel roomsTableModel;
-    private Map<Integer, Boolean> roomSelectionMap = new HashMap<>();
 
     public RadiationTab() {
         roomsTableModel = new RadiationRoomsTableModel(globalRoomSelectionMap);
         spaceTableModel = new SpaceTableModel();
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        // Инициализация модели таблицы комнат
 
         // Создаем основную панель с тремя колонками
         JPanel mainPanel = new JPanel(new GridLayout(1, 3, 10, 10));
@@ -129,7 +127,6 @@ public class RadiationTab extends JPanel {
                 null, title, TitledBorder.LEFT, TitledBorder.TOP, HEADER_FONT, color);
     }
 
-
     private void updateSpaceList() {
         spaceTableModel.clear();
         Floor selectedFloor = floorList.getSelectedValue();
@@ -147,27 +144,32 @@ public class RadiationTab extends JPanel {
     }
 
     private void updateRoomList() {
+        roomsTableModel.clear();
         int selectedRow = spaceTable.getSelectedRow();
-        if (selectedRow < 0) {
-            roomsTableModel.clear();
-            return;
-        }
 
-        roomsTableModel.clear(); // Очищаем только список комнат в модели
+        if (selectedRow >= 0) {
+            Space selectedSpace = spaceTableModel.getSpaceAt(selectedRow);
+            if (selectedSpace != null) {
+                for (Room room : selectedSpace.getRooms()) {
+                    int roomId = room.getId();
 
-        Space selectedSpace = spaceTableModel.getSpaceAt(selectedRow);
-        if (selectedSpace != null) {
-            for (Room room : selectedSpace.getRooms()) {
-                int roomId = room.getId(); // Использовать постоянный ID
-                globalRoomSelectionMap.putIfAbsent(roomId, true);
-                roomsTableModel.addRoom(room);
+                    // Только инициализация, если состояние еще не задано
+                    if (!globalRoomSelectionMap.containsKey(roomId)) {
+                        // Значение по умолчанию true устанавливаем только при первом показе
+                        globalRoomSelectionMap.put(roomId, true);
+                    }
+
+                    roomsTableModel.addRoom(room);
+                }
             }
         }
+        roomsTableModel.fireTableDataChanged();
     }
+
     public void setBuilding(Building building) {
-        this.currentBuilding = building; // Сохраняем здание
-        globalRoomSelectionMap.clear();
-        refreshFloors(); // Обновляем список этажей
+        this.currentBuilding = building;
+        // Не очищаем globalRoomSelectionMap, чтобы сохранить состояния между зданиями
+        refreshFloors();;
     }
 
     private void refreshFloors() {
@@ -181,21 +183,117 @@ public class RadiationTab extends JPanel {
             }
         }
     }
+
     public void refreshData() {
-        refreshFloors(); // Обновить список этажей
+        // Сохраняем текущее состояние выбранных комнат
+        Map<Integer, Boolean> savedSelection = new HashMap<>(globalRoomSelectionMap);
 
-        // Сбросить выделение и обновить таблицы
-        floorList.clearSelection();
-        spaceTableModel.clear();
-        roomsTableModel.clear();
+        refreshFloors();
 
-        if (currentBuilding != null && !currentBuilding.getFloors().isEmpty()) {
-            floorList.setSelectedIndex(0); // Автовыбор первого этажа
+        // Восстанавливаем состояние после обновления
+        // Убираем очистку globalRoomSelectionMap
+        globalRoomSelectionMap.putAll(savedSelection);
+
+        // Принудительно обновляем таблицу комнат
+        if (roomTable != null) {
+            roomsTableModel.fireTableDataChanged();
         }
     }
 
+    public Map<String, Boolean> saveSelections() {
+        Map<String, Boolean> selections = new HashMap<>();
+        for (Map.Entry<Integer, Boolean> entry : globalRoomSelectionMap.entrySet()) {
+            Room room = findRoomById(entry.getKey());
+            if (room != null) {
+                String key = generateRoomKey(room);
+                selections.put(key, entry.getValue());
+            }
+        }
+        return selections;
+    }
+
+    public void restoreSelections(Map<String, Boolean> savedSelections) {
+        // Не очищаем глобальную карту полностью, а обновляем только для текущих комнат
+        for (Room room : getAllRooms()) {
+            String key = generateRoomKey(room);
+            int roomId = room.getId();
+
+            if (savedSelections.containsKey(key)) {
+                // Обновляем состояние только если комната есть в сохраненных данных
+                globalRoomSelectionMap.put(roomId, savedSelections.get(key));
+            }
+            // Если комнаты нет в сохраненных данных - оставляем текущее состояние без изменений
+        }
+        roomsTableModel.fireTableDataChanged();
+    }
+
+    // Генерация уникального ключа для комнаты
+    private String generateRoomKey(Room room) {
+        Space space = findParentSpace(room);
+        if (space == null) return "unknown";
+
+        Floor floor = findParentFloor(space);
+        if (floor == null) return "unknown";
+
+        return String.format("%s|%s|%s",
+                floor.getNumber(),
+                space.getIdentifier(),
+                room.getName()
+        );
+    }
+
+    // Вспомогательные методы для поиска
+    private Space findParentSpace(Room room) {
+        if (currentBuilding == null) return null;
+
+        for (Floor floor : currentBuilding.getFloors()) {
+            for (Space space : floor.getSpaces()) {
+                if (space.getRooms().contains(room)) {
+                    return space;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Floor findParentFloor(Space space) {
+        if (currentBuilding == null) return null;
+
+        for (Floor floor : currentBuilding.getFloors()) {
+            if (floor.getSpaces().contains(space)) {
+                return floor;
+            }
+        }
+        return null;
+    }
+
+    private List<Room> getAllRooms() {
+        List<Room> allRooms = new ArrayList<>();
+        if (currentBuilding == null) return allRooms;
+
+        for (Floor floor : currentBuilding.getFloors()) {
+            for (Space space : floor.getSpaces()) {
+                allRooms.addAll(space.getRooms());
+            }
+        }
+        return allRooms;
+    }
+
+    // Добавленный метод для поиска комнаты по ID
+    private Room findRoomById(Integer roomId) {
+        if (roomId == null || currentBuilding == null) return null;
+
+        for (Room room : getAllRooms()) {
+            if (roomId.equals(room.getId())) {
+                return room;
+            }
+        }
+        return null;
+    }
+
+
     private static class SpaceTableModel extends AbstractTableModel {
-        private final String[] COLUMN_NAMES = {"Название"}; // Только один столбец
+        private final String[] COLUMN_NAMES = {"Название"};
         private final List<Space> spaces = new ArrayList<>();
 
         public void addSpace(Space space) {
@@ -210,7 +308,10 @@ public class RadiationTab extends JPanel {
         }
 
         public Space getSpaceAt(int rowIndex) {
-            return spaces.get(rowIndex);
+            if (rowIndex >= 0 && rowIndex < spaces.size()) {
+                return spaces.get(rowIndex);
+            }
+            return null;
         }
 
         @Override
@@ -220,7 +321,7 @@ public class RadiationTab extends JPanel {
 
         @Override
         public int getColumnCount() {
-            return COLUMN_NAMES.length; // Теперь только 1 столбец
+            return COLUMN_NAMES.length;
         }
 
         @Override
@@ -231,7 +332,7 @@ public class RadiationTab extends JPanel {
         @Override
         public Object getValueAt(int rowIndex, int columnIndex) {
             Space space = spaces.get(rowIndex);
-            return space.getIdentifier(); // Возвращаем только идентификатор помещения
+            return space.getIdentifier();
         }
     }
 }

@@ -24,11 +24,26 @@ class RadiationRoomsTableModel extends AbstractTableModel {
     // Добавлены недостающие методы
     public void addRoom(Room room) {
         int roomId = room.getId();
-        globalSelectionMap.putIfAbsent(roomId, true);
         rooms.add(room);
-        // Добавьте эту строку для инициализации отображения
-        roomToIdMap.put(room, roomId);
         fireTableRowsInserted(rooms.size()-1, rooms.size()-1);
+    }
+    @Override
+    public Object getValueAt(int rowIndex, int columnIndex) {
+        Room room = rooms.get(rowIndex);
+        if (columnIndex == 0) {
+            return globalSelectionMap.getOrDefault(room.getId(), true);
+        } else {
+            return room.getName();
+        }
+    }
+
+    @Override
+    public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
+        if (columnIndex == 0) {
+            Room room = rooms.get(rowIndex);
+            globalSelectionMap.put(room.getId(), (Boolean) aValue);
+            fireTableCellUpdated(rowIndex, columnIndex);
+        }
     }
 
     public void clear() {
@@ -64,29 +79,7 @@ class RadiationRoomsTableModel extends AbstractTableModel {
         return COLUMN_TYPES[columnIndex];
     }
 
-    @Override
-    public Object getValueAt(int rowIndex, int columnIndex) {
-        Room room = rooms.get(rowIndex);
-        int roomId = roomToIdMap.get(room);
-
-        if (columnIndex == 0) {
-            return selectionMap.get(roomId);
-        } else {
-            return room.getName(); // Или другое свойство комнаты
-        }
-    }
-
-    @Override
-    public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
-        if (columnIndex == 0) {
-            Room room = rooms.get(rowIndex);
-            int roomId = roomToIdMap.get(room);
-            selectionMap.put(roomId, (Boolean) aValue);
-            fireTableCellUpdated(rowIndex, columnIndex);
-        }
-    }
-
-    @Override
+       @Override
     public boolean isCellEditable(int rowIndex, int columnIndex) {
         return columnIndex == 0;
     }
