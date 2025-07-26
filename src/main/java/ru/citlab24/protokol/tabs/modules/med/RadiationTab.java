@@ -160,7 +160,7 @@ public class RadiationTab extends JPanel {
             for (Room room : selectedSpace.getRooms()) {
                 int roomId = room.getId(); // Использовать постоянный ID
                 globalRoomSelectionMap.putIfAbsent(roomId, true);
-                roomsTableModel.addRoom(room, roomId);
+                roomsTableModel.addRoom(room);
             }
         }
     }
@@ -181,78 +181,19 @@ public class RadiationTab extends JPanel {
             }
         }
     }
+    public void refreshData() {
+        refreshFloors(); // Обновить список этажей
 
-    // Модель таблицы комнат
-//    private static class RadiationRoomsTableModel extends AbstractTableModel {
-//        private final String[] COLUMN_NAMES = {"", "Комната"};
-//        private final Class<?>[] COLUMN_TYPES = {Boolean.class, String.class};
-//        private final Map<Integer, Boolean> globalSelectionMap; // Используем ID комнаты
-//        private Map<Integer, Boolean> selectionMap;
-//        private List<Room> rooms = new ArrayList<>();
-//        private Map<Room, Integer> roomToIdMap = new HashMap<>();
-//
-//        public RadiationRoomsTableModel(Map<Integer, Boolean> globalSelectionMap) {
-//            this.globalSelectionMap = globalSelectionMap;
-//        }
-//
-//        public void addRoom(Room room, int roomId) {
-//            rooms.add(room);
-//            roomToIdMap.put(room, roomId);
-//            fireTableRowsInserted(rooms.size()-1, rooms.size()-1);
-//        }
-//
-//        public void clear() {
-//            int size = rooms.size();
-//            rooms.clear();
-//            if (size > 0) {
-//                fireTableRowsDeleted(0, size - 1);
-//            }
-//        }
-//
-//        public Room getRoomAt(int rowIndex) {
-//            return rooms.get(rowIndex);
-//        }
-//
-//        @Override
-//        public int getRowCount() {
-//            return rooms.size();
-//        }
-//
-//        @Override
-//        public int getColumnCount() {
-//            return COLUMN_NAMES.length;
-//        }
-//
-//        @Override
-//        public String getColumnName(int column) {
-//            return COLUMN_NAMES[column];
-//        }
-//
-//        @Override
-//        public Class<?> getColumnClass(int columnIndex) {
-//            return COLUMN_TYPES[columnIndex];
-//        }
-//
-//        @Override
-//        public Object getValueAt(int rowIndex, int columnIndex) {
-//            Room room = rooms.get(rowIndex);
-//            int roomId = roomToIdMap.get(room);
-//            return selectionMap.get(roomId);
-//        }
-//
-//        @Override
-//        public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
-//            Room room = rooms.get(rowIndex);
-//            int roomId = roomToIdMap.get(room);
-//            selectionMap.put(roomId, (Boolean) aValue);
-//        }
-//
-//        @Override
-//        public boolean isCellEditable(int rowIndex, int columnIndex) {
-//            return columnIndex == 0; // Только колонка с чекбоксом редактируема
-//        }
-//
-//    }
+        // Сбросить выделение и обновить таблицы
+        floorList.clearSelection();
+        spaceTableModel.clear();
+        roomsTableModel.clear();
+
+        if (currentBuilding != null && !currentBuilding.getFloors().isEmpty()) {
+            floorList.setSelectedIndex(0); // Автовыбор первого этажа
+        }
+    }
+
     private static class SpaceTableModel extends AbstractTableModel {
         private final String[] COLUMN_NAMES = {"Название"}; // Только один столбец
         private final List<Space> spaces = new ArrayList<>();

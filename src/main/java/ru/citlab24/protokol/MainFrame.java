@@ -53,6 +53,14 @@ public class MainFrame extends JFrame {
                 FontIcon.of(FontAwesomeSolid.RADIATION_ALT, 24, new Color(255, 152, 0)),
                 new RadiationTab());
     }
+    public RadiationTab getRadiationTab() {
+        for (Component comp : tabbedPane.getComponents()) {
+            if (comp instanceof RadiationTab) {
+                return (RadiationTab) comp;
+            }
+        }
+        return null;
+    }
     public void selectVentilationTab() {
         tabbedPane.setSelectedIndex(2); // 2 - индекс вкладки "Вентиляция"
     }

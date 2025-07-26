@@ -22,8 +22,11 @@ class RadiationRoomsTableModel extends AbstractTableModel {
     }
 
     // Добавлены недостающие методы
-    public void addRoom(Room room, int roomId) {
+    public void addRoom(Room room) {
+        int roomId = room.getId();
+        globalSelectionMap.putIfAbsent(roomId, true);
         rooms.add(room);
+        // Добавьте эту строку для инициализации отображения
         roomToIdMap.put(room, roomId);
         fireTableRowsInserted(rooms.size()-1, rooms.size()-1);
     }

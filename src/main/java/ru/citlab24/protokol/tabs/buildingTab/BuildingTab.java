@@ -249,12 +249,14 @@ public class BuildingTab extends JPanel {
 
             this.building = newProject;
             projectNameField.setText(extractBaseName(finalName));
+            updateRadiationTab(newProject);
 
             showMessage("Новая версия проекта сохранена как: " + finalName, "Сохранение", JOptionPane.INFORMATION_MESSAGE);
             updateVentilationTab(newProject);
         } catch (SQLException ex) {
             handleError("Ошибка сохранения проекта: " + ex.getMessage(), "Ошибка");
         }
+
     }
 
     private String generateProjectVersionName(String baseName) {
@@ -344,11 +346,16 @@ public class BuildingTab extends JPanel {
 
     private Room createRoomCopy(Room originalRoom) {
         Room roomCopy = new Room();
+        roomCopy.setId(generateUniqueRoomId());
         roomCopy.setName(originalRoom.getName());
         roomCopy.setVolume(originalRoom.getVolume());
         roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
         roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
         return roomCopy;
+    }
+
+    private int generateUniqueRoomId() {
+        return UUID.randomUUID().hashCode();
     }
 
     private void calculateMetrics(ActionEvent e) {
@@ -377,6 +384,7 @@ public class BuildingTab extends JPanel {
         selectedFloor.addSpace(copiedSpace);
         spaceListModel.addElement(copiedSpace);
         spaceList.setSelectedValue(copiedSpace, true);
+        updateRadiationTab(building);
     }
 
     private String generateNextSpaceId(Floor floor, String currentId) {
@@ -438,15 +446,19 @@ public class BuildingTab extends JPanel {
 
             building.addFloor(floor);
             floorListModel.addElement(floor);
+            updateRadiationTab(building);
         }
     }
     private void updateRadiationTab(Building building) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
-            Arrays.stream(((MainFrame) mainFrame).getTabbedPane().getComponents())
-                    .filter(tab -> tab instanceof RadiationTab)
-                    .findFirst()
-                    .ifPresent(tab -> ((RadiationTab) tab).setBuilding(building));
+            MainFrame frame = (MainFrame) mainFrame;
+            RadiationTab tab = frame.getRadiationTab(); // Нужно добавить метод доступа
+
+            if (tab != null) {
+                tab.setBuilding(building);
+                tab.refreshData(); // Добавить этот метод в RadiationTab
+            }
         }
     }
     private void copyFloor(ActionEvent e) {
@@ -473,6 +485,7 @@ public class BuildingTab extends JPanel {
         building.addFloor(copiedFloor);
         floorListModel.addElement(copiedFloor);
         floorList.setSelectedValue(copiedFloor, true);
+        updateRadiationTab(building);
     }
     private String extractDigits(String input) {
         return input.replaceAll("\\D", ""); // Удаляем все не-цифры
@@ -581,6 +594,7 @@ public class BuildingTab extends JPanel {
             floorListModel.set(index, floor);
             updateSpaceList();
         }
+        updateRadiationTab(building);
     }
 
     private void removeFloor(ActionEvent e) {
@@ -589,6 +603,7 @@ public class BuildingTab extends JPanel {
             building.getFloors().remove(index);
             floorListModel.remove(index);
         }
+        updateRadiationTab(building);
     }
 
     // Операции с помещениями
@@ -607,6 +622,7 @@ public class BuildingTab extends JPanel {
             selectedFloor.addSpace(space);
             spaceListModel.addElement(space);
         }
+        updateRadiationTab(building);
     }
 
     private void editSpace(ActionEvent e) {
@@ -629,6 +645,7 @@ public class BuildingTab extends JPanel {
             spaceListModel.set(index, space);
             updateRoomList();
         }
+        updateRadiationTab(building);
     }
 
     private void removeSpace(ActionEvent e) {
@@ -644,6 +661,7 @@ public class BuildingTab extends JPanel {
             floor.getSpaces().remove(index);
             spaceListModel.remove(index);
         }
+        updateRadiationTab(building);
     }
 
     // Операции с комнатами
@@ -661,6 +679,7 @@ public class BuildingTab extends JPanel {
             selectedSpace.addRoom(room);
             roomListModel.addElement(room);
         }
+        updateRadiationTab(building);
     }
 
     private void editRoom(ActionEvent e) {
@@ -678,6 +697,7 @@ public class BuildingTab extends JPanel {
             room.setName(newName.trim());
             roomListModel.set(index, room);
         }
+        updateRadiationTab(building);
     }
 
     private void removeRoom(ActionEvent e) {
@@ -688,6 +708,7 @@ public class BuildingTab extends JPanel {
             space.getRooms().remove(index);
             roomListModel.remove(index);
         }
+        updateRadiationTab(building);
     }
 
     // Вспомогательные методы
@@ -736,9 +757,11 @@ public class BuildingTab extends JPanel {
     private void updateRoomList() {
         roomListModel.clear();
         Space selectedSpace = spaceList.getSelectedValue();
+
         if (selectedSpace != null) {
-            selectedSpace.getRooms().forEach(roomListModel::addElement);
-            if (!roomListModel.isEmpty()) roomList.setSelectedIndex(0);
+            for (Room room : selectedSpace.getRooms()) {
+                roomListModel.addElement(room);
+            }
         }
     }
 
@@ -801,6 +824,7 @@ public class BuildingTab extends JPanel {
     @Override
     public void addNotify() {
         super.addNotify();
+        updateRadiationTab(building);
         if (!floorListModel.isEmpty()) floorList.setSelectedIndex(0);
 
         // Инициализация слушателей после создания компонентов

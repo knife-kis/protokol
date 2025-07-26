@@ -217,9 +217,6 @@ public class DatabaseManager {
     }
 
     private static void saveRoom(int spaceId, Room room) throws SQLException {
-//        if (room.getId() == 0) { // Если комната новая
-//            room.setId(rs.getInt(1)); // Сохраняем ID из БД
-//        }
         String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, ventilation_section_area) " +
                 "VALUES (?, ?, ?, ?, ?)";
 
@@ -237,6 +234,11 @@ public class DatabaseManager {
             stmt.setInt(4, room.getVentilationChannels());
             stmt.setDouble(5, room.getVentilationSectionArea());
             stmt.executeUpdate();
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                if (rs.next()) {
+                    room.setId(rs.getInt(1));
+                }
+            }
         }
     }
 
@@ -296,6 +298,7 @@ public class DatabaseManager {
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
                 Room room = new Room();
+                room.setId(rs.getInt("id"));
                 room.setName(rs.getString("name"));
 
                 // Обработка NULL значения для объема

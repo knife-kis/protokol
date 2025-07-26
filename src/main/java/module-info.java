@@ -8,7 +8,7 @@ module ru.citlab24.protokol {
     requires org.kordamp.ikonli.swing;
     requires org.kordamp.ikonli.fontawesome5;
     requires java.sql;
-    requires org.apache.poi.poi;
+//    requires org.apache.poi.poi;
     requires org.apache.poi.ooxml;
 
     opens ru.citlab24.protokol to javafx.fxml;
