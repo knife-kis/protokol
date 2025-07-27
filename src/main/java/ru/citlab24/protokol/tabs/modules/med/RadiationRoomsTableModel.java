@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 class RadiationRoomsTableModel extends AbstractTableModel {
-    private final String[] COLUMN_NAMES = {"", "Комната"};
+    private final String[] COLUMN_NAMES = {"Измерения", "Комната"};
     private final Class<?>[] COLUMN_TYPES = {Boolean.class, String.class};
     private final Map<Integer, Boolean> globalSelectionMap;
     private final Map<Integer, Boolean> selectionMap;

@@ -5,11 +5,11 @@ import java.util.Locale;
 
 public class RoomUtils {
     public static final List<String> RESIDENTIAL_ROOM_KEYWORDS = List.of(
-            "кухня", "кухня-ниша",
+            "кухня", "кухня-ниша", "кухня-гостиная", "кухня гостиная", "кухня ниша",
             "санузел", "сан узел", "сан. узел",
             "ванная", "ванная комната",
             "совмещенный", "совмещенный санузел", "туалет",
-            "мусорокамера"
+            "мусорокамера", "су", "с/у"
     );
 
     public static boolean isResidentialRoom(String roomName) {
@@ -23,7 +23,7 @@ public class RoomUtils {
 
         String normalized = normalizeRoomName(roomName);
 
-        if (normalized.contains("кухня") || normalized.contains("кухня-ниша")) {
+        if (normalized.contains("кухня") || normalized.contains("кухня-ниша") || normalized.contains("кухня ниша") || normalized.contains("кухня-гостиная") || normalized.contains("кухня гостиная")) {
             return 60.0;
         } else if (normalized.contains("ванная комната") ||
                 normalized.contains("совмещенный санузел") ||

@@ -23,6 +23,15 @@ public class RadiationTab extends JPanel {
     private static final Color SPACE_PANEL_COLOR = new Color(76, 175, 80);
     private static final Color ROOM_PANEL_COLOR = new Color(156, 39, 176);
     private static final Font HEADER_FONT = new Font("Segoe UI", Font.BOLD, 14);
+    private static final List<String> EXCLUDED_ROOMS = Arrays.asList(
+            "санузел", "сан узел", "сан. узел",
+            "ванная", "ванная комната",
+            "совмещенный", "совмещенный санузел", "туалет",
+            "су", "с/у"
+    );
+    private static final List<String> KITCHEN_KEYWORDS = Arrays.asList(
+            "кухня", "кухня-ниша", "кухня-гостиная", "кухня гостиная", "кухня ниша"
+    );
 
     private JTable spaceTable;
     private SpaceTableModel spaceTableModel;
@@ -153,10 +162,9 @@ public class RadiationTab extends JPanel {
                 for (Room room : selectedSpace.getRooms()) {
                     int roomId = room.getId();
 
-                    // Только инициализация, если состояние еще не задано
+                    // Инициализация только если состояние не задано
                     if (!globalRoomSelectionMap.containsKey(roomId)) {
-                        // Значение по умолчанию true устанавливаем только при первом показе
-                        globalRoomSelectionMap.put(roomId, true);
+                        initRoomSelection(room);
                     }
 
                     roomsTableModel.addRoom(room);
@@ -164,6 +172,92 @@ public class RadiationTab extends JPanel {
             }
         }
         roomsTableModel.fireTableDataChanged();
+    }
+
+    private void initRoomSelection(Room room) {
+        int roomId = room.getId();
+        String roomName = room.getName().toLowerCase();
+
+        // 1. Always disable excluded rooms
+        if (containsAny(roomName, EXCLUDED_ROOMS)) {
+            globalRoomSelectionMap.put(roomId, false);
+            return;
+        }
+
+        // 2. For residential floors apply special logic
+        Space space = findParentSpace(room); // First find parent space
+        Floor floor = null;
+        if (space != null) {
+            floor = findParentFloor(space); // Then find parent floor
+        }
+
+        if (floor != null && floor.getType() == Floor.FloorType.RESIDENTIAL) {
+            initResidentialRoomSelection(room, floor);
+        } else {
+            // 3. For non-residential floors - default true
+            globalRoomSelectionMap.put(roomId, true);
+        }
+    }
+
+    private void initResidentialRoomSelection(Room currentRoom, Floor floor) {
+        Space space = findParentSpace(currentRoom);
+        if (space == null) return;
+
+        int roomId = currentRoom.getId();
+        String currentRoomName = currentRoom.getName().toLowerCase();
+
+        // Соберем все комнаты в помещении
+        List<Room> allRooms = space.getRooms();
+        List<Room> validRooms = new ArrayList<>();
+        List<Room> kitchenRooms = new ArrayList<>();
+
+        // Фильтруем комнаты
+        for (Room room : allRooms) {
+            String name = room.getName().toLowerCase();
+            if (containsAny(name, EXCLUDED_ROOMS)) {
+                // Для исключенных комнат сразу ставим false
+                globalRoomSelectionMap.put(room.getId(), false);
+            } else {
+                validRooms.add(room);
+                if (containsAny(name, KITCHEN_KEYWORDS)) {
+                    kitchenRooms.add(room);
+                }
+            }
+        }
+
+        // Выбираем комнаты для включения
+        Set<Integer> selectedRooms = new HashSet<>();
+
+        // 1. Выбираем первую кухню (если есть)
+        if (!kitchenRooms.isEmpty()) {
+            Room kitchen = kitchenRooms.get(0);
+            selectedRooms.add(kitchen.getId());
+            globalRoomSelectionMap.put(kitchen.getId(), true);
+        }
+
+        // 2. Выбираем первую НЕ кухню (если есть)
+        for (Room room : validRooms) {
+            if (!selectedRooms.contains(room.getId()) &&
+                    !containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS)) {
+                selectedRooms.add(room.getId());
+                globalRoomSelectionMap.put(room.getId(), true);
+                break; // Только одну комнату
+            }
+        }
+
+        // 3. Для текущей комнаты, если она не выбрана - ставим false
+        if (!selectedRooms.contains(roomId)) {
+            globalRoomSelectionMap.put(roomId, false);
+        }
+    }
+
+    private boolean containsAny(String source, List<String> targets) {
+        for (String target : targets) {
+            if (source.contains(target)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void setBuilding(Building building) {

@@ -49,7 +49,7 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Вентиляция",
                 FontIcon.of(FontAwesomeSolid.WIND, 24, new Color(41, 182, 246)), // Иконка вентиляции
                 new VentilationTab(building)); // Прямо в главной панели
-        tabbedPane.addTab("МЭД",
+        tabbedPane.addTab("Радиация",
                 FontIcon.of(FontAwesomeSolid.RADIATION_ALT, 24, new Color(255, 152, 0)),
                 new RadiationTab());
     }
