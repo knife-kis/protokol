@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Building {
+    private int plannedFloorsCount;
     private int id;
     private String name;
     private final List<Floor> floors = new ArrayList<>();
@@ -30,5 +31,12 @@ public class Building {
 
     public void addFloor(Floor floor) {
         floors.add(floor);
+    }
+    public int getPlannedFloorsCount() {
+        return plannedFloorsCount;
+    }
+
+    public void setPlannedFloorsCount(int plannedFloorsCount) {
+        this.plannedFloorsCount = plannedFloorsCount;
     }
 }

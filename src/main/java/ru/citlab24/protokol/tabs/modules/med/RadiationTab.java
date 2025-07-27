@@ -16,6 +16,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class RadiationTab extends JPanel {
     // Константы для цветов и стилей
@@ -178,23 +179,19 @@ public class RadiationTab extends JPanel {
         int roomId = room.getId();
         String roomName = room.getName().toLowerCase();
 
-        // 1. Always disable excluded rooms
+        // Всегда отключаем исключенные комнаты
         if (containsAny(roomName, EXCLUDED_ROOMS)) {
             globalRoomSelectionMap.put(roomId, false);
             return;
         }
 
-        // 2. For residential floors apply special logic
-        Space space = findParentSpace(room); // First find parent space
-        Floor floor = null;
-        if (space != null) {
-            floor = findParentFloor(space); // Then find parent floor
-        }
+        Space space = findParentSpace(room);
+        Floor floor = findParentFloor(space);
 
-        if (floor != null && floor.getType() == Floor.FloorType.RESIDENTIAL) {
+        if (space != null && floor != null && isResidentialSpace(space)) {
             initResidentialRoomSelection(room, floor);
         } else {
-            // 3. For non-residential floors - default true
+            // Для нежилых помещений - по умолчанию включено
             globalRoomSelectionMap.put(roomId, true);
         }
     }
@@ -204,51 +201,86 @@ public class RadiationTab extends JPanel {
         if (space == null) return;
 
         int roomId = currentRoom.getId();
-        String currentRoomName = currentRoom.getName().toLowerCase();
-
-        // Соберем все комнаты в помещении
         List<Room> allRooms = space.getRooms();
-        List<Room> validRooms = new ArrayList<>();
-        List<Room> kitchenRooms = new ArrayList<>();
 
-        // Фильтруем комнаты
-        for (Room room : allRooms) {
-            String name = room.getName().toLowerCase();
-            if (containsAny(name, EXCLUDED_ROOMS)) {
-                // Для исключенных комнат сразу ставим false
-                globalRoomSelectionMap.put(room.getId(), false);
-            } else {
-                validRooms.add(room);
-                if (containsAny(name, KITCHEN_KEYWORDS)) {
-                    kitchenRooms.add(room);
-                }
-            }
+        // Определение жилых этажей в здании
+        List<Floor> residentialFloors = currentBuilding.getFloors().stream()
+                .filter(f -> f.getType() == Floor.FloorType.RESIDENTIAL ||
+                        f.getType() == Floor.FloorType.MIXED)
+                .sorted(Comparator.comparing(f -> {
+                    try {
+                        return Integer.parseInt(f.getNumber());
+                    } catch (NumberFormatException e) {
+                        return Integer.MAX_VALUE;
+                    }
+                }))
+                .collect(Collectors.toList());
+
+        // Получаем первые два жилых этажа
+        List<Floor> firstTwoFloors = residentialFloors.stream()
+                .limit(2)
+                .collect(Collectors.toList());
+
+        // Обработка комнат в зависимости от этажа
+        if (firstTwoFloors.contains(floor)) {
+            // Логика для первых двух этажей
+            handleFirstTwoFloors(space);
+        } else if (residentialFloors.contains(floor)) {
+            // Логика для этажей выше второго
+            handleUpperFloors(floor, space);
+        } else {
+            // Для нежилых этажей включаем все комнаты
+            globalRoomSelectionMap.put(roomId, true);
         }
+    }
 
-        // Выбираем комнаты для включения
-        Set<Integer> selectedRooms = new HashSet<>();
+    private void handleFirstTwoFloors(Space space) {
+        List<Room> validRooms = space.getRooms().stream()
+                .filter(room -> !containsAny(room.getName().toLowerCase(), EXCLUDED_ROOMS))
+                .collect(Collectors.toList());
 
-        // 1. Выбираем первую кухню (если есть)
+        List<Room> kitchenRooms = validRooms.stream()
+                .filter(room -> containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
+                .collect(Collectors.toList());
+
+        // Сбрасываем все галочки
+        space.getRooms().forEach(room ->
+                globalRoomSelectionMap.put(room.getId(), false));
+
+        // Выбираем кухню
         if (!kitchenRooms.isEmpty()) {
-            Room kitchen = kitchenRooms.get(0);
-            selectedRooms.add(kitchen.getId());
-            globalRoomSelectionMap.put(kitchen.getId(), true);
+            globalRoomSelectionMap.put(kitchenRooms.get(0).getId(), true);
         }
 
-        // 2. Выбираем первую НЕ кухню (если есть)
-        for (Room room : validRooms) {
-            if (!selectedRooms.contains(room.getId()) &&
-                    !containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS)) {
-                selectedRooms.add(room.getId());
-                globalRoomSelectionMap.put(room.getId(), true);
-                break; // Только одну комнату
-            }
-        }
+        // Выбираем еще одну комнату (не кухню)
+        Optional<Room> otherRoom = validRooms.stream()
+                .filter(room -> !containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
+                .findFirst();
 
-        // 3. Для текущей комнаты, если она не выбрана - ставим false
-        if (!selectedRooms.contains(roomId)) {
-            globalRoomSelectionMap.put(roomId, false);
+        otherRoom.ifPresent(room ->
+                globalRoomSelectionMap.put(room.getId(), true));
+    }
+
+    private void handleUpperFloors(Floor floor, Space currentSpace) {
+        // Находим первое жилое помещение на этаже
+        Optional<Space> firstSpace = floor.getSpaces().stream()
+                .filter(this::isResidentialSpace)
+                .findFirst();
+
+        // Если текущее помещение - первое на этаже
+        if (firstSpace.isPresent() && firstSpace.get().equals(currentSpace)) {
+            handleFirstTwoFloors(currentSpace); // Та же логика, что и для первых этажей
+        } else {
+            // Для всех остальных помещений на этаже снимаем галочки
+            currentSpace.getRooms().forEach(room ->
+                    globalRoomSelectionMap.put(room.getId(), false));
         }
+    }
+    // Новый метод для определения жилых помещений
+    private boolean isResidentialSpace(Space space) {
+        if (space == null) return false;
+        String spaceId = space.getIdentifier().toLowerCase();
+        return spaceId.contains("кв") || spaceId.contains("квартира");
     }
 
     private boolean containsAny(String source, List<String> targets) {
