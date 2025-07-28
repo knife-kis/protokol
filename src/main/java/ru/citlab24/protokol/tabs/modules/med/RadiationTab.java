@@ -17,6 +17,8 @@ import java.awt.event.ActionEvent;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RadiationTab extends JPanel {
     // Константы для цветов и стилей
@@ -34,6 +36,7 @@ public class RadiationTab extends JPanel {
             "кухня", "кухня-ниша", "кухня-гостиная", "кухня гостиная", "кухня ниша"
     );
 
+    private static final Logger logger = LoggerFactory.getLogger(RadiationTab.class);
     private JTable spaceTable;
     private SpaceTableModel spaceTableModel;
     private Building currentBuilding;
@@ -200,8 +203,8 @@ public class RadiationTab extends JPanel {
         Space space = findParentSpace(currentRoom);
         if (space == null) return;
 
-        int roomId = currentRoom.getId();
-        List<Room> allRooms = space.getRooms();
+        logger.info("Обработка комнаты: {} в помещении: {} на этаже: {}",
+                currentRoom.getName(), space.getIdentifier(), floor.getNumber());
 
         // Определение жилых этажей в здании
         List<Floor> residentialFloors = currentBuilding.getFloors().stream()
@@ -216,25 +219,62 @@ public class RadiationTab extends JPanel {
                 }))
                 .collect(Collectors.toList());
 
+        logger.info("Все жилые этажи в здании: {}",
+                residentialFloors.stream().map(Floor::getNumber).collect(Collectors.toList()));
+
         // Получаем первые два жилых этажа
         List<Floor> firstTwoFloors = residentialFloors.stream()
                 .limit(2)
                 .collect(Collectors.toList());
 
+        logger.info("Первые два жилых этажа: {}",
+                firstTwoFloors.stream().map(Floor::getNumber).collect(Collectors.toList()));
+
         // Обработка комнат в зависимости от этажа
         if (firstTwoFloors.contains(floor)) {
-            // Логика для первых двух этажей
+            logger.info("Этаж {} - входит в первые два жилых этажа", floor.getNumber());
             handleFirstTwoFloors(space);
         } else if (residentialFloors.contains(floor)) {
-            // Логика для этажей выше второго
-            handleUpperFloors(floor, space);
+            logger.info("Этаж {} - жилой этаж выше второго", floor.getNumber());
+
+            boolean isFirstSpace = isFirstResidentialSpaceOnFloor(space, floor);
+            logger.info("Помещение {} является первым жилым на этаже: {}",
+                    space.getIdentifier(), isFirstSpace);
+
+            if (isFirstSpace) {
+                logger.info("Обработка как первого помещения на этаже");
+                handleFirstTwoFloors(space);
+            } else {
+                logger.info("Снятие галочек для непервых помещений");
+                space.getRooms().forEach(room ->
+                        globalRoomSelectionMap.put(room.getId(), false));
+            }
         } else {
-            // Для нежилых этажей включаем все комнаты
-            globalRoomSelectionMap.put(roomId, true);
+            logger.info("Этаж {} - не является жилым", floor.getNumber());
         }
     }
 
+    private boolean isFirstResidentialSpaceOnFloor(Space space, Floor floor) {
+        // Находим индекс текущего жилого помещения
+        List<Space> residentialSpaces = floor.getSpaces().stream()
+                .filter(this::isResidentialSpace)
+                .collect(Collectors.toList());
+
+        // Если нет жилых помещений - false
+        if (residentialSpaces.isEmpty()) return false;
+
+        // Первое жилое помещение на этаже
+        Space firstSpace = residentialSpaces.get(0);
+
+        logger.info("Первое жилое помещение на этаже {}: {}",
+                floor.getNumber(), firstSpace.getIdentifier());
+
+        return firstSpace.equals(space);
+    }
+
     private void handleFirstTwoFloors(Space space) {
+        logger.info("Обработка помещения {} по правилам первых двух этажей", space.getIdentifier());
+
         List<Room> validRooms = space.getRooms().stream()
                 .filter(room -> !containsAny(room.getName().toLowerCase(), EXCLUDED_ROOMS))
                 .collect(Collectors.toList());
@@ -249,7 +289,9 @@ public class RadiationTab extends JPanel {
 
         // Выбираем кухню
         if (!kitchenRooms.isEmpty()) {
-            globalRoomSelectionMap.put(kitchenRooms.get(0).getId(), true);
+            Room kitchen = kitchenRooms.get(0);
+            globalRoomSelectionMap.put(kitchen.getId(), true);
+            logger.info("Выбрана кухня: {}", kitchen.getName());
         }
 
         // Выбираем еще одну комнату (не кухню)
@@ -257,10 +299,18 @@ public class RadiationTab extends JPanel {
                 .filter(room -> !containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
                 .findFirst();
 
-        otherRoom.ifPresent(room ->
-                globalRoomSelectionMap.put(room.getId(), true));
+        if (otherRoom.isPresent()) {
+            Room room = otherRoom.get();
+            globalRoomSelectionMap.put(room.getId(), true);
+            logger.info("Выбрана комната: {}", room.getName());
+        }
     }
 
+    public void copyRoomSelectionState(int originalRoomId, int newRoomId) {
+        if (globalRoomSelectionMap.containsKey(originalRoomId)) {
+            globalRoomSelectionMap.put(newRoomId, globalRoomSelectionMap.get(originalRoomId));
+        }
+    }
     private void handleUpperFloors(Floor floor, Space currentSpace) {
         // Находим первое жилое помещение на этаже
         Optional<Space> firstSpace = floor.getSpaces().stream()
@@ -279,8 +329,20 @@ public class RadiationTab extends JPanel {
     // Новый метод для определения жилых помещений
     private boolean isResidentialSpace(Space space) {
         if (space == null) return false;
-        String spaceId = space.getIdentifier().toLowerCase();
-        return spaceId.contains("кв") || spaceId.contains("квартира");
+
+        // Определяем по типу помещения
+        boolean isApartment = space.getType() == Space.SpaceType.APARTMENT;
+
+        // Дополнительная проверка для смешанных этажей
+        Floor parentFloor = findParentFloor(space);
+        if (parentFloor != null) {
+            boolean isResidentialFloor =
+                    parentFloor.getType() == Floor.FloorType.RESIDENTIAL ||
+                            parentFloor.getType() == Floor.FloorType.MIXED;
+            return isApartment && isResidentialFloor;
+        }
+
+        return isApartment;
     }
 
     private boolean containsAny(String source, List<String> targets) {

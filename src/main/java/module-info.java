@@ -10,6 +10,7 @@ module ru.citlab24.protokol {
     requires java.sql;
 //    requires org.apache.poi.poi;
     requires org.apache.poi.ooxml;
+    requires org.slf4j;
 
     opens ru.citlab24.protokol to javafx.fxml;
     exports ru.citlab24.protokol;

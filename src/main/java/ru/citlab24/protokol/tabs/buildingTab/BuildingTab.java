@@ -469,23 +469,48 @@ public class BuildingTab extends JPanel {
             }
         }
     }
+    private RadiationTab getRadiationTab() {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            return ((MainFrame) mainFrame).getRadiationTab();
+        }
+        return null;
+    }
+    private void copyRoomSelectionStates(RadiationTab radiationTab, Floor originalFloor, Floor copiedFloor) {
+        for (int i = 0; i < originalFloor.getSpaces().size(); i++) {
+            Space originalSpace = originalFloor.getSpaces().get(i);
+            Space copiedSpace = copiedFloor.getSpaces().get(i);
+
+            for (int j = 0; j < originalSpace.getRooms().size(); j++) {
+                Room originalRoom = originalSpace.getRooms().get(j);
+                Room copiedRoom = copiedSpace.getRooms().get(j);
+                radiationTab.copyRoomSelectionState(originalRoom.getId(), copiedRoom.getId());
+            }
+        }
+    }
     private void copyFloor(ActionEvent e) {
-        Map<String, Boolean> savedSelections = saveRadiationSelections();
         Floor selectedFloor = floorList.getSelectedValue();
         if (selectedFloor == null) return;
 
+        // Создаем копию этажа
         Floor copiedFloor = createFloorCopy(selectedFloor);
         String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
         copiedFloor.setNumber(newFloorNumber);
-
         updateSpaceIdentifiers(copiedFloor, extractDigits(newFloorNumber));
+
+        // Добавляем копию в здание
         building.addFloor(copiedFloor);
         floorListModel.addElement(copiedFloor);
         floorList.setSelectedValue(copiedFloor, true);
 
-        // Восстанавливаем ПОСЛЕ добавления этажа
-        restoreRadiationSelections(savedSelections);
+        // Обновляем RadiationTab
         updateRadiationTab(building);
+
+        // Копируем состояния комнат
+        RadiationTab radiationTab = getRadiationTab();
+        if (radiationTab != null) {
+            copyRoomSelectionStates(radiationTab, selectedFloor, copiedFloor);
+        }
     }
     private String extractDigits(String input) {
         return input.replaceAll("\\D", ""); // Удаляем все не-цифры
