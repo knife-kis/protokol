@@ -156,10 +156,9 @@ public class RadiationTab extends JPanel {
             Space selectedSpace = spaceTableModel.getSpaceAt(selectedRow);
             if (selectedSpace != null) {
                 Floor floor = findParentFloor(selectedSpace);
-                // Проверяем, что помещение жилое и первое на этаже
-                if (floor != null && isResidentialSpace(selectedSpace) &&
-                        isFirstResidentialSpaceOnFloor(selectedSpace, floor)) {
 
+                // Для жилых помещений на смешанных этажах применяем обычную логику
+                if (floor != null && isResidentialSpace(selectedSpace)) {
                     if (!processedSpaces.contains(selectedSpace.getId())) {
                         processFirstResidentialSpace(selectedSpace);
                         processedSpaces.add(selectedSpace.getId());
@@ -224,7 +223,7 @@ public class RadiationTab extends JPanel {
         String roomName = room.getName().toLowerCase();
 
         // Всегда отключаем исключенные комнаты
-        if (containsAny(roomName, EXCLUDED_ROOMS)) {
+        if (isExcludedRoom(roomName)) {
             globalRoomSelectionMap.put(roomId, false);
             return;
         }
@@ -362,13 +361,19 @@ public class RadiationTab extends JPanel {
         if (space == null) return false;
         boolean isApartment = space.getType() == Space.SpaceType.APARTMENT;
         Floor parentFloor = findParentFloor(space);
+
         if (parentFloor != null) {
             boolean isResidentialFloor =
                     parentFloor.getType() == Floor.FloorType.RESIDENTIAL ||
                             parentFloor.getType() == Floor.FloorType.MIXED;
+
             return isApartment && isResidentialFloor;
         }
         return isApartment;
+    }
+    public static boolean isExcludedRoom(String roomName) {
+        String lowerName = roomName.toLowerCase();
+        return EXCLUDED_ROOMS.stream().anyMatch(lowerName::contains);
     }
 
     private boolean containsAny(String source, List<String> targets) {

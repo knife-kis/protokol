@@ -404,11 +404,14 @@ public class BuildingTab extends JPanel {
         // Восстанавливаем состояния ТОЛЬКО для исходных комнат
         restoreRadiationSelections(savedSelections);
 
-        // Для всех комнат в новом помещении снимаем галочки
+        // Явно устанавливаем галочки для офисных помещений
         RadiationTab radiationTab = getRadiationTab();
-        if (radiationTab != null) {
+        if (radiationTab != null && copiedSpace.getType() == Space.SpaceType.OFFICE) {
             for (Room room : copiedSpace.getRooms()) {
-                radiationTab.setRoomSelectionState(room.getId(), false);
+                // Галочка должна быть всегда для офисных комнат, кроме исключенных
+                if (!RadiationTab.isExcludedRoom(room.getName())) {
+                    radiationTab.setRoomSelectionState(room.getId(), true);
+                }
             }
         }
     }
@@ -526,10 +529,18 @@ public class BuildingTab extends JPanel {
             Space originalSpace = originalFloor.getSpaces().get(i);
             Space copiedSpace = copiedFloor.getSpaces().get(i);
 
-            for (int j = 0; j < originalSpace.getRooms().size(); j++) {
-                Room originalRoom = originalSpace.getRooms().get(j);
-                Room copiedRoom = copiedSpace.getRooms().get(j);
-                radiationTab.copyRoomSelectionState(originalRoom.getId(), copiedRoom.getId());
+            // Для офисов копируем состояние "включено"
+            if (originalSpace.getType() == Space.SpaceType.OFFICE) {
+                for (Room copiedRoom : copiedSpace.getRooms()) {
+                    radiationTab.setRoomSelectionState(copiedRoom.getId(), true);
+                }
+            } else {
+                // Для остальных - копируем как есть
+                for (int j = 0; j < originalSpace.getRooms().size(); j++) {
+                    Room originalRoom = originalSpace.getRooms().get(j);
+                    Room copiedRoom = copiedSpace.getRooms().get(j);
+                    radiationTab.copyRoomSelectionState(originalRoom.getId(), copiedRoom.getId());
+                }
             }
         }
     }
