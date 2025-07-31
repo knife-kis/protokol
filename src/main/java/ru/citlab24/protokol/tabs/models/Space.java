@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Space {
+    private int id;
     private String identifier;
     private SpaceType type;
     private List<Room> rooms = new ArrayList<>();
@@ -29,6 +30,15 @@ public class Space {
 
 
     // Геттеры и сеттеры
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
     public void addRoom(Room room) {
         rooms.add(room);
     }

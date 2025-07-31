@@ -386,13 +386,58 @@ public class BuildingTab extends JPanel {
             return;
         }
 
-        Space copiedSpace = createSpaceCopy(selectedSpace);
+        // Сохраняем состояния чекбоксов ДО копирования
+        Map<String, Boolean> savedSelections = saveRadiationSelections();
+
+        // Создаем копию помещения с НОВЫМИ ID комнат
+        Space copiedSpace = createSpaceCopyWithNewIds(selectedSpace);
         copiedSpace.setIdentifier(generateNextSpaceId(selectedFloor, selectedSpace.getIdentifier()));
 
+        // Добавляем новое помещение
         selectedFloor.addSpace(copiedSpace);
         spaceListModel.addElement(copiedSpace);
         spaceList.setSelectedValue(copiedSpace, true);
+
+        // Обновляем вкладку с новым зданием
         updateRadiationTab(building);
+
+        // Восстанавливаем состояния ТОЛЬКО для исходных комнат
+        restoreRadiationSelections(savedSelections);
+
+        // Для всех комнат в новом помещении снимаем галочки
+        RadiationTab radiationTab = getRadiationTab();
+        if (radiationTab != null) {
+            for (Room room : copiedSpace.getRooms()) {
+                radiationTab.setRoomSelectionState(room.getId(), false);
+            }
+        }
+    }
+    // Создаем глубокую копию помещения с новыми ID комнат
+    private Space createSpaceCopyWithNewIds(Space originalSpace) {
+        Space spaceCopy = new Space();
+        spaceCopy.setIdentifier(originalSpace.getIdentifier());
+        spaceCopy.setType(originalSpace.getType());
+
+        for (Room originalRoom : originalSpace.getRooms()) {
+            Room roomCopy = createRoomCopyWithNewId(originalRoom);
+            spaceCopy.addRoom(roomCopy);
+        }
+        return spaceCopy;
+    }
+
+    // Создаем копию комнаты с новым ID
+    private Room createRoomCopyWithNewId(Room originalRoom) {
+        Room roomCopy = new Room();
+        roomCopy.setId(generateUniqueRoomId()); // Генерируем новый уникальный ID
+        roomCopy.setName(originalRoom.getName());
+        roomCopy.setVolume(originalRoom.getVolume());
+        roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
+        roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
+        return roomCopy;
+    }
+
+    private boolean isResidentialSpace(Space space) {
+        return space.getType() == Space.SpaceType.APARTMENT;
     }
 
     private String generateNextSpaceId(Floor floor, String currentId) {
