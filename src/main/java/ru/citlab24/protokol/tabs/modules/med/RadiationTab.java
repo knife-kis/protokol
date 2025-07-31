@@ -155,10 +155,12 @@ public class RadiationTab extends JPanel {
         if (selectedRow >= 0) {
             Space selectedSpace = spaceTableModel.getSpaceAt(selectedRow);
             if (selectedSpace != null) {
-                Floor floor = findParentFloor(selectedSpace);
+                logger.info("Selected space: {} (type: {})",
+                        selectedSpace.getIdentifier(), selectedSpace.getType());
 
-                // Для жилых помещений на смешанных этажах применяем обычную логику
-                if (floor != null && isResidentialSpace(selectedSpace)) {
+                // Для жилых помещений применяем стандартную логику
+                if (isResidentialSpace(selectedSpace)) {
+                    logger.info("Processing as residential space");
                     if (!processedSpaces.contains(selectedSpace.getId())) {
                         processFirstResidentialSpace(selectedSpace);
                         processedSpaces.add(selectedSpace.getId());
@@ -359,17 +361,7 @@ public class RadiationTab extends JPanel {
     // Новый метод для определения жилых помещений
     private boolean isResidentialSpace(Space space) {
         if (space == null) return false;
-        boolean isApartment = space.getType() == Space.SpaceType.APARTMENT;
-        Floor parentFloor = findParentFloor(space);
-
-        if (parentFloor != null) {
-            boolean isResidentialFloor =
-                    parentFloor.getType() == Floor.FloorType.RESIDENTIAL ||
-                            parentFloor.getType() == Floor.FloorType.MIXED;
-
-            return isApartment && isResidentialFloor;
-        }
-        return isApartment;
+        return space.getType() == Space.SpaceType.APARTMENT;
     }
     public static boolean isExcludedRoom(String roomName) {
         String lowerName = roomName.toLowerCase();
