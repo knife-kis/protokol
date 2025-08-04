@@ -344,16 +344,16 @@ public class BuildingTab extends JPanel {
         return floorCopy;
     }
 
-    private Space createSpaceCopy(Space originalSpace) {
-        Space spaceCopy = new Space();
-        spaceCopy.setIdentifier(originalSpace.getIdentifier());
-        spaceCopy.setType(originalSpace.getType());
+    public void refreshFloor(Floor floor) {
+        int index = building.getFloors().indexOf(floor);
+        if (index >= 0) {
+            floorListModel.set(index, floor);
 
-        for (Room originalRoom : originalSpace.getRooms()) {
-            Room roomCopy = createRoomCopy(originalRoom);
-            spaceCopy.addRoom(roomCopy);
+            if (floorList.getSelectedIndex() == index) {
+                updateSpaceList();
+                spaceList.setSelectedIndex(0);
+            }
         }
-        return spaceCopy;
     }
 
     private Room createRoomCopy(Room originalRoom) {

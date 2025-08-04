@@ -1,5 +1,6 @@
 package ru.citlab24.protokol.tabs.modules.med;
 
+import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.models.Floor;
 import ru.citlab24.protokol.tabs.models.Room;
@@ -47,6 +48,8 @@ public class RadiationTab extends JPanel {
     private DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
     private JTable roomTable;
     private RadiationRoomsTableModel roomsTableModel;
+    private JButton splitOfficeButton;
+    private JButton splitRoomButton;
 
     public RadiationTab() {
         roomsTableModel = new RadiationRoomsTableModel(globalRoomSelectionMap);
@@ -103,43 +106,167 @@ public class RadiationTab extends JPanel {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(createTitledBorder("Помещения на этаже", SPACE_PANEL_COLOR));
 
-        // Заменяем список на таблицу
+        // Таблица помещений
         spaceTable = new JTable(spaceTableModel);
-
-        // Настройка внешнего вида таблицы
         spaceTable.getTableHeader().setFont(HEADER_FONT);
         spaceTable.setRowHeight(25);
         spaceTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        spaceTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                updateRoomList();
-            }
-        });
-
         panel.add(new JScrollPane(spaceTable), BorderLayout.CENTER);
         return panel;
+    }
+
+    private void splitOfficeAction(ActionEvent e) {
+        int row = spaceTable.getSelectedRow();
+        if (row < 0) return;
+
+        Space selectedSpace = spaceTableModel.getSpaceAt(row);
+        if (selectedSpace == null || selectedSpace.getType() != Space.SpaceType.OFFICE) return;
+
+        // Диалог для разделения помещения
+        SplitOfficeDialog dialog = new SplitOfficeDialog(
+                (Frame) SwingUtilities.getWindowAncestor(this),
+                selectedSpace.getIdentifier()
+        );
+        dialog.setVisible(true);
+
+        if (dialog.isConfirmed()) {
+            splitOfficeSpace(selectedSpace, dialog.getRoomDataList());
+        }
+    }
+    private void splitOfficeSpace(Space officeSpace, List<SplitOfficeDialog.RoomData> roomDataList) {
+        Floor floor = findParentFloor(officeSpace);
+        if (floor == null) return;
+
+        // Удаляем исходное помещение
+        floor.getSpaces().remove(officeSpace);
+
+        // Создаем новые помещения
+        for (SplitOfficeDialog.RoomData data : roomDataList) {
+            Space newSpace = new Space();
+            newSpace.setIdentifier(data.getSpaceIdentifier());
+            newSpace.setType(Space.SpaceType.OFFICE);
+
+            Room newRoom = new Room();
+            newRoom.setName(data.getRoomName());
+            newRoom.setId(generateUniqueRoomId());
+            newSpace.addRoom(newRoom);
+
+            floor.addSpace(newSpace);
+
+            // Автоматически выбираем комнату
+            globalRoomSelectionMap.put(newRoom.getId(), true);
+        }
+
+        // Обновляем UI
+        refreshData();
+        updateBuildingTab(floor);
+    }
+
+    private void updateBuildingTab(Floor updatedFloor) {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            ((MainFrame) mainFrame).getBuildingTab().refreshFloor(updatedFloor);
+        }
     }
 
     private JPanel createRoomPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(createTitledBorder("Комнаты на этаже", ROOM_PANEL_COLOR));
 
+        // Создаем кнопку "Добавить точки" для комнат
+        splitRoomButton = new JButton("Добавить точки");
+        splitRoomButton.setVisible(false);
+        splitRoomButton.addActionListener(this::splitRoomAction);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.add(splitRoomButton);
+
         // Таблица комнат с чекбоксами
         roomTable = new JTable(roomsTableModel);
+        // ... существующая настройка таблицы ...
 
-        // Настройка колонки с чекбоксами
-        roomTable.getColumnModel().getColumn(0).setCellRenderer(roomTable.getDefaultRenderer(Boolean.class));
-        roomTable.getColumnModel().getColumn(0).setCellEditor(roomTable.getDefaultEditor(Boolean.class));
-        roomTable.getColumnModel().getColumn(0).setPreferredWidth(30);
+        // Слушатель выбора комнаты
+        roomTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int row = roomTable.getSelectedRow();
+                splitRoomButton.setVisible(row >= 0);
+            }
+        });
 
-        // Настройка колонки с названиями комнат
-        DefaultTableCellRenderer renderer = new DefaultTableCellRenderer();
-        renderer.setHorizontalAlignment(SwingConstants.LEFT);
-        roomTable.getColumnModel().getColumn(1).setCellRenderer(renderer);
-
+        panel.add(buttonPanel, BorderLayout.NORTH);
         panel.add(new JScrollPane(roomTable), BorderLayout.CENTER);
         return panel;
+    }
+    private void splitRoomAction(ActionEvent e) {
+        int row = roomTable.getSelectedRow();
+        if (row < 0) return;
+
+        Room selectedRoom = roomsTableModel.getRoomAt(row);
+        if (selectedRoom == null) return;
+
+        // Запрос количества точек
+        String input = JOptionPane.showInputDialog(
+                this,
+                "Сколько точек замеров будет в этом помещении?",
+                "Количество точек",
+                JOptionPane.QUESTION_MESSAGE
+        );
+
+        if (input == null) return; // пользователь отменил
+
+        int pointCount;
+        try {
+            pointCount = Integer.parseInt(input);
+            if (pointCount <= 0) {
+                JOptionPane.showMessageDialog(this, "Введите положительное число", "Ошибка", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Введите целое число", "Ошибка", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Диалог для ввода суффиксов
+        SuffixInputDialog dialog = new SuffixInputDialog(
+                (Frame) SwingUtilities.getWindowAncestor(this),
+                selectedRoom.getName(),
+                pointCount
+        );
+        dialog.setVisible(true);
+
+        if (dialog.isConfirmed()) {
+            splitRoom(selectedRoom, dialog.getSuffixes());
+        }
+    }
+    private void splitRoom(Room selectedRoom, List<String> suffixes) {
+        Space space = findParentSpace(selectedRoom);
+        if (space == null) return;
+
+        Floor floor = findParentFloor(space);
+        if (floor == null) return;
+
+        // Сохраняем состояние выбранности
+        boolean wasSelected = globalRoomSelectionMap.getOrDefault(selectedRoom.getId(), false);
+
+        // Удаляем исходную комнату
+        space.getRooms().remove(selectedRoom);
+        globalRoomSelectionMap.remove(selectedRoom.getId());
+
+        // Создаем новые комнаты с суффиксами
+        for (String suffix : suffixes) {
+            Room newRoom = new Room();
+            newRoom.setName(selectedRoom.getName() + suffix); // Добавляем суффикс
+            newRoom.setId(generateUniqueRoomId());
+            space.addRoom(newRoom);
+
+            // Копируем состояние выбранности
+            globalRoomSelectionMap.put(newRoom.getId(), wasSelected);
+        }
+
+        // Обновляем UI
+        refreshData();
+        updateBuildingTab(floor);
     }
 
     private TitledBorder createTitledBorder(String title, Color color) {
@@ -629,5 +756,8 @@ public class RadiationTab extends JPanel {
             Space space = spaces.get(rowIndex);
             return space.getIdentifier();
         }
+    }
+    private int generateUniqueRoomId() {
+        return UUID.randomUUID().hashCode();
     }
 }
