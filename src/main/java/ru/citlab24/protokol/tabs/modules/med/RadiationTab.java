@@ -81,7 +81,21 @@ public class RadiationTab extends JPanel {
             }
         });
 
-        panel.add(new JScrollPane(floorList), BorderLayout.CENTER);
+        // Создаем панель для списка и кнопки
+        JPanel floorListPanel = new JPanel(new BorderLayout());
+        floorListPanel.add(new JScrollPane(floorList), BorderLayout.CENTER);
+
+        // Кнопка для обработки всех квартир
+        JButton selectForAllButton = new JButton("Выбрать для всех квартир");
+        selectForAllButton.addActionListener(e -> processAllResidentialSpacesOnCurrentFloor());
+
+        // Панель для кнопки (для выравнивания)
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.add(selectForAllButton);
+
+        floorListPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        panel.add(floorListPanel, BorderLayout.CENTER);
         return panel;
     }
 
@@ -180,43 +194,9 @@ public class RadiationTab extends JPanel {
     }
 
     private void processFirstResidentialSpace(Space space) {
-        // Получаем список всех комнат в помещении, не исключенных
-        List<Room> validRooms = space.getRooms().stream()
-                .filter(room -> !containsAny(room.getName().toLowerCase(), EXCLUDED_ROOMS))
-                .collect(Collectors.toList());
-
-        // Разделяем на кухни и не-кухни
-        List<Room> kitchenRooms = validRooms.stream()
-                .filter(room -> containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
-                .collect(Collectors.toList());
-
-        List<Room> otherRooms = validRooms.stream()
-                .filter(room -> !containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
-                .collect(Collectors.toList());
-
-        // Сначала сбрасываем все галочки в этом помещении
-        for (Room room : space.getRooms()) {
-            globalRoomSelectionMap.put(room.getId(), false);
-        }
-
-        // Правило выбора двух комнат
-        if (kitchenRooms.isEmpty()) {
-            // Нет кухонь -> отмечаем две не-кухни (если есть)
-            int count = 0;
-            for (Room room : otherRooms) {
-                globalRoomSelectionMap.put(room.getId(), true);
-                count++;
-                if (count >= 2) break;
-            }
-        } else {
-            // Отмечаем одну кухню (первую)
-            globalRoomSelectionMap.put(kitchenRooms.get(0).getId(), true);
-            // Отмечаем одну не-кухню (если есть) или вторую кухню (если не-кухонь нет)
-            if (!otherRooms.isEmpty()) {
-                globalRoomSelectionMap.put(otherRooms.get(0).getId(), true);
-            } else if (kitchenRooms.size() > 1) {
-                globalRoomSelectionMap.put(kitchenRooms.get(1).getId(), true);
-            }
+        if (!processedSpaces.contains(space.getId())) {
+            applyRoomSelectionRulesForResidentialSpace(space);
+            processedSpaces.add(space.getId());
         }
     }
 
@@ -250,6 +230,95 @@ public class RadiationTab extends JPanel {
 
         // Для жилых помещений по умолчанию отключаем
         globalRoomSelectionMap.put(roomId, false);
+    }
+
+    private void processAllResidentialSpacesOnCurrentFloor() {
+        Floor currentFloor = floorList.getSelectedValue();
+        if (currentFloor == null) {
+            logger.info("Не выбран этаж для обработки");
+            return;
+        }
+
+        logger.info("Обработка всех квартир на этаже: {}", currentFloor.getNumber());
+
+        boolean changesMade = false;
+        for (Space space : currentFloor.getSpaces()) {
+            if (space != null && isResidentialSpace(space)) {
+                logger.info("Применение правил для квартиры: {}", space.getIdentifier());
+                applyRoomSelectionRulesForResidentialSpace(space);
+                changesMade = true;
+            }
+        }
+
+        if (changesMade) {
+            // Обновляем таблицу комнат
+            roomsTableModel.fireTableDataChanged();
+            // Обновляем список помещений
+            updateSpaceList();
+            // Пересчитываем представление
+            revalidate();
+            repaint();
+
+            logger.info("Правила применены для всех квартир на этаже");
+        } else {
+            logger.info("На этаже нет квартир для обработки");
+        }
+    }
+
+    private void applyRoomSelectionRulesForResidentialSpace(Space space) {
+        try {
+            // Получаем список всех комнат в помещении, не исключенных
+            List<Room> validRooms = space.getRooms().stream()
+                    .filter(room -> room != null && !containsAny(room.getName().toLowerCase(), EXCLUDED_ROOMS))
+                    .collect(Collectors.toList());
+
+            // Разделяем на кухни и не-кухни
+            List<Room> kitchenRooms = validRooms.stream()
+                    .filter(room -> containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
+                    .collect(Collectors.toList());
+
+            List<Room> otherRooms = validRooms.stream()
+                    .filter(room -> !containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
+                    .collect(Collectors.toList());
+
+            // Сбрасываем все галочки в этом помещении
+            for (Room room : space.getRooms()) {
+                if (room != null) {
+                    globalRoomSelectionMap.put(room.getId(), false);
+                }
+            }
+
+            // Правило выбора двух комнат
+            if (kitchenRooms.isEmpty()) {
+                // Нет кухонь -> отмечаем две не-кухни (если есть)
+                int count = 0;
+                for (Room room : otherRooms) {
+                    if (room != null) {
+                        globalRoomSelectionMap.put(room.getId(), true);
+                        count++;
+                        if (count >= 2) break;
+                    }
+                }
+            } else {
+                // Отмечаем одну кухню (первую)
+                if (kitchenRooms.get(0) != null) {
+                    globalRoomSelectionMap.put(kitchenRooms.get(0).getId(), true);
+                }
+
+                // Отмечаем одну не-кухню (если есть) или вторую кухню (если не-кухонь нет)
+                if (!otherRooms.isEmpty() && otherRooms.get(0) != null) {
+                    globalRoomSelectionMap.put(otherRooms.get(0).getId(), true);
+                } else if (kitchenRooms.size() > 1 && kitchenRooms.get(1) != null) {
+                    globalRoomSelectionMap.put(kitchenRooms.get(1).getId(), true);
+                }
+            }
+
+            // Помечаем пространство как обработанное
+            processedSpaces.add(space.getId());
+
+        } catch (Exception e) {
+            logger.error("Ошибка при обработке помещения {}: {}", space.getIdentifier(), e.getMessage());
+        }
     }
 
     private void processResidentialSpace(Space space, Floor floor) {
@@ -378,8 +447,15 @@ public class RadiationTab extends JPanel {
     }
 
     public void setBuilding(Building building) {
+        // Сохраняем текущие состояния
+        Map<String, Boolean> savedSelections = saveSelections();
+
         this.currentBuilding = building;
-        processedSpaces.clear(); // Очищаем при смене здания
+        processedSpaces.clear();
+
+        // Восстанавливаем состояния для существующих комнат
+        restoreSelections(savedSelections);
+
         refreshFloors();
     }
 
@@ -497,6 +573,17 @@ public class RadiationTab extends JPanel {
             }
         }
         return null;
+    }
+    public Map<Integer, Boolean> getFloorSelections(Floor floor) {
+        Map<Integer, Boolean> selections = new HashMap<>();
+        for (Space space : floor.getSpaces()) {
+            for (Room room : space.getRooms()) {
+                if (globalRoomSelectionMap.containsKey(room.getId())) {
+                    selections.put(room.getId(), globalRoomSelectionMap.get(room.getId()));
+                }
+            }
+        }
+        return selections;
     }
 
 

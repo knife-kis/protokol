@@ -306,33 +306,37 @@ public class BuildingTab extends JPanel {
         Building copy = new Building();
         copy.setName(building.getName());
 
+        // Используем пустую карту, так как она не нужна в этом контексте
+        Map<Integer, Integer> roomIdMap = new HashMap<>();
         for (Floor originalFloor : building.getFloors()) {
-            Floor floorCopy = createFloorCopy(originalFloor);
+            Floor floorCopy = createFloorCopy(originalFloor, roomIdMap);
             copy.addFloor(floorCopy);
         }
         return copy;
     }
 
-    private Floor createFloorCopy(Floor originalFloor) {
+    private Floor createFloorCopy(Floor originalFloor, Map<Integer,Integer> roomIdMap) {
         Floor floorCopy = new Floor();
         floorCopy.setNumber(originalFloor.getNumber());
         floorCopy.setType(originalFloor.getType());
-        floorCopy.setName(originalFloor.getName()); // Копируем имя если нужно
+        floorCopy.setName(originalFloor.getName());
 
-        // Глубокое копирование помещений
-        for (Space originalSpace : originalFloor.getSpaces()) {
+        for (Space origSpace : originalFloor.getSpaces()) {
             Space spaceCopy = new Space();
-            spaceCopy.setIdentifier(originalSpace.getIdentifier());
-            spaceCopy.setType(originalSpace.getType());
+            spaceCopy.setIdentifier(origSpace.getIdentifier());
+            spaceCopy.setType(origSpace.getType());
 
-            // Глубокое копирование комнат
-            for (Room originalRoom : originalSpace.getRooms()) {
+            for (Room origRoom : origSpace.getRooms()) {
                 Room roomCopy = new Room();
-                roomCopy.setId(originalRoom.getId());
-                roomCopy.setName(originalRoom.getName());
-                roomCopy.setVolume(originalRoom.getVolume());
-                roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
-                roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
+                int newId = generateUniqueRoomId();
+                roomCopy.setId(newId);
+                roomCopy.setName(origRoom.getName());
+                roomCopy.setVolume(origRoom.getVolume());
+                roomCopy.setVentilationChannels(origRoom.getVentilationChannels());
+                roomCopy.setVentilationSectionArea(origRoom.getVentilationSectionArea());
+
+                // сохраняем соответствие старого → нового ID
+                roomIdMap.put(origRoom.getId(), newId);
                 spaceCopy.addRoom(roomCopy);
             }
             floorCopy.addSpace(spaceCopy);
@@ -548,24 +552,37 @@ public class BuildingTab extends JPanel {
         Floor selectedFloor = floorList.getSelectedValue();
         if (selectedFloor == null) return;
 
-        // Создаем копию этажа
-        Floor copiedFloor = createFloorCopy(selectedFloor);
+        RadiationTab radiationTab = getRadiationTab();
+        Map<Integer, Boolean> originalSelections = radiationTab != null ?
+                radiationTab.getFloorSelections(selectedFloor) : new HashMap<>();
+
+        // Создаем карту для соответствия ID
+        Map<Integer, Integer> roomIdMap = new HashMap<>(); // Объявление здесь!
+
+        // Создаем копию этажа с передачей roomIdMap
+        Floor copiedFloor = createFloorCopy(selectedFloor, roomIdMap);
         String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
         copiedFloor.setNumber(newFloorNumber);
         updateSpaceIdentifiers(copiedFloor, extractDigits(newFloorNumber));
 
-        // Добавляем копию в здание
         building.addFloor(copiedFloor);
         floorListModel.addElement(copiedFloor);
         floorList.setSelectedValue(copiedFloor, true);
 
-        // Обновляем RadiationTab
         updateRadiationTab(building);
 
-        // Копируем состояния комнат
-        RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null) {
-            copyRoomSelectionStates(radiationTab, selectedFloor, copiedFloor);
+            for (Space space : selectedFloor.getSpaces()) {
+                for (Room room : space.getRooms()) {
+                    Boolean state = originalSelections.get(room.getId());
+                    if (state != null) {
+                        Integer newRoomId = roomIdMap.get(room.getId());
+                        if (newRoomId != null) {
+                            radiationTab.setRoomSelectionState(newRoomId, state);
+                        }
+                    }
+                }
+            }
         }
     }
     private String extractDigits(String input) {
