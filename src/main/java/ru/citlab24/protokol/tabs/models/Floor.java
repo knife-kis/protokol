@@ -30,23 +30,7 @@ public class Floor {
 
     @Override
     public String toString() {
-        // Если есть имя этажа - используем его
-        if (name != null && !name.trim().isEmpty()) {
-            return name;
-        }
-
-        // Если есть номер этажа - используем его
-        if (number != null && !number.trim().isEmpty()) {
-            return number;
-        }
-
-        // Если тип этажа задан - используем его
-        if (type != null) {
-            return type.title;
-        }
-
-        // Все остальные случаи
-        return "Этаж";
+        return number + " - " + type.title;
     }
 
     // Геттеры и сеттеры

@@ -38,6 +38,10 @@ public class Space {
     public void setId(int id) {
         this.id = id;
     }
+    @Override
+    public String toString() {
+        return identifier + " (" + type + ")";
+    }
 
     public void addRoom(Room room) {
         rooms.add(room);

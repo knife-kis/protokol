@@ -573,15 +573,29 @@ public class RadiationTab extends JPanel {
         return false;
     }
 
+    private void forceSelectOfficeRooms() {
+        if (currentBuilding == null) return;
+
+        for (Floor floor : currentBuilding.getFloors()) {
+            for (Space space : floor.getSpaces()) {
+                if (space.getType() == Space.SpaceType.OFFICE) {
+                    for (Room room : space.getRooms()) {
+                        if (!isExcludedRoom(room.getName())) {
+                            globalRoomSelectionMap.put(room.getId(), true);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public void setBuilding(Building building) {
         // Сохраняем текущие состояния
         Map<String, Boolean> savedSelections = saveSelections();
-
         this.currentBuilding = building;
         processedSpaces.clear();
-
-        // Восстанавливаем состояния для существующих комнат
         restoreSelections(savedSelections);
+        forceSelectOfficeRooms();
 
         for (Floor floor : building.getFloors()) {
             for (Space space : floor.getSpaces()) {
@@ -593,7 +607,6 @@ public class RadiationTab extends JPanel {
 
         // Глубокое клонирование здания
         radiationBuilding = cloneBuilding(building);
-        refreshFloors();
         refreshFloors();
     }
 

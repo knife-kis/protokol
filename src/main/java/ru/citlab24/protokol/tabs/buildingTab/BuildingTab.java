@@ -412,7 +412,6 @@ public class BuildingTab extends JPanel {
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null && copiedSpace.getType() == Space.SpaceType.OFFICE) {
             for (Room room : copiedSpace.getRooms()) {
-                // Галочка должна быть всегда для офисных комнат, кроме исключенных
                 if (!RadiationTab.isExcludedRoom(room.getName())) {
                     radiationTab.setRoomSelectionState(room.getId(), true);
                 }
@@ -572,13 +571,11 @@ public class BuildingTab extends JPanel {
         updateRadiationTab(building);
 
         if (radiationTab != null) {
-            for (Space space : selectedFloor.getSpaces()) {
-                for (Room room : space.getRooms()) {
-                    Boolean state = originalSelections.get(room.getId());
-                    if (state != null) {
-                        Integer newRoomId = roomIdMap.get(room.getId());
-                        if (newRoomId != null) {
-                            radiationTab.setRoomSelectionState(newRoomId, state);
+            for (Space space : copiedFloor.getSpaces()) {
+                if (space.getType() == Space.SpaceType.OFFICE) {
+                    for (Room room : space.getRooms()) {
+                        if (!RadiationTab.isExcludedRoom(room.getName())) {
+                            radiationTab.setRoomSelectionState(room.getId(), true);
                         }
                     }
                 }
