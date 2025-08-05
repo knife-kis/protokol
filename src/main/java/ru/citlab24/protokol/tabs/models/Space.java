@@ -31,6 +31,7 @@ public class Space {
 
     // Геттеры и сеттеры
 
+
     public int getId() {
         return id;
     }

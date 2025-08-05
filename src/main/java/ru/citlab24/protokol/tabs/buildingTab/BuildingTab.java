@@ -409,12 +409,15 @@ public class BuildingTab extends JPanel {
         restoreRadiationSelections(savedSelections);
 
         // Явно устанавливаем галочки для офисных помещений
+        updateRadiationTab(building);
+
+        // Явно выделяем новое помещение в RadiationTab
         RadiationTab radiationTab = getRadiationTab();
-        if (radiationTab != null && copiedSpace.getType() == Space.SpaceType.OFFICE) {
-            for (Room room : copiedSpace.getRooms()) {
-                if (!RadiationTab.isExcludedRoom(room.getName())) {
-                    radiationTab.setRoomSelectionState(room.getId(), true);
-                }
+        if (radiationTab != null) {
+            // Находим индекс нового помещения
+            int newIndex = selectedFloor.getSpaces().indexOf(copiedSpace);
+            if (newIndex >= 0) {
+                radiationTab.selectSpaceByIndex(newIndex);
             }
         }
     }
@@ -731,14 +734,25 @@ public class BuildingTab extends JPanel {
         }
 
         AddSpaceDialog dialog = new AddSpaceDialog((JFrame) SwingUtilities.getWindowAncestor(this), selectedFloor.getType());
+        Space space = null; // Объявляем здесь
         if (dialog.showDialog()) {
-            Space space = new Space();
+            space = new Space(); // Инициализируем здесь
             space.setIdentifier(dialog.getSpaceIdentifier());
             space.setType(dialog.getSpaceType());
             selectedFloor.addSpace(space);
             spaceListModel.addElement(space);
         }
+
         updateRadiationTab(building);
+
+        // Проверяем, что space был создан
+        RadiationTab radiationTab = getRadiationTab();
+        if (radiationTab != null && space != null) {
+            int newIndex = selectedFloor.getSpaces().indexOf(space);
+            if (newIndex >= 0) {
+                radiationTab.selectSpaceByIndex(newIndex);
+            }
+        }
     }
 
     private void editSpace(ActionEvent e) {

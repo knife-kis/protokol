@@ -110,6 +110,11 @@ public class RadiationTab extends JPanel {
 
         // Таблица помещений
         spaceTable = new JTable(spaceTableModel);
+        spaceTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                updateRoomList(); // Обновляем комнаты при выборе помещения
+            }
+        });
         spaceTable.getTableHeader().setFont(HEADER_FONT);
         spaceTable.setRowHeight(25);
         spaceTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -279,40 +284,26 @@ public class RadiationTab extends JPanel {
             for (Space space : selectedFloor.getSpaces()) {
                 spaceTableModel.addSpace(space);
             }
-
-            if (spaceTableModel.getRowCount() > 0) {
-                spaceTable.setRowSelectionInterval(0, 0);
-            }
         }
     }
 
     private void updateRoomList() {
         roomsTableModel.clear();
-        int selectedRow = spaceTable.getSelectedRow();
+        Floor selectedFloor = floorList.getSelectedValue();
+        int selectedSpaceRow = spaceTable.getSelectedRow();
 
-        if (selectedRow >= 0) {
-            Space selectedSpace = spaceTableModel.getSpaceAt(selectedRow);
-            if (selectedSpace != null) {
-                logger.info("Selected space: {} (type: {})",
-                        selectedSpace.getIdentifier(), selectedSpace.getType());
+        if (selectedFloor != null && selectedSpaceRow >= 0) {
+            Space selectedSpace = spaceTableModel.getSpaceAt(selectedSpaceRow);
 
-                // Для ВСЕХ типов помещений инициализируем выбор комнат
-                for (Room room : selectedSpace.getRooms()) {
-                    int roomId = room.getId();
-                    if (!globalRoomSelectionMap.containsKey(roomId)) {
-                        initRoomSelection(room);
-                    }
-                    roomsTableModel.addRoom(room);
-                }
+            // Всегда добавляем все комнаты выбранного помещения
+            for (Room room : selectedSpace.getRooms()) {
+                roomsTableModel.addRoom(room);
+            }
 
-                // Дополнительная обработка только для жилых помещений
-                if (isResidentialSpace(selectedSpace)) {
-                    logger.info("Processing as residential space");
-                    if (!processedSpaces.contains(selectedSpace.getId())) {
-                        processFirstResidentialSpace(selectedSpace);
-                        processedSpaces.add(selectedSpace.getId());
-                    }
-                }
+            // Применяем логику выбора ТОЛЬКО для жилых помещений
+            if (isResidentialSpace(selectedSpace) && !processedSpaces.contains(selectedSpace.getId())) {
+                applyRoomSelectionRulesForResidentialSpace(selectedSpace);
+                processedSpaces.add(selectedSpace.getId());
             }
         }
         roomsTableModel.fireTableDataChanged();
@@ -371,21 +362,20 @@ public class RadiationTab extends JPanel {
         boolean changesMade = false;
         for (Space space : currentFloor.getSpaces()) {
             if (space != null && isResidentialSpace(space)) {
-                logger.info("Применение правил для квартиры: {}", space.getIdentifier());
-                applyRoomSelectionRulesForResidentialSpace(space);
-                changesMade = true;
+                logger.info("Processing space: {}", space.getIdentifier());
+                if (!processedSpaces.contains(space.getIdentifier())) {
+                    applyRoomSelectionRulesForResidentialSpace(space);
+                    processedSpaces.add(space.getId());
+                    changesMade = true;
+                }
             }
         }
 
         if (changesMade) {
-            // Обновляем таблицу комнат
             roomsTableModel.fireTableDataChanged();
-            // Обновляем список помещений
             updateSpaceList();
-            // Пересчитываем представление
             revalidate();
             repaint();
-
             logger.info("Правила применены для всех квартир на этаже");
         } else {
             logger.info("На этаже нет квартир для обработки");
@@ -393,6 +383,7 @@ public class RadiationTab extends JPanel {
     }
 
     private void applyRoomSelectionRulesForResidentialSpace(Space space) {
+        if (processedSpaces.contains(space.getIdentifier())) return;
         try {
             // Получаем список всех комнат в помещении, не исключенных
             List<Room> validRooms = space.getRooms().stream()
@@ -648,24 +639,99 @@ public class RadiationTab extends JPanel {
     private void refreshFloors() {
         floorListModel.clear();
         if (currentBuilding != null) {
-            for (Floor floor : currentBuilding.getFloors()) {
-                floorListModel.addElement(floor);
-            }
+            currentBuilding.getFloors().forEach(floorListModel::addElement);
             if (!floorListModel.isEmpty()) {
                 floorList.setSelectedIndex(0);
+                // Принудительно обновляем помещения и комнаты
+                SwingUtilities.invokeLater(() -> {
+                    updateSpaceList();
+                    updateRoomList();
+                });
             }
         }
     }
 
     public void refreshData() {
+        String selectedFloorNumber = null;
+        String selectedSpaceIdentifier = null;
+
+        if (floorList.getSelectedValue() != null) {
+            selectedFloorNumber = floorList.getSelectedValue().getNumber();
+        }
+
+        // FIX: Use getSelectedSpace() helper
+        Space selectedSpace = getSelectedSpace();
+        if (selectedSpace != null) {
+            // FIX: Use identifier (String) instead of ID (Integer)
+            selectedSpaceIdentifier = selectedSpace.getIdentifier();
+        }
+
+        // Сохраняем состояния комнат
         Map<Integer, Boolean> savedSelection = new HashMap<>(globalRoomSelectionMap);
-        processedSpaces.clear(); // Сбрасываем при обновлении
+        processedSpaces.clear();
 
+        // Обновляем список этажей
         refreshFloors();
-        globalRoomSelectionMap.putAll(savedSelection);
 
-        if (roomTable != null) {
-            roomsTableModel.fireTableDataChanged();
+        // Восстанавливаем выделение этажа
+        restoreFloorSelection(selectedFloorNumber);
+
+        // Обновляем таблицу помещений
+        updateSpaceList();
+
+        // Восстанавливаем выделение помещения
+        restoreSpaceSelection(selectedSpaceIdentifier);
+
+        // Обновляем таблицу комнат
+        updateRoomList();
+
+        // Восстанавливаем состояния комнат
+        globalRoomSelectionMap.putAll(savedSelection);
+        roomsTableModel.fireTableDataChanged();
+    }
+    private Space getSelectedSpace() {
+        int row = spaceTable.getSelectedRow();
+        if (row >= 0) {
+            return spaceTableModel.getSpaceAt(row);
+        }
+        return null;
+    }
+    // Восстановление этажа по номеру
+    private void restoreFloorSelection(String floorNumber) {
+        if (floorNumber == null) return;
+
+        for (int i = 0; i < floorListModel.size(); i++) {
+            if (floorListModel.get(i).getNumber().equals(floorNumber)) {
+                floorList.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+    public void selectSpaceByIndex(int index) {
+        if (index >= 0 && index < spaceTableModel.getRowCount()) {
+            spaceTable.setRowSelectionInterval(index, index);
+            updateRoomList();
+        }
+    }
+
+    // Восстановление помещения по идентификатору
+    private void restoreSpaceSelection(String spaceIdentifier) {
+        if (spaceIdentifier == null) {
+            if (spaceTableModel.getRowCount() > 0) {
+                spaceTable.setRowSelectionInterval(0, 0);
+            }
+            return;
+        }
+
+        for (int i = 0; i < spaceTableModel.getRowCount(); i++) {
+            if (spaceTableModel.getSpaceAt(i).getIdentifier().equals(spaceIdentifier)) {
+                spaceTable.setRowSelectionInterval(i, i);
+                return;
+            }
+        }
+
+        if (spaceTableModel.getRowCount() > 0) {
+            spaceTable.setRowSelectionInterval(0, 0);
         }
     }
 
