@@ -15,7 +15,10 @@ public class FloorListRenderer extends DefaultListCellRenderer {
         super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
         if (value instanceof Floor) {
             Floor floor = (Floor) value;
-            setText(floor.getNumber() + " (" + floor.getType().toString().toLowerCase() + ")");
+            String typeStr = (floor.getType() != null)
+                    ? floor.getType().toString().toLowerCase()
+                    : "неизвестный тип";
+            setText(floor.getNumber() + " (" + typeStr + ")");
         }
         return this;
     }
