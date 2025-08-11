@@ -242,6 +242,12 @@ public class RadiationTab extends JPanel {
 
         if (selectedFloor != null && selectedSpaceRow >= 0) {
             Space selectedSpace = spaceTableModel.getSpaceAt(selectedSpaceRow);
+            boolean isOffice = selectedSpace.getType() == Space.SpaceType.OFFICE;
+            // Всегда обрабатываем офисные помещения независимо от флага processedSpaces
+            if (isOffice) {
+                selectAllOfficeRooms(selectedSpace);
+                processedSpaces.add(selectedSpace.getId());
+            }
 
             // Проверяем, было ли помещение обработано
             boolean alreadyProcessed = processedSpaces.contains(selectedSpace.getId());
@@ -252,7 +258,6 @@ public class RadiationTab extends JPanel {
 
             // Определяем поведение в зависимости от типа этажа
             if (!processedSpaces.contains(selectedSpace.getId())) {
-                boolean isOffice = selectedSpace.getType() == Space.SpaceType.OFFICE;
                 boolean isApartment = selectedSpace.getType() == Space.SpaceType.APARTMENT;
 
                 if (selectedFloor.getType() == Floor.FloorType.OFFICE) {

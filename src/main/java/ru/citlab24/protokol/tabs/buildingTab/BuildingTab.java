@@ -400,9 +400,6 @@ public class BuildingTab extends JPanel {
         // Восстанавливаем состояния ТОЛЬКО для исходных комнат
         restoreRadiationSelections(savedSelections);
 
-        // Явно устанавливаем галочки для офисных помещений
-        updateRadiationTab(building, false);
-
         // Явно выделяем новое помещение в RadiationTab
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null) {
