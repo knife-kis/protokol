@@ -40,7 +40,7 @@ public class RadiationTab extends JPanel {
     private JTable spaceTable;
     private SpaceTableModel spaceTableModel;
     private Building currentBuilding;
-    private final Map<Integer, Boolean> globalRoomSelectionMap = new HashMap<>();
+    public final Map<Integer, Boolean> globalRoomSelectionMap = new HashMap<>();
     private final Set<Integer> processedSpaces = new HashSet<>(); // Для отслеживания обработанных помещений
 
     private JList<Floor> floorList;
@@ -188,6 +188,9 @@ public class RadiationTab extends JPanel {
             splitRoom(selectedRoom, dialog.getSuffixes());
         }
     }
+    public void markSpaceAsProcessed(Space space) {
+        processedSpaces.add(space.getId());
+    }
     private void splitRoom(Room selectedRoom, List<String> suffixes) {
         Space space = findParentSpace(selectedRoom);
         if (space == null) return;
@@ -227,6 +230,10 @@ public class RadiationTab extends JPanel {
             }
         }
     }
+    public Map<Integer, Boolean> globalRoomSelectionMap() {
+        return globalRoomSelectionMap;
+    }
+
 
     private void updateRoomList() {
         roomsTableModel.clear();
@@ -235,6 +242,9 @@ public class RadiationTab extends JPanel {
 
         if (selectedFloor != null && selectedSpaceRow >= 0) {
             Space selectedSpace = spaceTableModel.getSpaceAt(selectedSpaceRow);
+
+            // Проверяем, было ли помещение обработано
+            boolean alreadyProcessed = processedSpaces.contains(selectedSpace.getId());
 
             for (Room room : selectedSpace.getRooms()) {
                 roomsTableModel.addRoom(room);
@@ -445,19 +455,30 @@ public class RadiationTab extends JPanel {
         logger.info("RadiationTab.updateRoomSelectionStates() - Обновлено {} комнат", updatedCount);
     }
 
-    private void refreshFloors() {
+    public void refreshFloors() {
+        String selectedFloorNumber = null;
+        if (floorList.getSelectedValue() != null) {
+            selectedFloorNumber = floorList.getSelectedValue().getNumber();
+        }
+
         floorListModel.clear();
         if (currentBuilding != null) {
             currentBuilding.getFloors().forEach(floorListModel::addElement);
-            if (!floorListModel.isEmpty()) {
-                floorList.setSelectedIndex(0);
-                // Принудительно обновляем помещения и комнаты
-                SwingUtilities.invokeLater(() -> {
-                    updateSpaceList();
-                    updateRoomList();
-                });
+        }
+
+        // Восстанавливаем выделение этажа
+        if (selectedFloorNumber != null) {
+            for (int i = 0; i < floorListModel.size(); i++) {
+                if (floorListModel.get(i).getNumber().equals(selectedFloorNumber)) {
+                    floorList.setSelectedIndex(i);
+                    break;
+                }
             }
         }
+
+        // Обновляем таблицы помещений и комнат
+        updateSpaceList();
+        updateRoomList();
     }
 
     public void refreshData() {

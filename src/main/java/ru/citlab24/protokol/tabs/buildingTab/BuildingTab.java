@@ -353,8 +353,8 @@ public class BuildingTab extends JPanel {
         roomCopy.setVolume(originalRoom.getVolume());
         roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
         roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
-        // Копируем состояние чекбокса
         roomCopy.setSelected(originalRoom.isSelected());
+        roomCopy.setOriginalRoomId(originalRoom.getId()); // Сохраняем ссылку на оригинал
         return roomCopy;
     }
 
@@ -420,7 +420,9 @@ public class BuildingTab extends JPanel {
         spaceCopy.setType(originalSpace.getType());
 
         for (Room originalRoom : originalSpace.getRooms()) {
-            Room roomCopy = createRoomCopy(originalRoom); // Используем исправленный метод
+            Room roomCopy = createRoomCopy(originalRoom);
+            // Сохраняем состояние выбора
+            roomCopy.setSelected(originalRoom.isSelected());
             spaceCopy.addRoom(roomCopy);
         }
         return spaceCopy;
@@ -508,30 +510,49 @@ public class BuildingTab extends JPanel {
         Floor selectedFloor = floorList.getSelectedValue();
         if (selectedFloor == null) return;
 
+        // 1. Сохраняем ВСЕ текущие состояния комнат
         RadiationTab radiationTab = getRadiationTab();
+        Map<Integer, Boolean> allRoomStates = new HashMap<>();
+        if (radiationTab != null) {
+            allRoomStates.putAll(radiationTab.globalRoomSelectionMap);
+        }
 
-        // Убрали roomIdMap из вызова
+        // 2. Создаем копию этажа
         Floor copiedFloor = createFloorCopy(selectedFloor);
         String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
         copiedFloor.setNumber(newFloorNumber);
         updateSpaceIdentifiers(copiedFloor, extractDigits(newFloorNumber));
 
+        // 3. Добавляем новый этаж в модель
         building.addFloor(copiedFloor);
         floorListModel.addElement(copiedFloor);
+
+        // 4. Обновляем ТОЛЬКО список этажей в UI
         floorList.setSelectedValue(copiedFloor, true);
 
-        updateRadiationTab(building, true);
-
+        // 5. Восстанавливаем ВСЕ состояния комнат
         if (radiationTab != null) {
-            for (Space space : copiedFloor.getSpaces()) {
-                if (space.getType() == Space.SpaceType.OFFICE) {
-                    for (Room room : space.getRooms()) {
-                        if (!RadiationTab.isExcludedRoom(room.getName())) {
-                            radiationTab.setRoomSelectionState(room.getId(), true);
-                        }
+            radiationTab.globalRoomSelectionMap.clear();
+            radiationTab.globalRoomSelectionMap.putAll(allRoomStates);
+
+            // 6. Устанавливаем состояния для новых комнат
+            for (int i = 0; i < selectedFloor.getSpaces().size(); i++) {
+                Space origSpace = selectedFloor.getSpaces().get(i);
+                Space copiedSpace = copiedFloor.getSpaces().get(i);
+
+                for (int j = 0; j < origSpace.getRooms().size(); j++) {
+                    Room origRoom = origSpace.getRooms().get(j);
+                    Room copiedRoom = copiedSpace.getRooms().get(j);
+
+                    Boolean state = allRoomStates.get(origRoom.getId());
+                    if (state != null) {
+                        radiationTab.setRoomSelectionState(copiedRoom.getId(), state);
                     }
                 }
             }
+
+            // 7. Обновляем UI RadiationTab
+            radiationTab.refreshFloors();
         }
     }
     private String extractDigits(String input) {
