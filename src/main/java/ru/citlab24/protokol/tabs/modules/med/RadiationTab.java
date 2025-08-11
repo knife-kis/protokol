@@ -120,42 +120,6 @@ public class RadiationTab extends JPanel {
         return panel;
     }
 
-    private void splitOfficeSpace(Space officeSpace, List<SplitOfficeDialog.RoomData> roomDataList) {
-        Floor floor = findParentFloor(officeSpace);
-        if (floor == null) return;
-
-        // Удаляем исходное помещение
-        floor.getSpaces().remove(officeSpace);
-
-        // Создаем новые помещения
-        for (SplitOfficeDialog.RoomData data : roomDataList) {
-            Space newSpace = new Space();
-            newSpace.setIdentifier(data.getSpaceIdentifier());
-            newSpace.setType(Space.SpaceType.OFFICE);
-
-            Room newRoom = new Room();
-            newRoom.setName(data.getRoomName());
-            newRoom.setId(generateUniqueRoomId());
-            newSpace.addRoom(newRoom);
-
-            floor.addSpace(newSpace);
-
-            // Автоматически выбираем комнату
-            globalRoomSelectionMap.put(newRoom.getId(), true);
-        }
-
-        // Обновляем UI
-        refreshData();
-        updateBuildingTab(floor);
-    }
-
-    private void updateBuildingTab(Floor updatedFloor) {
-        Window mainFrame = SwingUtilities.getWindowAncestor(this);
-        if (mainFrame instanceof MainFrame) {
-            ((MainFrame) mainFrame).getBuildingTab().refreshFloor(updatedFloor);
-        }
-    }
-
     private JPanel createRoomPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(createTitledBorder("Комнаты на этаже", ROOM_PANEL_COLOR));
@@ -276,10 +240,10 @@ public class RadiationTab extends JPanel {
                 roomsTableModel.addRoom(room);
             }
 
-            // ВОССТАНАВЛИВАЕМ ПРОВЕРКУ НА ПЕРВОЕ ПОМЕЩЕНИЕ
+            // Автопроставление только если нет ни одной галочки в помещении
             if (isResidentialSpace(selectedSpace) &&
                     !processedSpaces.contains(selectedSpace.getId()) &&
-                    isFirstResidentialSpaceOnFloor(selectedSpace, selectedFloor)) {
+                    globalRoomSelectionMap.values().stream().noneMatch(Boolean::booleanValue)) {
 
                 applyRoomSelectionRulesForResidentialSpace(selectedSpace);
             }
@@ -366,53 +330,11 @@ public class RadiationTab extends JPanel {
         }
     }
 
-
     public void setRoomSelectionState(int roomId, boolean state) {
         globalRoomSelectionMap.put(roomId, state);
         roomsTableModel.fireTableDataChanged();
     }
 
-
-    private void handleFirstTwoFloors(Space space) {
-        logger.info("Обработка помещения {} по правилам первых двух этажей", space.getIdentifier());
-
-        List<Room> validRooms = space.getRooms().stream()
-                .filter(room -> !containsAny(room.getName().toLowerCase(), EXCLUDED_ROOMS))
-                .collect(Collectors.toList());
-
-        List<Room> kitchenRooms = validRooms.stream()
-                .filter(room -> containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
-                .collect(Collectors.toList());
-
-        // Сбрасываем все галочки
-        space.getRooms().forEach(room ->
-                globalRoomSelectionMap.put(room.getId(), false));
-
-        // Выбираем кухню
-        if (!kitchenRooms.isEmpty()) {
-            Room kitchen = kitchenRooms.get(0);
-            globalRoomSelectionMap.put(kitchen.getId(), true);
-            logger.info("Выбрана кухня: {}", kitchen.getName());
-        }
-
-        // Выбираем еще одну комнату (не кухню)
-        Optional<Room> otherRoom = validRooms.stream()
-                .filter(room -> !containsAny(room.getName().toLowerCase(), KITCHEN_KEYWORDS))
-                .findFirst();
-
-        if (otherRoom.isPresent()) {
-            Room room = otherRoom.get();
-            globalRoomSelectionMap.put(room.getId(), true);
-            logger.info("Выбрана комната: {}", room.getName());
-        }
-    }
-
-    public void copyRoomSelectionState(int originalRoomId, int newRoomId) {
-        if (globalRoomSelectionMap.containsKey(originalRoomId)) {
-            globalRoomSelectionMap.put(newRoomId, globalRoomSelectionMap.get(originalRoomId));
-        }
-    }
-    // Новый метод для определения жилых помещений
     private boolean isResidentialSpace(Space space) {
         if (space == null) return false;
         return space.getType() == Space.SpaceType.APARTMENT;
@@ -431,7 +353,7 @@ public class RadiationTab extends JPanel {
         return false;
     }
 
-    private void forceSelectOfficeRooms() {
+    public void forceSelectOfficeRooms() {
         if (currentBuilding == null) return;
 
         for (Floor floor : currentBuilding.getFloors()) {
@@ -447,63 +369,50 @@ public class RadiationTab extends JPanel {
         }
     }
 
-    public void setBuilding(Building building) {
-        // Сохраняем текущие состояния перед обновлением
-        Map<String, Boolean> savedSelections = saveSelections();
-
+    public void setBuilding(Building building, boolean forceOfficeSelection) {
+        logger.info("RadiationTab.setBuilding() - Начало установки здания");
         this.currentBuilding = building;
         processedSpaces.clear();
 
-        // Восстанавливаем состояния после обновления
-        restoreSelections(savedSelections);
-        forceSelectOfficeRooms();
-
-        // Инициализация оригинальных комнат
+        // Перенос состояний из модели
+        globalRoomSelectionMap.clear();
         for (Floor floor : building.getFloors()) {
             for (Space space : floor.getSpaces()) {
                 for (Room room : space.getRooms()) {
-                    originalRoomMap.put(room.getId(), room);
+                    globalRoomSelectionMap.put(room.getId(), room.isSelected());
                 }
             }
         }
 
-        radiationBuilding = cloneBuilding(building);
+        // ТОЛЬКО при необходимости - принудительный выбор
+        if (forceOfficeSelection) {
+            forceSelectOfficeRooms();
+        }
+
         refreshFloors();
+        logger.info("Здание установлено. Комнат: {}", globalRoomSelectionMap.size());
     }
 
-    private Building cloneBuilding(Building original) {
-        Building clone = new Building();
-        // ... копирование свойств ...
-        for (Floor floor : original.getFloors()) {
-            clone.addFloor(cloneFloor(floor));
+    public void updateRoomSelectionStates() {
+        logger.info("RadiationTab.updateRoomSelectionStates() - Начало обновления состояний комнат");
+        int updatedCount = 0;
+
+        for (Floor floor : currentBuilding.getFloors()) {
+            for (Space space : floor.getSpaces()) {
+                for (Room room : space.getRooms()) {
+                    // Получаем состояние чекбокса из глобальной карты
+                    Boolean selected = globalRoomSelectionMap.get(room.getId());
+                    if (selected != null) {
+                        // Обновляем состояние комнаты
+                        room.setSelected(selected);
+                        logger.trace("Обновление комнаты {}: {} -> {}",
+                                room.getName(), room.isSelected(), selected);
+                        updatedCount++;
+                    }
+                }
+            }
         }
-        return clone;
-    }
-
-    private Floor cloneFloor(Floor original) {
-        Floor clone = new Floor();
-        // ... копирование свойств ...
-        for (Space space : original.getSpaces()) {
-            clone.addSpace(cloneSpace(space));
-        }
-        return clone;
-    }
-
-    private Space cloneSpace(Space original) {
-        Space clone = new Space();
-        // ... копирование свойств ...
-        for (Room room : original.getRooms()) {
-            clone.addRoom(cloneRoom(room));
-        }
-        return clone;
-    }
-
-    private Room cloneRoom(Room original) {
-        Room clone = new Room();
-        clone.setId(generateUniqueRoomId());
-        clone.setName(original.getName());
-        clone.setOriginalRoomId(original.getId()); // Связь с оригиналом
-        return clone;
+        logger.info("RadiationTab.updateRoomSelectionStates() - Обновлено {} комнат", updatedCount);
     }
 
     private void refreshFloors() {
@@ -606,7 +515,10 @@ public class RadiationTab extends JPanel {
     }
 
     public Map<String, Boolean> saveSelections() {
+        logger.info("RadiationTab.saveSelections() - Сохранение состояний");
         Map<String, Boolean> selections = new HashMap<>();
+        int count = 0;
+
         for (Map.Entry<Integer, Boolean> entry : globalRoomSelectionMap.entrySet()) {
             Room room = findRoomById(entry.getKey());
             if (room != null) {
@@ -615,26 +527,42 @@ public class RadiationTab extends JPanel {
                 if (floor != null && space != null) {
                     String key = floor.getNumber() + "|" + space.getIdentifier() + "|" + room.getName();
                     selections.put(key, entry.getValue());
+                    count++;
+                    logger.trace("Сохранено состояние: {} = {}", key, entry.getValue());
                 }
             }
         }
+        logger.info("RadiationTab.saveSelections() - Сохранено {} состояний", count);
         return selections;
     }
 
     public void restoreSelections(Map<String, Boolean> savedSelections) {
+        logger.info("RadiationTab.restoreSelections() - Восстановление состояний");
+        logger.debug("Получено {} состояний для восстановления", savedSelections.size());
+
         Map<Integer, Boolean> newSelectionMap = new HashMap<>();
+        int restoredCount = 0;
+        int notFoundCount = 0;
+
         for (Room room : getAllRooms()) {
             String key = generateRoomKey(room);
             if (savedSelections.containsKey(key)) {
                 newSelectionMap.put(room.getId(), savedSelections.get(key));
+                restoredCount++;
+                logger.trace("Восстановлено состояние для {}: {}", key, savedSelections.get(key));
             } else {
                 Boolean currentState = globalRoomSelectionMap.get(room.getId());
                 newSelectionMap.put(room.getId(), currentState != null ? currentState : false);
+                notFoundCount++;
+                logger.trace("Состояние не найдено для {}, используется текущее: {}", key, currentState);
             }
         }
+
         globalRoomSelectionMap.clear();
         globalRoomSelectionMap.putAll(newSelectionMap);
         roomsTableModel.fireTableDataChanged();
+
+        logger.info("RadiationTab.restoreSelections() - Восстановлено: {}, Не найдено: {}", restoredCount, notFoundCount);
     }
 
     // Генерация уникального ключа для комнаты
@@ -701,18 +629,6 @@ public class RadiationTab extends JPanel {
         }
         return null;
     }
-    public Map<Integer, Boolean> getFloorSelections(Floor floor) {
-        Map<Integer, Boolean> selections = new HashMap<>();
-        for (Space space : floor.getSpaces()) {
-            for (Room room : space.getRooms()) {
-                if (globalRoomSelectionMap.containsKey(room.getId())) {
-                    selections.put(room.getId(), globalRoomSelectionMap.get(room.getId()));
-                }
-            }
-        }
-        return selections;
-    }
-
 
     private static class SpaceTableModel extends AbstractTableModel {
         private final String[] COLUMN_NAMES = {"Название"};

@@ -12,13 +12,11 @@ class RadiationRoomsTableModel extends AbstractTableModel {
     private final String[] COLUMN_NAMES = {"Измерения", "Комната"};
     private final Class<?>[] COLUMN_TYPES = {Boolean.class, String.class};
     private final Map<Integer, Boolean> globalSelectionMap;
-    private final Map<Integer, Boolean> selectionMap;
     private final List<Room> rooms = new ArrayList<>();
     private final Map<Room, Integer> roomToIdMap = new HashMap<>();
 
     public RadiationRoomsTableModel(Map<Integer, Boolean> globalSelectionMap) {
         this.globalSelectionMap = globalSelectionMap;
-        this.selectionMap = globalSelectionMap;
     }
 
     // Добавлены недостающие методы

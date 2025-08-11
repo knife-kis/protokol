@@ -1,14 +1,15 @@
 package ru.citlab24.protokol.db;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import ru.citlab24.protokol.tabs.models.*;
 
 import javax.swing.*;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 public class DatabaseManager {
+    private static final Logger logger = LoggerFactory.getLogger(DatabaseManager.class);
     private static final String CONFIG_FILE = "/db.properties";
     private static Connection connection;
 
@@ -58,11 +59,20 @@ public class DatabaseManager {
                     "volume DOUBLE," + // Разрешено NULL значение
                     "ventilation_channels INT," +
                     "ventilation_section_area DOUBLE)");
+            stmt.execute("CREATE TABLE IF NOT EXISTS room (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "space_id INT," +
+                    "name VARCHAR(255)," +
+                    "volume DOUBLE," +
+                    "ventilation_channels INT," +
+                    "ventilation_section_area DOUBLE," +
+                    "is_selected BOOLEAN DEFAULT FALSE)");
 
             // Проверка столбцов остается без изменений
             addColumnIfMissing(stmt, "room", "volume", "DOUBLE");
             addColumnIfMissing(stmt, "room", "ventilation_channels", "INT");
             addColumnIfMissing(stmt, "room", "ventilation_section_area", "DOUBLE");
+            addColumnIfMissing(stmt, "room", "is_selected", "BOOLEAN DEFAULT FALSE");
         }
     }
 
@@ -178,23 +188,21 @@ public class DatabaseManager {
     }
 
     private static void saveRoom(int spaceId, Room room) throws SQLException {
-        String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, ventilation_section_area) " +
-                "VALUES (?, ?, ?, ?, ?)";
+        logger.debug("Сохранение комнаты: {}", room.getName());
+        String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, "
+                + "ventilation_section_area, is_selected) VALUES (?, ?, ?, ?, ?, ?)";
 
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, spaceId);
             stmt.setString(2, room.getName());
-
-            // Обработка NULL значения для объема
-            if (room.getVolume() != null) {
-                stmt.setDouble(3, room.getVolume());
-            } else {
-                stmt.setNull(3, Types.DOUBLE);
-            }
-
+            stmt.setObject(3, room.getVolume(), Types.DOUBLE);
             stmt.setInt(4, room.getVentilationChannels());
             stmt.setDouble(5, room.getVentilationSectionArea());
+            // Сохраняем состояние чекбокса
+            stmt.setBoolean(6, room.isSelected());
+
             stmt.executeUpdate();
+
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
                     room.setId(rs.getInt(1));
@@ -254,63 +262,30 @@ public class DatabaseManager {
     }
 
     private static void loadRooms(Space space, int spaceId) throws SQLException {
-        String sql = "SELECT * FROM room WHERE space_id = " + spaceId;
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                Room room = new Room();
-                room.setId(rs.getInt("id"));
-                room.setName(rs.getString("name"));
-
-                // Обработка NULL значения для объема
-                double volumeValue = rs.getDouble("volume");
-                if (rs.wasNull()) {
-                    room.setVolume(null);
-                } else {
-                    room.setVolume(volumeValue);
-                }
-
-                room.setVentilationChannels(rs.getInt("ventilation_channels"));
-                room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
-                space.addRoom(room);
-            }
-        }
-    }
-    public static List<Building> getBuildings() {
-        try {
-            return getAllBuildings();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(null,
-                    "Ошибка загрузки зданий: " + e.getMessage(),
-                    "Database Error", JOptionPane.ERROR_MESSAGE);
-            return new ArrayList<>();
-        }
-    }
-
-    public static List<Floor> getFloors(int buildingId) {
-        List<Floor> floors = new ArrayList<>();
-        String sql = "SELECT * FROM floor WHERE building_id = ?";
+        logger.debug("Загрузка комнат для помещения ID: {}", spaceId);
+        String sql = "SELECT * FROM room WHERE space_id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setInt(1, buildingId);
+            stmt.setInt(1, spaceId);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    Floor floor = new Floor();
-                    floor.setId(rs.getInt("id"));
-                    floor.setNumber(rs.getString("number"));
-                    floor.setType(Floor.FloorType.valueOf(rs.getString("type")));
-                    floors.add(floor);
+                    Room room = new Room();
+                    room.setId(rs.getInt("id"));
+                    room.setName(rs.getString("name"));
+                    // Загружаем состояние чекбокса
+                    room.setSelected(rs.getBoolean("is_selected"));
+
+                    double volume = rs.getDouble("volume");
+                    if (!rs.wasNull()) {
+                        room.setVolume(volume);
+                    }
+
+                    room.setVentilationChannels(rs.getInt("ventilation_channels"));
+                    room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
+                    space.addRoom(room);
                 }
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(null,
-                    "Ошибка загрузки этажей: " + e.getMessage(),
-                    "Database Error", JOptionPane.ERROR_MESSAGE);
         }
-        return floors;
     }
-
     public static List<Room> getRooms(int floorId) {
         List<Room> rooms = new ArrayList<>();
         String sql = "SELECT r.* FROM room r " +

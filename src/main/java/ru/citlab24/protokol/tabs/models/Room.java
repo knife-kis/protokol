@@ -2,6 +2,7 @@ package ru.citlab24.protokol.tabs.models;
 
 public class Room {
     private Integer originalRoomId;
+    private boolean selected;
     private static int nextId = 1;
     private int id;
     private String name = "";
@@ -56,5 +57,11 @@ public class Room {
     public void setVolume(Double volume) {
         this.volume = (volume != null && volume == 0.0) ? null : volume;
     }
+    public boolean isSelected() {
+        return selected;
+    }
 
+    public void setSelected(boolean selected) {
+        this.selected = selected;
+    }
 }

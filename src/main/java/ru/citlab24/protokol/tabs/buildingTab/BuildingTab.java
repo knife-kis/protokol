@@ -2,6 +2,8 @@ package ru.citlab24.protokol.tabs.buildingTab;
 
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
@@ -30,6 +32,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class BuildingTab extends JPanel {
+    private static final Logger logger = LoggerFactory.getLogger(BuildingTab.class);
     // Константы для цветов и стилей
     private static final Color FLOOR_PANEL_COLOR = new Color(0, 115, 200);
     private static final Color SPACE_PANEL_COLOR = new Color(76, 175, 80);
@@ -228,42 +231,45 @@ public class BuildingTab extends JPanel {
         projectNameField.setText(loadedBuilding.getName());
         refreshAllLists();
         updateVentilationTab(loadedBuilding);
-        updateRadiationTab(loadedBuilding); // Добавлено обновление RadiationTab
+        // Обновляем RadiationTab с загруженными состояниями
+        updateRadiationTab(loadedBuilding, true);
         showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен", "Загрузка", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void saveProject(ActionEvent e) {
-        try {
-            // Сохраняем состояния чекбоксов ДО создания копии
-            Map<String, Boolean> radiationSelections = saveRadiationSelections();
+        logger.info("BuildingTab.saveProject() - Начало сохранения проекта");
 
-            String baseName = projectNameField.getText().trim();
-            if (baseName.isEmpty()) {
-                showMessage("Введите название проекта!", "Ошибка", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            String finalName = generateProjectVersionName(baseName);
-            saveVentilationCalculations();
-
-            Building newProject = createBuildingCopy();
-            newProject.setName(finalName);
-            DatabaseManager.saveBuilding(newProject);
-
-            this.building = newProject;
-            projectNameField.setText(extractBaseName(finalName));
-
-            // Обновляем вкладку с новым зданием
-            updateRadiationTab(newProject);
-
-            // Восстанавливаем состояния ПОСЛЕ обновления
-            restoreRadiationSelections(radiationSelections);
-
-            showMessage("Новая версия проекта сохранена как: " + finalName, "Сохранение", JOptionPane.INFORMATION_MESSAGE);
-            updateVentilationTab(newProject);
-        } catch (SQLException ex) {
-            handleError("Ошибка сохранения проекта: " + ex.getMessage(), "Ошибка");
+        // Обновляем модель из UI
+        RadiationTab radiationTab = getRadiationTab();
+        if (radiationTab != null) {
+            radiationTab.updateRoomSelectionStates();
         }
+
+        // Генерация имени проекта
+        String baseName = projectNameField.getText().trim();
+        if (baseName.isEmpty()) {
+            showMessage("Введите название проекта!", "Ошибка", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Создаем копию проекта с сохранением состояний
+        Building newProject = createBuildingCopy();
+        newProject.setName(generateProjectVersionName(baseName));
+
+        // Сохраняем в БД
+        try {
+            DatabaseManager.saveBuilding(newProject);
+            this.building = newProject;
+            projectNameField.setText(extractBaseName(newProject.getName()));
+        } catch (SQLException ex) {
+            handleError("Ошибка сохранения: " + ex.getMessage(), "Ошибка");
+            return;
+        }
+
+        // Обновляем RadiationTab
+        updateRadiationTab(newProject, false);
+
+        logger.info("Проект успешно сохранен");
     }
 
     private String generateProjectVersionName(String baseName) {
@@ -306,39 +312,23 @@ public class BuildingTab extends JPanel {
         Building copy = new Building();
         copy.setName(building.getName());
 
-        // Используем пустую карту, так как она не нужна в этом контексте
-        Map<Integer, Integer> roomIdMap = new HashMap<>();
         for (Floor originalFloor : building.getFloors()) {
-            Floor floorCopy = createFloorCopy(originalFloor, roomIdMap);
+            // Убрали roomIdMap из вызова
+            Floor floorCopy = createFloorCopy(originalFloor);
             copy.addFloor(floorCopy);
         }
         return copy;
     }
 
-    private Floor createFloorCopy(Floor originalFloor, Map<Integer,Integer> roomIdMap) {
+    private Floor createFloorCopy(Floor originalFloor) {
         Floor floorCopy = new Floor();
         floorCopy.setNumber(originalFloor.getNumber());
         floorCopy.setType(originalFloor.getType());
         floorCopy.setName(originalFloor.getName());
 
         for (Space origSpace : originalFloor.getSpaces()) {
-            Space spaceCopy = new Space();
-            spaceCopy.setIdentifier(origSpace.getIdentifier());
-            spaceCopy.setType(origSpace.getType());
-
-            for (Room origRoom : origSpace.getRooms()) {
-                Room roomCopy = new Room();
-                int newId = generateUniqueRoomId();
-                roomCopy.setId(newId);
-                roomCopy.setName(origRoom.getName());
-                roomCopy.setVolume(origRoom.getVolume());
-                roomCopy.setVentilationChannels(origRoom.getVentilationChannels());
-                roomCopy.setVentilationSectionArea(origRoom.getVentilationSectionArea());
-
-                // сохраняем соответствие старого → нового ID
-                roomIdMap.put(origRoom.getId(), newId);
-                spaceCopy.addRoom(roomCopy);
-            }
+            // Используем исправленный метод копирования
+            Space spaceCopy = createSpaceCopyWithNewIds(origSpace);
             floorCopy.addSpace(spaceCopy);
         }
         return floorCopy;
@@ -358,11 +348,13 @@ public class BuildingTab extends JPanel {
 
     private Room createRoomCopy(Room originalRoom) {
         Room roomCopy = new Room();
-        roomCopy.setId(originalRoom.getId()); // Сохраняем оригинальный ID!
+        roomCopy.setId(generateUniqueRoomId());
         roomCopy.setName(originalRoom.getName());
         roomCopy.setVolume(originalRoom.getVolume());
         roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
         roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
+        // Копируем состояние чекбокса
+        roomCopy.setSelected(originalRoom.isSelected());
         return roomCopy;
     }
 
@@ -374,7 +366,7 @@ public class BuildingTab extends JPanel {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
             updateVentilationTab(building);
-            updateRadiationTab(building); // Добавлено обновление RadiationTab
+            updateRadiationTab(building, true);; // Добавлено обновление RadiationTab
             ((MainFrame) mainFrame).selectVentilationTab();
         }
         showMessage("Данные для вентиляции обновлены!", "Расчет завершен", JOptionPane.INFORMATION_MESSAGE);
@@ -403,13 +395,13 @@ public class BuildingTab extends JPanel {
         spaceList.setSelectedValue(copiedSpace, true);
 
         // Обновляем вкладку с новым зданием
-        updateRadiationTab(building);
+        updateRadiationTab(building, false);
 
         // Восстанавливаем состояния ТОЛЬКО для исходных комнат
         restoreRadiationSelections(savedSelections);
 
         // Явно устанавливаем галочки для офисных помещений
-        updateRadiationTab(building);
+        updateRadiationTab(building, false);
 
         // Явно выделяем новое помещение в RadiationTab
         RadiationTab radiationTab = getRadiationTab();
@@ -428,25 +420,10 @@ public class BuildingTab extends JPanel {
         spaceCopy.setType(originalSpace.getType());
 
         for (Room originalRoom : originalSpace.getRooms()) {
-            Room roomCopy = createRoomCopyWithNewId(originalRoom);
+            Room roomCopy = createRoomCopy(originalRoom); // Используем исправленный метод
             spaceCopy.addRoom(roomCopy);
         }
         return spaceCopy;
-    }
-
-    // Создаем копию комнаты с новым ID
-    private Room createRoomCopyWithNewId(Room originalRoom) {
-        Room roomCopy = new Room();
-        roomCopy.setId(generateUniqueRoomId()); // Генерируем новый уникальный ID
-        roomCopy.setName(originalRoom.getName());
-        roomCopy.setVolume(originalRoom.getVolume());
-        roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
-        roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
-        return roomCopy;
-    }
-
-    private boolean isResidentialSpace(Space space) {
-        return space.getType() == Space.SpaceType.APARTMENT;
     }
 
     private String generateNextSpaceId(Floor floor, String currentId) {
@@ -508,18 +485,15 @@ public class BuildingTab extends JPanel {
 
             building.addFloor(floor);
             floorListModel.addElement(floor);
-            updateRadiationTab(building);
+            updateRadiationTab(building, true);
         }
     }
-    private void updateRadiationTab(Building building) {
+    private void updateRadiationTab(Building building, boolean forceOfficeSelection) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
-            MainFrame frame = (MainFrame) mainFrame;
-            RadiationTab tab = frame.getRadiationTab(); // Нужно добавить метод доступа
-
+            RadiationTab tab = ((MainFrame) mainFrame).getRadiationTab();
             if (tab != null) {
-                tab.setBuilding(building);
-//                tab.refreshData(); // Добавить этот метод в RadiationTab
+                tab.setBuilding(building, forceOfficeSelection);
             }
         }
     }
@@ -530,39 +504,14 @@ public class BuildingTab extends JPanel {
         }
         return null;
     }
-    private void copyRoomSelectionStates(RadiationTab radiationTab, Floor originalFloor, Floor copiedFloor) {
-        for (int i = 0; i < originalFloor.getSpaces().size(); i++) {
-            Space originalSpace = originalFloor.getSpaces().get(i);
-            Space copiedSpace = copiedFloor.getSpaces().get(i);
-
-            // Для офисов копируем состояние "включено"
-            if (originalSpace.getType() == Space.SpaceType.OFFICE) {
-                for (Room copiedRoom : copiedSpace.getRooms()) {
-                    radiationTab.setRoomSelectionState(copiedRoom.getId(), true);
-                }
-            } else {
-                // Для остальных - копируем как есть
-                for (int j = 0; j < originalSpace.getRooms().size(); j++) {
-                    Room originalRoom = originalSpace.getRooms().get(j);
-                    Room copiedRoom = copiedSpace.getRooms().get(j);
-                    radiationTab.copyRoomSelectionState(originalRoom.getId(), copiedRoom.getId());
-                }
-            }
-        }
-    }
     private void copyFloor(ActionEvent e) {
         Floor selectedFloor = floorList.getSelectedValue();
         if (selectedFloor == null) return;
 
         RadiationTab radiationTab = getRadiationTab();
-        Map<Integer, Boolean> originalSelections = radiationTab != null ?
-                radiationTab.getFloorSelections(selectedFloor) : new HashMap<>();
 
-        // Создаем карту для соответствия ID
-        Map<Integer, Integer> roomIdMap = new HashMap<>(); // Объявление здесь!
-
-        // Создаем копию этажа с передачей roomIdMap
-        Floor copiedFloor = createFloorCopy(selectedFloor, roomIdMap);
+        // Убрали roomIdMap из вызова
+        Floor copiedFloor = createFloorCopy(selectedFloor);
         String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
         copiedFloor.setNumber(newFloorNumber);
         updateSpaceIdentifiers(copiedFloor, extractDigits(newFloorNumber));
@@ -571,7 +520,7 @@ public class BuildingTab extends JPanel {
         floorListModel.addElement(copiedFloor);
         floorList.setSelectedValue(copiedFloor, true);
 
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
 
         if (radiationTab != null) {
             for (Space space : copiedFloor.getSpaces()) {
@@ -692,7 +641,7 @@ public class BuildingTab extends JPanel {
             floorListModel.set(index, floor);
             updateSpaceList();
         }
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
     }
 
     private Map<String, Boolean> saveRadiationSelections() {
@@ -722,7 +671,7 @@ public class BuildingTab extends JPanel {
             building.getFloors().remove(index);
             floorListModel.remove(index);
         }
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
     }
 
     // Операции с помещениями
@@ -743,7 +692,7 @@ public class BuildingTab extends JPanel {
             spaceListModel.addElement(space);
         }
 
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
 
         // Проверяем, что space был создан
         RadiationTab radiationTab = getRadiationTab();
@@ -775,7 +724,7 @@ public class BuildingTab extends JPanel {
             spaceListModel.set(index, space);
             updateRoomList();
         }
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
     }
 
     private void removeSpace(ActionEvent e) {
@@ -791,7 +740,7 @@ public class BuildingTab extends JPanel {
             floor.getSpaces().remove(index);
             spaceListModel.remove(index);
         }
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
     }
 
     // Операции с комнатами
@@ -809,7 +758,7 @@ public class BuildingTab extends JPanel {
             selectedSpace.addRoom(room);
             roomListModel.addElement(room);
         }
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
     }
 
     private void editRoom(ActionEvent e) {
@@ -827,7 +776,7 @@ public class BuildingTab extends JPanel {
             room.setName(newName.trim());
             roomListModel.set(index, room);
         }
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
     }
 
     private void removeRoom(ActionEvent e) {
@@ -838,7 +787,7 @@ public class BuildingTab extends JPanel {
             space.getRooms().remove(index);
             roomListModel.remove(index);
         }
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
     }
 
     // Вспомогательные методы
@@ -919,16 +868,6 @@ public class BuildingTab extends JPanel {
         }
     }
 
-    private void saveVentilationCalculations() {
-        Window mainFrame = SwingUtilities.getWindowAncestor(this);
-        if (mainFrame instanceof MainFrame) {
-            Arrays.stream(((MainFrame) mainFrame).getTabbedPane().getComponents())
-                    .filter(tab -> tab instanceof VentilationTab)
-                    .findFirst()
-                    .ifPresent(tab -> ((VentilationTab) tab).saveCalculationsToModel());
-        }
-    }
-
     private String showInputDialog(String title, String message, String initialValue) {
         JPanel panel = new JPanel(new GridLayout(1, 2, 5, 5));
         panel.add(new JLabel(message));
@@ -954,7 +893,7 @@ public class BuildingTab extends JPanel {
     @Override
     public void addNotify() {
         super.addNotify();
-        updateRadiationTab(building);
+        updateRadiationTab(building, true);
         if (!floorListModel.isEmpty()) floorList.setSelectedIndex(0);
 
         // Инициализация слушателей после создания компонентов
