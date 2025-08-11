@@ -240,15 +240,45 @@ public class RadiationTab extends JPanel {
                 roomsTableModel.addRoom(room);
             }
 
-            // Автопроставление только если нет ни одной галочки в помещении
-            if (isResidentialSpace(selectedSpace) &&
-                    !processedSpaces.contains(selectedSpace.getId()) &&
-                    globalRoomSelectionMap.values().stream().noneMatch(Boolean::booleanValue)) {
+            // Определяем поведение в зависимости от типа этажа
+            if (!processedSpaces.contains(selectedSpace.getId())) {
+                boolean isOffice = selectedSpace.getType() == Space.SpaceType.OFFICE;
+                boolean isApartment = selectedSpace.getType() == Space.SpaceType.APARTMENT;
 
-                applyRoomSelectionRulesForResidentialSpace(selectedSpace);
+                if (selectedFloor.getType() == Floor.FloorType.OFFICE) {
+                    // Офисный этаж — всегда автопроставляем офисы
+                    if (isOffice) {
+                        selectAllOfficeRooms(selectedSpace);
+                    }
+
+                } else if (selectedFloor.getType() == Floor.FloorType.RESIDENTIAL) {
+                    // Жилой этаж — только первое помещение
+                    if (isApartment && isFirstResidentialSpaceOnFloor(selectedSpace, selectedFloor)) {
+                        applyRoomSelectionRulesForResidentialSpace(selectedSpace);
+                    }
+
+                } else if (selectedFloor.getType() == Floor.FloorType.MIXED) {
+                    if (isOffice) {
+                        // Для офисов в смешанном — всегда автопроставляем
+                        selectAllOfficeRooms(selectedSpace);
+                    } else if (isApartment && isFirstResidentialSpaceOnFloor(selectedSpace, selectedFloor)) {
+                        // Для квартир в смешанном — только первое помещение
+                        applyRoomSelectionRulesForResidentialSpace(selectedSpace);
+                    }
+                }
             }
         }
         roomsTableModel.fireTableDataChanged();
+    }
+    private void selectAllOfficeRooms(Space space) {
+        for (Room room : space.getRooms()) {
+            if (!isExcludedRoom(room.getName())) {
+                globalRoomSelectionMap.put(room.getId(), true);
+            } else {
+                globalRoomSelectionMap.put(room.getId(), false);
+            }
+        }
+        processedSpaces.add(space.getId());
     }
     private boolean isFirstResidentialSpaceOnFloor(Space space, Floor floor) {
         for (Space sp : floor.getSpaces()) {
