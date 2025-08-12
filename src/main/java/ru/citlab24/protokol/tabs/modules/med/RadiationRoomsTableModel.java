@@ -1,6 +1,8 @@
 package ru.citlab24.protokol.tabs.modules.med;
 
+import ru.citlab24.protokol.tabs.models.Floor;
 import ru.citlab24.protokol.tabs.models.Room;
+import ru.citlab24.protokol.tabs.models.Space;
 
 import javax.swing.table.AbstractTableModel;
 import java.util.ArrayList;
@@ -12,19 +14,19 @@ class RadiationRoomsTableModel extends AbstractTableModel {
     private final String[] COLUMN_NAMES = {"Измерения", "Комната"};
     private final Class<?>[] COLUMN_TYPES = {Boolean.class, String.class};
     private final Map<Integer, Boolean> globalSelectionMap;
+    private final RadiationTab radiationTab;
     private final List<Room> rooms = new ArrayList<>();
-    private final Map<Room, Integer> roomToIdMap = new HashMap<>();
 
-    public RadiationRoomsTableModel(Map<Integer, Boolean> globalSelectionMap) {
+    public RadiationRoomsTableModel(Map<Integer, Boolean> globalSelectionMap, RadiationTab radiationTab) {
         this.globalSelectionMap = globalSelectionMap;
+        this.radiationTab = radiationTab;
     }
 
-    // Добавлены недостающие методы
     public void addRoom(Room room) {
-        int roomId = room.getId();
         rooms.add(room);
         fireTableRowsInserted(rooms.size()-1, rooms.size()-1);
     }
+
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
         Room room = rooms.get(rowIndex);
@@ -39,6 +41,17 @@ class RadiationRoomsTableModel extends AbstractTableModel {
     public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
         if (columnIndex == 0) {
             Room room = rooms.get(rowIndex);
+            Space space = radiationTab.findParentSpace(room);
+
+            // Блокируем снятие галочек в офисах (кроме санузлов)
+            if (space != null &&
+                    space.getType() == Space.SpaceType.OFFICE &&
+                    !RadiationTab.isExcludedRoom(room.getName()) &&
+                    !Boolean.TRUE.equals(aValue)
+            ) {
+                return; // Игнорируем попытку снять галочку
+            }
+
             globalSelectionMap.put(room.getId(), (Boolean) aValue);
             fireTableCellUpdated(rowIndex, columnIndex);
         }
@@ -47,7 +60,6 @@ class RadiationRoomsTableModel extends AbstractTableModel {
     public void clear() {
         int size = rooms.size();
         rooms.clear();
-        roomToIdMap.clear();
         if (size > 0) {
             fireTableRowsDeleted(0, size - 1);
         }
@@ -77,7 +89,7 @@ class RadiationRoomsTableModel extends AbstractTableModel {
         return COLUMN_TYPES[columnIndex];
     }
 
-       @Override
+    @Override
     public boolean isCellEditable(int rowIndex, int columnIndex) {
         return columnIndex == 0;
     }

@@ -242,7 +242,7 @@ public class BuildingTab extends JPanel {
         // Обновляем модель из UI
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null) {
-            radiationTab.updateRoomSelectionStates();
+            radiationTab.updateRoomSelectionStates(); // Сохраняем ручные изменения
         }
 
         // Генерация имени проекта

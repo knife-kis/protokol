@@ -51,7 +51,7 @@ public class RadiationTab extends JPanel {
     private JButton splitRoomButton;
 
     public RadiationTab() {
-        roomsTableModel = new RadiationRoomsTableModel(globalRoomSelectionMap);
+        roomsTableModel = new RadiationRoomsTableModel(globalRoomSelectionMap, this);
         spaceTableModel = new SpaceTableModel();
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -188,9 +188,6 @@ public class RadiationTab extends JPanel {
             splitRoom(selectedRoom, dialog.getSuffixes());
         }
     }
-    public void markSpaceAsProcessed(Space space) {
-        processedSpaces.add(space.getId());
-    }
     private void splitRoom(Room selectedRoom, List<String> suffixes) {
         Space space = findParentSpace(selectedRoom);
         if (space == null) return;
@@ -243,43 +240,33 @@ public class RadiationTab extends JPanel {
         if (selectedFloor != null && selectedSpaceRow >= 0) {
             Space selectedSpace = spaceTableModel.getSpaceAt(selectedSpaceRow);
             boolean isOffice = selectedSpace.getType() == Space.SpaceType.OFFICE;
-            // Всегда обрабатываем офисные помещения независимо от флага processedSpaces
-            if (isOffice) {
-                selectAllOfficeRooms(selectedSpace);
-                processedSpaces.add(selectedSpace.getId());
+            boolean isApartment = selectedSpace.getType() == Space.SpaceType.APARTMENT;
+
+            // Сохраняем текущие состояния перед обновлением
+            Map<Integer, Boolean> savedStates = new HashMap<>();
+            for (Room room : selectedSpace.getRooms()) {
+                savedStates.put(room.getId(), globalRoomSelectionMap.get(room.getId()));
             }
 
-            // Проверяем, было ли помещение обработано
-            boolean alreadyProcessed = processedSpaces.contains(selectedSpace.getId());
-
+            // Заполняем таблицу комнат
             for (Room room : selectedSpace.getRooms()) {
                 roomsTableModel.addRoom(room);
             }
 
-            // Определяем поведение в зависимости от типа этажа
+            // Восстанавливаем сохраненные состояния
+            for (Room room : selectedSpace.getRooms()) {
+                Boolean savedState = savedStates.get(room.getId());
+                if (savedState != null) {
+                    globalRoomSelectionMap.put(room.getId(), savedState);
+                }
+            }
+
+            // Применяем правила ТОЛЬКО для необработанных помещений
             if (!processedSpaces.contains(selectedSpace.getId())) {
-                boolean isApartment = selectedSpace.getType() == Space.SpaceType.APARTMENT;
-
-                if (selectedFloor.getType() == Floor.FloorType.OFFICE) {
-                    // Офисный этаж — всегда автопроставляем офисы
-                    if (isOffice) {
-                        selectAllOfficeRooms(selectedSpace);
-                    }
-
-                } else if (selectedFloor.getType() == Floor.FloorType.RESIDENTIAL) {
-                    // Жилой этаж — только первое помещение
-                    if (isApartment && isFirstResidentialSpaceOnFloor(selectedSpace, selectedFloor)) {
-                        applyRoomSelectionRulesForResidentialSpace(selectedSpace);
-                    }
-
-                } else if (selectedFloor.getType() == Floor.FloorType.MIXED) {
-                    if (isOffice) {
-                        // Для офисов в смешанном — всегда автопроставляем
-                        selectAllOfficeRooms(selectedSpace);
-                    } else if (isApartment && isFirstResidentialSpaceOnFloor(selectedSpace, selectedFloor)) {
-                        // Для квартир в смешанном — только первое помещение
-                        applyRoomSelectionRulesForResidentialSpace(selectedSpace);
-                    }
+                if (isOffice) {
+                    selectAllOfficeRooms(selectedSpace);
+                } else if (isApartment && isFirstResidentialSpaceOnFloor(selectedSpace, selectedFloor)) {
+                    applyRoomSelectionRulesForResidentialSpace(selectedSpace);
                 }
             }
         }
@@ -637,8 +624,7 @@ public class RadiationTab extends JPanel {
     }
 
     // Вспомогательные методы для поиска
-    private Space findParentSpace(Room room) {
-        if (radiationBuilding == null) return null;
+    public Space findParentSpace(Room room) {
         if (currentBuilding == null) return null;
 
         for (Floor floor : currentBuilding.getFloors()) {
