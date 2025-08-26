@@ -31,7 +31,9 @@ class RadiationRoomsTableModel extends AbstractTableModel {
     public Object getValueAt(int rowIndex, int columnIndex) {
         Room room = rooms.get(rowIndex);
         if (columnIndex == 0) {
-            return globalSelectionMap.getOrDefault(room.getId(), true);
+            return globalSelectionMap.containsKey(room.getId())
+                    ? globalSelectionMap.get(room.getId())
+                    : room.isSelected(); // ← если в карте нет — используем сохранённое в модели
         } else {
             return room.getName();
         }

@@ -34,8 +34,7 @@ public class RadiationTab extends JPanel {
             "кухня", "кухня-ниша", "кухня-гостиная", "кухня гостиная", "кухня ниша"
     );
 
-    private Building radiationBuilding;
-    private Map<Integer, Room> originalRoomMap = new HashMap<>(); // Связь ID оригинала -> комната
+    private boolean autoApplyRulesOnDisplay = true;
     private static final Logger logger = LoggerFactory.getLogger(RadiationTab.class);
     private JTable spaceTable;
     private SpaceTableModel spaceTableModel;
@@ -47,7 +46,6 @@ public class RadiationTab extends JPanel {
     private DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
     private JTable roomTable;
     private RadiationRoomsTableModel roomsTableModel;
-    private JButton splitOfficeButton;
     private JButton splitRoomButton;
 
     public RadiationTab() {
@@ -262,7 +260,7 @@ public class RadiationTab extends JPanel {
             }
 
             // Применяем правила ТОЛЬКО для необработанных помещений
-            if (!processedSpaces.contains(selectedSpace.getId())) {
+            if (autoApplyRulesOnDisplay && !processedSpaces.contains(selectedSpace.getId())) {
                 if (isOffice) {
                     selectAllOfficeRooms(selectedSpace);
                 } else if (isApartment && isFirstResidentialSpaceOnFloor(selectedSpace, selectedFloor)) {
@@ -306,7 +304,7 @@ public class RadiationTab extends JPanel {
     }
 
     private void applyRoomSelectionRulesForResidentialSpace(Space space) {
-        if (processedSpaces.contains(space.getIdentifier())) return;
+        if (processedSpaces.contains(space.getId())) return;
         try {
             // Получаем список всех комнат в помещении, не исключенных
             List<Room> validRooms = space.getRooms().stream()
@@ -402,8 +400,13 @@ public class RadiationTab extends JPanel {
     }
 
     public void setBuilding(Building building, boolean forceOfficeSelection) {
+        // поведение по умолчанию оставляем прежним: авто-правила разрешены
+        setBuilding(building, forceOfficeSelection, true);
+    }
+    public void setBuilding(Building building, boolean forceOfficeSelection, boolean autoApplyRules) {
         logger.info("RadiationTab.setBuilding() - Начало установки здания");
         this.currentBuilding = building;
+        this.autoApplyRulesOnDisplay = autoApplyRules; // ← управляем автоприменением правил
         processedSpaces.clear();
 
         // Перенос состояний из модели
@@ -416,7 +419,6 @@ public class RadiationTab extends JPanel {
             }
         }
 
-        // ТОЛЬКО при необходимости - принудительный выбор
         if (forceOfficeSelection) {
             forceSelectOfficeRooms();
         }

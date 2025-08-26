@@ -231,8 +231,8 @@ public class BuildingTab extends JPanel {
         projectNameField.setText(loadedBuilding.getName());
         refreshAllLists();
         updateVentilationTab(loadedBuilding);
-        // Обновляем RadiationTab с загруженными состояниями
-        updateRadiationTab(loadedBuilding, true);
+        // Показываем ровно сохранённые состояния: без принудительного проставления и без авто-правил
+        updateRadiationTab(loadedBuilding, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен", "Загрузка", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -267,7 +267,7 @@ public class BuildingTab extends JPanel {
         }
 
         // Обновляем RadiationTab
-        updateRadiationTab(newProject, false);
+        updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
 
         logger.info("Проект успешно сохранен");
     }
@@ -395,7 +395,7 @@ public class BuildingTab extends JPanel {
         spaceList.setSelectedValue(copiedSpace, true);
 
         // Обновляем вкладку с новым зданием
-        updateRadiationTab(building, false);
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
 
         // Восстанавливаем состояния ТОЛЬКО для исходных комнат
         restoreRadiationSelections(savedSelections);
@@ -488,11 +488,15 @@ public class BuildingTab extends JPanel {
         }
     }
     private void updateRadiationTab(Building building, boolean forceOfficeSelection) {
+        // дефолт: старое поведение — авто-правила включены
+        updateRadiationTab(building, forceOfficeSelection, true);
+    }
+    private void updateRadiationTab(Building building, boolean forceOfficeSelection, boolean autoApplyRules) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
             RadiationTab tab = ((MainFrame) mainFrame).getRadiationTab();
             if (tab != null) {
-                tab.setBuilding(building, forceOfficeSelection);
+                tab.setBuilding(building, forceOfficeSelection, autoApplyRules);
             }
         }
     }
