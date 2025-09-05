@@ -768,6 +768,7 @@ public class BuildingTab extends JPanel {
     // Операции с комнатами
     private void addRoom(ActionEvent e) {
         Space selectedSpace = spaceList.getSelectedValue();
+        Floor selectedFloor = floorList.getSelectedValue();
         if (selectedSpace == null) {
             showMessage("Выберите помещение!", "Ошибка", JOptionPane.WARNING_MESSAGE);
             return;
@@ -780,7 +781,18 @@ public class BuildingTab extends JPanel {
             selectedSpace.addRoom(room);
             roomListModel.addElement(room);
         }
-        updateRadiationTab(building, true);
+
+        // Обновляем вкладку «Радиация» (автоправила включены)
+        updateRadiationTab(building, /*forceOfficeSelection=*/true, /*autoApplyRules=*/true);
+
+        // Вернём выделение на то же помещение, чтобы сработал updateRoomList()
+        RadiationTab radiationTab = getRadiationTab();
+        if (radiationTab != null && selectedFloor != null && selectedSpace != null) {
+            int newIndex = selectedFloor.getSpaces().indexOf(selectedSpace);
+            if (newIndex >= 0) {
+                radiationTab.selectSpaceByIndex(newIndex);
+            }
+        }
     }
 
     private void editRoom(ActionEvent e) {

@@ -37,15 +37,6 @@ public class MainFrame extends JFrame {
         });
 
     }
-    public BuildingTab getBuildingTab() {
-        for (Component comp : tabbedPane.getComponents()) {
-            if (comp instanceof BuildingTab) {
-                return (BuildingTab) comp;
-            }
-        }
-        return null;
-    }
-
 
     private void initUI() {
         tabbedPane.addTab("Характеристики здания",

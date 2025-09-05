@@ -4,17 +4,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Space {
+    private static int nextId = 1;
+
     private int id;
     private String identifier;
     private SpaceType type;
     private List<Room> rooms = new ArrayList<>();
 
+    public Space() {
+        this.id = nextId++; // ← уникальный ID для каждого помещения
+    }
+
     public enum SpaceType {
         APARTMENT("Квартира"),
         OFFICE("Офис"),
-        PUBLIC_SPACE("Общественный");    // Общественное пространство
-
-        // Другое
+        PUBLIC_SPACE("Общественный");
 
         private final String title;
 
@@ -28,38 +32,15 @@ public class Space {
         }
     }
 
-
-    // Геттеры и сеттеры
-
-
-    public int getId() {
-        return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
-    }
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; } // оставим, если где-то явно задаёшь
     @Override
-    public String toString() {
-        return identifier + " (" + type + ")";
-    }
+    public String toString() { return identifier + " (" + type + ")"; }
 
-    public void addRoom(Room room) {
-        rooms.add(room);
-    }
-    public String getIdentifier() {
-        return identifier;
-    }
-    public void setIdentifier(String identifier) {
-        this.identifier = identifier;
-    }
-    public SpaceType getType() {
-        return type;
-    }
-    public void setType(SpaceType type) {
-        this.type = type;
-    }
-    public List<Room> getRooms() {
-        return rooms;
-    }
+    public void addRoom(Room room) { rooms.add(room); }
+    public String getIdentifier() { return identifier; }
+    public void setIdentifier(String identifier) { this.identifier = identifier; }
+    public SpaceType getType() { return type; }
+    public void setType(SpaceType type) { this.type = type; }
+    public List<Room> getRooms() { return rooms; }
 }
