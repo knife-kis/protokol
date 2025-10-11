@@ -50,13 +50,16 @@ public class AddSpaceDialog extends JDialog {
     }
 
     private Space.SpaceType[] getAllowedSpaceTypes(Floor.FloorType floorType) {
+        if (floorType == null) return Space.SpaceType.values();
         switch (floorType) {
             case RESIDENTIAL:
-                return new Space.SpaceType[]{Space.SpaceType.APARTMENT};
+                return new Space.SpaceType[] { Space.SpaceType.APARTMENT };
             case OFFICE:
-                return new Space.SpaceType[]{Space.SpaceType.OFFICE};
+                return new Space.SpaceType[] { Space.SpaceType.OFFICE };
+            case PUBLIC:
+                return Space.SpaceType.values();   // общественные — разрешаем любые
             case MIXED:
-                return Space.SpaceType.values();
+                return Space.SpaceType.values();   // смешанные — разрешаем любые
             default:
                 return Space.SpaceType.values();
         }

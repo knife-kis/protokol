@@ -7,36 +7,26 @@ public class Building {
     private int plannedFloorsCount;
     private int id;
     private String name;
+    private final List<Section> sections = new ArrayList<>(); // <-- секции
     private final List<Floor> floors = new ArrayList<>();
 
-    public int getId() {
-        return id;
-    }
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
 
-    public void setId(int id) {
-        this.id = id;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-    public String getName() {
-        return name;
-    }
+    public List<Floor> getFloors() { return floors; }
+    public void addFloor(Floor floor) { floors.add(floor); }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    public int getPlannedFloorsCount() { return plannedFloorsCount; }
+    public void setPlannedFloorsCount(int plannedFloorsCount) { this.plannedFloorsCount = plannedFloorsCount; }
 
-    public List<Floor> getFloors() {
-        return floors;
+    // секции
+    public List<Section> getSections() { return sections; }
+    public void setSections(List<Section> newSections) {
+        sections.clear();
+        if (newSections != null) sections.addAll(newSections);
     }
-
-    public void addFloor(Floor floor) {
-        floors.add(floor);
-    }
-    public int getPlannedFloorsCount() {
-        return plannedFloorsCount;
-    }
-
-    public void setPlannedFloorsCount(int plannedFloorsCount) {
-        this.plannedFloorsCount = plannedFloorsCount;
-    }
+    public void addSection(Section s) { sections.add(s); }
 }

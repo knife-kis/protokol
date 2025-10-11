@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.db.DatabaseManager;
+import ru.citlab24.protokol.tabs.dialogs.ManageSectionsDialog;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.dialogs.AddFloorDialog;
@@ -44,6 +45,8 @@ public class BuildingTab extends JPanel {
     private final DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
     private final DefaultListModel<Space> spaceListModel = new DefaultListModel<>();
     private final DefaultListModel<Room> roomListModel = new DefaultListModel<>();
+    private final DefaultListModel<Section> sectionListModel = new DefaultListModel<>();
+    private JList<Section> sectionList;
 
     private JList<Floor> floorList;
     private JList<Space> spaceList;
@@ -51,8 +54,14 @@ public class BuildingTab extends JPanel {
     private JTextField projectNameField;
 
     public BuildingTab(Building building) {
-        setRussianLocale();
-        this.building = building;
+        // 1) сохраняем в поле, 2) создаём дефолт, если пришёл null
+        this.building = (building != null) ? building : new Building();
+
+        // гарантируем хотя бы одну секцию
+        if (this.building.getSections().isEmpty()) {
+            this.building.addSection(new Section("Секция 1", 0));
+        }
+
         initComponents();
     }
 
@@ -90,7 +99,8 @@ public class BuildingTab extends JPanel {
 
         projectNameField = new JTextField(30);
         projectNameField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        projectNameField.setText(building.getName());
+        String bName = (this.building.getName() != null) ? this.building.getName() : "";
+        projectNameField.setText(bName);
 
         panel.add(label);
         panel.add(projectNameField);
@@ -100,8 +110,7 @@ public class BuildingTab extends JPanel {
 
     private JPanel createBuildingPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 3, 15, 15));
-        panel.add(createListPanel("Этажи здания", FLOOR_PANEL_COLOR, floorListModel,
-                new FloorListRenderer(), this::createFloorButtons));
+        panel.add(createSectionsAndFloorsPanel());
         panel.add(createListPanel("Помещения на этаже", SPACE_PANEL_COLOR, spaceListModel,
                 new SpaceListRenderer(), this::createSpaceButtons));
         panel.add(createListPanel("Комнаты в помещении", ROOM_PANEL_COLOR, roomListModel,
@@ -141,6 +150,7 @@ public class BuildingTab extends JPanel {
 
     private JPanel createFloorButtons() {
         return createButtonPanel(
+                createStyledButton("", FontAwesomeSolid.LAYER_GROUP, new Color(63, 81, 181), this::manageSections), // ← новое
                 createStyledButton("", FontAwesomeSolid.PLUS, new Color(46, 125, 50), this::addFloor),
                 createStyledButton("", FontAwesomeSolid.CLONE, new Color(100, 181, 246), this::copyFloor),
                 createStyledButton("", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editFloor),
@@ -181,6 +191,81 @@ public class BuildingTab extends JPanel {
         );
     }
 
+    private JPanel createSectionsAndFloorsPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(createTitledBorder("Секции и этажи", FLOOR_PANEL_COLOR));
+
+        // СЛЕВА — список секций
+        sectionList = new JList<>(sectionListModel);
+        sectionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        sectionList.setFixedCellHeight(28);
+        refreshSectionListModel();
+
+        // СПРАВА — список этажей текущей секции
+        floorList = new JList<>(floorListModel);
+        floorList.setCellRenderer(new FloorListRenderer());
+        floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        floorList.setFixedCellHeight(28);
+
+        // начальная выборка
+        if (!sectionListModel.isEmpty()) sectionList.setSelectedIndex(0);
+        refreshFloorListForSelectedSection();
+
+        // DnD: перетаскиваем этаж -> на секцию
+        floorList.setDragEnabled(true);
+        floorList.setTransferHandler(new TransferHandler("selectedValue"));
+        sectionList.setDropMode(DropMode.ON);
+        sectionList.setTransferHandler(new TransferHandler() {
+            @Override
+            public boolean canImport(TransferSupport supp) {
+                return supp.isDrop();
+            }
+
+            @Override
+            public boolean importData(TransferSupport supp) {
+                if (!supp.isDrop()) return false;
+                JList.DropLocation dl = (JList.DropLocation) supp.getDropLocation();
+                int targetIdx = dl.getIndex();
+                if (targetIdx < 0 || targetIdx >= sectionListModel.size()) return false;
+                Floor dragged = floorList.getSelectedValue();
+                if (dragged == null) return false;
+
+                dragged.setSectionIndex(targetIdx);
+                refreshFloorListForSelectedSection(); // удалится из текущего списка, если секция изменилась
+                updateRadiationTab(building, /*force=*/false, /*auto=*/false);
+                return true;
+            }
+        });
+
+        // слушатели
+        sectionList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) refreshFloorListForSelectedSection();
+        });
+
+        // раскладка
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
+                new JScrollPane(sectionList), new JScrollPane(floorList));
+        split.setResizeWeight(0.35);
+        panel.add(split, BorderLayout.CENTER);
+        panel.add(createFloorButtons(), BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private void refreshSectionListModel() {
+        sectionListModel.clear();
+        for (Section s : building.getSections()) sectionListModel.addElement(s);
+    }
+
+    private void refreshFloorListForSelectedSection() {
+        floorListModel.clear();
+        int secIdx = Math.max(0, sectionList.getSelectedIndex());
+        for (Floor f : building.getFloors()) {
+            if (f.getSectionIndex() == secIdx) floorListModel.addElement(f);
+        }
+        if (!floorListModel.isEmpty()) floorList.setSelectedIndex(0);
+    }
+
+
     private JButton createStyledButton(String text, FontAwesomeSolid icon, Color bgColor, ActionListener action) {
         JButton btn = new JButton(text, FontIcon.of(icon, 16, Color.WHITE));
         btn.setBackground(bgColor);
@@ -201,6 +286,27 @@ public class BuildingTab extends JPanel {
             }
         });
         return btn;
+    }
+
+    private void manageSections(ActionEvent e) {
+        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+        ManageSectionsDialog dlg = new ManageSectionsDialog(frame, building.getSections());
+        if (dlg.showDialog()) {
+            List<Section> updated = dlg.getSections();
+            // если секций стало меньше — этажи «вышедших» секций сдвигаем в секцию 0
+            int oldCount = building.getSections().size();
+            building.setSections(updated);
+            int newCount = updated.size();
+            if (newCount < oldCount) {
+                for (Floor f : building.getFloors()) {
+                    if (f.getSectionIndex() >= newCount) f.setSectionIndex(0);
+                }
+            }
+            refreshSectionListModel();
+            if (!sectionListModel.isEmpty()) sectionList.setSelectedIndex(0);
+            refreshFloorListForSelectedSection();
+            updateRadiationTab(building, /*force=*/false, /*auto=*/false);
+        }
     }
 
     // Основные операции с проектом
@@ -366,7 +472,8 @@ public class BuildingTab extends JPanel {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
             updateVentilationTab(building);
-            updateRadiationTab(building, true);; // Добавлено обновление RadiationTab
+            updateRadiationTab(building, true);
+            ; // Добавлено обновление RadiationTab
             ((MainFrame) mainFrame).selectVentilationTab();
         }
         showMessage("Данные для вентиляции обновлены!", "Расчет завершен", JOptionPane.INFORMATION_MESSAGE);
@@ -410,6 +517,7 @@ public class BuildingTab extends JPanel {
             }
         }
     }
+
     // Создаем глубокую копию помещения с новыми ID комнат
     private Space createSpaceCopyWithNewIds(Space originalSpace) {
         Space spaceCopy = new Space();
@@ -477,20 +585,21 @@ public class BuildingTab extends JPanel {
             Floor floor = new Floor();
             floor.setNumber(dialog.getFloorNumber());
             floor.setType(dialog.getFloorType());
-
-            // Устанавливаем имя этажа как комбинацию типа и номера
+            floor.setSectionIndex(Math.max(0, sectionList.getSelectedIndex())); // ← секция
             String floorName = floor.getType().title + " " + floor.getNumber();
             floor.setName(floorName);
-
             building.addFloor(floor);
-            floorListModel.addElement(floor);
+            refreshFloorListForSelectedSection(); // вместо прямого addElement
             updateRadiationTab(building, true);
+
         }
     }
+
     private void updateRadiationTab(Building building, boolean forceOfficeSelection) {
         // дефолт: старое поведение — авто-правила включены
         updateRadiationTab(building, forceOfficeSelection, true);
     }
+
     private void updateRadiationTab(Building building, boolean forceOfficeSelection, boolean autoApplyRules) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
@@ -500,6 +609,7 @@ public class BuildingTab extends JPanel {
             }
         }
     }
+
     private RadiationTab getRadiationTab() {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
@@ -507,6 +617,7 @@ public class BuildingTab extends JPanel {
         }
         return null;
     }
+
     private void copyFloor(ActionEvent e) {
         Floor selectedFloor = floorList.getSelectedValue();
         if (selectedFloor == null) return;
@@ -522,6 +633,7 @@ public class BuildingTab extends JPanel {
         Floor copiedFloor = createFloorCopy(selectedFloor);
         String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
         copiedFloor.setNumber(newFloorNumber);
+        copiedFloor.setSectionIndex(selectedFloor.getSectionIndex());
         updateSpaceIdentifiers(copiedFloor, extractDigits(newFloorNumber));
 
         // 3. Добавляем новый этаж в модель
@@ -556,9 +668,11 @@ public class BuildingTab extends JPanel {
             radiationTab.refreshFloors();
         }
     }
+
     private String extractDigits(String input) {
         return input.replaceAll("\\D", ""); // Удаляем все не-цифры
     }
+
     private String generateNextFloorNumber(String currentNumber) {
         // Пытаемся извлечь число из названия этажа
         Pattern p = Pattern.compile("\\d+");
@@ -587,6 +701,7 @@ public class BuildingTab extends JPanel {
         // Для нечисловых названий
         return generateUniqueNonNumericName(currentNumber);
     }
+
     private String findNextAvailableNumber(int baseNumber) {
         int candidate = baseNumber + 1;
         Set<Integer> existingNumbers = new HashSet<>();
@@ -619,12 +734,14 @@ public class BuildingTab extends JPanel {
 
         return base + (maxCopy == 0 ? "" : " (копия " + (maxCopy + 1) + ")");
     }
+
     private void updateSpaceIdentifiers(Floor floor, String newFloorDigits) {
         for (Space space : floor.getSpaces()) {
             String newId = updateIdentifier(space.getIdentifier(), newFloorDigits);
             space.setIdentifier(newId);
         }
     }
+
     private String updateIdentifier(String identifier, String newFloorDigits) {
         // Шаблон для поиска формата "X-Y" (например: "кв 1-1")
         Pattern pattern = Pattern.compile("(.*?)(\\d+)-(\\d+)(.*)");
@@ -834,6 +951,7 @@ public class BuildingTab extends JPanel {
             }
         }
     }
+
     private void createDefaultSpaceIfMissing(Floor floor) {
         boolean hasDefaultSpace = floor.getSpaces().stream()
                 .anyMatch(space -> "-".equals(space.getIdentifier()));
@@ -915,15 +1033,21 @@ public class BuildingTab extends JPanel {
     @Override
     public void addNotify() {
         super.addNotify();
-        updateRadiationTab(building, true);
-        if (!floorListModel.isEmpty()) floorList.setSelectedIndex(0);
+        if (this.building == null) this.building = new Building();
+        updateRadiationTab(this.building, true);
 
-        // Инициализация слушателей после создания компонентов
-        floorList.addListSelectionListener(evt -> {
-            if (!evt.getValueIsAdjusting()) updateSpaceList();
-        });
-        spaceList.addListSelectionListener(evt -> {
-            if (!evt.getValueIsAdjusting()) updateRoomList();
-        });
+        if (floorList != null && !floorListModel.isEmpty()) {
+            floorList.setSelectedIndex(0);
+        }
+        if (floorList != null) {
+            floorList.addListSelectionListener(evt -> {
+                if (!evt.getValueIsAdjusting()) updateSpaceList();
+            });
+        }
+        if (spaceList != null) {
+            spaceList.addListSelectionListener(evt -> {
+                if (!evt.getValueIsAdjusting()) updateRoomList();
+            });
+        }
     }
 }

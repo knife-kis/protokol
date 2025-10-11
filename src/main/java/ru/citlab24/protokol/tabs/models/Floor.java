@@ -8,6 +8,7 @@ public class Floor {
     private String number;
     private String name;
     private FloorType type;
+    private int sectionIndex = 0;           // <-- индекс секции (0..N-1)
     private List<Space> spaces = new ArrayList<>();
 
     public enum FloorType {
@@ -17,23 +18,10 @@ public class Floor {
         MIXED("смешанный");
 
         public final String title;
-
-        FloorType(String title) {
-            this.title = title;
-        }
-
-        @Override
-        public String toString() {
-            return title;
-        }
+        FloorType(String title) { this.title = title; }
+        @Override public String toString() { return title; }
     }
 
-    @Override
-    public String toString() {
-        return number + " - " + type.title;
-    }
-
-    // Геттеры и сеттеры
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
 
@@ -46,10 +34,11 @@ public class Floor {
     public FloorType getType() { return type; }
     public void setType(FloorType type) { this.type = type; }
 
+    public int getSectionIndex() { return sectionIndex; }
+    public void setSectionIndex(int sectionIndex) { this.sectionIndex = Math.max(0, sectionIndex); }
+
     public List<Space> getSpaces() { return spaces; }
     public void setSpaces(List<Space> spaces) { this.spaces = spaces; }
 
-    public void addSpace(Space space) {
-        spaces.add(space);
-    }
+    public void addSpace(Space space) { spaces.add(space); }
 }
