@@ -20,6 +20,9 @@ import ru.citlab24.protokol.tabs.renderers.SpaceListRenderer;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
@@ -129,13 +132,22 @@ public class BuildingTab extends JPanel {
         list.setCellRenderer(renderer);
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        // Сохраняем ссылки на списки
+        // Сохраняем ссылки на списки + включаем DnD там, где нужно
         if ("Этажи здания".equals(title)) {
             floorList = (JList<Floor>) list;
+            // (перестановку этажей внутри секции мы вешаем в createSectionsAndFloorsPanel, тут не нужно)
         } else if ("Помещения на этаже".equals(title)) {
             spaceList = (JList<Space>) list;
+            // <<< ВОТ ЭТИ ТРИ СТРОКИ >>>
+            spaceList.setDragEnabled(true);
+            spaceList.setDropMode(DropMode.INSERT);
+            spaceList.setTransferHandler(spaceReorderHandler);
         } else if ("Комнаты в помещении".equals(title)) {
             roomList = (JList<Room>) list;
+            // <<< И ВОТ ЭТИ ТРИ >>>
+            roomList.setDragEnabled(true);
+            roomList.setDropMode(DropMode.INSERT);
+            roomList.setTransferHandler(roomReorderHandler);
         }
 
         panel.add(new JScrollPane(list), BorderLayout.CENTER);
@@ -144,6 +156,7 @@ public class BuildingTab extends JPanel {
         return panel;
     }
 
+
     private TitledBorder createTitledBorder(String title, Color color) {
         return BorderFactory.createTitledBorder(
                 null, title, TitledBorder.LEFT, TitledBorder.TOP, HEADER_FONT, color);
@@ -151,12 +164,14 @@ public class BuildingTab extends JPanel {
 
     private JPanel createFloorButtons() {
         return createButtonPanel(
-                createStyledButton("", FontAwesomeSolid.LAYER_GROUP, new Color(63, 81, 181), this::manageSections), // ← новое
-                createStyledButton("", FontAwesomeSolid.PLUS, new Color(46, 125, 50), this::addFloor),
-                createStyledButton("", FontAwesomeSolid.CLONE, new Color(100, 181, 246), this::copyFloor),
-                createStyledButton("", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editFloor),
-                createStyledButton("", FontAwesomeSolid.TRASH, new Color(198, 40, 40), this::removeFloor)
+                createStyledButton("", FontAwesomeSolid.LAYER_GROUP, new Color(63,81,181), this::manageSections),
+                createStyledButton("", FontAwesomeSolid.COPY,        new Color(0,150,136), this::copySection), // ← НОВОЕ
+                createStyledButton("", FontAwesomeSolid.PLUS,        new Color(46,125,50),  this::addFloor),
+                createStyledButton("", FontAwesomeSolid.CLONE,       new Color(100,181,246), this::copyFloor),
+                createStyledButton("", FontAwesomeSolid.EDIT,        new Color(255,152,0),  this::editFloor),
+                createStyledButton("", FontAwesomeSolid.TRASH,       new Color(198,40,40),  this::removeFloor)
         );
+
     }
 
     private JPanel createSpaceButtons() {
@@ -191,6 +206,72 @@ public class BuildingTab extends JPanel {
                 createStyledButton("Рассчитать показатели", FontAwesomeSolid.CALCULATOR, new Color(103, 58, 183), this::calculateMetrics)
         );
     }
+    private void copySection(ActionEvent e) {
+        if (sectionList == null || sectionList.isSelectionEmpty()) {
+            showMessage("Выберите секцию для копирования", "Информация", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        int srcIdx = sectionList.getSelectedIndex();
+        Section src = sectionListModel.get(srcIdx);
+
+        // спросим имя новой секции
+        String suggested = generateUniqueSectionName(src.getName());
+        String newName = showInputDialog("Копировать секцию", "Название новой секции:", suggested);
+        if (newName == null || newName.trim().isEmpty()) return;
+
+        // создаём новую секцию в конце списка
+        int newPosition = building.getSections().size();
+        Section dst = new Section();
+        dst.setName(newName.trim());
+        dst.setPosition(newPosition);
+        building.addSection(dst);
+
+        // индекс новой секции
+        int dstIdx = newPosition;
+
+        // Копируем все этажи исходной секции
+        java.util.List<Floor> toAdd = new java.util.ArrayList<>();
+        for (Floor f : building.getFloors()) {
+            if (f.getSectionIndex() == srcIdx) {
+                Floor fCopy = createFloorCopy(f);               // уже умеет глубоко копировать помещения/комнаты
+                fCopy.setSectionIndex(dstIdx);                  // привязываем к новой секции
+                toAdd.add(fCopy);
+            }
+        }
+        // добавляем скопированные этажи в здание
+        for (Floor fCopy : toAdd) {
+            building.addFloor(fCopy);
+        }
+
+        // UI: показать новую секцию и её этажи
+        refreshSectionListModel();
+        sectionList.setSelectedIndex(dstIdx);
+        refreshFloorListForSelectedSection();
+        updateSpaceList();
+        updateRoomList();
+
+        // Обновим вкладки расчётов (без форсирования правил)
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        updateVentilationTab(building);
+
+        showMessage("Секция «" + src.getName() + "» успешно скопирована в «" + newName + "».",
+                "Готово", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private String generateUniqueSectionName(String base) {
+        if (base == null || base.isEmpty()) base = "Секция";
+        String plain = base + " (копия)";
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (Section s : building.getSections()) {
+            if (s.getName() != null) names.add(s.getName());
+        }
+        if (!names.contains(plain)) return plain;
+
+        // если имя занято — добавляем счётчик
+        int n = 2;
+        while (names.contains(plain + " " + n)) n++;
+        return plain + " " + n;
+    }
 
     private JPanel createSectionsAndFloorsPanel() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -202,41 +283,59 @@ public class BuildingTab extends JPanel {
         sectionList.setFixedCellHeight(28);
         refreshSectionListModel();
 
-        // СПРАВА — список этажей текущей секции
+// СПРАВА — список этажей текущей секции
         floorList = new JList<>(floorListModel);
         floorList.setCellRenderer(new FloorListRenderer());
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorList.setFixedCellHeight(28);
 
-        // начальная выборка
+// начальная выборка
         if (!sectionListModel.isEmpty()) sectionList.setSelectedIndex(0);
         refreshFloorListForSelectedSection();
 
-        // DnD: перетаскиваем этаж -> на секцию
+// DnD: секции ↔ секции (перестановка) И перенос этажей на секцию
+        sectionList.setDragEnabled(true);
+        sectionList.setDropMode(DropMode.INSERT);
+        sectionList.setTransferHandler(sectionReorderHandler);
+
+// DnD: перестановка этажей внутри секции
         floorList.setDragEnabled(true);
-        floorList.setTransferHandler(new TransferHandler("selectedValue"));
-        sectionList.setDropMode(DropMode.ON);
-        sectionList.setTransferHandler(new TransferHandler() {
-            @Override
-            public boolean canImport(TransferSupport supp) {
-                return supp.isDrop();
-            }
+        floorList.setDropMode(DropMode.INSERT);
+        floorList.setTransferHandler(floorReorderHandler);
 
-            @Override
-            public boolean importData(TransferSupport supp) {
-                if (!supp.isDrop()) return false;
-                JList.DropLocation dl = (JList.DropLocation) supp.getDropLocation();
-                int targetIdx = dl.getIndex();
-                if (targetIdx < 0 || targetIdx >= sectionListModel.size()) return false;
-                Floor dragged = floorList.getSelectedValue();
-                if (dragged == null) return false;
 
-                dragged.setSectionIndex(targetIdx);
-                refreshFloorListForSelectedSection(); // удалится из текущего списка, если секция изменилась
-                updateRadiationTab(building, /*force=*/false, /*auto=*/false);
-                return true;
-            }
-        });
+// Этажи: перестановка внутри секции
+        floorList.setDragEnabled(true);
+        floorList.setDropMode(DropMode.INSERT);
+        floorList.setTransferHandler(floorReorderHandler);
+
+// Перенос этажа МЕЖДУ секциями: дроп на список секций
+//        sectionList.setDropMode(DropMode.ON);
+//        sectionList.setTransferHandler(new TransferHandler() {
+//            @Override public boolean canImport(TransferSupport supp) { return supp.isDrop(); }
+//            @Override public boolean importData(TransferSupport supp) {
+//                if (!supp.isDrop()) return false;
+//                JList.DropLocation dl = (JList.DropLocation) supp.getDropLocation();
+//                int targetIdx = dl.getIndex();
+//                if (targetIdx < 0 || targetIdx >= sectionListModel.size()) return false;
+//                Floor dragged = floorList.getSelectedValue();
+//                if (dragged == null) return false;
+//
+//                // кладём в КОНЕЦ целевой секции
+//                int lastPos = 0;
+//                for (Floor f : building.getFloors())
+//                    if (f.getSectionIndex() == targetIdx)
+//                        lastPos = Math.max(lastPos, f.getPosition() + 1);
+//
+//                dragged.setSectionIndex(targetIdx);
+//                dragged.setPosition(lastPos);
+//
+//                refreshFloorListForSelectedSection();
+//                updateRadiationTab(building, /*force=*/false, /*auto=*/false);
+//                return true;
+//            }
+//        });
+
 
         // слушатели
         sectionList.addListSelectionListener(e -> {
@@ -252,6 +351,89 @@ public class BuildingTab extends JPanel {
         return panel;
     }
 
+    // Флажки, чтобы понимать откуда тянем (этажи → на секцию, или секции ↔ секции)
+    private boolean draggingFromFloor = false;
+
+    // Перестановка этажей ВНУТРИ текущей секции
+    private final TransferHandler floorReorderHandler = new ReorderHandler<Floor>() {
+        @Override protected Transferable createTransferable(JComponent c) {
+            draggingFromFloor = true;                    // помечаем источник DnD
+            return super.createTransferable(c);
+        }
+        @Override protected void afterReorder(DefaultListModel<Floor> model) {
+            // Переименовываем позиции по текущему порядку в списке
+            for (int i = 0; i < model.size(); i++) {
+                model.get(i).setPosition(i);
+            }
+            draggingFromFloor = false;
+        }
+    };
+
+    // Перестановка секций МЕЖДУ собой + приём "этажа" (перенос этажа на секцию)
+    private final TransferHandler sectionReorderHandler = new ReorderHandler<Section>() {
+
+        @Override public boolean importData(TransferSupport s) {
+            // Если тянули ЭТАЖ (из floorList) и бросили на секцию — переносим этаж в эту секцию
+            if (draggingFromFloor) {
+                try {
+                    JList.DropLocation dl = (JList.DropLocation) s.getDropLocation();
+                    int targetSecIdx = Math.max(0, dl.getIndex());
+                    Floor dragged = (floorList != null) ? floorList.getSelectedValue() : null;
+                    if (dragged == null) return false;
+
+                    int lastPos = building.getFloors().stream()
+                            .filter(f -> f.getSectionIndex() == targetSecIdx)
+                            .mapToInt(Floor::getPosition)
+                            .max().orElse(-1) + 1;
+
+                    dragged.setSectionIndex(targetSecIdx);
+                    dragged.setPosition(lastPos);
+
+                    refreshFloorListForSelectedSection();
+                    updateRadiationTab(building, /*force=*/false, /*autoApplyRules=*/false);
+                    return true;
+                } finally {
+                    draggingFromFloor = false;
+                }
+            }
+
+            // Иначе — обычная перестановка СЕКЦИЙ (внутренний dnd секций)
+            return super.importData(s);
+        }
+
+        @Override protected void afterReorder(DefaultListModel<Section> model) {
+            // Старый и новый порядок секций
+            List<Section> oldOrder = new ArrayList<>(building.getSections());
+            List<Section> newOrder = Collections.list(model.elements());
+
+            // Обновляем positions у секций
+            for (int i = 0; i < newOrder.size(); i++) {
+                newOrder.get(i).setPosition(i);
+            }
+
+            // Обновляем список секций у здания
+            building.setSections(new ArrayList<>(newOrder));
+
+            // Пересчёт индексов секций у этажей (т.к. sectionIndex у этажей — это индекс в списке секций)
+            Map<Integer, Integer> remap = new HashMap<>();
+            for (int i = 0; i < oldOrder.size(); i++) {
+                int newIdx = newOrder.indexOf(oldOrder.get(i));
+                if (newIdx >= 0) remap.put(i, newIdx);
+            }
+            for (Floor f : building.getFloors()) {
+                Integer ni = remap.get(f.getSectionIndex());
+                if (ni != null) f.setSectionIndex(ni);
+            }
+
+            // Обновляем UI
+            refreshSectionListModel();
+            if (!sectionListModel.isEmpty()) {
+                sectionList.setSelectedIndex(0);
+            }
+            refreshFloorListForSelectedSection();
+        }
+    };
+
     private void refreshSectionListModel() {
         sectionListModel.clear();
         for (Section s : building.getSections()) sectionListModel.addElement(s);
@@ -260,9 +442,13 @@ public class BuildingTab extends JPanel {
     private void refreshFloorListForSelectedSection() {
         floorListModel.clear();
         int secIdx = Math.max(0, sectionList.getSelectedIndex());
-        for (Floor f : building.getFloors()) {
-            if (f.getSectionIndex() == secIdx) floorListModel.addElement(f);
-        }
+        java.util.List<Floor> list = new java.util.ArrayList<>();
+        for (Floor f : building.getFloors())
+            if (f.getSectionIndex() == secIdx) list.add(f);
+        list.sort(java.util.Comparator.comparingInt(Floor::getPosition));
+        floorListModel.clear();
+        list.forEach(floorListModel::addElement);
+
         if (!floorListModel.isEmpty()) floorList.setSelectedIndex(0);
     }
 
@@ -438,6 +624,46 @@ public class BuildingTab extends JPanel {
         return copy;
     }
 
+    @SuppressWarnings("serial")
+    private abstract class ReorderHandler<T> extends TransferHandler {
+        private final DataFlavor flavor = DataFlavor.stringFlavor;
+        @Override protected Transferable createTransferable(JComponent c) {
+            @SuppressWarnings("unchecked") JList<T> list = (JList<T>) c;
+            return new StringSelection(Integer.toString(list.getSelectedIndex()));
+        }
+        @Override public int getSourceActions(JComponent c) { return MOVE; }
+        @Override public boolean canImport(TransferSupport s) { return s.isDrop() && s.isDataFlavorSupported(flavor); }
+        @Override public boolean importData(TransferSupport s) {
+            try {
+                @SuppressWarnings("unchecked") JList<T> list = (JList<T>) s.getComponent();
+                DefaultListModel<T> model = (DefaultListModel<T>) list.getModel();
+                int to = ((JList.DropLocation) s.getDropLocation()).getIndex();
+                int from = Integer.parseInt((String) s.getTransferable().getTransferData(flavor));
+                if (from == -1 || from == to) return false;
+                T elem = model.get(from);
+                model.remove(from);
+                if (to > from) to--;
+                model.add(to, elem);
+                list.setSelectedIndex(to);
+                afterReorder(model);
+                return true;
+            } catch (Exception ex) { ex.printStackTrace(); return false; }
+        }
+        protected abstract void afterReorder(DefaultListModel<T> model);
+    }
+
+    private final TransferHandler spaceReorderHandler = new ReorderHandler<Space>() {
+        @Override protected void afterReorder(DefaultListModel<Space> model) {
+            // Переписываем position по новому порядку
+            for (int i = 0; i < model.size(); i++) model.get(i).setPosition(i);
+        }
+    };
+
+    private final TransferHandler roomReorderHandler = new ReorderHandler<Room>() {
+        @Override protected void afterReorder(DefaultListModel<Room> model) {
+            for (int i = 0; i < model.size(); i++) model.get(i).setPosition(i);
+        }
+    };
 
     private Floor createFloorCopy(Floor originalFloor) {
         Floor floorCopy = new Floor();
@@ -531,6 +757,7 @@ public class BuildingTab extends JPanel {
             }
         }
     }
+
 
     // Создаем глубокую копию помещения с новыми ID комнат
     private Space createSpaceCopyWithNewIds(Space originalSpace) {
@@ -947,17 +1174,14 @@ public class BuildingTab extends JPanel {
     private void updateSpaceList() {
         spaceListModel.clear();
         Floor selectedFloor = floorList.getSelectedValue();
-
         if (selectedFloor != null) {
-            // Для общественных этажей: проверяем и создаем помещение "-" при необходимости
             if (selectedFloor.getType() == Floor.FloorType.PUBLIC) {
                 createDefaultSpaceIfMissing(selectedFloor);
             }
+            List<Space> sorted = new ArrayList<>(selectedFloor.getSpaces());
+            sorted.sort(Comparator.comparingInt(Space::getPosition));
+            sorted.forEach(spaceListModel::addElement);
 
-            // Заполняем список помещений
-            selectedFloor.getSpaces().forEach(spaceListModel::addElement);
-
-            // Автоматически выбираем помещение "-" для общественных этажей
             if (selectedFloor.getType() == Floor.FloorType.PUBLIC && !spaceListModel.isEmpty()) {
                 selectDefaultSpace(selectedFloor);
             } else if (!spaceListModel.isEmpty()) {

@@ -8,6 +8,9 @@ public class Space {
     private String identifier;
     private SpaceType type;
     private List<Room> rooms = new ArrayList<>();
+    private int position = 0;
+    public int getPosition() { return position; }
+    public void setPosition(int position) { this.position = Math.max(0, position); }
 
     public enum SpaceType {
         APARTMENT("Квартира"),

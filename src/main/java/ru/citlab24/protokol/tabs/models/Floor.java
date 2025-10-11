@@ -8,7 +8,12 @@ public class Floor {
     private String number;
     private String name;
     private FloorType type;
-    private int sectionIndex = 0;           // <-- индекс секции (0..N-1)
+    private int sectionIndex = 0;
+    private int position = 0;
+
+    public int getPosition() { return position; }
+    public void setPosition(int position) { this.position = Math.max(0, position); }
+
     private List<Space> spaces = new ArrayList<>();
 
     public enum FloorType {
