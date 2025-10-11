@@ -112,10 +112,10 @@ public class DatabaseManager {
                     int buildingId = rs.getInt(1);
                     building.setId(buildingId);
 
-                    // 1) Сохраняем секции (в порядке position)
+                    // 1) Сначала секции
                     saveSections(buildingId, building.getSections());
 
-                    // 2) Сохраняем этажи (с их section_index)
+                    // 2) Затем этажи (у них уже корректный section_index)
                     for (Floor floor : building.getFloors()) {
                         saveFloor(buildingId, floor);
                     }
@@ -123,6 +123,49 @@ public class DatabaseManager {
             }
         }
     }
+    public static void deleteBuilding(int buildingId) throws SQLException {
+        // Удаляем комнаты данного здания
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM room WHERE space_id IN (" +
+                        "  SELECT s.id FROM space s JOIN floor f ON s.floor_id = f.id WHERE f.building_id = ?" +
+                        ")")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+
+        // Удаляем помещения этого здания
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM space WHERE floor_id IN (" +
+                        "  SELECT id FROM floor WHERE building_id = ?" +
+                        ")")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+
+        // Удаляем этажи этого здания
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM floor WHERE building_id = ?")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+
+        // Удаляем секции этого здания (если таблица section есть)
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM section WHERE building_id = ?")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        } catch (SQLException ignore) {
+            // на случай если таблицы секций нет в старой БД
+        }
+
+        // Удаляем сам объект здания
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM building WHERE id = ?")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+    }
+
 
     private static void deleteBuildingData(int buildingId) throws SQLException {
         // Сначала удаляем комнаты

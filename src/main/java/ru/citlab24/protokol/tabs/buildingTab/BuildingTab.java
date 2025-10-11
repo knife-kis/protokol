@@ -38,7 +38,8 @@ public class BuildingTab extends JPanel {
     private static final Color FLOOR_PANEL_COLOR = new Color(0, 115, 200);
     private static final Color SPACE_PANEL_COLOR = new Color(76, 175, 80);
     private static final Color ROOM_PANEL_COLOR = new Color(156, 39, 176);
-    private static final Font HEADER_FONT = new Font("Segoe UI", Font.BOLD, 14);
+    private static final Font HEADER_FONT =
+            UIManager.getFont("Label.font").deriveFont(Font.PLAIN, 15f);
     private static final Dimension BUTTON_PANEL_SIZE = new Dimension(5, 5);
 
     private Building building;
@@ -271,7 +272,7 @@ public class BuildingTab extends JPanel {
         btn.setBackground(bgColor);
         btn.setForeground(Color.WHITE);
         btn.setFocusPainted(false);
-        btn.setFont(HEADER_FONT);
+        btn.setFont(UIManager.getFont("Button.font"));
         btn.addActionListener(action);
 
         btn.addMouseListener(new MouseAdapter() {
@@ -418,27 +419,40 @@ public class BuildingTab extends JPanel {
         Building copy = new Building();
         copy.setName(building.getName());
 
+        // 1) Полностью копируем секции (имя + position)
+        java.util.List<Section> copiedSections = new java.util.ArrayList<>();
+        for (Section s : building.getSections()) {
+            Section cs = new Section();
+            cs.setName(s.getName());
+            cs.setPosition(s.getPosition());
+            copiedSections.add(cs);
+        }
+        copy.setSections(copiedSections);
+
+        // 2) Копируем этажи с сохранением индекса секции
         for (Floor originalFloor : building.getFloors()) {
-            // Убрали roomIdMap из вызова
             Floor floorCopy = createFloorCopy(originalFloor);
+            floorCopy.setSectionIndex(originalFloor.getSectionIndex()); // ВАЖНО
             copy.addFloor(floorCopy);
         }
         return copy;
     }
+
 
     private Floor createFloorCopy(Floor originalFloor) {
         Floor floorCopy = new Floor();
         floorCopy.setNumber(originalFloor.getNumber());
         floorCopy.setType(originalFloor.getType());
         floorCopy.setName(originalFloor.getName());
+        floorCopy.setSectionIndex(originalFloor.getSectionIndex()); // ВАЖНО
 
         for (Space origSpace : originalFloor.getSpaces()) {
-            // Используем исправленный метод копирования
             Space spaceCopy = createSpaceCopyWithNewIds(origSpace);
             floorCopy.addSpace(spaceCopy);
         }
         return floorCopy;
     }
+
 
     public void refreshFloor(Floor floor) {
         int index = building.getFloors().indexOf(floor);
@@ -985,15 +999,20 @@ public class BuildingTab extends JPanel {
     }
 
     private void refreshAllLists() {
-        floorListModel.clear();
-        building.getFloors().forEach(floorListModel::addElement);
-
-        if (!floorListModel.isEmpty()) {
-            floorList.setSelectedIndex(0);
-            updateSpaceList();
-            updateRoomList();
+        // Секции
+        refreshSectionListModel();
+        if (!sectionListModel.isEmpty() && sectionList.getSelectedIndex() < 0) {
+            sectionList.setSelectedIndex(0);
         }
+
+        // Этажи выбранной секции
+        refreshFloorListForSelectedSection();
+
+        // Помещения/комнаты для актуального выбора
+        updateSpaceList();
+        updateRoomList();
     }
+
 
     private void updateVentilationTab(Building building) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);

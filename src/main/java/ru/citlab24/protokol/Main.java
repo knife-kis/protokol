@@ -24,6 +24,18 @@ public class Main {
                 UIManager.put("Component.focusWidth", 1);
 
                 try {
+                    java.awt.Font baseFont = new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 15);
+                    javax.swing.plaf.FontUIResource f = new javax.swing.plaf.FontUIResource(baseFont);
+                    java.util.Enumeration<?> keys = javax.swing.UIManager.getDefaults().keys();
+                    while (keys.hasMoreElements()) {
+                        Object key = keys.nextElement();
+                        Object val = javax.swing.UIManager.get(key);
+                        if (val instanceof javax.swing.plaf.FontUIResource) {
+                            javax.swing.UIManager.put(key, f);
+                        }
+                    }
+
+// Дальше — ЛАФ
                     UIManager.setLookAndFeel(new com.formdev.flatlaf.FlatIntelliJLaf());
                     com.formdev.flatlaf.FlatLaf.updateUI();
                 } catch (Exception ignore) {}
