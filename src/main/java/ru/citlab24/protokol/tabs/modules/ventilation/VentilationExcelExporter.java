@@ -490,25 +490,30 @@ public class VentilationExcelExporter {
                         cellH.setCellStyle(integerStyle);
 
                         // I: объем помещения — только в первой строке группы
+                        // Колонка I (объем помещения) — только в первой строке группы
                         if (i == 0) {
+                            Cell cellI = dataRow.createCell(8);
                             if (record.volume() != null && record.volume() > 0) {
-                                Cell cellI = dataRow.createCell(8);
                                 cellI.setCellValue(record.volume());
                                 cellI.setCellStyle(oneDigitStyle);
                             } else {
-                                Cell cellI = dataRow.createCell(8);
-                                cellI.setCellValue("");
-                                cellI.setCellStyle(dataStyle);
+                                cellI.setCellValue("-");           // ← ставим дефолтное тире
+                                cellI.setCellStyle(dataStyle);     // стиль для текста/центра
                             }
                         } else {
-                            dataRow.createCell(8).setCellValue("");
-                            dataRow.getCell(8).setCellStyle(dataStyle);
+                            // нижние строки объединения — ставим дефолтный тире
+                            Cell cellI = dataRow.createCell(8);
+                            cellI.setCellValue("-");
+                            cellI.setCellStyle(dataStyle);
                         }
 
-                        // J: кратность (формула заполняется после группы)
-                        dataRow.createCell(9);
 
-                        // K–L: нормы/допустимые (только в первой строке группы — как было)
+                        // J: кратность (формула заполняется после группы)
+                        Cell cellJ = dataRow.createCell(9);
+                        cellJ.setCellValue("-");
+                        cellJ.setCellStyle(dataStyle);
+
+                        // K–L: нормы/допустимые
                         if (i == 0) {
                             Double airExchangeRate = RoomUtils.getAirExchangeRate(record.room());
 
@@ -522,7 +527,16 @@ public class VentilationExcelExporter {
                                 cellK.setCellStyle(dataStyle);
                             }
 
-                            // L — всегда "-"
+                            // L — базово "-"
+                            Cell cellL = dataRow.createCell(11);
+                            cellL.setCellValue("-");
+                            cellL.setCellStyle(dataStyle);
+                        } else {
+                            // нижние строки объединения — тоже ставим дефолтные тире
+                            Cell cellK = dataRow.createCell(10);
+                            cellK.setCellValue("-");
+                            cellK.setCellStyle(dataStyle);
+
                             Cell cellL = dataRow.createCell(11);
                             cellL.setCellValue("-");
                             cellL.setCellStyle(dataStyle);
