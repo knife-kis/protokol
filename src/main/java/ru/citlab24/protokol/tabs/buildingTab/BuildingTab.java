@@ -510,26 +510,42 @@ public class BuildingTab extends JPanel {
         return btn;
     }
 
-    private void manageSections(ActionEvent e) {
+    void manageSections(ActionEvent e) {
         JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
         ManageSectionsDialog dlg = new ManageSectionsDialog(frame, building.getSections());
-        if (dlg.showDialog()) {
-            List<Section> updated = dlg.getSections();
-            // если секций стало меньше — этажи «вышедших» секций сдвигаем в секцию 0
-            int oldCount = building.getSections().size();
-            building.setSections(updated);
-            int newCount = updated.size();
-            if (newCount < oldCount) {
-                for (Floor f : building.getFloors()) {
-                    if (f.getSectionIndex() >= newCount) f.setSectionIndex(0);
-                }
-            }
-            refreshSectionListModel();
-            if (!sectionListModel.isEmpty()) sectionList.setSelectedIndex(0);
-            refreshFloorListForSelectedSection();
-            updateRadiationTab(building, /*force=*/false, /*auto=*/false);
+        if (!dlg.showDialog()) return;
+
+        // 1) Запоминаем старые секции (для ремапа этажей по имени)
+        List<Section> oldSections = new ArrayList<>(building.getSections());
+        List<Section> updated = dlg.getSections();
+
+        // 2) Строим карту "имя секции -> новый индекс"
+        Map<String, Integer> nameToNewIndex = new HashMap<>();
+        for (int i = 0; i < updated.size(); i++) {
+            String name = updated.get(i).getName();
+            if (name != null) nameToNewIndex.put(name, i);
         }
+
+        // 3) Ремапим sectionIndex у всех этажей по ИМЕНИ старой секции.
+        // Если имя не найдено в новом списке — отправляем этаж в секцию 0.
+        for (Floor f : building.getFloors()) {
+            int oldIdx = f.getSectionIndex();
+            String oldName = (oldIdx >= 0 && oldIdx < oldSections.size())
+                    ? oldSections.get(oldIdx).getName()
+                    : null;
+            Integer newIdx = (oldName == null) ? null : nameToNewIndex.get(oldName);
+            f.setSectionIndex(newIdx != null ? newIdx : 0);
+        }
+
+        // 4) Фиксируем новые секции и обновляем UI
+        building.setSections(updated);
+        refreshSectionListModel();
+        if (!sectionListModel.isEmpty()) sectionList.setSelectedIndex(0);
+        refreshFloorListForSelectedSection();
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+
     }
+
 
     // Основные операции с проектом
     private void loadProject(ActionEvent e) {
