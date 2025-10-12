@@ -1,211 +1,191 @@
 package ru.citlab24.protokol.tabs.modules.ventilation;
 
-import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
+/**
+ * Табличная модель для вкладки "Вентиляция" с опциональной первой колонкой "Блок-секция".
+ */
 public class VentilationTableModel extends AbstractTableModel {
-    private final String[] COLUMN_NAMES = {
-            "Этаж", "Помещение", "Комната",
-            "Кол-во каналов", "Сечение (кв.м)", "Объем (куб.м)"
-    };
 
-    private final VentilationTab ventilationTab;
     private final List<VentilationRecord> records = new ArrayList<>();
+    private boolean showSectionColumn = false;
 
-    public VentilationTableModel(VentilationTab ventilationTab) {
-        this.ventilationTab = ventilationTab;
+    /** Включить/выключить первую колонку "Блок-секция". Включай, если секций > 1. */
+    public void setShowSectionColumn(boolean show) {
+        if (this.showSectionColumn != show) {
+            this.showSectionColumn = show;
+            fireTableStructureChanged(); // пересоздаёт колонки у JTable
+        }
     }
+    public boolean isShowSectionColumn() { return showSectionColumn; }
 
     public void clearData() {
-        records.clear();
+        int sz = records.size();
+        if (sz > 0) {
+            records.clear();
+            fireTableRowsDeleted(0, sz - 1);
+        }
     }
+    public void addRecord(VentilationRecord r) {
+        int idx = records.size();
+        records.add(r);
+        fireTableRowsInserted(idx, idx);
+    }
+    public void addRecords(Collection<VentilationRecord> toAdd) {
+        if (toAdd == null || toAdd.isEmpty()) return;
+        int from = records.size();
+        records.addAll(toAdd);
+        fireTableRowsInserted(from, records.size() - 1);
+    }
+    public VentilationRecord getRecordAt(int row) { return records.get(row); }
+    public List<VentilationRecord> getRecords() { return new ArrayList<>(records); }
 
-    public void addRecord(VentilationRecord record) {
-        records.add(record);
-    }
-
-    public List<VentilationRecord> getRecords() {
-        return new ArrayList<>(records);
-    }
-
-    @Override
-    public int getRowCount() {
-        return records.size();
-    }
-
-    @Override
-    public int getColumnCount() {
-        return COLUMN_NAMES.length;
-    }
+    // ===== AbstractTableModel =====
+    @Override public int getRowCount() { return records.size(); }
+    @Override public int getColumnCount() { return showSectionColumn ? 7 : 6; }
 
     @Override
     public String getColumnName(int column) {
-        return COLUMN_NAMES[column];
+        if (showSectionColumn) {
+            return switch (column) {
+                case 0 -> "Блок-секция";
+                case 1 -> "Этаж";
+                case 2 -> "Помещение";
+                case 3 -> "Комната";
+                case 4 -> "Кол-во каналов";
+                case 5 -> "Сечение (кв.м)";
+                case 6 -> "Объем (куб.м)";
+                default -> "";
+            };
+        } else {
+            return switch (column) {
+                case 0 -> "Этаж";
+                case 1 -> "Помещение";
+                case 2 -> "Комната";
+                case 3 -> "Кол-во каналов";
+                case 4 -> "Сечение (кв.м)";
+                case 5 -> "Объем (куб.м)";
+                default -> "";
+            };
+        }
     }
 
     @Override
     public Class<?> getColumnClass(int columnIndex) {
-        return switch (columnIndex) {
-            case 0, 1, 2 -> String.class;
-            case 3 -> Integer.class;
-            case 4 -> Double.class;
-            case 5 -> Object.class;
-            default -> Object.class;
-        };
+        if (showSectionColumn) {
+            return switch (columnIndex) {
+                case 0 -> Integer.class;        // Блок-секция
+                case 1, 2, 3 -> String.class;
+                case 4 -> Integer.class;        // каналы
+                case 5, 6 -> Double.class;      // сечение, объем
+                default -> Object.class;
+            };
+        } else {
+            return switch (columnIndex) {
+                case 0, 1, 2 -> String.class;
+                case 3 -> Integer.class;        // каналы
+                case 4, 5 -> Double.class;      // сечение, объем
+                default -> Object.class;
+            };
+        }
     }
 
     @Override
     public boolean isCellEditable(int rowIndex, int columnIndex) {
+        // редактируем только кол-во каналов, сечение, объем
+        if (showSectionColumn) return columnIndex == 4 || columnIndex == 5 || columnIndex == 6;
         return columnIndex == 3 || columnIndex == 4 || columnIndex == 5;
     }
 
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
-        VentilationRecord record = records.get(rowIndex);
-        return switch (columnIndex) {
-            case 0 -> record.floor();
-            case 1 -> record.space();
-            case 2 -> record.room();
-            case 3 -> record.channels();
-            case 4 -> record.sectionArea();
-            case 5 -> record.volume();
-            default -> null;
-        };
+        VentilationRecord r = records.get(rowIndex);
+        if (showSectionColumn) {
+            return switch (columnIndex) {
+                case 0 -> r.sectionIndex() + 1;   // показываем 1..N
+                case 1 -> r.floor();
+                case 2 -> r.space();
+                case 3 -> r.room();
+                case 4 -> r.channels();
+                case 5 -> r.sectionArea();
+                case 6 -> r.volume();
+                default -> "";
+            };
+        } else {
+            return switch (columnIndex) {
+                case 0 -> r.floor();
+                case 1 -> r.space();
+                case 2 -> r.room();
+                case 3 -> r.channels();
+                case 4 -> r.sectionArea();
+                case 5 -> r.volume();
+                default -> "";
+            };
+        }
     }
 
     @Override
     public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
-        if (aValue == null) return;
-
-        VentilationRecord record = records.get(rowIndex);
-        switch (columnIndex) {
-            case 3 -> handleChannelsUpdate(aValue, rowIndex, record);
-            case 4 -> handleSectionUpdate(aValue, rowIndex, record);
-            case 5 -> updateVolume(aValue, rowIndex, record);
-        }
-    }
-
-    private void handleChannelsUpdate(Object aValue, int rowIndex, VentilationRecord record) {
-        if (!(aValue instanceof Number numberValue)) return;
-
-        int newValue = numberValue.intValue();
-        int oldValue = record.channels();
-        if (newValue == oldValue) return;
-
-        String category = ventilationTab.getRoomCategory(record.room());
-        if (category == null) {
-            updateRecordAndRoom(record, rowIndex, newValue);
-            return;
-        }
-
-        int option = showConfirmationDialog(
-                "Вы хотите изменить количество каналов во всех комнатах типа '" + category + "'?"
-        );
-
-        switch (option) {
-            case 0 -> updateAllRoomsOfType(category, newValue);
-            case 1 -> updateRecordAndRoom(record, rowIndex, newValue);
-            case 2 -> fireTableCellUpdated(rowIndex, 3);
-        }
-    }
-
-    private void handleSectionUpdate(Object aValue, int rowIndex, VentilationRecord record) {
-        if (!(aValue instanceof Number numberValue)) return;
-
-        double newValue = numberValue.doubleValue();
-        double oldValue = record.sectionArea();
-        if (Math.abs(newValue - oldValue) < 0.000001) return;
-
-        String category = ventilationTab.getRoomCategory(record.room());
-        if (category == null) {
-            updateRecordAndSection(record, rowIndex, newValue);
-            return;
-        }
-
-        int option = showConfirmationDialog(
-                "Вы хотите изменить сечение каналов во всех комнатах типа '" + category + "'?"
-        );
-
-        switch (option) {
-            case 0 -> updateAllRoomsOfTypeForSection(category, newValue);
-            case 1 -> updateRecordAndSection(record, rowIndex, newValue);
-            case 2 -> fireTableCellUpdated(rowIndex, 4);
-        }
-    }
-
-    private void updateVolume(Object aValue, int rowIndex, VentilationRecord record) {
-        Double newValue = null;
-
-        if (aValue instanceof Number) {
-            double doubleValue = ((Number) aValue).doubleValue();
-            // Сохраняем 0.0 как null
-            newValue = (doubleValue != 0.0) ? doubleValue : null;
-        }
-
-        records.set(rowIndex, record.withVolume(newValue));
-        fireTableCellUpdated(rowIndex, 5);
-    }
-
-    private int showConfirmationDialog(String message) {
-        return JOptionPane.showOptionDialog(
-                ventilationTab,
-                message,
-                "Подтверждение",
-                JOptionPane.YES_NO_CANCEL_OPTION,
-                JOptionPane.QUESTION_MESSAGE,
-                null,
-                new String[]{"Да", "Нет", "Отмена"},
-                "Нет"
-        );
-    }
-
-    private void updateAllRoomsOfTypeForSection(String category, double newValue) {
-        ventilationTab.getBuilding().getFloors().forEach(floor ->
-                floor.getSpaces().forEach(space ->
-                        space.getRooms().stream()
-                                .filter(room -> category.equals(ventilationTab.getRoomCategory(room.getName())))
-                                .forEach(room -> room.setVentilationSectionArea(newValue))
-                )
-        );
-
-        for (int i = 0; i < records.size(); i++) {
-            VentilationRecord r = records.get(i);
-            if (category.equals(ventilationTab.getRoomCategory(r.room()))) {
-                records.set(i, r.withSectionArea(newValue));
-                fireTableCellUpdated(i, 4);
+        VentilationRecord r = records.get(rowIndex);
+        try {
+            if (showSectionColumn) {
+                if (columnIndex == 4) {
+                    int newVal = toInt(aValue, r.channels());
+                    VentilationRecord nr = r.withChannels(newVal);
+                    records.set(rowIndex, nr);
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationChannels(newVal);
+                } else if (columnIndex == 5) {
+                    double newVal = toDouble(aValue, r.sectionArea());
+                    VentilationRecord nr = r.withSectionArea(newVal);
+                    records.set(rowIndex, nr);
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(newVal);
+                } else if (columnIndex == 6) {
+                    Double newVal = toNullableDouble(aValue, r.volume());
+                    VentilationRecord nr = r.withVolume(newVal);
+                    records.set(rowIndex, nr);
+                    if (nr.roomRef() != null) nr.roomRef().setVolume(newVal);
+                } else return;
+            } else {
+                if (columnIndex == 3) {
+                    int newVal = toInt(aValue, r.channels());
+                    VentilationRecord nr = r.withChannels(newVal);
+                    records.set(rowIndex, nr);
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationChannels(newVal);
+                } else if (columnIndex == 4) {
+                    double newVal = toDouble(aValue, r.sectionArea());
+                    VentilationRecord nr = r.withSectionArea(newVal);
+                    records.set(rowIndex, nr);
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(newVal);
+                } else if (columnIndex == 5) {
+                    Double newVal = toNullableDouble(aValue, r.volume());
+                    VentilationRecord nr = r.withVolume(newVal);
+                    records.set(rowIndex, nr);
+                    if (nr.roomRef() != null) nr.roomRef().setVolume(newVal);
+                } else return;
             }
-        }
+            fireTableRowsUpdated(rowIndex, rowIndex);
+        } catch (Exception ignore) {}
     }
 
-    private void updateRecordAndSection(VentilationRecord record, int rowIndex, double newValue) {
-        records.set(rowIndex, record.withSectionArea(newValue));
-        record.roomRef().setVentilationSectionArea(newValue);
-        fireTableCellUpdated(rowIndex, 4);
+    // ===== утилиты парсинга =====
+    private static int toInt(Object v, int def) {
+        if (v == null) return def;
+        if (v instanceof Number n) return n.intValue();
+        return Integer.parseInt(v.toString().trim());
     }
-
-    private void updateAllRoomsOfType(String category, int newValue) {
-        ventilationTab.getBuilding().getFloors().forEach(floor ->
-                floor.getSpaces().forEach(space ->
-                        space.getRooms().stream()
-                                .filter(room -> category.equals(ventilationTab.getRoomCategory(room.getName())))
-                                .forEach(room -> room.setVentilationChannels(newValue))
-                )
-        );
-
-        for (int i = 0; i < records.size(); i++) {
-            VentilationRecord r = records.get(i);
-            if (category.equals(ventilationTab.getRoomCategory(r.room()))) {
-                records.set(i, r.withChannels(newValue));
-                fireTableCellUpdated(i, 3);
-            }
-        }
+    private static double toDouble(Object v, double def) {
+        if (v == null) return def;
+        if (v instanceof Number n) return n.doubleValue();
+        return Double.parseDouble(v.toString().trim().replace(",", "."));
     }
-
-    private void updateRecordAndRoom(VentilationRecord record, int rowIndex, int newValue) {
-        records.set(rowIndex, record.withChannels(newValue));
-        record.roomRef().setVentilationChannels(newValue);
-        fireTableCellUpdated(rowIndex, 3);
+    private static Double toNullableDouble(Object v, Double def) {
+        if (v == null) return null;
+        if (v instanceof Number n) return n.doubleValue();
+        String s = v.toString().trim();
+        if (s.isEmpty()) return null;
+        return Double.parseDouble(s.replace(",", "."));
     }
 }

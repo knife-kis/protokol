@@ -9,15 +9,18 @@ public record VentilationRecord(
         int channels,
         double sectionArea,
         Double volume,
-        Room roomRef
+        Room roomRef,
+        int sectionIndex // 0-based индекс блок-секции (Floor.getSectionIndex())
 ) {
     public VentilationRecord withVolume(Double newVolume) {
-        return new VentilationRecord(floor, space, room, channels, sectionArea, newVolume, roomRef);
+        return new VentilationRecord(floor, space, room, channels, sectionArea, newVolume, roomRef, sectionIndex);
     }
     public VentilationRecord withChannels(int newChannels) {
-        return new VentilationRecord(floor, space, room, newChannels, sectionArea, volume, roomRef);
+        return new VentilationRecord(floor, space, room, newChannels, sectionArea, volume, roomRef, sectionIndex);
     }
     public VentilationRecord withSectionArea(double newArea) {
-        return new VentilationRecord(floor, space, room, channels, newArea, volume, roomRef);
+        return new VentilationRecord(floor, space, room, channels, newArea, volume, roomRef, sectionIndex);
     }
 }
+
+

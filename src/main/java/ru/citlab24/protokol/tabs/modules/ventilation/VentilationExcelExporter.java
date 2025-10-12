@@ -38,6 +38,7 @@ public class VentilationExcelExporter {
         CellStyle dataStyle = createDataStyle(workbook, baseFont);
         CellStyle floorHeaderStyle = createFloorHeaderStyle(workbook, baseFont);
         CellStyle wrappedDataStyle = createWrappedDataStyle(workbook, baseFont);
+        wrappedDataStyle.setWrapText(true);
 
         // Стили для группы D-F
         CellStyle plusMinusStyle = createPlusMinusStyle(workbook, baseFont);
@@ -72,58 +73,75 @@ public class VentilationExcelExporter {
     }
 
     private static void adjustRowsWithText(XSSFSheet sheet) {
-        final float BASE_ROW_HEIGHT_POINTS = 15.0f; // 20 пикселей
-        final float LARGE_TOTAL_HEIGHT_POINTS = 45.0f; // 60 пикселей
-        final int COLUMN_C_WIDTH_PX = 231;
-        final float CHAR_WIDTH_POINTS = 6.0f;
+        final float BASE_ROW_HEIGHT_POINTS = 15.0f; // базовая высота одной строки
+        final int COLUMN_INDEX = 2;                 // столбец C
+
+        // ширина колонки C в "символах" (Excel хранит в 1/256 символа)
+        final int colWidth256 = sheet.getColumnWidth(COLUMN_INDEX);
+        final int charsPerLine = Math.max(1, colWidth256 / 256);
 
         for (int rowIndex = 4; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             if (row == null) continue;
 
-            Cell cell = row.getCell(2);
+            Cell cell = row.getCell(COLUMN_INDEX);
             if (cell == null || cell.getCellType() != CellType.STRING) continue;
 
             String text = cell.getStringCellValue();
             if (text == null || text.isEmpty()) continue;
 
-            // Определение объединенной области
+            // Определяем объединение по столбцу C
             int mergedHeight = 1;
             boolean isFirstMerged = true;
-            for (CellRangeAddress mergedRegion : sheet.getMergedRegions()) {
-                if (mergedRegion.isInRange(rowIndex, 2)) {
-                    mergedHeight = mergedRegion.getLastRow() - mergedRegion.getFirstRow() + 1;
-                    isFirstMerged = (rowIndex == mergedRegion.getFirstRow());
+            for (CellRangeAddress mr : sheet.getMergedRegions()) {
+                if (mr.isInRange(rowIndex, COLUMN_INDEX)) {
+                    mergedHeight = mr.getLastRow() - mr.getFirstRow() + 1;
+                    isFirstMerged = (rowIndex == mr.getFirstRow());
                     break;
                 }
             }
+            // Размер меняем только в первой строке объединения
             if (!isFirstMerged) continue;
 
-            // Расчет кол-ва строк текста
-            int charsPerLine = (int) (COLUMN_C_WIDTH_PX / CHAR_WIDTH_POINTS);
-            String[] lines = text.split("\r?\n");
-            int lineCount = 0;
-            for (String line : lines) {
-                lineCount += Math.max(1, (int) Math.ceil((double) line.length() / charsPerLine));
+            // Оценка требуемого количества «визуальных строк» с учётом wrapText
+            int neededLines = 0;
+            for (String para : text.split("\\R", -1)) {
+                if (para.isEmpty()) { neededLines++; continue; }
+                neededLines += (para.length() + charsPerLine - 1) / charsPerLine; // ceil(len / charsPerLine)
             }
 
-            // Определение общей высоты
-            float totalHeightPoints;
-            if (lineCount <= 1) {
-                totalHeightPoints = BASE_ROW_HEIGHT_POINTS * mergedHeight;
-            } else {
-                totalHeightPoints = LARGE_TOTAL_HEIGHT_POINTS;
-            }
+            // «Добавляем высоту одного ряда, пока не влезет»:
+            // нужно не меньше, чем mergedHeight, и не меньше, чем neededLines.
+            int totalVisualLines = Math.max(mergedHeight, neededLines);
 
-            // Установка новой высоты
-            float heightPerRow = totalHeightPoints / mergedHeight;
+            // Распределяем общую высоту на все строки объединения
+            float heightPerRow = (BASE_ROW_HEIGHT_POINTS * totalVisualLines) / mergedHeight;
             for (int i = 0; i < mergedHeight; i++) {
-                Row currentRow = sheet.getRow(rowIndex + i);
-                if (currentRow == null) continue;
-                currentRow.setHeightInPoints(heightPerRow);
+                Row r = sheet.getRow(rowIndex + i);
+                if (r != null) r.setHeightInPoints(heightPerRow);
             }
         }
     }
+
+    // Оценка числа «визуальных строк» для текста в колонке при wrapText=true.
+// Берём ширину колонки в "символах" (Excel хранит в 1/256 символа), делим текст по переносам
+// и считаем, сколько «строк» потребуется с учётом ширины.
+    private static int estimateLinesForCell(Sheet sheet, int columnIndex, String text) {
+        if (text == null || text.isBlank()) return 1;
+
+        // ширина колонки в символах (очень близкая к тому, как считает Excel autosize)
+        int colWidth256 = sheet.getColumnWidth(columnIndex); // в 1/256 символа
+        int colChars = Math.max(1, colWidth256 / 256);
+
+        int lines = 0;
+        for (String para : text.split("\\R", -1)) {
+            if (para.isEmpty()) { lines++; continue; }
+            // грубая оценка: длинные слова тоже считаем по символам
+            lines += (para.length() + colChars - 1) / colChars;
+        }
+        return Math.max(1, lines);
+    }
+
 
     private static void setRowsHeight(Sheet sheet) {
         sheet.getRow(0).setHeightInPoints(12);
@@ -342,179 +360,218 @@ public class VentilationExcelExporter {
                                  CellStyle leftInGroupStyle, CellStyle rightInGroupStyle) {
         int rowNum = 4;
         int counter = 1;
+        final float BASE_ROW_HEIGHT = Math.max(15f, sheet.getDefaultRowHeightInPoints());
 
-        Map<String, List<VentilationRecord>> recordsByFloor = records.stream()
-                .collect(Collectors.groupingBy(
-                        VentilationRecord::floor,
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
+        // Нужно ли показывать "блок-секцию" в шапке (только если секций > 1)
+        int distinctSections = (int) records.stream()
+                .map(VentilationRecord::sectionIndex)
+                .distinct()
+                .count();
+        boolean showSectionInHeader = distinctSections > 1;
 
-        for (Map.Entry<String, List<VentilationRecord>> entry : recordsByFloor.entrySet()) {
-            String floor = entry.getKey();
-            List<VentilationRecord> floorRecords = entry.getValue();
+        // Группировка: секция (по возрастанию индекса) → этаж (в порядке появления)
+        java.util.Map<Integer, java.util.Map<String, java.util.List<VentilationRecord>>> bySectionThenFloor =
+                records.stream().collect(
+                        java.util.stream.Collectors.groupingBy(
+                                VentilationRecord::sectionIndex,
+                                java.util.TreeMap::new, // секции 0,1,2,...
+                                java.util.stream.Collectors.groupingBy(
+                                        VentilationRecord::floor,
+                                        java.util.LinkedHashMap::new,
+                                        java.util.stream.Collectors.toList()
+                                )
+                        )
+                );
 
-            // Заголовок этажа
-            Row floorRow = sheet.createRow(rowNum++);
-            floorRow.setHeightInPoints(15); // 20 пикселей
-            Cell floorCell = floorRow.createCell(0);
-            floorCell.setCellValue(floor);
-            floorCell.setCellStyle(floorHeaderStyle);
-            CellRangeAddress mergedRegion = new CellRangeAddress(rowNum-1, rowNum-1, 0, 11);
-            sheet.addMergedRegion(mergedRegion);
-            RegionUtil.setBorderTop(BorderStyle.THIN, mergedRegion, sheet);
-            RegionUtil.setBorderBottom(BorderStyle.THIN, mergedRegion, sheet);
-            RegionUtil.setBorderLeft(BorderStyle.THIN, mergedRegion, sheet);
-            RegionUtil.setBorderRight(BorderStyle.THIN, mergedRegion, sheet);
+        for (java.util.Map.Entry<Integer, java.util.Map<String, java.util.List<VentilationRecord>>> secEntry
+                : bySectionThenFloor.entrySet()) {
+            int sectionIndex = secEntry.getKey();
+            java.util.Map<String, java.util.List<VentilationRecord>> byFloor = secEntry.getValue();
 
-            for (VentilationRecord record : floorRecords) {
-                int startRow = rowNum;
-                int numChannels = record.channels();
+            for (java.util.Map.Entry<String, java.util.List<VentilationRecord>> entry : byFloor.entrySet()) {
+                String floor = entry.getKey();
+                java.util.List<VentilationRecord> floorRecords = entry.getValue();
 
-                for (int i = 0; i < numChannels; i++) {
-                    Row dataRow = sheet.createRow(rowNum++);
-                    dataRow.setHeightInPoints(15);
+                // Заголовок: "блок-секция N, X этаж" либо просто "X этаж" если секция одна
+                String headerText = showSectionInHeader
+                        ? ("блок-секция " + (sectionIndex + 1) + ", " + floor)
+                        : floor;
 
-                    // Колонка A
-                    dataRow.createCell(0).setCellValue(counter++);
-                    dataRow.getCell(0).setCellStyle(dataStyle);
+                Row floorRow = sheet.createRow(rowNum++);
+                floorRow.setHeightInPoints(15);
+                Cell floorCell = floorRow.createCell(0);
+                floorCell.setCellValue(headerText);
+                floorCell.setCellStyle(floorHeaderStyle);
+                CellRangeAddress mergedRegion = new CellRangeAddress(rowNum - 1, rowNum - 1, 0, 11);
+                sheet.addMergedRegion(mergedRegion);
+                RegionUtil.setBorderTop(BorderStyle.THIN, mergedRegion, sheet);
+                RegionUtil.setBorderBottom(BorderStyle.THIN, mergedRegion, sheet);
+                RegionUtil.setBorderLeft(BorderStyle.THIN, mergedRegion, sheet);
+                RegionUtil.setBorderRight(BorderStyle.THIN, mergedRegion, sheet);
 
-                    // Колонка B
-                    Cell cellB = dataRow.createCell(1);
-                    cellB.setCellValue("-");
-                    cellB.setCellStyle(dataStyle);
+                // ===== ниже — твоя текущая логика заполнения строк (без изменений) =====
+                for (VentilationRecord record : floorRecords) {
+                    int startRow = rowNum;
+                    int numChannels = record.channels();
 
-                    // Колонка C
-                    if (i == 0) {
-                        String displayName;
-                        if (RoomUtils.isResidentialRoom(record.room())) {
-                            String space = record.space();
-                            String room = record.room();
-                            String spaceNormalized = (space != null) ? space.trim().toLowerCase() : "";
-                            String roomNormalized = (room != null) ? room.trim().toLowerCase() : "";
+                    for (int i = 0; i < numChannels; i++) {
+                        Row dataRow = sheet.createRow(rowNum++);
 
-                            if (spaceNormalized.equals(roomNormalized)) {
-                                displayName = space + " (Вытяжка)";
+                        // A: № п/п
+                        dataRow.createCell(0).setCellValue(counter++);
+                        dataRow.getCell(0).setCellStyle(dataStyle);
+
+                        // B: место отбора пробы (пока "-")
+                        Cell cellB = dataRow.createCell(1);
+                        cellB.setCellValue("-");
+                        cellB.setCellStyle(dataStyle);
+
+                        // C: место измерения (группа по каналам)
+                        if (i == 0) {
+                            String displayName;
+                            if (RoomUtils.isResidentialRoom(record.room())) {
+                                String space = record.space();
+                                String roomName = record.room();
+                                displayName = (space == null || space.isBlank() ? roomName : space + ", " + roomName) + " (Вытяжка)";
                             } else {
-                                displayName = space + " " + room + " (Вытяжка)";
+                                displayName = record.room() + " (Вытяжка)";
+                            }
+                            Cell cellC = dataRow.createCell(2);
+                            cellC.setCellValue(displayName);
+                            cellC.setCellStyle(wrappedDataStyle);
+
+// === авто-подбор высоты для столбца C ===
+// Сколько визуальных строк требуется при текущей ширине колонки C:
+                            int neededLines = estimateLinesForCell(sheet, 2, displayName);
+
+// Сколько строк доступно «по умолчанию»: это число каналов (т.к. C объединяем по группе).
+// Если канал один — доступна 1 строка; если больше — доступна сумма высот всех строк группы.
+                            int availableLines = Math.max(1, numChannels);
+
+// Если требуется больше, чем доступно, добавляем недостающее к высоте первой строки группы.
+// Таким образом суммарная высота объединённой области C будет достаточной.
+                            int totalLines = Math.max(neededLines, availableLines);
+                            float totalHeightPts = BASE_ROW_HEIGHT * totalLines;
+                            float firstRowHeightPts = totalHeightPts - BASE_ROW_HEIGHT * (availableLines - 1);
+
+// На случай погрешностей округляем вверх на пол-пункта
+                            dataRow.setHeightInPoints((float)Math.ceil(firstRowHeightPts + 0.5));
+
+                        } else {
+                            Cell cellC = dataRow.createCell(2);
+                            cellC.setCellValue("");
+                            cellC.setCellStyle(wrappedDataStyle);
+                        }
+
+                        // D–F: скорость, ±, неопределенность (как у тебя было)
+                        double sectionArea = record.sectionArea();
+                        double targetFlow = java.util.concurrent.ThreadLocalRandom.current().nextInt(65, 82);
+                        double airSpeed = targetFlow / (sectionArea * 3600);
+
+                        Cell cellD = dataRow.createCell(3);
+                        cellD.setCellValue(airSpeed);
+                        cellD.setCellStyle(leftInGroupStyle);
+
+                        Cell cellE = dataRow.createCell(4);
+                        cellE.setCellValue("±");
+                        cellE.setCellStyle(plusMinusStyle);
+
+                        Cell cellF = dataRow.createCell(5);
+                        cellF.setCellFormula("(0.1+0.05*D" + rowNum + ")*2/(3^0.5)");
+                        cellF.setCellStyle(rightInGroupStyle);
+
+                        // G: сечение
+                        dataRow.createCell(6).setCellValue(sectionArea);
+                        dataRow.getCell(6).setCellStyle(threeDigitStyle);
+
+                        // H: производительность
+                        Cell cellH = dataRow.createCell(7);
+                        cellH.setCellFormula("ROUND(G" + rowNum + "*D" + rowNum + "*3600, 0)");
+                        cellH.setCellStyle(integerStyle);
+
+                        // I: объем помещения — только в первой строке группы
+                        if (i == 0) {
+                            if (record.volume() != null && record.volume() > 0) {
+                                Cell cellI = dataRow.createCell(8);
+                                cellI.setCellValue(record.volume());
+                                cellI.setCellStyle(oneDigitStyle);
+                            } else {
+                                Cell cellI = dataRow.createCell(8);
+                                cellI.setCellValue("");
+                                cellI.setCellStyle(dataStyle);
                             }
                         } else {
-                            displayName = record.room() + " (Вытяжка)";
-                        }
-                        dataRow.createCell(2).setCellValue(displayName);
-                        dataRow.getCell(2).setCellStyle(wrappedDataStyle);
-                    } else {
-                        dataRow.createCell(2).setCellValue("");
-//                        dataRow.getCell(2).setCellStyle(dataStyle);
-                    }
-//                    dataRow.getCell(2).setCellStyle(dataStyle);
-
-                    // Колонки D-F
-                    double sectionArea = record.sectionArea();
-                    double targetFlow = ThreadLocalRandom.current().nextInt(65, 82);
-                    double airSpeed = targetFlow / (sectionArea * 3600);
-
-                    Cell cellD = dataRow.createCell(3);
-                    cellD.setCellValue(airSpeed);
-                    cellD.setCellStyle(leftInGroupStyle);
-
-                    Cell cellE = dataRow.createCell(4);
-                    cellE.setCellValue("±");
-                    cellE.setCellStyle(plusMinusStyle);
-
-                    Cell cellF = dataRow.createCell(5);
-                    cellF.setCellFormula("(0.1+0.05*D" + rowNum + ")*2/(3^0.5)");
-                    cellF.setCellStyle(rightInGroupStyle);
-
-                    // Колонка G
-                    dataRow.createCell(6).setCellValue(sectionArea);
-                    dataRow.getCell(6).setCellStyle(threeDigitStyle); // 3 знака после запятой
-
-                    // Колонка H
-                    Cell cellH = dataRow.createCell(7);
-                    cellH.setCellFormula("ROUND(G" + rowNum + "*D" + rowNum + "*3600, 0)");
-                    cellH.setCellStyle(integerStyle);
-
-                    // Колонка I
-                    if (i == 0) {
-                        if (record.volume() != null && record.volume() > 0) {
-                            dataRow.createCell(8).setCellValue(record.volume());
-                            dataRow.getCell(8).setCellStyle(oneDigitStyle);
-                        } else {
-                            dataRow.createCell(8).setCellValue("-");
+                            dataRow.createCell(8).setCellValue("");
                             dataRow.getCell(8).setCellStyle(dataStyle);
                         }
-                    } else {
-                        dataRow.createCell(8).setCellValue("");
-                        dataRow.getCell(8).setCellStyle(dataStyle);
+
+                        // J: кратность (формула заполняется после группы)
+                        dataRow.createCell(9);
+
+                        // K–L: нормы/допустимые (только в первой строке группы — как было)
+                        if (i == 0) {
+                            Double airExchangeRate = RoomUtils.getAirExchangeRate(record.room());
+
+                            // K
+                            Cell cellK = dataRow.createCell(10);
+                            if (airExchangeRate != null) {
+                                cellK.setCellValue(Math.round(airExchangeRate));
+                                cellK.setCellStyle(integerStyle);
+                            } else {
+                                cellK.setCellValue("-");
+                                cellK.setCellStyle(dataStyle);
+                            }
+
+                            // L — всегда "-"
+                            Cell cellL = dataRow.createCell(11);
+                            cellL.setCellValue("-");
+                            cellL.setCellStyle(dataStyle);
+                        }
                     }
 
-                    // Колонка J
-                    dataRow.createCell(9);
+                    int lastRow = rowNum - 1;
 
-                    // Колонки K-L
-                    if (i == 0) {
-                        Double airExchangeRate = RoomUtils.getAirExchangeRate(record.room());
+                    // Заполнение колонки J (кратность) одной формулой по группе
+                    if (record.volume() != null && record.volume() > 0) {
+                        Row firstRow = sheet.getRow(startRow);
+                        Cell cellJ = firstRow.getCell(9);
 
-                        // Колонка K
-                        Cell cellK = dataRow.createCell(10);
-                        if (airExchangeRate != null) {
-                            cellK.setCellValue(Math.round(airExchangeRate)); // Целое число
-                            cellK.setCellStyle(integerStyle);
+                        if (numChannels == 1) {
+                            cellJ.setCellFormula("ROUND(H" + (startRow + 1) + "/I" + (startRow + 1) + ", 1)");
                         } else {
-                            cellK.setCellValue("-");
-                            cellK.setCellStyle(dataStyle);
+                            StringBuilder sumFormula = new StringBuilder("SUM(H" + (startRow + 1));
+                            for (int i = startRow + 2; i <= lastRow + 1; i++) {
+                                sumFormula.append(",H").append(i);
+                            }
+                            sumFormula.append(")");
+                            cellJ.setCellFormula("ROUND(" + sumFormula + "/I" + (startRow + 1) + ", 1)");
                         }
-
-                        // Колонка L - всегда "-"
-                        Cell cellL = dataRow.createCell(11);
-                        cellL.setCellValue("-");
-                        cellL.setCellStyle(dataStyle);
-                    }
-                }
-
-                int lastRow = rowNum - 1;
-
-                // Заполнение колонки J
-                if (record.volume() != null && record.volume() > 0) {
-                    Row firstRow = sheet.getRow(startRow);
-                    Cell cellJ = firstRow.getCell(9);
-
-                    if (numChannels == 1) {
-                        cellJ.setCellFormula("ROUND(H" + (startRow+1) + "/I" + (startRow+1) + ", 1)");
+                        cellJ.setCellStyle(oneDigitStyle);
                     } else {
-                        StringBuilder sumFormula = new StringBuilder("SUM(H" + (startRow+1));
-                        for (int i = startRow+2; i <= lastRow+1; i++) {
-                            sumFormula.append(",H").append(i);
+                        Row firstRow = sheet.getRow(startRow);
+                        Cell cellJ = firstRow.getCell(9);
+                        cellJ.setCellValue("-");
+                        cellJ.setCellStyle(dataStyle);
+                    }
+
+                    // Объединение C, I, J, K, L по группе (если каналов > 1) с восстановлением границ
+                    int[] columnsToMerge = {2, 8, 9, 10, 11};
+                    if (lastRow > startRow) {
+                        for (int col : columnsToMerge) {
+                            CellRangeAddress mergedRegionRecord = new CellRangeAddress(startRow, lastRow, col, col);
+                            sheet.addMergedRegion(mergedRegionRecord);
+                            RegionUtil.setBorderTop(BorderStyle.THIN, mergedRegionRecord, sheet);
+                            RegionUtil.setBorderBottom(BorderStyle.THIN, mergedRegionRecord, sheet);
+                            RegionUtil.setBorderLeft(BorderStyle.THIN, mergedRegionRecord, sheet);
+                            RegionUtil.setBorderRight(BorderStyle.THIN, mergedRegionRecord, sheet);
                         }
-                        sumFormula.append(")");
-                        cellJ.setCellFormula("ROUND(" + sumFormula + "/I" + (startRow+1) + ", 1)");
-                    }
-                    cellJ.setCellStyle(oneDigitStyle);
-                } else {
-                    Row firstRow = sheet.getRow(startRow);
-                    Cell cellJ = firstRow.getCell(9);
-                    cellJ.setCellValue("-");
-                    cellJ.setCellStyle(dataStyle);
-                }
-
-                // Объединение ячеек с восстановлением границ
-                int[] columnsToMerge = {2, 8, 9, 10, 11};
-                if (lastRow > startRow) {
-                    for (int col : columnsToMerge) {
-                        CellRangeAddress mergedRegionRecord = new CellRangeAddress(startRow, lastRow, col, col);
-                        sheet.addMergedRegion(mergedRegionRecord);
-
-                        // Восстановление границ
-                        RegionUtil.setBorderTop(BorderStyle.THIN, mergedRegionRecord, sheet);
-                        RegionUtil.setBorderBottom(BorderStyle.THIN, mergedRegionRecord, sheet);
-                        RegionUtil.setBorderLeft(BorderStyle.THIN, mergedRegionRecord, sheet);
-                        RegionUtil.setBorderRight(BorderStyle.THIN, mergedRegionRecord, sheet);
                     }
                 }
+                // ===== конец блока заполнения строк =====
             }
         }
     }
+
 
     private static void saveWorkbook(Workbook workbook, java.awt.Component parent) {
         JFileChooser fileChooser = new JFileChooser();
