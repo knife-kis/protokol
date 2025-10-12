@@ -6,12 +6,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.db.DatabaseManager;
-import ru.citlab24.protokol.tabs.dialogs.ManageSectionsDialog;
+import ru.citlab24.protokol.tabs.dialogs.*;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
-import ru.citlab24.protokol.tabs.dialogs.AddFloorDialog;
-import ru.citlab24.protokol.tabs.dialogs.AddSpaceDialog;
-import ru.citlab24.protokol.tabs.dialogs.LoadProjectDialog;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
 import ru.citlab24.protokol.tabs.renderers.RoomListRenderer;
@@ -68,6 +65,44 @@ public class BuildingTab extends JPanel {
 
         initComponents();
     }
+    // === НОРМАЛИЗАЦИЯ БАЗОВОГО НАЗВАНИЯ КОМНАТЫ (без площадей/осей/скобок) ===
+    private static final java.util.regex.Pattern TAIL_PLO =
+            java.util.regex.Pattern.compile(
+                    "\\s*[,;]?\\s*площад[ьяиуе][^\\d]*\\d+[\\d.,]*\\s*(?:кв\\.?\\s*м|м\\s*²|м2|м\\^2)\\.?\\s*$",
+                    java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+
+    private static final java.util.regex.Pattern TAIL_AXES =
+            java.util.regex.Pattern.compile(
+                    "\\s*[,;]?\\s*в\\s+осях\\s+[\\p{L}\\p{N}]+(?:\\s*[-—–]\\s*[\\p{L}\\p{N}]+)?\\s*$",
+                    java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+
+    // Удаляем хвостовые скобки вида "(...)" в конце
+    private static final java.util.regex.Pattern TAIL_PAREN =
+            java.util.regex.Pattern.compile("\\s*\\((?:[^)(]+|\\([^)(]*\\))*\\)\\s*$");
+
+    private static String normalizeRoomBaseName(String name) {
+        if (name == null) return "";
+        String s = name.replace('\u00A0',' ').trim();      // NBSP → пробел
+        s = s.replaceAll("\\s+", " ");
+
+        // Сначала убираем финальные скобки "(площадью 15 кв. м)" / "(в осях 1-2)" и т.п.
+        boolean changed;
+        do {
+            changed = false;
+            java.util.regex.Matcher mp = TAIL_PAREN.matcher(s);
+            if (mp.find()) { s = s.substring(0, mp.start()).trim(); changed = true; }
+        } while (changed);
+
+        // Затем убираем явные хвосты "в осях …" и "площадью …"
+        s = TAIL_AXES.matcher(s).replaceAll("");
+        s = TAIL_PLO.matcher(s).replaceAll("");
+
+        // Чистим завершающие знаки/пробелы
+        s = s.replaceAll("[\\s\\.,;:—–-]+$", "").trim();
+
+        return s;
+    }
+
 
     private void setRussianLocale() {
         Locale.setDefault(new Locale("ru", "RU"));
@@ -1123,7 +1158,7 @@ public class BuildingTab extends JPanel {
         updateRadiationTab(building, true);
     }
 
-    // Операции с комнатами
+    // «умное» добавление комнат — с подсказками, пакетным добавлением и автонумерацией
     private void addRoom(ActionEvent e) {
         Space selectedSpace = spaceList.getSelectedValue();
         if (selectedSpace == null) {
@@ -1131,15 +1166,40 @@ public class BuildingTab extends JPanel {
             return;
         }
 
-        String name = showInputDialog("Добавление комнаты", "Название комнаты:", "");
-        if (name != null && !name.trim().isEmpty()) {
-            Room room = new Room();
-            room.setName(name.trim());
-            selectedSpace.addRoom(room);
-            roomListModel.addElement(room);
+        // Только для квартир — быстрый набор через AddRoomDialog.
+        if (isApartmentSpace(selectedSpace)) {
+            java.util.List<String> suggestions = collectPopularApartmentRoomNames(building, 30);
+
+            JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+            AddRoomDialog dlg = new AddRoomDialog(
+                    parent,
+                    suggestions,
+                    "",     // пусто при добавлении
+                    false
+            );
+            if (dlg.showDialog()) {
+                String name = dlg.getNameToAdd();
+                if (name != null && !name.isBlank()) {
+                    Room room = new Room();
+                    room.setName(name.trim());
+                    selectedSpace.addRoom(room);
+                    roomListModel.addElement(room);
+                }
+            }
+        } else {
+            // Для НЕ-квартир — простое поле ввода без «быстрого выбора»
+            String name = showInputDialog("Добавление комнаты", "Название комнаты:", "");
+            if (name != null && !name.isBlank()) {
+                Room room = new Room();
+                room.setName(name.trim());
+                selectedSpace.addRoom(room);
+                roomListModel.addElement(room);
+            }
         }
+
         updateRadiationTab(building, true);
     }
+
 
     private void editRoom(ActionEvent e) {
         Space space = spaceList.getSelectedValue();
@@ -1151,13 +1211,35 @@ public class BuildingTab extends JPanel {
         }
 
         Room room = roomListModel.get(index);
-        String newName = showInputDialog("Редактирование комнаты", "Новое название комнаты:", room.getName());
-        if (newName != null && !newName.trim().isEmpty()) {
-            room.setName(newName.trim());
-            roomListModel.set(index, room);
+
+        if (isApartmentSpace(space)) {
+            java.util.List<String> suggestions = collectPopularApartmentRoomNames(building, 30);
+            JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+            AddRoomDialog dlg = new AddRoomDialog(
+                    parent,
+                    suggestions,
+                    room.getName(),
+                    true
+            );
+            if (dlg.showDialog()) {
+                String newName = dlg.getNameToAdd();
+                if (newName != null && !newName.isBlank()) {
+                    room.setName(newName.trim());
+                    roomListModel.set(index, room);
+                    updateRadiationTab(building, true);
+                }
+            }
+        } else {
+            // Для НЕ-квартир — простое редактирование строкой
+            String newName = showInputDialog("Редактирование комнаты", "Новое название комнаты:", room.getName());
+            if (newName != null && !newName.isBlank()) {
+                room.setName(newName.trim());
+                roomListModel.set(index, room);
+                updateRadiationTab(building, true);
+            }
         }
-        updateRadiationTab(building, true);
     }
+
 
     private void removeRoom(ActionEvent e) {
         Space space = spaceList.getSelectedValue();
@@ -1293,4 +1375,92 @@ public class BuildingTab extends JPanel {
             });
         }
     }
+    // Вспомогательная функция: топ часто встречающихся названий комнат в здании
+    private java.util.List<String> collectPopularRoomNames(Building b, int limit) {
+        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
+        if (b != null) {
+            for (Floor f : b.getFloors()) {
+                for (Space s : f.getSpaces()) {
+                    for (Room r : s.getRooms()) {
+                        String n = (r.getName() == null) ? "" : r.getName().trim();
+                        if (!n.isEmpty()) freq.merge(n, 1, Integer::sum);
+                    }
+                }
+            }
+        }
+        return freq.entrySet().stream()
+                .sorted((a, c) -> {
+                    int byCount = Integer.compare(c.getValue(), a.getValue());
+                    if (byCount != 0) return byCount;
+                    return a.getKey().compareToIgnoreCase(c.getKey());
+                })
+                .limit(limit)
+                .map(java.util.Map.Entry::getKey)
+                .toList();
+    }
+
+    private java.util.List<String> collectPopularApartmentRoomNames(Building b, int limit) {
+        // key — нормализованная «база» (в нижнем регистре), val — счётчик
+        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
+        // для отображения храним «красивый» вариант (первое встреченное написание базы)
+        java.util.Map<String, String> display = new java.util.LinkedHashMap<>();
+
+        if (b != null) {
+            for (Floor f : b.getFloors()) {
+                for (Space s : f.getSpaces()) {
+                    if (!isApartmentSpace(s)) continue;
+                    for (Room r : s.getRooms()) {
+                        String raw = (r.getName() == null) ? "" : r.getName().trim();
+                        if (raw.isEmpty()) continue;
+
+                        String base = normalizeRoomBaseName(raw);
+                        if (base.isEmpty()) continue;
+
+                        String key = base.toLowerCase(java.util.Locale.ROOT);
+                        freq.merge(key, 1, Integer::sum);
+                        display.putIfAbsent(key, base); // запоминаем первое «красивое» написание
+                    }
+                }
+            }
+        }
+
+        return freq.entrySet().stream()
+                .sorted((a, c) -> {
+                    int byCount = Integer.compare(c.getValue(), a.getValue());
+                    if (byCount != 0) return byCount;
+                    return display.get(a.getKey()).compareToIgnoreCase(display.get(c.getKey()));
+                })
+                .limit(limit)
+                .map(e -> display.get(e.getKey()))
+                .toList();
+    }
+
+
+    // Возвращает true, если помещение — «квартира».
+// Не опираемся на конкретные enum-константы проекта, работаем по имени типа и по идентификатору.
+    private boolean isApartmentSpace(Space s) {
+        if (s == null) return false;
+
+        // 1) По типу (через имя enum, чтобы не падать, если нет APARTMENT в исходном enum)
+        Space.SpaceType t = s.getType();
+        if (t != null) {
+            String tn = t.name();
+            if ("APARTMENT".equalsIgnoreCase(tn) ||
+                    "FLAT".equalsIgnoreCase(tn) ||
+                    "RESIDENTIAL".equalsIgnoreCase(tn) ||
+                    "LIVING".equalsIgnoreCase(tn)) {
+                return true;
+            }
+        }
+
+        // 2) По идентификатору (часто «кв 1-1», «квартира 12» и т.п.)
+        String id = s.getIdentifier();
+        if (id != null) {
+            String low = id.toLowerCase(java.util.Locale.ROOT);
+            if (low.startsWith("кв") || low.contains("квартира")) return true;
+            if (low.startsWith("apt") || low.contains("apartment")) return true;
+        }
+        return false;
+    }
+
 }
