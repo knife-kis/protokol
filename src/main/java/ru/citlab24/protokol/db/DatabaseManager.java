@@ -40,25 +40,27 @@ public class DatabaseManager {
                     "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "name VARCHAR(255))");
 
+            stmt.execute("CREATE TABLE IF NOT EXISTS section (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "building_id INT," +
+                    "name VARCHAR(255)," +
+                    "position INT)");
+
             stmt.execute("CREATE TABLE IF NOT EXISTS floor (" +
                     "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "building_id INT," +
                     "number VARCHAR(50)," +
-                    "type VARCHAR(50))");
+                    "type VARCHAR(50)," +
+                    "section_index INT," +
+                    "position INT)");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS space (" +
                     "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "floor_id INT," +
-                    "identifier VARCHAR(50)," +
-                    "type VARCHAR(50))");
+                    "identifier VARCHAR(255)," +
+                    "type VARCHAR(50)," +
+                    "position INT)");
 
-            stmt.execute("CREATE TABLE IF NOT EXISTS room (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY," +
-                    "space_id INT," +
-                    "name VARCHAR(255)," +
-                    "volume DOUBLE," + // Разрешено NULL значение
-                    "ventilation_channels INT," +
-                    "ventilation_section_area DOUBLE)");
             stmt.execute("CREATE TABLE IF NOT EXISTS room (" +
                     "id INT AUTO_INCREMENT PRIMARY KEY," +
                     "space_id INT," +
@@ -66,15 +68,21 @@ public class DatabaseManager {
                     "volume DOUBLE," +
                     "ventilation_channels INT," +
                     "ventilation_section_area DOUBLE," +
-                    "is_selected BOOLEAN DEFAULT FALSE)");
+                    "is_selected BOOLEAN DEFAULT FALSE," +
+                    "position INT)");
 
-            // Проверка столбцов остается без изменений
-            addColumnIfMissing(stmt, "room", "volume", "DOUBLE");
-            addColumnIfMissing(stmt, "room", "ventilation_channels", "INT");
-            addColumnIfMissing(stmt, "room", "ventilation_section_area", "DOUBLE");
-            addColumnIfMissing(stmt, "room", "is_selected", "BOOLEAN DEFAULT FALSE");
+            // миграции (безопасны, если столбцы уже есть)
+            addColumnIfMissing(stmt, "floor", "section_index", "INT");
+            addColumnIfMissing(stmt, "floor", "position", "INT");
+            addColumnIfMissing(stmt, "space", "position", "INT");
+            addColumnIfMissing(stmt, "room",  "position", "INT");
+            addColumnIfMissing(stmt, "room",  "volume", "DOUBLE");
+            addColumnIfMissing(stmt, "room",  "ventilation_channels", "INT");
+            addColumnIfMissing(stmt, "room",  "ventilation_section_area", "DOUBLE");
+            addColumnIfMissing(stmt, "room",  "is_selected", "BOOLEAN DEFAULT FALSE");
         }
     }
+
 
     private static void addColumnIfMissing(Statement stmt, String table, String column, String type)
             throws SQLException {
@@ -101,6 +109,11 @@ public class DatabaseManager {
                 if (rs.next()) {
                     int buildingId = rs.getInt(1);
                     building.setId(buildingId);
+
+                    // 1) Сначала секции
+                    saveSections(buildingId, building.getSections());
+
+                    // 2) Затем этажи (у них уже корректный section_index)
                     for (Floor floor : building.getFloors()) {
                         saveFloor(buildingId, floor);
                     }
@@ -108,6 +121,50 @@ public class DatabaseManager {
             }
         }
     }
+    public static void deleteBuilding(int buildingId) throws SQLException {
+        // Удаляем комнаты данного здания
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM room WHERE space_id IN (" +
+                        "  SELECT s.id FROM space s JOIN floor f ON s.floor_id = f.id WHERE f.building_id = ?" +
+                        ")")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+
+        // Удаляем помещения этого здания
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM space WHERE floor_id IN (" +
+                        "  SELECT id FROM floor WHERE building_id = ?" +
+                        ")")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+
+        // Удаляем этажи этого здания
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM floor WHERE building_id = ?")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+
+        // Удаляем секции этого здания (если таблица section есть)
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM section WHERE building_id = ?")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        } catch (SQLException ignore) {
+            // на случай если таблицы секций нет в старой БД
+        }
+
+        // Удаляем сам объект здания
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM building WHERE id = ?")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+    }
+
+
     private static void deleteBuildingData(int buildingId) throws SQLException {
         // Сначала удаляем комнаты
         try (PreparedStatement stmt = connection.prepareStatement(
@@ -150,16 +207,19 @@ public class DatabaseManager {
     }
 
     private static void saveFloor(int buildingId, Floor floor) throws SQLException {
-        String sql = "INSERT INTO floor (building_id, number, type) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO floor (building_id, number, type, section_index, position) VALUES (?,?,?,?,?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, buildingId);
             stmt.setString(2, floor.getNumber());
             stmt.setString(3, floor.getType().name());
+            stmt.setInt(4, floor.getSectionIndex());
+            stmt.setInt(5, floor.getPosition());
             stmt.executeUpdate();
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
                     int floorId = rs.getInt(1);
+                    floor.setId(floorId);
                     for (Space space : floor.getSpaces()) {
                         saveSpace(floorId, space);
                     }
@@ -168,17 +228,36 @@ public class DatabaseManager {
         }
     }
 
+    private static void saveSections(int buildingId, List<Section> sections) throws SQLException {
+        if (sections == null) return;
+        String sql = "INSERT INTO section (building_id, name, position) VALUES (?, ?, ?)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            for (Section s : sections) {
+                stmt.setInt(1, buildingId);
+                stmt.setString(2, s.getName());
+                stmt.setInt(3, s.getPosition());
+                stmt.executeUpdate();
+                try (ResultSet rs = stmt.getGeneratedKeys()) {
+                    if (rs.next()) s.setId(rs.getInt(1));
+                }
+            }
+        }
+    }
+
+
     private static void saveSpace(int floorId, Space space) throws SQLException {
-        String sql = "INSERT INTO space (floor_id, identifier, type) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO space (floor_id, identifier, type, position) VALUES (?, ?, ?, ?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, floorId);
             stmt.setString(2, space.getIdentifier());
             stmt.setString(3, space.getType().name());
+            stmt.setInt(4, space.getPosition());
             stmt.executeUpdate();
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
                     int spaceId = rs.getInt(1);
+                    space.setId(spaceId);
                     for (Room room : space.getRooms()) {
                         saveRoom(spaceId, room);
                     }
@@ -187,29 +266,27 @@ public class DatabaseManager {
         }
     }
 
+
     private static void saveRoom(int spaceId, Room room) throws SQLException {
         logger.debug("Сохранение комнаты: {}", room.getName());
-        String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, "
-                + "ventilation_section_area, is_selected) VALUES (?, ?, ?, ?, ?, ?)";
-
+        String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, ventilation_section_area, is_selected, position) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, spaceId);
             stmt.setString(2, room.getName());
-            stmt.setObject(3, room.getVolume(), Types.DOUBLE);
+            if (room.getVolume() == null) stmt.setNull(3, Types.DOUBLE); else stmt.setDouble(3, room.getVolume());
             stmt.setInt(4, room.getVentilationChannels());
             stmt.setDouble(5, room.getVentilationSectionArea());
-            // Сохраняем состояние чекбокса
             stmt.setBoolean(6, room.isSelected());
-
+            stmt.setInt(7, room.getPosition());
             stmt.executeUpdate();
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
-                if (rs.next()) {
-                    room.setId(rs.getInt(1));
-                }
+                if (rs.next()) room.setId(rs.getInt(1));
             }
         }
     }
+
 
     public static Building loadBuilding(int buildingId) throws SQLException {
         Building building = new Building();
@@ -219,51 +296,55 @@ public class DatabaseManager {
             if (rs.next()) {
                 building.setId(rs.getInt("id"));
                 building.setName(rs.getString("name"));
-                System.out.println("Загружаем здание: " + building.getName());
+                loadSections(building, buildingId);
                 loadFloors(building, buildingId);
             }
         }
         return building;
     }
 
+
     private static void loadFloors(Building building, int buildingId) throws SQLException {
-        String sql = "SELECT * FROM floor WHERE building_id = " + buildingId;
+        String sql = "SELECT * FROM floor WHERE building_id = " + buildingId +
+                " ORDER BY section_index, COALESCE(position,0), id";
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
                 Floor floor = new Floor();
+                floor.setId(rs.getInt("id"));
                 floor.setNumber(rs.getString("number"));
                 floor.setType(Floor.FloorType.valueOf(rs.getString("type")));
-
-                // Если имя не загружено из БД, создаем его
+                floor.setSectionIndex(Math.max(0, rs.getInt("section_index")));
+                floor.setPosition(rs.getInt("position"));
                 if (floor.getName() == null) {
-                    String floorName = floor.getType().title + " " + floor.getNumber();
-                    floor.setName(floorName);
+                    floor.setName(floor.getType().title + " " + floor.getNumber());
                 }
-
                 building.addFloor(floor);
-                loadSpaces(floor, rs.getInt("id"));
+                loadSpaces(floor, floor.getId());
             }
         }
     }
 
     private static void loadSpaces(Floor floor, int floorId) throws SQLException {
-        String sql = "SELECT * FROM space WHERE floor_id = " + floorId;
+        String sql = "SELECT * FROM space WHERE floor_id = " + floorId + " ORDER BY COALESCE(position,0), id";
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
                 Space space = new Space();
+                space.setId(rs.getInt("id"));
                 space.setIdentifier(rs.getString("identifier"));
                 space.setType(Space.SpaceType.valueOf(rs.getString("type")));
+                space.setPosition(rs.getInt("position"));
                 floor.addSpace(space);
-                loadRooms(space, rs.getInt("id"));
+                loadRooms(space, space.getId());
             }
         }
     }
 
+
     private static void loadRooms(Space space, int spaceId) throws SQLException {
         logger.debug("Загрузка комнат для помещения ID: {}", spaceId);
-        String sql = "SELECT * FROM room WHERE space_id = ?";
+        String sql = "SELECT * FROM room WHERE space_id = ? ORDER BY COALESCE(position,0), id";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setInt(1, spaceId);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -271,21 +352,35 @@ public class DatabaseManager {
                     Room room = new Room();
                     room.setId(rs.getInt("id"));
                     room.setName(rs.getString("name"));
-                    // Загружаем состояние чекбокса
                     room.setSelected(rs.getBoolean("is_selected"));
-
                     double volume = rs.getDouble("volume");
-                    if (!rs.wasNull()) {
-                        room.setVolume(volume);
-                    }
-
+                    if (!rs.wasNull()) room.setVolume(volume);
                     room.setVentilationChannels(rs.getInt("ventilation_channels"));
                     room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
+                    room.setPosition(rs.getInt("position"));
                     space.addRoom(room);
                 }
             }
         }
     }
+
+    private static void loadSections(Building building, int buildingId) throws SQLException {
+        String sql = "SELECT * FROM section WHERE building_id = " + buildingId + " ORDER BY position";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            List<Section> sections = new ArrayList<>();
+            while (rs.next()) {
+                Section s = new Section();
+                s.setId(rs.getInt("id"));
+                s.setName(rs.getString("name"));
+                s.setPosition(rs.getInt("position"));
+                sections.add(s);
+            }
+            if (sections.isEmpty()) sections.add(new Section("Секция 1", 0));
+            building.setSections(sections);
+        }
+    }
+
     public static List<Room> getRooms(int floorId) {
         List<Room> rooms = new ArrayList<>();
         String sql = "SELECT r.* FROM room r " +

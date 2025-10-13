@@ -1,71 +1,165 @@
 package ru.citlab24.protokol;
 
-import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
-import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.buildingTab.BuildingTab;
+import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
+import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
+import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
+
+import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.FlatDarculaLaf;
+import com.formdev.flatlaf.FlatIntelliJLaf;
+import com.formdev.flatlaf.FlatClientProperties;
 
 import javax.swing.*;
 import java.awt.*;
-import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
-import org.kordamp.ikonli.swing.FontIcon;
-import ru.citlab24.protokol.tabs.models.Building;
 
 public class MainFrame extends JFrame {
+
     private final Building building = new Building();
-    private final JTabbedPane tabbedPane = new JTabbedPane();
+    private final JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
 
     public MainFrame() {
-        super("Building Analytics");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1000, 750);
-        setLocationRelativeTo(null);
+        super("Протокол испытаний");
+        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        setMinimumSize(new Dimension(1100, 720));
+        setLocationByPlatform(true);
+
+        // Современные оконные декорации (если FlatLaf активен)
+        getRootPane().putClientProperty("JRootPane.titleBarBackground", UIManager.getColor("Panel.background"));
+        getRootPane().putClientProperty("JRootPane.titleBarForeground", UIManager.getColor("Label.foreground"));
+
+        setJMenuBar(createMenuBar());
+        configureTabbedPane();
         initUI();
-        add(tabbedPane);
-        tabbedPane.addChangeListener(e -> {
-            Component selectedTab = tabbedPane.getSelectedComponent();
-            if (selectedTab instanceof VentilationTab) {
-                ((VentilationTab) selectedTab).refreshData();
-            } else if (selectedTab instanceof BuildingTab) {
-                // Сохраняем изменения при переходе на вкладку здания
-                for (Component tab : tabbedPane.getComponents()) {
-                    if (tab instanceof VentilationTab) {
-                        ((VentilationTab) tab).saveCalculationsToModel();
-                    }
-                }
+
+        pack();
+        setLocationRelativeTo(null);
+    }
+
+    private JMenuBar createMenuBar() {
+        JMenuBar menuBar = new JMenuBar();
+
+        // ===== Меню «Вид» -> «Тема» =====
+        JMenu viewMenu = new JMenu("Вид");
+        JMenu themeMenu = new JMenu("Тема");
+
+        JMenuItem light = new JMenuItem("Светлая");
+        JMenuItem dark = new JMenuItem("Тёмная");
+        JMenuItem intellij = new JMenuItem("IntelliJ");
+        JMenuItem darcula = new JMenuItem("Darcula");
+        JMenuItem system = new JMenuItem("Системная (классическая)");
+
+        light.addActionListener(e -> switchLaf(new FlatLightLaf()));
+        dark.addActionListener(e -> switchLaf(new FlatDarkLaf()));
+        intellij.addActionListener(e -> switchLaf(new FlatIntelliJLaf()));
+        darcula.addActionListener(e -> switchLaf(new FlatDarculaLaf()));
+        system.addActionListener(e -> {
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+                FlatLaf.updateUI();
+                SwingUtilities.updateComponentTreeUI(this);
+            } catch (Exception ex) {
+                ex.printStackTrace();
             }
         });
 
+        themeMenu.add(light);
+        themeMenu.add(dark);
+        themeMenu.add(intellij);
+        themeMenu.add(darcula);
+        themeMenu.addSeparator();
+        themeMenu.add(system);
+
+        // (Опционально) настройки вкладок
+        JMenu tabsMenu = new JMenu("Вкладки");
+        JCheckBoxMenuItem compactTabs = new JCheckBoxMenuItem("Компактный режим");
+        compactTabs.addActionListener(e -> {
+            boolean compact = compactTabs.isSelected();
+            tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_HEIGHT, compact ? 28 : 40);
+            tabbedPane.revalidate();
+            tabbedPane.repaint();
+        });
+
+        tabsMenu.add(compactTabs);
+        viewMenu.add(themeMenu);
+        viewMenu.add(tabsMenu);
+
+        menuBar.add(viewMenu);
+        return menuBar;
+    }
+
+    private void switchLaf(LookAndFeel laf) {
+        try {
+            UIManager.setLookAndFeel(laf);
+            FlatLaf.updateUI();
+            SwingUtilities.updateComponentTreeUI(this);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private void configureTabbedPane() {
+        // «Воздушные» вкладки — только свойства, гарантированно присутствующие во FlatLaf
+        tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_HEIGHT, 40);
+        tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_HAS_FULL_BORDER, Boolean.FALSE);
+
+        // Скролл, если вкладок много
+        tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+
+        getContentPane().setLayout(new BorderLayout());
+        getContentPane().add(tabbedPane, BorderLayout.CENTER);
     }
 
     private void initUI() {
-        tabbedPane.addTab("Характеристики здания",
-                FontIcon.of(FontAwesomeSolid.BUILDING, 24, new Color(0, 115, 200)),
-                new BuildingTab(building)); // Обновлённый BuildingTab
+        // Вкладки (без сторонних иконок, чтобы исключить ошибки зависимостей)
+        tabbedPane.addTab("Характеристики здания", new BuildingTab(building));
+        tabbedPane.addTab("Микроклимат",           new MicroclimateTab());
+        tabbedPane.addTab("Вентиляция",            new VentilationTab(building)); // <-- фикс конструктора
+        tabbedPane.addTab("Ионизирующее излучение",new RadiationTab());
+    }
 
-        tabbedPane.addTab("Микроклимат",
-                FontIcon.of(FontAwesomeSolid.THERMOMETER_HALF, 24, new Color(76, 175, 80)),
-                new MicroclimateTab());
+    // ===== Утилиты доступа к вкладкам (по желанию) =====
 
-        tabbedPane.addTab("Вентиляция",
-                FontIcon.of(FontAwesomeSolid.WIND, 24, new Color(41, 182, 246)), // Иконка вентиляции
-                new VentilationTab(building)); // Прямо в главной панели
-        tabbedPane.addTab("Радиация",
-                FontIcon.of(FontAwesomeSolid.RADIATION_ALT, 24, new Color(255, 152, 0)),
-                new RadiationTab());
+    public BuildingTab getBuildingTab() {
+        for (Component comp : tabbedPane.getComponents()) {
+            if (comp instanceof BuildingTab) return (BuildingTab) comp;
+        }
+        return null;
+    }
+
+    public MicroclimateTab getMicroclimateTab() {
+        for (Component comp : tabbedPane.getComponents()) {
+            if (comp instanceof MicroclimateTab) return (MicroclimateTab) comp;
+        }
+        return null;
+    }
+
+    public VentilationTab getVentilationTab() {
+        for (Component comp : tabbedPane.getComponents()) {
+            if (comp instanceof VentilationTab) return (VentilationTab) comp;
+        }
+        return null;
     }
 
     public RadiationTab getRadiationTab() {
         for (Component comp : tabbedPane.getComponents()) {
-            if (comp instanceof RadiationTab) {
-                return (RadiationTab) comp;
-            }
+            if (comp instanceof RadiationTab) return (RadiationTab) comp;
         }
         return null;
     }
+
     public void selectVentilationTab() {
-        tabbedPane.setSelectedIndex(2); // 2 - индекс вкладки "Вентиляция"
+        for (int i = 0; i < tabbedPane.getTabCount(); i++) {
+            if ("Вентиляция".equals(tabbedPane.getTitleAt(i))) {
+                tabbedPane.setSelectedIndex(i);
+                return;
+            }
+        }
     }
+
     public JTabbedPane getTabbedPane() {
         return tabbedPane;
     }

@@ -10,6 +10,9 @@ public class Room {
     private int ventilationChannels = 1;
     private double ventilationSectionArea = 0.008;
 
+    private int position = 0;
+    public int getPosition() { return position; }
+    public void setPosition(int position) { this.position = Math.max(0, position); }
     public Room() {
         this.id = nextId++;
     }
