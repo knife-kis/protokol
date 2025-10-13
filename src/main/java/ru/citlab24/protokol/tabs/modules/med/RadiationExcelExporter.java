@@ -33,9 +33,12 @@ public final class RadiationExcelExporter {
             // ===== 2) Лист «МЭД (2)» (новый по твоему примеру) =====
             buildSheetMED2(wb, building, sectionIndex, S, gamma5);
 
+// ===== 3) Лист «ЭРОА радона» =====
+            buildSheetRadon(wb, building, sectionIndex, S);
 
-            // ===== сохранение =====
+// ===== сохранение =====
             JFileChooser chooser = new JFileChooser();
+
             chooser.setDialogTitle("Сохранить Excel");
             chooser.setSelectedFile(new File("Ионизирующее_излучение.xlsx"));
             if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
@@ -258,8 +261,10 @@ public final class RadiationExcelExporter {
                     Cell a = cell(rr, 0); a.setCellValue(seq++); a.setCellStyle(S.headerCenterBorder);
 
                     // B — "<помещение>, <комната>"
-                    String bText = spaceDisplayName(re.space) + ", " + safeName(re.room.getName());
+                    String roomLabel = safeName(re.room.getName());
+                    String bText = isPublicSpace(re.space) ? roomLabel : (spaceDisplayName(re.space) + ", " + roomLabel);
                     Cell b = cell(rr, 1); b.setCellValue(bText); b.setCellStyle(S.textLeftBorder);
+
 
                     // C — значение (ср. ≈ 0,135)
                     double cVal = sampleMEDValue();
@@ -287,14 +292,201 @@ public final class RadiationExcelExporter {
             }
         }
     }
+    /* ============================ Лист 3: «ЭРОА радона» ============================ */
+
+    private static void buildSheetRadon(Workbook wb, Building building, int sectionIndex, Styles S) {
+        Sheet sh = wb.createSheet("ЭРОА радона");
+
+        // ширины A..G
+        setColWidths(sh, new double[]{4.71, 60.0, 9.5, 6.0, 11.5, 14.0, 18.0});
+        setColWidthPx(sh, 1, 333); // B
+        setColWidthPx(sh, 2, 104); // C
+        setColWidthPx(sh, 3, 104); // D
+        setColWidthPx(sh, 4, 104); // E
+        // ===== шапка (строки 1–5) как в образце ЭРОА.xlsx =====
+
+// 1-я строка — общий заголовок
+        merge(sh, "A1:G1");
+        put(sh, 0, 0, "17.3. ЭРОА радона, ЭРОА торона, среднегодовое значение ЭРОА изотопов радона:", S.textLeft);
+
+// 2-я строка — пустая техническая (для отступа/границ)
+        Row r2 = ensureRow(sh, 1);
+        r2.setHeightInPoints(3f);
+        for (int c = 0; c <= 6; c++) {
+            cell(r2, c).setCellStyle(S.bottomOnly);
+        }
+
+// 3-я строка — внешний уровень
+        styleMerge(sh, "A3:A4", S.headerCenterBorder);
+        put(sh, 2, 0, "№ п/п", S.headerCenterBorder);
+
+        styleMerge(sh, "B3:B4", S.headerCenterBorder);
+        put(sh, 2, 1, "Наименование места\nпроведения измерений", S.headerCenterBorder);
+
+// «Результаты измерений, Бк/м³» на C3:F3
+        styleMerge(sh, "C3:F3", S.headerCenterBorder);
+        put(sh, 2, 2, "Результаты измерений, Бк/м³", S.headerCenterBorder);
+
+// Правый столбец
+        styleMerge(sh, "G3:G4", S.headerCenterBorder);
+        put(sh, 2, 6, "Допустимый уровень, Бк/м³", S.headerCenterBorder);
+
+// 4-я строка — внутренние подписи блока результатов
+        styleMerge(sh, "C4:D4", S.headerCenterBorder);
+        put(sh, 3, 2, "Измеренное значение ЭРОА радона (ЭРОА торона)", S.headerCenterBorder);
+
+        put(sh, 3, 4, "Среднегодовое значение ЭРОА\nизотопов радона, Бк/м³", S.headerCenterBorder);
+        put(sh, 3, 5, "Суммарная\nнеопределённость", S.headerCenterBorder);
+
+// 5-я строка — номера столбцов (как в образце) + объединение C5:D5
+        put(sh, 4, 0, 1, S.headerCenterBorder);
+        put(sh, 4, 1, 2, S.headerCenterBorder);
+        styleMerge(sh, "C5:D5", S.headerCenterBorder);
+        put(sh, 4, 2, 3, S.headerCenterBorder);
+        put(sh, 4, 4, 4, S.headerCenterBorder);
+        put(sh, 4, 5, 5, S.headerCenterBorder);
+        put(sh, 4, 6, 7, S.headerCenterBorder);
+
+
+        // данные с 6-й строки
+        int row = 4;     // 0-based → 6-я
+        int seq = 1;     // № п/п
+
+        List<Section> sections = building.getSections() != null ? building.getSections() : Collections.emptyList();
+        int secStart = 0, secEnd = sections.size();
+        if (sectionIndex >= 0 && sectionIndex < sections.size()) { secStart = sectionIndex; secEnd = sectionIndex + 1; }
+
+        // сезонный коэффициент: май–сентябрь = 1.3, иначе 1.0
+        Calendar cal = Calendar.getInstance();
+        int m = cal.get(Calendar.MONTH) + 1; // 1..12
+        double seasonK = (m >= 5 && m <= 9) ? 1.3 : 1.0;
+        String seasonKStr = (seasonK == 1.3) ? "1.3" : "1.0";
+
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
+
+        for (int si = secStart; si < secEnd; si++) {
+            Section sec = sections.get(si);
+            String secName = (sec != null && notBlank(sec.getName())) ? sec.getName() : ("Секция " + (si + 1));
+
+            List<Floor> floors = floorsOfSection(building, si);
+            floors.removeIf(f -> !floorHasAnyChecked(f));
+            if (floors.isEmpty()) continue;
+
+            for (Floor f : floors) {
+                // строка "Секция, Этаж"
+                row++;
+                String floorTitle = notBlank(f.getNumber()) ? f.getNumber() : "Этаж";
+                styleMerge(sh, "A" + (row+1) + ":G" + (row+1), S.headerCenterBorder);
+                put(sh, row, 0, secName + ", " + floorTitle, S.headerCenterBorder);
+
+                // элементы (офисы/общественные — ВСЕ отмеченные; квартиры — по 1 комнате)
+                List<RadonEntry> entries = radonEntriesOnFloor(f);
+
+                int dataStart = row + 1;
+                int dataEnd   = row;
+
+                for (RadonEntry re : entries) {
+                    row++;
+                    Row rr = ensureRow(sh, row);
+
+                    // A — № п/п
+                    Cell a = cell(rr, 0); a.setCellValue(seq++); a.setCellStyle(S.headerCenterBorder);
+
+                    // B — "<помещение>, комнаты через запятую"
+                    String roomName = re.rooms.isEmpty() ? "" : safeName(re.rooms.get(0).getName());
+                    String bText = isPublicSpace(re.space)
+                            ? roomName
+                            : spaceDisplayName(re.space) + (roomName.isBlank() ? "" : ", " + roomName);
+                    Cell b = cell(rr, 1); b.setCellValue(bText); b.setCellStyle(S.textLeftBorder);
+
+                    // C — случайное целое 17..40
+                    int cVal = rnd.nextInt(17, 41);
+                    Cell c = cell(rr, 2); c.setCellValue(cVal); c.setCellStyle(S.headerCenterBorder);
+
+                    // D — всегда 1
+                    Cell d = cell(rr, 3); d.setCellValue(1); d.setCellStyle(S.headerCenterBorder);
+
+                    // E — =(C+4.6*D)*K  (десятичные ТОЧКИ для формул Excel)
+                    String baseE = String.format(java.util.Locale.US, "(C%d+4.6*D%d)*%s", row+1, row+1, seasonKStr);
+                    Cell e = cell(rr, 4); e.setCellFormula("ROUND(" + baseE + ",0)"); e.setCellStyle(S.num0);
+
+                    String baseF = String.format(java.util.Locale.US,
+                            "SQRT(POWER(C%d*0.3*(2/POWER(3,0.5))*%s,2)+21.16*POWER(D%d*0.3*(2/POWER(3,0.5))*%s,2))",
+                            row+1, seasonKStr, row+1, seasonKStr);
+                    Cell fcell = cell(rr, 5); fcell.setCellFormula("ROUND(" + baseF + ",0)"); fcell.setCellStyle(S.num0);
+
+
+                    // G — значение заполним после merge
+                    Cell g = cell(rr, 6); g.setCellStyle(S.headerCenterBorder);
+
+                    dataEnd = row;
+                }
+
+                // G объединяем на блок комнат этажа и ставим "10"
+                if (!entries.isEmpty()) {
+                    String rng = "G" + (dataStart+1) + ":G" + (dataEnd+1);
+                    styleMerge(sh, rng, S.headerCenterBorder);
+                    put(sh, dataStart, 6, 100, S.headerCenterBorder);
+                }
+            }
+        }
+    }
+
+    private static String buildRoomsList(List<Room> rooms) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < rooms.size(); i++) {
+            String n = safeName(rooms.get(i).getName());
+            if (n != null && !n.isBlank()) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(n);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static class RadonEntry {
+        final Space space;
+        final List<Room> rooms;
+        RadonEntry(Space s, List<Room> r) { this.space = s; this.rooms = r; }
+    }
+
+    // Офисы/общественные — все отмеченные комнаты;
+// Квартиры — если отмечено >=1, берём случайно одну.
+    private static List<RadonEntry> radonEntriesOnFloor(Floor floor) {
+        List<RadonEntry> res = new ArrayList<>();
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
+        for (Space s : floor.getSpaces()) {
+            List<Room> selected = new ArrayList<>();
+            for (Room r : s.getRooms()) {
+                if (r != null && r.isSelected()) selected.add(r);
+            }
+            if (selected.isEmpty()) continue;
+
+            Space.SpaceType tp = s.getType();
+            if (tp == Space.SpaceType.APARTMENT) {
+                // квартиры — случайно одна комната
+                Room r = selected.get(selected.size() == 1 ? 0 : rnd.nextInt(selected.size()));
+                res.add(new RadonEntry(s, Collections.singletonList(r)));
+            } else {
+                // офисы/общественные — КАЖДАЯ отмеченная комната отдельной строкой
+                for (Room r : selected) {
+                    res.add(new RadonEntry(s, Collections.singletonList(r)));
+                }
+            }
+        }
+        return res;
+    }
+
 
     /* ============================ Вспомогательные ============================ */
 
     private static class Styles {
         final CellStyle textLeft, textLeftBorder, headerCenter, headerCenterBorder, num2;
-        final CellStyle plusMinusTB; // ← добавили
-        final CellStyle num2NoRight; // C без правой границы
-        final CellStyle num2NoLeft;  // E без левой границы
+        final CellStyle plusMinusTB;
+        final CellStyle num2NoRight;
+        final CellStyle num2NoLeft;
+        final CellStyle num0;        // целые числа
+        final CellStyle bottomOnly;
 
         Styles(Workbook wb) {
             Font base = wb.createFont();
@@ -336,10 +528,26 @@ public final class RadiationExcelExporter {
 
             num2NoLeft = wb.createCellStyle();
             num2NoLeft.cloneStyleFrom(num2);
-            num2NoLeft.setBorderLeft(BorderStyle.NONE);   // убираем левую
+            num2NoLeft.setBorderLeft(BorderStyle.NONE);
+
+// формат целых чисел
+            num0 = wb.createCellStyle();
+            num0.setFont(base);
+            num0.setAlignment(HorizontalAlignment.CENTER);
+            num0.setVerticalAlignment(VerticalAlignment.CENTER);
+            num0.setDataFormat(wb.createDataFormat().getFormat("0"));
+            cloneIntoBorders(num0);
+
+// только нижняя граница (для строки 2 листа ЭРОА)
+            bottomOnly = wb.createCellStyle();
+            bottomOnly.setBorderBottom(BorderStyle.THIN);
+            bottomOnly.setBorderTop(BorderStyle.NONE);
+            bottomOnly.setBorderLeft(BorderStyle.NONE);
+            bottomOnly.setBorderRight(BorderStyle.NONE);
+            bottomOnly.setAlignment(HorizontalAlignment.CENTER);
+            bottomOnly.setVerticalAlignment(VerticalAlignment.CENTER);
         }
     }
-
 
     private static void setColWidths(Sheet sh, double[] widths) {
         for (int i = 0; i < widths.length; i++) {
@@ -372,7 +580,17 @@ public final class RadiationExcelExporter {
     }
 
     private static void merge(Sheet sh, String addr) {
-        sh.addMergedRegion(CellRangeAddress.valueOf(addr));
+        CellRangeAddress want = CellRangeAddress.valueOf(addr);
+        for (int i = 0; i < sh.getNumMergedRegions(); i++) {
+            CellRangeAddress r = sh.getMergedRegion(i);
+            if (r.getFirstRow()    == want.getFirstRow() &&
+                    r.getLastRow()     == want.getLastRow()  &&
+                    r.getFirstColumn() == want.getFirstColumn() &&
+                    r.getLastColumn()  == want.getLastColumn()) {
+                return; // уже объединено — выходим
+            }
+        }
+        sh.addMergedRegion(want);
     }
     private static void styleMerge(Sheet sh, String addr, CellStyle style) {
         CellRangeAddress range = CellRangeAddress.valueOf(addr);
@@ -382,7 +600,7 @@ public final class RadiationExcelExporter {
         boolean singleCell = range.getFirstRow() == range.getLastRow()
                 && range.getFirstColumn() == range.getLastColumn();
         if (!singleCell) {
-            sh.addMergedRegion(range);
+            merge(sh, addr); // безопасно: не добавит дубликат
         }
 
         for (int r = range.getFirstRow(); r <= range.getLastRow(); r++) {
@@ -527,6 +745,18 @@ public final class RadiationExcelExporter {
             }
         } catch (Exception ignored) {}
         return "Помещение";
+    }
+    private static void setColWidthPx(Sheet sh, int col, int px) {
+        int width = (int) Math.round((px - 5) / 7.0 * 256); // прибл. формула Excel
+        if (width < 0) width = 0;
+        sh.setColumnWidth(col, width);
+    }
+    private static boolean isPublicSpace(Space s) {
+        if (s == null) return false;
+        Space.SpaceType t = s.getType();
+        if (t == null) return false;
+        String txt = (t.name() + " " + String.valueOf(t)).toLowerCase(java.util.Locale.ROOT);
+        return txt.contains("public") || txt.contains("обще");
     }
 
 }
