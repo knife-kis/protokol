@@ -116,14 +116,29 @@ public class RadiationTab extends JPanel {
         JButton selectForAllButton = new JButton("Проставить чекбоксы на этаже");
         selectForAllButton.addActionListener(e -> applyRulesForWholeFloor());
 
-        // Панель для кнопки (для выравнивания)
+        JButton exportBtn = new JButton("Экспорт в Excel");
+        exportBtn.addActionListener(e -> exportToExcel());
+
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         buttonPanel.add(selectForAllButton);
+        buttonPanel.add(exportBtn); // NEW
 
         floorListPanel.add(buttonPanel, BorderLayout.SOUTH);
 
         panel.add(floorListPanel, BorderLayout.CENTER);
         return panel;
+    }
+    private void exportToExcel() {
+        if (currentBuilding == null) {
+            JOptionPane.showMessageDialog(this, "Сначала загрузите проект (здание).",
+                    "Экспорт", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        // синхронизируем глобальную карту чекбоксов в room.isSelected()
+        updateRoomSelectionStates();
+
+        // -1 = экспорт всех блок-секций
+        RadiationExcelExporter.export(currentBuilding, -1, this);
     }
 
     // NEW — колонка секций слева от этажей
