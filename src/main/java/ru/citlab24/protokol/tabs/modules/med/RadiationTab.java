@@ -1,6 +1,6 @@
 package ru.citlab24.protokol.tabs.modules.med;
 
-import ru.citlab24.protokol.MainFrame;
+import ru.citlab24.protokol.tabs.models.Section;
 import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.models.Floor;
 import ru.citlab24.protokol.tabs.models.Room;
@@ -44,6 +44,8 @@ public class RadiationTab extends JPanel {
 
     private JList<Floor> floorList;
     private DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
+    private JList<Section> sectionList;
+    private DefaultListModel<Section> sectionListModel = new DefaultListModel<>();
     private JTable roomTable;
     private RadiationRoomsTableModel roomsTableModel;
     private JButton splitRoomButton;
@@ -54,11 +56,36 @@ public class RadiationTab extends JPanel {
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        JPanel mainPanel = new JPanel(new GridLayout(1, 3, 10, 10));
-        mainPanel.add(createFloorPanel());
-        mainPanel.add(createSpacePanel());
-        mainPanel.add(createRoomPanel());
+        JPanel mainPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weighty = 1.0;
+
+// Секции — узкая колонка (вес 1)
+        gbc.gridx = 0;
+        gbc.weightx = 1.0;                 // ← в 3 раза меньше остальных
+        gbc.insets = new Insets(0, 0, 0, 10);
+        mainPanel.add(createSectionPanel(), gbc);
+
+// Этажи — обычная ширина (вес 3)
+        gbc.gridx = 1;
+        gbc.weightx = 3.0;
+        mainPanel.add(createFloorPanel(), gbc);
+
+// Помещения — обычная ширина (вес 3)
+        gbc.gridx = 2;
+        gbc.weightx = 3.0;
+        mainPanel.add(createSpacePanel(), gbc);
+
+// Комнаты — обычная ширина (вес 3)
+        gbc.gridx = 3;
+        gbc.weightx = 3.0;
+        gbc.insets = new Insets(0, 0, 0, 0); // без правого отступа у последнего
+        mainPanel.add(createRoomPanel(), gbc);
+
         add(mainPanel, BorderLayout.CENTER);
+
 
         SwingUtilities.invokeLater(() -> {
             if (currentBuilding != null) {
@@ -86,8 +113,8 @@ public class RadiationTab extends JPanel {
         floorListPanel.add(new JScrollPane(floorList), BorderLayout.CENTER);
 
         // Кнопка для обработки всех квартир
-        JButton selectForAllButton = new JButton("Выбрать для всех квартир");
-        selectForAllButton.addActionListener(e -> processAllResidentialSpacesOnCurrentFloor());
+        JButton selectForAllButton = new JButton("Проставить чекбоксы на этаже");
+        selectForAllButton.addActionListener(e -> applyRulesForWholeFloor());
 
         // Панель для кнопки (для выравнивания)
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -98,6 +125,42 @@ public class RadiationTab extends JPanel {
         panel.add(floorListPanel, BorderLayout.CENTER);
         return panel;
     }
+
+    // NEW — колонка секций слева от этажей
+    private JPanel createSectionPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(createTitledBorder("Секции", FLOOR_PANEL_COLOR));
+
+        sectionList = new JList<>(sectionListModel);
+        sectionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        sectionList.setFixedCellHeight(28);
+
+        sectionList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                // при выборе секции — перерисовываем этажи/помещения/комнаты
+                refreshFloors();
+            }
+        });
+
+        panel.add(new JScrollPane(sectionList), BorderLayout.CENTER);
+        return panel;
+    }
+
+    // NEW — подгрузка секций из currentBuilding в список
+    private void refreshSections() {
+        sectionListModel.clear();
+        if (currentBuilding != null && currentBuilding.getSections() != null) {
+            for (Section s : currentBuilding.getSections()) {
+                sectionListModel.addElement(s);
+            }
+        }
+        if (!sectionListModel.isEmpty()) {
+            // если раньше было выделение — можно попытаться его сохранить,
+            // но для простоты выберем первую секцию
+            sectionList.setSelectedIndex(0);
+        }
+    }
+
 
     private JPanel createSpacePanel() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -226,13 +289,16 @@ public class RadiationTab extends JPanel {
 
             if (autoApplyRulesOnDisplay) {
                 // Офисные этажи: проставляем во всех офисах (как раньше)
-                if (selectedFloor.getType() == Floor.FloorType.OFFICE) {
+                // Офисные и смешанные этажи: проставляем во всех офисных помещениях
+                if (selectedFloor.getType() == Floor.FloorType.OFFICE
+                        || selectedFloor.getType() == Floor.FloorType.MIXED) {
                     for (Space space : selectedFloor.getSpaces()) {
                         if (space.getType() == Space.SpaceType.OFFICE && !processedSpaces.contains(space.getId())) {
                             selectAllOfficeRooms(space);
                         }
                     }
                 }
+
 
                 // Жилые и смешанные этажи: применяем правила к ПЕРВОЙ квартире, у которой уже есть комнаты
                 Space firstApartmentWithRooms = selectedFloor.getSpaces().stream()
@@ -310,20 +376,65 @@ public class RadiationTab extends JPanel {
         }
         return false;
     }
-
-    private void processAllResidentialSpacesOnCurrentFloor() {
+    private void applyRulesForWholeFloor() {
         Floor currentFloor = floorList.getSelectedValue();
         if (currentFloor == null) return;
 
         for (Space space : currentFloor.getSpaces()) {
-            if (isResidentialSpace(space)) {
-                // Убираем проверку на firstResidentialSpace
+            if (space.getType() == Space.SpaceType.APARTMENT) {
+                // правило «2 галочки»: кухня (если есть) + одна не санузел
                 applyRoomSelectionRulesForResidentialSpace(space);
                 processedSpaces.add(space.getId());
-            }
+            } else if (space.getType() == Space.SpaceType.OFFICE) {
+                // офисы: все комнаты, кроме исключений
+                selectAllOfficeRooms(space);
+            } // PUBLIC — ничего не трогаем
         }
         roomsTableModel.fireTableDataChanged();
     }
+    // === ПУБЛИЧНЫЕ ХУКИ, вызывать из BuildingTab при создании ===
+    public void onFloorCreated(Floor floor) {
+        // Ничего не делаем сразу: для жилых/смешанных отметим при создании квартиры (см. onSpaceCreated).
+        // Для офисных можно и здесь пройтись, но удобнее — в onSpaceCreated, чтобы не зависеть от порядка.
+    }
+
+    public void onSpaceCreated(Floor floor, Space space) {
+        if (floor == null || space == null) return;
+
+        switch (floor.getType()) {
+            case PUBLIC:
+                // общественный — ничего не ставим
+                break;
+
+            case OFFICE:
+                if (space.getType() == Space.SpaceType.OFFICE) {
+                    selectAllOfficeRooms(space);
+                }
+                break;
+
+            case RESIDENTIAL:
+                if (space.getType() == Space.SpaceType.APARTMENT) {
+                    // «только в одном помещении на этаже» — в первой добавленной квартире
+                    if (!hasResidentialSelectionOnFloor(floor)) {
+                        applyRoomSelectionRulesForResidentialSpace(space);
+                    }
+                }
+                break;
+
+            case MIXED:
+                if (space.getType() == Space.SpaceType.OFFICE) {
+                    selectAllOfficeRooms(space);
+                } else if (space.getType() == Space.SpaceType.APARTMENT) {
+                    if (!hasResidentialSelectionOnFloor(floor)) {
+                        applyRoomSelectionRulesForResidentialSpace(space);
+                    }
+                }
+                break;
+        }
+        // обновим таблицу комнат, если она уже показана
+        if (roomsTableModel != null) roomsTableModel.fireTableDataChanged();
+    }
+
 
     private void applyRoomSelectionRulesForResidentialSpace(Space space) {
         if (processedSpaces.contains(space.getId())) return;
@@ -377,6 +488,27 @@ public class RadiationTab extends JPanel {
             logger.error("Ошибка при обработке помещения {}: {}", space.getIdentifier(), e.getMessage());
         }
     }
+    private boolean hasResidentialSelectionOnFloor(Floor floor) {
+        // Есть ли уже хоть одна отмеченная не-санузловая комната в любой квартире этого этажа?
+        for (Space s : floor.getSpaces()) {
+            if (s.getType() != Space.SpaceType.APARTMENT) continue;
+            for (Room r : s.getRooms()) {
+                // сперва смотрим в живую карту чекбоксов, затем в сохранённое состояние комнаты
+                Boolean v = globalRoomSelectionMap.get(r.getId());
+                if (Boolean.TRUE.equals(v) || r.isSelected()) {
+                    String n = safe(r.getName());
+                    if (!isExcludedRoom(n)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+
+    private static String safe(String s) {
+        return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
+    }
+
 
     public void setRoomSelectionState(int roomId, boolean state) {
         globalRoomSelectionMap.put(roomId, state);
@@ -440,6 +572,7 @@ public class RadiationTab extends JPanel {
             forceSelectOfficeRooms();
         }
 
+        refreshSections();
         refreshFloors();
         logger.info("Здание установлено. Комнат: {}", globalRoomSelectionMap.size());
     }
@@ -468,26 +601,41 @@ public class RadiationTab extends JPanel {
 
     public void refreshFloors() {
         String selectedFloorNumber = null;
-        if (floorList.getSelectedValue() != null) {
+        if (floorList != null && floorList.getSelectedValue() != null) {
             selectedFloorNumber = floorList.getSelectedValue().getNumber();
         }
 
         floorListModel.clear();
         if (currentBuilding != null) {
-            currentBuilding.getFloors().forEach(floorListModel::addElement);
+            // индекс выбранной секции; если ничего не выбрано — 0
+            int secIdx = 0;
+            if (sectionList != null && sectionList.getSelectedIndex() >= 0) {
+                secIdx = sectionList.getSelectedIndex();
+            }
+            // собираем только этажи выбранной секции и сортируем по position
+            java.util.List<Floor> list = new java.util.ArrayList<>();
+            for (Floor f : currentBuilding.getFloors()) {
+                if (f.getSectionIndex() == secIdx) list.add(f);
+            }
+            list.sort(java.util.Comparator.comparingInt(Floor::getPosition));
+            list.forEach(floorListModel::addElement);
         }
 
-        // Восстанавливаем выделение этажа
+        // восстановление выделения этажа, если он остался в текущей секции
+        boolean restored = false;
         if (selectedFloorNumber != null) {
             for (int i = 0; i < floorListModel.size(); i++) {
                 if (floorListModel.get(i).getNumber().equals(selectedFloorNumber)) {
                     floorList.setSelectedIndex(i);
+                    restored = true;
                     break;
                 }
             }
         }
+        if (!restored && !floorListModel.isEmpty()) {
+            floorList.setSelectedIndex(0);
+        }
 
-        // Обновляем таблицы помещений и комнат
         updateSpaceList();
         updateRoomList();
     }

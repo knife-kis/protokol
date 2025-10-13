@@ -1159,20 +1159,15 @@ public class BuildingTab extends JPanel {
     }
 
     private void removeSpace(ActionEvent e) {
-        Space space = spaceList.getSelectedValue();
-        if (space != null && "-".equals(space.getIdentifier())) {
-            showMessage("Нельзя удалить системное помещение", "Ошибка", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
         Floor floor = floorList.getSelectedValue();
         int index = spaceList.getSelectedIndex();
-
         if (floor != null && index >= 0) {
             floor.getSpaces().remove(index);
             spaceListModel.remove(index);
         }
         updateRadiationTab(building, true);
     }
+
 
     // «умное» добавление комнат — с подсказками, пакетным добавлением и автонумерацией
     private void addRoom(ActionEvent e) {
@@ -1272,19 +1267,18 @@ public class BuildingTab extends JPanel {
     private void updateSpaceList() {
         spaceListModel.clear();
         Floor selectedFloor = floorList.getSelectedValue();
-        if (selectedFloor != null) {
-            if (selectedFloor.getType() == Floor.FloorType.PUBLIC) {
-                createDefaultSpaceIfMissing(selectedFloor);
-            }
-            List<Space> sorted = new ArrayList<>(selectedFloor.getSpaces());
-            sorted.sort(Comparator.comparingInt(Space::getPosition));
-            sorted.forEach(spaceListModel::addElement);
+        if (selectedFloor == null) return;
 
-            if (selectedFloor.getType() == Floor.FloorType.PUBLIC && !spaceListModel.isEmpty()) {
-                selectDefaultSpace(selectedFloor);
-            } else if (!spaceListModel.isEmpty()) {
-                spaceList.setSelectedIndex(0);
-            }
+        // просто показываем реальные помещения, ничего не добавляем автоматически
+        List<Space> sorted = new ArrayList<>(selectedFloor.getSpaces());
+        sorted.sort(Comparator.comparingInt(Space::getPosition));
+        sorted.forEach(spaceListModel::addElement);
+
+        if (!spaceListModel.isEmpty()) {
+            // попытка сохранить текущее выделение (если есть)
+            Space prev = spaceList.getSelectedValue();
+            int idx = (prev != null) ? sorted.indexOf(prev) : -1;
+            spaceList.setSelectedIndex(idx >= 0 ? idx : 0);
         }
     }
 
@@ -1300,14 +1294,6 @@ public class BuildingTab extends JPanel {
         }
     }
 
-    private void selectDefaultSpace(Floor floor) {
-        for (int i = 0; i < spaceListModel.size(); i++) {
-            if ("-".equals(spaceListModel.get(i).getIdentifier())) {
-                spaceList.setSelectedIndex(i);
-                break;
-            }
-        }
-    }
 
     private void updateRoomList() {
         roomListModel.clear();

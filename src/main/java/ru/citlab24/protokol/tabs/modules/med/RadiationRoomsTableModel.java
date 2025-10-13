@@ -45,15 +45,6 @@ class RadiationRoomsTableModel extends AbstractTableModel {
             Room room = rooms.get(rowIndex);
             Space space = radiationTab.findParentSpace(room);
 
-            // Блокируем снятие галочек в офисах (кроме санузлов)
-            if (space != null &&
-                    space.getType() == Space.SpaceType.OFFICE &&
-                    !RadiationTab.isExcludedRoom(room.getName()) &&
-                    !Boolean.TRUE.equals(aValue)
-            ) {
-                return; // Игнорируем попытку снять галочку
-            }
-
             globalSelectionMap.put(room.getId(), (Boolean) aValue);
             fireTableCellUpdated(rowIndex, columnIndex);
         }
