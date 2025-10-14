@@ -13,6 +13,8 @@ import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
 import ru.citlab24.protokol.tabs.renderers.RoomListRenderer;
 import ru.citlab24.protokol.tabs.renderers.SpaceListRenderer;
+import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
+
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -577,6 +579,7 @@ public class BuildingTab extends JPanel {
         updateVentilationTab(loadedBuilding);
         // Показываем ровно сохранённые состояния: без принудительного проставления и без авто-правил
         updateRadiationTab(loadedBuilding, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        updateLightingTab(loadedBuilding, /*autoApplyDefaults=*/false);
         showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен", "Загрузка", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -612,6 +615,7 @@ public class BuildingTab extends JPanel {
 
         // Обновляем RadiationTab
         updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        updateLightingTab(newProject, /*autoApplyDefaults=*/false);
 
         logger.info("Проект успешно сохранен");
     }
@@ -1321,7 +1325,16 @@ public class BuildingTab extends JPanel {
         updateRoomList();
     }
 
-
+    private void updateLightingTab(Building building, boolean autoApplyDefaults) {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            LightingTab tab = ((MainFrame) mainFrame).getLightingTab();
+            if (tab != null) {
+                tab.setBuilding(building, autoApplyDefaults);
+                tab.refreshData();
+            }
+        }
+    }
     private void updateVentilationTab(Building building) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
@@ -1362,6 +1375,7 @@ public class BuildingTab extends JPanel {
         super.addNotify();
         if (this.building == null) this.building = new Building();
         updateRadiationTab(this.building, true);
+        updateLightingTab(building, true);
 
         if (floorList != null && !floorListModel.isEmpty()) {
             floorList.setSelectedIndex(0);
