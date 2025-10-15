@@ -4,203 +4,159 @@ import ru.citlab24.protokol.tabs.models.*;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
-import javax.swing.table.AbstractTableModel;
+import javax.swing.event.TableModelEvent;
 import java.awt.*;
-import java.util.*;
 import java.util.List;
+import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * Вкладка «Освещение» в стиле «Радиации»:
- * слева — Секции и Этажи, посередине — список Помещений, справа — таблица Комнат (чекбоксы).
- * Автопроставление галочек на первом жилом этаже каждой секции (квартиры), с исключениями.
+ * Вкладка «Освещение» в стиле «Радиации».
+ * Слева направо: Секции → Этажи → Помещения → Комнаты (с чекбоксами).
+ * Автопроставление галочек: первый ЖИЛОЙ этаж (RESIDENTIAL) или MIXED с квартирами,
+ * исключая санузлы/ванные/душ/туалет/гардероб/коридор. Ручные клики не перетираем.
  */
-public class LightingTab extends JPanel {
+public final class LightingTab extends JPanel {
 
-    private static final Color FLOOR_PANEL_COLOR = new Color(0, 115, 200);
+    private static final Color PANEL_COLOR = new Color(0,115,200);
     private static final Font HEADER_FONT = UIManager.getFont("Label.font").deriveFont(Font.PLAIN, 15f);
 
-    private JList<Section> sectionList;
-    private DefaultListModel<Section> sectionListModel = new DefaultListModel<>();
-
-    private JList<Floor> floorList;
-    private DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
-
-    private JTable spaceTable;
-    private SpaceTableModel spaceTableModel = new SpaceTableModel();
-
-    private JTable roomTable;
-    private LightingRoomsTableModel roomsTableModel;
-
+    // Модель здания
     private Building currentBuilding;
+
+    // Списки/таблицы
+    private final DefaultListModel<Section> sectionListModel = new DefaultListModel<>();
+    private final JList<Section> sectionList = new JList<>(sectionListModel);
+
+    private final DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
+    private final JList<Floor> floorList = new JList<>(floorListModel);
+
+    private final SpaceTableModel spaceTableModel = new SpaceTableModel();
+    private final JTable spaceTable = new JTable(spaceTableModel);
+
+    private final Map<Integer, Boolean> globalRoomSelectionMap = new HashMap<>();
+    private final Set<Integer> userTouchedRooms = new HashSet<>();
+    private final Set<String> processedSpaceKeys = new HashSet<>();
+
+    private final LightingRoomsTableModel roomsTableModel =
+            new LightingRoomsTableModel(globalRoomSelectionMap, new Consumer<Integer>() {
+                @Override public void accept(Integer id) { userTouchedRooms.add(id); }
+            });
+    private final JTable roomTable = new JTable(roomsTableModel);
+
     private boolean autoApplyRulesOnDisplay = true;
 
-    // Глобальные состояния чекбоксов по id комнаты (как в радиации)
-    public final Map<Integer, Boolean> globalRoomSelectionMap = new HashMap<>();
-    private final Set<Integer> processedSpaces = new HashSet<>(); // чтобы не перетирать ручной выбор
-
+    // ====== Конструктор ======
     public LightingTab(Building building) {
-        roomsTableModel = new LightingRoomsTableModel(globalRoomSelectionMap);
-
-        setLayout(new BorderLayout(10, 10));
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        JPanel mainPanel = new JPanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridy = 0;
-        gbc.insets = new Insets(0,0,0,0);
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.weighty = 1.0;
-
-        // Секции
-        gbc.gridx = 0; gbc.weightx = 0.25;
-        mainPanel.add(createSectionPanel(), gbc);
-
-        // Этажи
-        gbc.gridx = 1; gbc.weightx = 0.25;
-        mainPanel.add(createFloorPanel(), gbc);
-
-        // Помещения
-        gbc.gridx = 2; gbc.weightx = 0.25;
-        mainPanel.add(createSpacePanel(), gbc);
-
-        // Комнаты
-        gbc.gridx = 3; gbc.weightx = 0.25;
-        mainPanel.add(createRoomPanel(), gbc);
-
-        add(mainPanel, BorderLayout.CENTER);
-        setBuilding(building, /*autoApplyDefaults=*/true);
-    }
-
-    // ==== Публичные API, как у радиации ====
-
-    public void setBuilding(Building building, boolean autoApplyDefaults) {
         this.currentBuilding = building;
-        this.autoApplyRulesOnDisplay = autoApplyDefaults;
-        processedSpaces.clear();
 
-        // переносим состояния из модели
-        globalRoomSelectionMap.clear();
-        if (building != null) {
-            for (Floor f : building.getFloors()) {
-                for (Space s : f.getSpaces()) {
-                    for (Room r : s.getRooms()) {
-                        globalRoomSelectionMap.put(r.getId(), r.isSelected());
-                    }
-                }
-            }
-        }
+        setLayout(new BorderLayout(10,10));
+        setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+        add(buildMainPanel(), BorderLayout.CENTER);
 
-        refreshSections();
-        refreshFloors();
-    }
-
-    public void refreshData() {
-        refreshSections();
-        refreshFloors();
-    }
-
-    /** Сохранить чекбоксы обратно в Room.isSelected() (зови перед сохранением проекта) */
-    public void updateRoomSelectionStates() {
-        if (currentBuilding == null) return;
-        for (Floor f : currentBuilding.getFloors()) {
-            for (Space s : f.getSpaces()) {
-                for (Room r : s.getRooms()) {
-                    Boolean sel = globalRoomSelectionMap.get(r.getId());
-                    if (sel != null) r.setSelected(sel);
-                }
-            }
-        }
-    }
-
-    /** Сохраняем/восстанавливаем снимок состояний (по аналогии с Радиацией) */
-    public Map<String, Boolean> saveSelections() {
-        Map<String, Boolean> map = new HashMap<>();
-        for (Map.Entry<Integer, Boolean> e : globalRoomSelectionMap.entrySet()) {
-            map.put(String.valueOf(e.getKey()), e.getValue());
-        }
-        return map;
-    }
-    public void restoreSelections(Map<String, Boolean> saved) {
-        for (Map.Entry<String, Boolean> e : saved.entrySet()) {
-            try {
-                globalRoomSelectionMap.put(Integer.parseInt(e.getKey()), e.getValue());
-            } catch (NumberFormatException ignore) {}
-        }
-        updateRoomList();
-    }
-
-    // ==== UI блоки ====
-
-    private JPanel createSectionPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(createTitledBorder("Секции", FLOOR_PANEL_COLOR));
-
-        sectionList = new JList<>(sectionListModel);
+        // Лиснеры выбора
         sectionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         sectionList.setFixedCellHeight(28);
-        sectionList.addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) refreshFloors();
-        });
+        sectionList.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) refreshFloors(); });
 
-        panel.add(new JScrollPane(sectionList), BorderLayout.CENTER);
-        return panel;
-    }
-
-    private JPanel createFloorPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(createTitledBorder("Этажи", FLOOR_PANEL_COLOR));
-
-        floorList = new JList<>(floorListModel);
-        floorList.setCellRenderer(new ru.citlab24.protokol.tabs.renderers.FloorListRenderer());
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorList.setFixedCellHeight(28);
+        floorList.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) updateSpaceList(); });
+        try {
+            // Если у тебя есть кастомные рендереры — используем
+            floorList.setCellRenderer(new ru.citlab24.protokol.tabs.renderers.FloorListRenderer());
+        } catch (Throwable ignore) { /* не критично */ }
 
-        floorList.addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) updateSpaceList();
-        });
-
-        panel.add(new JScrollPane(floorList), BorderLayout.CENTER);
-        return panel;
-    }
-
-    private JPanel createSpacePanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(createTitledBorder("Помещения", FLOOR_PANEL_COLOR));
-
-        spaceTable = new JTable(spaceTableModel);
         spaceTable.getTableHeader().setFont(HEADER_FONT);
         spaceTable.setRowHeight(25);
         spaceTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        spaceTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) updateRoomList();
-        });
+        spaceTable.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) updateRoomList(); });
 
-        panel.add(new JScrollPane(spaceTable), BorderLayout.CENTER);
-        return panel;
-    }
-
-    private JPanel createRoomPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(createTitledBorder("Комнаты", FLOOR_PANEL_COLOR));
-
-        roomTable = new JTable(roomsTableModel);
         roomTable.getTableHeader().setFont(HEADER_FONT);
         roomTable.setRowHeight(26);
         roomTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        roomsTableModel.addTableModelListener(e -> {
+            if (e.getType() == TableModelEvent.UPDATE && e.getColumn() == 0) {
+                int row = e.getFirstRow();
+                Room r = roomsTableModel.getRoomAt(row);
+                if (r != null) userTouchedRooms.add(r.getId());
+            }
+        });
 
-        panel.add(new JScrollPane(roomTable), BorderLayout.CENTER);
-        return panel;
+        // Инициализация
+        setBuilding(building, true);
     }
 
-    // ==== Refresh ====
+    // ====== Публичные API (как в Радиации) ======
+    public void setBuilding(Building building, boolean autoApplyDefaults) {
+        this.currentBuilding = building;
+        this.autoApplyRulesOnDisplay = autoApplyDefaults;
+        processedSpaceKeys.clear();
+        userTouchedRooms.clear();
+        globalRoomSelectionMap.clear();
 
+        if (building != null) {
+            for (Floor f : building.getFloors())
+                for (Space s : f.getSpaces())
+                    for (Room r : s.getRooms())
+                        globalRoomSelectionMap.put(r.getId(), r.isSelected());
+        }
+        refreshSections();
+        refreshFloors(); // внутри вызовется updateSpaceList()
+    }
+
+    /** Пробросить состояния чекбоксов обратно в доменную модель. */
+    public void updateRoomSelectionStates() {
+        if (currentBuilding == null) return;
+        for (Floor f : currentBuilding.getFloors())
+            for (Space s : f.getSpaces())
+                for (Room r : s.getRooms()) {
+                    Boolean v = globalRoomSelectionMap.get(r.getId());
+                    if (v != null) r.setSelected(v);
+                }
+    }
+
+    // ====== UI ======
+    private JPanel buildMainPanel() {
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(0,0,0,0);
+        g.fill = GridBagConstraints.BOTH;
+        g.weighty = 1.0;
+
+        g.gridx = 0; g.gridy = 0; g.weightx = 0.25;
+        p.add(panelWithBorder("Секции", new JScrollPane(sectionList)), g);
+
+        g.gridx = 1; g.weightx = 0.25;
+        p.add(panelWithBorder("Этажи", new JScrollPane(floorList)), g);
+
+        g.gridx = 2; g.weightx = 0.25;
+        p.add(panelWithBorder("Помещения", new JScrollPane(spaceTable)), g);
+
+        g.gridx = 3; g.weightx = 0.25;
+        p.add(panelWithBorder("Комнаты", new JScrollPane(roomTable)), g);
+
+        return p;
+    }
+
+    private JPanel panelWithBorder(String title, JComponent inner) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBorder(createTitledBorder(title, PANEL_COLOR));
+        p.add(inner, BorderLayout.CENTER);
+        return p;
+    }
+
+    private TitledBorder createTitledBorder(String title, Color color) {
+        return BorderFactory.createTitledBorder(null, title, TitledBorder.LEFT, TitledBorder.TOP, HEADER_FONT, color);
+    }
+
+    // ====== Refresh ======
     private void refreshSections() {
         sectionListModel.clear();
         if (currentBuilding == null) return;
-        List<Section> secs = new ArrayList<>(currentBuilding.getSections());
-        secs.sort(Comparator.comparingInt(Section::getPosition));
-        secs.forEach(sectionListModel::addElement);
+        List<Section> secs = currentBuilding.getSections(); // порядок = индексы в модели
+        for (Section s : secs) sectionListModel.addElement(s);
         if (!sectionListModel.isEmpty() && sectionList.getSelectedIndex() < 0) {
             sectionList.setSelectedIndex(0);
         }
@@ -208,115 +164,112 @@ public class LightingTab extends JPanel {
 
     private void refreshFloors() {
         floorListModel.clear();
-        if (currentBuilding == null) return;
+        if (currentBuilding == null) { updateSpaceList(); return; }
 
-        int secIdx = Math.max(0, sectionList.getSelectedIndex());
+        final int secIdx = Math.max(0, sectionList.getSelectedIndex()); // <- как в радиации
+
         List<Floor> list = currentBuilding.getFloors().stream()
                 .filter(f -> f.getSectionIndex() == secIdx)
                 .sorted(Comparator.comparingInt(Floor::getPosition))
                 .collect(Collectors.toList());
 
-        list.forEach(floorListModel::addElement);
+        for (Floor f : list) floorListModel.addElement(f);
         if (!floorListModel.isEmpty() && floorList.getSelectedIndex() < 0) {
             floorList.setSelectedIndex(0);
         }
+        updateSpaceList(); // принудительно, если выбор не изменился
+    }
+
+    private int computeRawSectionIndex() {
+        if (currentBuilding == null) return 0;
+        Section sel = sectionList.getSelectedValue();
+        if (sel == null) return 0;
+        List<Section> raw = currentBuilding.getSections(); // исходный список (индексы совпадают с floor.sectionIndex)
+        int idx = raw.indexOf(sel);
+        return (idx >= 0) ? idx : 0;
     }
 
     private void updateSpaceList() {
-        spaceTableModel.clear();
-        Floor selectedFloor = floorList.getSelectedValue();
-        if (selectedFloor == null) return;
-
-        for (Space s : selectedFloor.getSpaces()) {
-            spaceTableModel.addSpace(s);
+        Floor floor = floorList.getSelectedValue();
+        if (floor == null) {
+            spaceTableModel.setSpaces(Collections.emptyList());
+            updateRoomList();
+            return;
         }
+        List<Space> spaces = new ArrayList<>(floor.getSpaces());
+        spaces.sort(Comparator.comparingInt(Space::getPosition));
+        spaceTableModel.setSpaces(spaces);
 
-        if (autoApplyRulesOnDisplay) {
-            autoApplyForFirstResidentialFloorIfNeeded(selectedFloor);
-        }
+        if (autoApplyRulesOnDisplay) autoApplyForFirstResidentialFloorIfNeeded(floor);
 
-        // Выбрать первую строку (если не выбрано)
         if (spaceTable.getRowCount() > 0 && spaceTable.getSelectedRow() < 0) {
-            spaceTable.setRowSelectionInterval(0, 0);
+            spaceTable.setRowSelectionInterval(0,0);
         }
-
         updateRoomList();
     }
 
     private void updateRoomList() {
         int row = spaceTable.getSelectedRow();
-        if (row < 0) {
-            roomsTableModel.setRooms(List.of());
-            return;
-        }
+        if (row < 0) { roomsTableModel.setRooms(Collections.emptyList()); return; }
         Space s = spaceTableModel.getSpaceAt(row);
-        if (s == null) {
-            roomsTableModel.setRooms(List.of());
-            return;
-        }
+        if (s == null) { roomsTableModel.setRooms(Collections.emptyList()); return; }
         roomsTableModel.setRooms(new ArrayList<>(s.getRooms()));
     }
 
-    // ==== Логика автопроставления ====
-
+    // ====== Автопроставление для первого жилого этажа ======
     private void autoApplyForFirstResidentialFloorIfNeeded(Floor selectedFloor) {
-        // Берём карту "секция -> позиция первого жилого этажа"
-        Map<Integer, Integer> firstBySection = findFirstResidentialFloorPositionBySection(currentBuilding);
+        if (currentBuilding == null) return;
 
+        Map<Integer, Integer> firstBySection = findFirstResidentialFloorPositionBySection(currentBuilding);
         Integer firstPos = firstBySection.get(selectedFloor.getSectionIndex());
         if (firstPos == null) return;
         if (selectedFloor.getPosition() != firstPos) return;
 
-        // На первом жилом этаже: отмечаем ВСЕ квартиры (кроме исключений по комнатам)
         for (Space s : selectedFloor.getSpaces()) {
-            if (s.getType() == Space.SpaceType.APARTMENT && !processedSpaces.contains(s.getId())) {
-                for (Room r : s.getRooms()) {
-                    boolean excluded = isExcludedRoom(r.getName());
-                    // если пользователь уже явно трогал — не перезатираем
-                    globalRoomSelectionMap.putIfAbsent(r.getId(), !excluded);
-                    if (!globalRoomSelectionMap.containsKey(r.getId())) {
-                        globalRoomSelectionMap.put(r.getId(), !excluded);
-                    }
+            if (s.getType() != Space.SpaceType.APARTMENT) continue;
+
+            String key = spaceKey(selectedFloor, s); // устойчивый ключ (без Space.id)
+            if (processedSpaceKeys.contains(key)) continue;
+
+            for (Room r : s.getRooms()) {
+                if (isExcludedRoom(r.getName())) continue;
+                if (!userTouchedRooms.contains(r.getId())) {
+                    globalRoomSelectionMap.put(r.getId(), true);
                 }
-                processedSpaces.add(s.getId());
             }
+            processedSpaceKeys.add(key);
         }
+        roomTable.repaint();
     }
 
-    /**
-     * Жилой этаж: FloorType.RESIDENTIAL ИЛИ FloorType.MIXED, но только если на нём есть квартиры.
-     * Берём самый верхний в списке (по position) — у тебя position уже задаёт порядок.
-     */
+    /** Жилой этаж: RESIDENTIAL или MIXED при наличии хотя бы одной квартиры. */
     private Map<Integer, Integer> findFirstResidentialFloorPositionBySection(Building bld) {
         Map<Integer, Integer> result = new HashMap<>();
-        if (bld == null) return result;
-
-        Map<Integer, List<Floor>> bySec = bld.getFloors().stream()
-                .collect(Collectors.groupingBy(Floor::getSectionIndex));
-
+        Map<Integer, List<Floor>> bySec = bld.getFloors().stream().collect(Collectors.groupingBy(Floor::getSectionIndex));
         for (Map.Entry<Integer, List<Floor>> e : bySec.entrySet()) {
             int sec = e.getKey();
             List<Floor> fs = new ArrayList<>(e.getValue());
-            fs.sort(Comparator.comparingInt(Floor::getPosition)); // «сверху тот и жилой»
+            fs.sort(Comparator.comparingInt(Floor::getPosition));
 
             Integer firstPos = null;
             for (Floor f : fs) {
-                if (f.getType() == Floor.FloorType.RESIDENTIAL) {
-                    firstPos = f.getPosition();
-                    break;
-                }
+                if (f.getType() == Floor.FloorType.RESIDENTIAL) { firstPos = f.getPosition(); break; }
                 if (f.getType() == Floor.FloorType.MIXED) {
-                    boolean hasApts = f.getSpaces().stream()
-                            .anyMatch(s -> s.getType() == Space.SpaceType.APARTMENT);
-                    if (hasApts) {
-                        firstPos = f.getPosition();
-                        break;
-                    }
+                    boolean hasApts = f.getSpaces().stream().anyMatch(s -> s.getType() == Space.SpaceType.APARTMENT);
+                    if (hasApts) { firstPos = f.getPosition(); break; }
                 }
             }
             if (firstPos != null) result.put(sec, firstPos);
         }
         return result;
+    }
+
+    private String spaceKey(Floor f, Space s) {
+        int sec = (f != null) ? f.getSectionIndex() : -1;
+        int fpos = (f != null) ? f.getPosition() : -1;
+        int spos = (s != null) ? s.getPosition() : -1;
+        String sid = (s != null && s.getIdentifier() != null) ? s.getIdentifier() : "";
+        return sec + "/" + fpos + "/" + spos + "/" + sid;
     }
 
     private boolean isExcludedRoom(String name) {
@@ -328,38 +281,39 @@ public class LightingTab extends JPanel {
                 || n.contains("гардероб") || n.contains("коридор");
     }
 
-    private TitledBorder createTitledBorder(String title, Color color) {
-        return BorderFactory.createTitledBorder(
-                null, title, TitledBorder.LEFT, TitledBorder.TOP, HEADER_FONT, color);
-    }
-
-    // ==== Space table model (как в радиации: одна колонка «Название») ====
-
-    static class SpaceTableModel extends AbstractTableModel {
+    // ====== Таблица помещений (1 колонка) ======
+    static final class SpaceTableModel extends javax.swing.table.AbstractTableModel {
         private final String[] COLUMN_NAMES = {"Название"};
         private final List<Space> spaces = new ArrayList<>();
 
-        public void addSpace(Space space) {
-            spaces.add(space);
-            fireTableRowsInserted(spaces.size() - 1, spaces.size() - 1);
-        }
-        public void clear() {
-            int size = spaces.size();
+        void setSpaces(List<Space> newSpaces) {
             spaces.clear();
-            if (size > 0) fireTableRowsDeleted(0, size - 1);
+            if (newSpaces != null) spaces.addAll(newSpaces);
+            fireTableDataChanged();
         }
-        public Space getSpaceAt(int row) {
+        Space getSpaceAt(int row) {
             return (row >= 0 && row < spaces.size()) ? spaces.get(row) : null;
         }
 
         @Override public int getRowCount() { return spaces.size(); }
-        @Override public int getColumnCount() { return COLUMN_NAMES.length; }
+        @Override public int getColumnCount() { return 1; }
         @Override public String getColumnName(int column) { return COLUMN_NAMES[column]; }
-
-        @Override
-        public Object getValueAt(int rowIndex, int columnIndex) {
-            Space space = spaces.get(rowIndex);
-            return space.getIdentifier();
+        @Override public Object getValueAt(int rowIndex, int columnIndex) {
+            Space s = spaces.get(rowIndex);
+            return (s != null) ? s.getIdentifier() : "";
         }
     }
+    // стало: добавили безопасное обновление UI без автопроставления
+    /** Перечитать UI из текущей доменной модели без автопроставления. */
+    public void refreshData() {
+        boolean prev = this.autoApplyRulesOnDisplay;
+        try {
+            this.autoApplyRulesOnDisplay = false; // не триггерим авто-галочки при простом рефреше
+            refreshSections();
+            refreshFloors();   // внутри принудительно перегружает список помещений
+        } finally {
+            this.autoApplyRulesOnDisplay = prev;
+        }
+    }
+
 }

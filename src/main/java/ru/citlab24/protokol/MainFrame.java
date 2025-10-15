@@ -2,10 +2,10 @@ package ru.citlab24.protokol;
 
 import ru.citlab24.protokol.tabs.buildingTab.BuildingTab;
 import ru.citlab24.protokol.tabs.models.Building;
+import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
-import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatDarkLaf;
@@ -125,26 +125,6 @@ public class MainFrame extends JFrame {
 
     // ===== Утилиты доступа к вкладкам (по желанию) =====
 
-    public BuildingTab getBuildingTab() {
-        for (Component comp : tabbedPane.getComponents()) {
-            if (comp instanceof BuildingTab) return (BuildingTab) comp;
-        }
-        return null;
-    }
-
-    public MicroclimateTab getMicroclimateTab() {
-        for (Component comp : tabbedPane.getComponents()) {
-            if (comp instanceof MicroclimateTab) return (MicroclimateTab) comp;
-        }
-        return null;
-    }
-
-    public VentilationTab getVentilationTab() {
-        for (Component comp : tabbedPane.getComponents()) {
-            if (comp instanceof VentilationTab) return (VentilationTab) comp;
-        }
-        return null;
-    }
 
     public RadiationTab getRadiationTab() {
         for (Component comp : tabbedPane.getComponents()) {

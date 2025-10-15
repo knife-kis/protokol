@@ -7,13 +7,13 @@ import org.slf4j.LoggerFactory;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.dialogs.*;
+import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
 import ru.citlab24.protokol.tabs.renderers.RoomListRenderer;
 import ru.citlab24.protokol.tabs.renderers.SpaceListRenderer;
-import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 
 
 import javax.swing.*;
@@ -346,33 +346,6 @@ public class BuildingTab extends JPanel {
         floorList.setDropMode(DropMode.INSERT);
         floorList.setTransferHandler(floorReorderHandler);
 
-// Перенос этажа МЕЖДУ секциями: дроп на список секций
-//        sectionList.setDropMode(DropMode.ON);
-//        sectionList.setTransferHandler(new TransferHandler() {
-//            @Override public boolean canImport(TransferSupport supp) { return supp.isDrop(); }
-//            @Override public boolean importData(TransferSupport supp) {
-//                if (!supp.isDrop()) return false;
-//                JList.DropLocation dl = (JList.DropLocation) supp.getDropLocation();
-//                int targetIdx = dl.getIndex();
-//                if (targetIdx < 0 || targetIdx >= sectionListModel.size()) return false;
-//                Floor dragged = floorList.getSelectedValue();
-//                if (dragged == null) return false;
-//
-//                // кладём в КОНЕЦ целевой секции
-//                int lastPos = 0;
-//                for (Floor f : building.getFloors())
-//                    if (f.getSectionIndex() == targetIdx)
-//                        lastPos = Math.max(lastPos, f.getPosition() + 1);
-//
-//                dragged.setSectionIndex(targetIdx);
-//                dragged.setPosition(lastPos);
-//
-//                refreshFloorListForSelectedSection();
-//                updateRadiationTab(building, /*force=*/false, /*auto=*/false);
-//                return true;
-//            }
-//        });
-
 
         // слушатели
         sectionList.addListSelectionListener(e -> {
@@ -428,6 +401,7 @@ public class BuildingTab extends JPanel {
 
                     refreshFloorListForSelectedSection();
                     updateRadiationTab(building, /*force=*/false, /*autoApplyRules=*/false);
+                    updateLightingTab(building, /*autoApplyDefaults=*/false);
                     return true;
                 } finally {
                     draggingFromFloor = false;
@@ -468,6 +442,7 @@ public class BuildingTab extends JPanel {
                 sectionList.setSelectedIndex(0);
             }
             refreshFloorListForSelectedSection();
+            updateLightingTab(building, /*autoApplyDefaults=*/false);
         }
     };
 
@@ -545,6 +520,7 @@ public class BuildingTab extends JPanel {
         if (!sectionListModel.isEmpty()) sectionList.setSelectedIndex(0);
         refreshFloorListForSelectedSection();
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
 
     }
 
@@ -711,12 +687,14 @@ public class BuildingTab extends JPanel {
         @Override protected void afterReorder(DefaultListModel<Space> model) {
             // Переписываем position по новому порядку
             for (int i = 0; i < model.size(); i++) model.get(i).setPosition(i);
+            updateLightingTab(building, /*autoApplyDefaults=*/false);
         }
     };
 
     private final TransferHandler roomReorderHandler = new ReorderHandler<Room>() {
         @Override protected void afterReorder(DefaultListModel<Room> model) {
             for (int i = 0; i < model.size(); i++) model.get(i).setPosition(i);
+            updateLightingTab(building, /*autoApplyDefaults=*/false);
         }
     };
 
@@ -798,6 +776,7 @@ public class BuildingTab extends JPanel {
 
         // Обновляем вкладку с новым зданием
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
 
         // Восстанавливаем состояния ТОЛЬКО для исходных комнат
         restoreRadiationSelections(savedSelections);
@@ -885,8 +864,9 @@ public class BuildingTab extends JPanel {
             String floorName = floor.getType().title + " " + floor.getNumber();
             floor.setName(floorName);
             building.addFloor(floor);
-            refreshFloorListForSelectedSection(); // вместо прямого addElement
+            refreshFloorListForSelectedSection();
             updateRadiationTab(building, true);
+            updateLightingTab(building, /*autoApplyDefaults=*/false);
 
         }
     }
@@ -938,6 +918,7 @@ public class BuildingTab extends JPanel {
 
         // 4. Обновляем ТОЛЬКО список этажей в UI
         floorList.setSelectedValue(copiedFloor, true);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
 
         // 5. Восстанавливаем ВСЕ состояния комнат
         if (radiationTab != null) {
@@ -1077,6 +1058,7 @@ public class BuildingTab extends JPanel {
             updateSpaceList();
         }
         updateRadiationTab(building, true);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
     }
 
     private Map<String, Boolean> saveRadiationSelections() {
@@ -1107,6 +1089,7 @@ public class BuildingTab extends JPanel {
             floorListModel.remove(index);
         }
         updateRadiationTab(building, true);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
     }
 
     // Операции с помещениями
@@ -1128,6 +1111,7 @@ public class BuildingTab extends JPanel {
         }
 
         updateRadiationTab(building, true);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
 
         // Проверяем, что space был создан
         RadiationTab radiationTab = getRadiationTab();
@@ -1160,6 +1144,7 @@ public class BuildingTab extends JPanel {
             updateRoomList();
         }
         updateRadiationTab(building, true);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
     }
 
     private void removeSpace(ActionEvent e) {
@@ -1170,6 +1155,7 @@ public class BuildingTab extends JPanel {
             spaceListModel.remove(index);
         }
         updateRadiationTab(building, true);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
     }
 
 
@@ -1213,6 +1199,7 @@ public class BuildingTab extends JPanel {
         }
 
         updateRadiationTab(building, true);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
     }
 
 
@@ -1242,6 +1229,7 @@ public class BuildingTab extends JPanel {
                     room.setName(newName.trim());
                     roomListModel.set(index, room);
                     updateRadiationTab(building, true);
+                    updateLightingTab(building, /*autoApplyDefaults=*/false);
                 }
             }
         } else {
@@ -1265,6 +1253,7 @@ public class BuildingTab extends JPanel {
             roomListModel.remove(index);
         }
         updateRadiationTab(building, true);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
     }
 
     // Вспомогательные методы

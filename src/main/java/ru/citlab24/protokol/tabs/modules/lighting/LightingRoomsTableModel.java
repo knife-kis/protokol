@@ -3,29 +3,32 @@ package ru.citlab24.protokol.tabs.modules.lighting;
 import ru.citlab24.protokol.tabs.models.Room;
 
 import javax.swing.table.AbstractTableModel;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.function.Consumer;
 
-/** Таблица комнат как в радиации: [Измерения],[Комната] */
-class LightingRoomsTableModel extends AbstractTableModel {
+/** Таблица комнат: [чекбокс «Измерения» | «Комната»] */
+final class LightingRoomsTableModel extends AbstractTableModel {
+
     private final String[] COLUMN_NAMES = {"Измерения", "Комната"};
     private final Class<?>[] COLUMN_TYPES = {Boolean.class, String.class};
 
-    private final Map<Integer, Boolean> globalSelectionMap;
+    private final Map<Integer, Boolean> globalSelectionMap; // по id комнаты
     private final List<Room> rooms = new ArrayList<>();
+    private final Consumer<Integer> onUserTouched; // уведомить вкладку, что юзер кликнул
 
-    LightingRoomsTableModel(Map<Integer, Boolean> globalSelectionMap) {
-        this.globalSelectionMap = globalSelectionMap;
+    LightingRoomsTableModel(Map<Integer, Boolean> globalSelectionMap,
+                            Consumer<Integer> onUserTouched) {
+        this.globalSelectionMap = Objects.requireNonNull(globalSelectionMap);
+        this.onUserTouched = Objects.requireNonNull(onUserTouched);
     }
 
-    public void setRooms(List<Room> list) {
+    void setRooms(List<Room> newRooms) {
         rooms.clear();
-        if (list != null) rooms.addAll(list);
+        if (newRooms != null) rooms.addAll(newRooms);
         fireTableDataChanged();
     }
 
-    public Room getRoomAt(int row) {
+    Room getRoomAt(int row) {
         return (row >= 0 && row < rooms.size()) ? rooms.get(row) : null;
     }
 
@@ -38,11 +41,11 @@ class LightingRoomsTableModel extends AbstractTableModel {
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
         Room r = rooms.get(rowIndex);
-        return switch (columnIndex) {
-            case 0 -> Boolean.TRUE.equals(globalSelectionMap.getOrDefault(r.getId(), Boolean.FALSE));
-            case 1 -> r.getName();
-            default -> null;
-        };
+        if (columnIndex == 0) {
+            Boolean v = globalSelectionMap.get(r.getId());
+            return (v != null) ? v : Boolean.FALSE;
+        }
+        return r.getName();
     }
 
     @Override
@@ -51,6 +54,7 @@ class LightingRoomsTableModel extends AbstractTableModel {
         Room r = rooms.get(rowIndex);
         boolean val = (aValue instanceof Boolean) && (Boolean) aValue;
         globalSelectionMap.put(r.getId(), val);
+        onUserTouched.accept(r.getId());
         fireTableRowsUpdated(rowIndex, rowIndex);
     }
 }
