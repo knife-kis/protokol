@@ -95,6 +95,9 @@ public final class LightingTab extends JPanel {
         processedSpaceKeys.clear();
         userTouchedRooms.clear();
         globalRoomSelectionMap.clear();
+        if (autoApplyDefaults) {
+            applyAutoOnFirstFloorsAcrossSections(); // ← проставим галочки сразу
+        }
 
         if (building != null) {
             for (Floor f : building.getFloors())
@@ -314,6 +317,27 @@ public final class LightingTab extends JPanel {
         } finally {
             this.autoApplyRulesOnDisplay = prev;
         }
+    }
+    /** Применить правила ко всему зданию (идемпотентно, не трогаем ручные клики). */
+    private void applyAutoOnFirstFloorsAcrossSections() {
+        if (currentBuilding == null) return;
+        Map<Integer, Integer> firstBySection = findFirstResidentialFloorPositionBySection(currentBuilding);
+
+        for (Floor f : currentBuilding.getFloors()) {
+            Integer firstPos = firstBySection.get(f.getSectionIndex());
+            if (firstPos == null || f.getPosition() != firstPos) continue;
+
+            for (Space s : f.getSpaces()) {
+                if (s.getType() != Space.SpaceType.APARTMENT) continue;
+                for (Room r : s.getRooms()) {
+                    if (isExcludedRoom(r.getName())) continue;
+                    if (!userTouchedRooms.contains(r.getId())) {
+                        globalRoomSelectionMap.put(r.getId(), true);
+                    }
+                }
+            }
+        }
+        if (roomTable != null) roomTable.repaint();
     }
 
 }
