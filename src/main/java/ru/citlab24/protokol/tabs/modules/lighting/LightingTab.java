@@ -21,6 +21,18 @@ public final class LightingTab extends JPanel {
 
     private static final Color PANEL_COLOR = new Color(0,115,200);
     private static final Font HEADER_FONT = UIManager.getFont("Label.font").deriveFont(Font.PLAIN, 15f);
+    // === Порядок как в модели здания (НЕ по строкам), а по position ===
+    private static java.util.Comparator<Section> SECTION_ORDER =
+            java.util.Comparator.comparingInt(Section::getPosition);
+
+    private static java.util.Comparator<Floor> FLOOR_ORDER =
+            java.util.Comparator.comparingInt(Floor::getPosition);
+
+    private static java.util.Comparator<Space> SPACE_ORDER =
+            java.util.Comparator.comparingInt(Space::getPosition);
+
+    private static java.util.Comparator<Room> ROOM_ORDER =
+            java.util.Comparator.comparingInt(Room::getPosition);
 
     // Модель здания
     private Building currentBuilding;
@@ -92,21 +104,40 @@ public final class LightingTab extends JPanel {
     public void setBuilding(Building building, boolean autoApplyDefaults) {
         this.currentBuilding = building;
         this.autoApplyRulesOnDisplay = autoApplyDefaults;
+
+        // 1) Сохраняем предыдущее состояние (чтобы не гасить уже отмеченные)
+        Map<Integer, Boolean> prevSelections = new HashMap<>(globalRoomSelectionMap);
+        Set<Integer> prevTouched = new HashSet<>(userTouchedRooms);
+        Set<Integer> oldIds = new HashSet<>(prevSelections.keySet());
+
+        // 2) Сбрасываем только служебные маркеры авторасстановки
         processedSpaceKeys.clear();
-        userTouchedRooms.clear();
+
+        // 3) Пересобираем карту, НЕ теряя ручные отметки
         globalRoomSelectionMap.clear();
-        if (autoApplyDefaults) {
-            applyAutoOnFirstFloorsAcrossSections(); // ← проставим галочки сразу
+        if (building != null) {
+            for (Floor f : building.getFloors()) {
+                for (Space s : f.getSpaces()) {
+                    for (Room r : s.getRooms()) {
+                        boolean val = prevSelections.getOrDefault(r.getId(), r.isSelected());
+                        globalRoomSelectionMap.put(r.getId(), val);
+                    }
+                }
+            }
         }
 
-        if (building != null) {
-            for (Floor f : building.getFloors())
-                for (Space s : f.getSpaces())
-                    for (Room r : s.getRooms())
-                        globalRoomSelectionMap.put(r.getId(), r.isSelected());
+        // 4) Восстанавливаем «ручные» клики
+        userTouchedRooms.clear();
+        userTouchedRooms.addAll(prevTouched);
+
+        // 5) При необходимости — авто-только-для-НОВЫХ комнат на первом жилом/совмещённом этаже
+        if (autoApplyDefaults) {
+            applyAutoOnFirstFloorsAcrossSectionsOnlyForNewRooms(oldIds);
         }
+
+        // 6) Обновляем UI
         refreshSections();
-        refreshFloors(); // внутри вызовется updateSpaceList()
+        refreshFloors();
     }
 
     /** Пробросить состояния чекбоксов обратно в доменную модель. */
@@ -158,7 +189,11 @@ public final class LightingTab extends JPanel {
     private void refreshSections() {
         sectionListModel.clear();
         if (currentBuilding == null) return;
-        List<Section> secs = currentBuilding.getSections(); // порядок = индексы в модели
+
+        // Порядок секций строго по position
+        List<Section> secs = new ArrayList<>(currentBuilding.getSections());
+        secs.sort(SECTION_ORDER);
+
         for (Section s : secs) sectionListModel.addElement(s);
         if (!sectionListModel.isEmpty() && sectionList.getSelectedIndex() < 0) {
             sectionList.setSelectedIndex(0);
@@ -169,7 +204,7 @@ public final class LightingTab extends JPanel {
         floorListModel.clear();
         if (currentBuilding == null) { updateSpaceList(); return; }
 
-        final int secIdx = Math.max(0, sectionList.getSelectedIndex()); // <- как в радиации
+        final int secIdx = computeRawSectionIndex(); // индекс секции в "сыром" списке модели
 
         List<Floor> list = currentBuilding.getFloors().stream()
                 .filter(f -> f.getSectionIndex() == secIdx)
@@ -216,7 +251,9 @@ public final class LightingTab extends JPanel {
         if (row < 0) { roomsTableModel.setRooms(Collections.emptyList()); return; }
         Space s = spaceTableModel.getSpaceAt(row);
         if (s == null) { roomsTableModel.setRooms(Collections.emptyList()); return; }
-        roomsTableModel.setRooms(new ArrayList<>(s.getRooms()));
+        List<Room> rooms = new ArrayList<>(s.getRooms());
+        rooms.sort(ROOM_ORDER);
+        roomsTableModel.setRooms(rooms);
     }
 
     // ====== Автопроставление для первого жилого этажа ======
@@ -339,5 +376,54 @@ public final class LightingTab extends JPanel {
         }
         if (roomTable != null) roomTable.repaint();
     }
+    /** Автопроставление ТОЛЬКО для новых комнат (которых не было в старой карте). */
+    /** Автопроставление галочек ТОЛЬКО для новых комнат на первом жилом/совмещённом этаже каждой секции. */
+    private void applyAutoOnFirstFloorsAcrossSectionsOnlyForNewRooms(Set<Integer> oldIds) {
+        if (currentBuilding == null) return;
+
+        Map<Integer, Integer> firstPosBySection = findFirstResidentialOrCombinedFloorPositionBySection(currentBuilding);
+
+        for (Floor f : currentBuilding.getFloors()) {
+            Integer firstPos = firstPosBySection.get(f.getSectionIndex());
+            if (firstPos == null || f.getPosition() != firstPos) continue; // только первый жилой/совмещённый этаж
+
+            for (Space s : f.getSpaces()) {
+                if (s.getType() != Space.SpaceType.APARTMENT) continue;    // работаем по квартирам
+                for (Room r : s.getRooms()) {
+                    if (isExcludedRoom(r.getName())) continue;             // ваши исключения, если есть
+                    if (oldIds.contains(r.getId())) continue;              // НОВЫЕ комнаты — только те, которых не было ранее
+                    if (userTouchedRooms.contains(r.getId())) continue;    // не трогаем, если пользователь уже кликал
+                    globalRoomSelectionMap.put(r.getId(), true);
+                }
+            }
+        }
+        if (roomTable != null) roomTable.repaint();
+    }
+    /** Возвращает для каждой секции position первого жилого ИЛИ совмещённого этажа. */
+    private Map<Integer, Integer> findFirstResidentialOrCombinedFloorPositionBySection(Building b) {
+        Map<Integer, Integer> firstPos = new HashMap<>();
+        if (b == null) return firstPos;
+
+        for (Floor f : b.getFloors()) {
+            if (!isResidentialOrCombined(f)) continue;
+            int sec = f.getSectionIndex();
+            Integer cur = firstPos.get(sec);
+            if (cur == null || f.getPosition() < cur) {
+                firstPos.put(sec, f.getPosition());
+            }
+        }
+        return firstPos;
+    }
+
+    /** Универсальная проверка типа этажа: жилой или совмещённый (без жёсткой привязки к enum). */
+    private boolean isResidentialOrCombined(Floor f) {
+        if (f == null || f.getType() == null) return false;
+        String n = f.getType().name().toUpperCase(Locale.ROOT);
+        // Поддержим разные варианты названий в enum:
+        // RESIDENTIAL, LIVING, APARTMENT, MIXED, COMBINED, COMBO и т.п.
+        return n.contains("RESID") || n.contains("LIV") || n.contains("APART")
+                || n.contains("MIX") || n.contains("COMBIN");
+    }
+
 
 }
