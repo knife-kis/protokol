@@ -41,13 +41,15 @@ class RadiationRoomsTableModel extends AbstractTableModel {
 
     @Override
     public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
-        if (columnIndex == 0) {
-            Room room = rooms.get(rowIndex);
-            Space space = radiationTab.findParentSpace(room);
+        if (columnIndex != 0) return;
 
-            globalSelectionMap.put(room.getId(), (Boolean) aValue);
-            fireTableCellUpdated(rowIndex, columnIndex);
-        }
+        Room room = rooms.get(rowIndex);
+        boolean val = (aValue instanceof Boolean) && (Boolean) aValue;
+
+        globalSelectionMap.put(room.getId(), val); // для таблицы
+        room.setSelected(val);                     // ПИШЕМ В МОДЕЛЬ (сохранится в проекте)
+
+        fireTableRowsUpdated(rowIndex, rowIndex);
     }
 
     public void clear() {

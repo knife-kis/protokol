@@ -66,6 +66,7 @@ public final class LightingTab extends JPanel {
         setLayout(new BorderLayout(10,10));
         setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
         add(buildMainPanel(), BorderLayout.CENTER);
+        add(buildFooterPanel(), BorderLayout.SOUTH);
 
         // Лиснеры выбора
         sectionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -132,6 +133,9 @@ public final class LightingTab extends JPanel {
 
         // 5) При необходимости — авто-только-для-НОВЫХ комнат на первом жилом/совмещённом этаже
         if (autoApplyDefaults) {
+            // Сначала офисы (новые комнаты в офисных помещениях → галочки)
+            applyOfficeAutoOnlyForNewRooms(oldIds);
+            // Затем — правило для «первого жилого/совмещённого»
             applyAutoOnFirstFloorsAcrossSectionsOnlyForNewRooms(oldIds);
         }
 
@@ -139,6 +143,23 @@ public final class LightingTab extends JPanel {
         refreshSections();
         refreshFloors();
     }
+    /** Автопроставление галочек для офисов: только для НОВЫХ комнат. */
+    private void applyOfficeAutoOnlyForNewRooms(Set<Integer> oldIds) {
+        if (currentBuilding == null) return;
+        for (Floor f : currentBuilding.getFloors()) {
+            for (Space s : f.getSpaces()) {
+                if (s.getType() != Space.SpaceType.OFFICE) continue;
+                for (Room r : s.getRooms()) {
+                    if (oldIds.contains(r.getId())) continue;           // только новые
+                    if (userTouchedRooms.contains(r.getId())) continue; // не трогаем ручные клики
+                    if (isExcludedRoom(r.getName())) continue;          // исключения (санузлы и т.п.)
+                    globalRoomSelectionMap.put(r.getId(), true);
+                }
+            }
+        }
+        if (roomTable != null) roomTable.repaint();
+    }
+
 
     /** Пробросить состояния чекбоксов обратно в доменную модель. */
     public void updateRoomSelectionStates() {
@@ -172,6 +193,16 @@ public final class LightingTab extends JPanel {
         p.add(panelWithBorder("Комнаты", new JScrollPane(roomTable)), g);
 
         return p;
+    }
+    /** Нижняя панель вкладки с кнопкой экспорта. */
+    private JPanel buildFooterPanel() {
+        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+
+        JButton exportBtn = new JButton("Экспорт в Excel");
+        exportBtn.addActionListener(e -> exportToExcel());
+
+        footer.add(exportBtn);
+        return footer;
     }
 
     private JPanel panelWithBorder(String title, JComponent inner) {
@@ -381,7 +412,8 @@ public final class LightingTab extends JPanel {
     private void applyAutoOnFirstFloorsAcrossSectionsOnlyForNewRooms(Set<Integer> oldIds) {
         if (currentBuilding == null) return;
 
-        Map<Integer, Integer> firstPosBySection = findFirstResidentialOrCombinedFloorPositionBySection(currentBuilding);
+        Map<Integer, Integer> firstPosBySection =
+                findFirstResidentialFloorPositionBySection(currentBuilding);
 
         for (Floor f : currentBuilding.getFloors()) {
             Integer firstPos = firstPosBySection.get(f.getSectionIndex());
@@ -424,6 +456,23 @@ public final class LightingTab extends JPanel {
         return n.contains("RESID") || n.contains("LIV") || n.contains("APART")
                 || n.contains("MIX") || n.contains("COMBIN");
     }
+    /** Экспорт Excel: сначала фиксируем чекбоксы в модель, затем экспорт. */
+    private void exportToExcel() {
+        if (currentBuilding == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Сначала загрузите проект (здание).",
+                    "Экспорт", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
+        // 1) Переливаем состояния чекбоксов в доменную модель (Room.setSelected)
+        updateRoomSelectionStates();
+
+        // 2) Определяем выбранную секцию (если ничего не выбрано — экспорт по всем)
+        int secIdx = (sectionList.getSelectedIndex() >= 0) ? computeRawSectionIndex() : -1;
+
+        // 3) Поехали
+        LightingExcelExporter.export(currentBuilding, secIdx, this);
+    }
 
 }

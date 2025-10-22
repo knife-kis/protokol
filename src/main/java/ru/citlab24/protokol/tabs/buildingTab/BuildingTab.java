@@ -571,10 +571,16 @@ public class BuildingTab extends JPanel {
     private void saveProject(ActionEvent e) {
         logger.info("BuildingTab.saveProject() - Начало сохранения проекта");
 
-        // Обновляем модель из UI
+        // 1) Синхронизируем UI → модель (радиация)
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null) {
             radiationTab.updateRoomSelectionStates(); // Сохраняем ручные изменения
+        }
+
+        // 2) Синхронизируем UI → модель (освещение)  ←← ВСТАВИЛИ ЭТО
+        LightingTab lightingTab = getLightingTab();
+        if (lightingTab != null) {
+            lightingTab.updateRoomSelectionStates();
         }
 
         // Генерация имени проекта
@@ -598,12 +604,13 @@ public class BuildingTab extends JPanel {
             return;
         }
 
-        // Обновляем RadiationTab
+        // Переинициализируем вкладки без авто-проставления
         updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(newProject, /*autoApplyDefaults=*/false);
 
         logger.info("Проект успешно сохранен");
     }
+
 
     private String generateProjectVersionName(String baseName) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy");
@@ -645,8 +652,8 @@ public class BuildingTab extends JPanel {
         Building copy = new Building();
         copy.setName(building.getName());
 
-        // 1) Полностью копируем секции (имя + position)
-        java.util.List<Section> copiedSections = new java.util.ArrayList<>();
+        // копируем секции
+        List<Section> copiedSections = new ArrayList<>();
         for (Section s : building.getSections()) {
             Section cs = new Section();
             cs.setName(s.getName());
@@ -655,14 +662,14 @@ public class BuildingTab extends JPanel {
         }
         copy.setSections(copiedSections);
 
-        // 2) Копируем этажи с сохранением индекса секции
+        // этажи — с сохранением selected и id
         for (Floor originalFloor : building.getFloors()) {
-            Floor floorCopy = createFloorCopy(originalFloor);
-            floorCopy.setSectionIndex(originalFloor.getSectionIndex()); // ВАЖНО
+            Floor floorCopy = createFloorCopyPreserve(originalFloor);
             copy.addFloor(floorCopy);
         }
         return copy;
     }
+
 
     @SuppressWarnings("serial")
     private abstract class ReorderHandler<T> extends TransferHandler {
@@ -871,10 +878,22 @@ public class BuildingTab extends JPanel {
             Floor floor = new Floor();
             floor.setNumber(dialog.getFloorNumber());
             floor.setType(dialog.getFloorType());
-            floor.setSectionIndex(Math.max(0, sectionList.getSelectedIndex())); // ← секция
+
+            int secIdx = Math.max(0, sectionList.getSelectedIndex());
+            floor.setSectionIndex(secIdx); // ← секция
+
             String floorName = floor.getType().title + " " + floor.getNumber();
             floor.setName(floorName);
+
+// <<< НОВОЕ: ставим позицию в КОНЕЦ секции >>>
+            int maxPos = building.getFloors().stream()
+                    .filter(f -> f.getSectionIndex() == secIdx)
+                    .mapToInt(Floor::getPosition)
+                    .max().orElse(-1);
+            floor.setPosition(maxPos + 1);
+
             building.addFloor(floor);
+
             refreshFloorListForSelectedSection();
             updateRadiationTab(building, true);
             updateLightingTab(building, /*autoApplyDefaults=*/true);
@@ -914,6 +933,13 @@ public class BuildingTab extends JPanel {
         Map<Integer, Boolean> allRoomStates = new HashMap<>();
         if (radiationTab != null) {
             allRoomStates.putAll(radiationTab.globalRoomSelectionMap);
+        }
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            LightingTab lightingTab = ((MainFrame) mainFrame).getLightingTab();
+            if (lightingTab != null) {
+                lightingTab.updateRoomSelectionStates();
+            }
         }
 
         // 2. Создаем копию этажа
@@ -1488,6 +1514,46 @@ public class BuildingTab extends JPanel {
             if (low.startsWith("apt") || low.contains("apartment")) return true;
         }
         return false;
+    }
+    // КОПИЯ ДЛЯ СОХРАНЕНИЯ: сохраняем id и selected
+    private Floor createFloorCopyPreserve(Floor original) {
+        Floor copy = new Floor();
+        copy.setNumber(original.getNumber());
+        copy.setType(original.getType());
+        copy.setName(original.getName());
+        copy.setSectionIndex(original.getSectionIndex());
+        copy.setPosition(original.getPosition());
+        for (Space os : original.getSpaces()) {
+            copy.addSpace(createSpaceCopyPreserve(os));
+        }
+        return copy;
+    }
+
+    private Space createSpaceCopyPreserve(Space original) {
+        Space copy = new Space();
+        copy.setIdentifier(original.getIdentifier());
+        copy.setType(original.getType());
+        copy.setPosition(original.getPosition());
+        // Сохраняем комнаты как есть (id + selected)
+        for (Room or : original.getRooms()) {
+            Room r = new Room();
+            r.setId(or.getId());                   // сохраняем id
+            r.setName(or.getName());
+            r.setVolume(or.getVolume());
+            r.setVentilationChannels(or.getVentilationChannels());
+            r.setVentilationSectionArea(or.getVentilationSectionArea());
+            r.setSelected(or.isSelected());        // ВАЖНО: сохраняем выбранность
+            r.setOriginalRoomId(or.getOriginalRoomId());
+            copy.addRoom(r);
+        }
+        return copy;
+    }
+    private LightingTab getLightingTab() {
+        Window mainFrame = SwingUtilities.getWindowAncestor(this);
+        if (mainFrame instanceof MainFrame) {
+            return ((MainFrame) mainFrame).getLightingTab();
+        }
+        return null;
     }
 
 }

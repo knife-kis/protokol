@@ -40,21 +40,28 @@ final class LightingRoomsTableModel extends AbstractTableModel {
 
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
-        Room r = rooms.get(rowIndex);
+        Room room = rooms.get(rowIndex);
         if (columnIndex == 0) {
-            Boolean v = globalSelectionMap.get(r.getId());
-            return (v != null) ? v : Boolean.FALSE;
+            return globalSelectionMap.getOrDefault(room.getId(), room.isSelected());
         }
-        return r.getName();
+        return room.getName();
     }
 
     @Override
     public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
         if (columnIndex != 0) return;
-        Room r = rooms.get(rowIndex);
+
+        Room room = rooms.get(rowIndex);
         boolean val = (aValue instanceof Boolean) && (Boolean) aValue;
-        globalSelectionMap.put(r.getId(), val);
-        onUserTouched.accept(r.getId());
+
+        // 1) Обновляем глобальную карту (то, что видит таблица)
+        globalSelectionMap.put(room.getId(), val);
+
+        // 2) ПРЯМО пишем в доменную модель — чтобы это сохранилось в проекте
+        room.setSelected(val);
+
+        // 3) Перерисовка строки
         fireTableRowsUpdated(rowIndex, rowIndex);
     }
+
 }
