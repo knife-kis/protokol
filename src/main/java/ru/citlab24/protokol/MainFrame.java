@@ -124,8 +124,6 @@ public class MainFrame extends JFrame {
     }
 
     // ===== Утилиты доступа к вкладкам (по желанию) =====
-
-
     public RadiationTab getRadiationTab() {
         for (Component comp : tabbedPane.getComponents()) {
             if (comp instanceof RadiationTab) return (RadiationTab) comp;
@@ -147,7 +145,6 @@ public class MainFrame extends JFrame {
         }
         return null;
     }
-
 
     public JTabbedPane getTabbedPane() {
         return tabbedPane;
