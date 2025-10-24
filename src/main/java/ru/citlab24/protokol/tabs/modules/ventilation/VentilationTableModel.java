@@ -40,12 +40,11 @@ public class VentilationTableModel extends AbstractTableModel {
         records.addAll(toAdd);
         fireTableRowsInserted(from, records.size() - 1);
     }
-    public VentilationRecord getRecordAt(int row) { return records.get(row); }
     public List<VentilationRecord> getRecords() { return new ArrayList<>(records); }
 
     // ===== AbstractTableModel =====
     @Override public int getRowCount() { return records.size(); }
-    @Override public int getColumnCount() { return showSectionColumn ? 7 : 6; }
+    @Override public int getColumnCount() { return showSectionColumn ? 9 : 8; }
 
     @Override
     public String getColumnName(int column) {
@@ -55,9 +54,11 @@ public class VentilationTableModel extends AbstractTableModel {
                 case 1 -> "Этаж";
                 case 2 -> "Помещение";
                 case 3 -> "Комната";
-                case 4 -> "Кол-во каналов";
-                case 5 -> "Сечение (кв.м)";
-                case 6 -> "Объем (куб.м)";
+                case 4 -> "Каналы";
+                case 5 -> "Форма";
+                case 6 -> "Ширина (м)";
+                case 7 -> "Сечение (кв.м)";
+                case 8 -> "Объем (куб.м)";
                 default -> "";
             };
         } else {
@@ -65,9 +66,11 @@ public class VentilationTableModel extends AbstractTableModel {
                 case 0 -> "Этаж";
                 case 1 -> "Помещение";
                 case 2 -> "Комната";
-                case 3 -> "Кол-во каналов";
-                case 4 -> "Сечение (кв.м)";
-                case 5 -> "Объем (куб.м)";
+                case 3 -> "Каналы";
+                case 4 -> "Форма";
+                case 5 -> "Ширина (м)";
+                case 6 -> "Сечение (кв.м)";
+                case 7 -> "Объем (куб.м)";
                 default -> "";
             };
         }
@@ -77,17 +80,21 @@ public class VentilationTableModel extends AbstractTableModel {
     public Class<?> getColumnClass(int columnIndex) {
         if (showSectionColumn) {
             return switch (columnIndex) {
-                case 0 -> Integer.class;        // Блок-секция
-                case 1, 2, 3 -> String.class;
-                case 4 -> Integer.class;        // каналы
-                case 5, 6 -> Double.class;      // сечение, объем
+                case 0 -> Integer.class;
+                case 1,2,3 -> String.class;
+                case 4 -> Integer.class;
+                case 5 -> VentilationRecord.DuctShape.class;
+                case 6,7 -> Double.class;
+                case 8 -> Double.class;
                 default -> Object.class;
             };
         } else {
             return switch (columnIndex) {
-                case 0, 1, 2 -> String.class;
-                case 3 -> Integer.class;        // каналы
-                case 4, 5 -> Double.class;      // сечение, объем
+                case 0,1,2 -> String.class;
+                case 3 -> Integer.class;
+                case 4 -> VentilationRecord.DuctShape.class;
+                case 5,6 -> Double.class;
+                case 7 -> Double.class;
                 default -> Object.class;
             };
         }
@@ -95,9 +102,10 @@ public class VentilationTableModel extends AbstractTableModel {
 
     @Override
     public boolean isCellEditable(int rowIndex, int columnIndex) {
-        // редактируем только кол-во каналов, сечение, объем
-        if (showSectionColumn) return columnIndex == 4 || columnIndex == 5 || columnIndex == 6;
-        return columnIndex == 3 || columnIndex == 4 || columnIndex == 5;
+        // редактируем: Каналы, Форма, Ширина, Объём — Сечение запрещено (только вычисляется)
+        if (showSectionColumn) return columnIndex == 4 || columnIndex == 5 || columnIndex == 6 || columnIndex == 8;
+        else return columnIndex == 3 || columnIndex == 4 || columnIndex == 5 || columnIndex == 7;
+
     }
 
     @Override
@@ -105,13 +113,15 @@ public class VentilationTableModel extends AbstractTableModel {
         VentilationRecord r = records.get(rowIndex);
         if (showSectionColumn) {
             return switch (columnIndex) {
-                case 0 -> r.sectionIndex() + 1;   // показываем 1..N
+                case 0 -> r.sectionIndex() + 1;
                 case 1 -> r.floor();
                 case 2 -> r.space();
                 case 3 -> r.room();
                 case 4 -> r.channels();
-                case 5 -> r.sectionArea();
-                case 6 -> r.volume();
+                case 5 -> r.shape();
+                case 6 -> r.width();
+                case 7 -> r.sectionArea();
+                case 8 -> r.volume();
                 default -> "";
             };
         } else {
@@ -120,8 +130,10 @@ public class VentilationTableModel extends AbstractTableModel {
                 case 1 -> r.space();
                 case 2 -> r.room();
                 case 3 -> r.channels();
-                case 4 -> r.sectionArea();
-                case 5 -> r.volume();
+                case 4 -> r.shape();
+                case 5 -> r.width();
+                case 6 -> r.sectionArea();
+                case 7 -> r.volume();
                 default -> "";
             };
         }
@@ -131,42 +143,66 @@ public class VentilationTableModel extends AbstractTableModel {
     public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
         VentilationRecord r = records.get(rowIndex);
         try {
+            int areaCol  = showSectionColumn ? 7 : 6; // индекс «Сечение»
             if (showSectionColumn) {
-                if (columnIndex == 4) {
-                    int newVal = toInt(aValue, r.channels());
-                    VentilationRecord nr = r.withChannels(newVal);
+                if (columnIndex == 4) { // Каналы
+                    int v = toInt(aValue, r.channels());
+                    var nr = r.withChannels(v);
                     records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationChannels(newVal);
-                } else if (columnIndex == 5) {
-                    double newVal = toDouble(aValue, r.sectionArea());
-                    VentilationRecord nr = r.withSectionArea(newVal);
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationChannels(v);
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                } else if (columnIndex == 5) { // Форма
+                    var shape = (aValue instanceof VentilationRecord.DuctShape ds) ? ds
+                            : VentilationRecord.DuctShape.valueOf(aValue.toString());
+                    var nr = r.withShape(shape); // площадь пересчиталась
                     records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(newVal);
-                } else if (columnIndex == 6) {
-                    Double newVal = toNullableDouble(aValue, r.volume());
-                    VentilationRecord nr = r.withVolume(newVal);
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                    fireTableCellUpdated(rowIndex, areaCol); // обновить «Сечение»
+                } else if (columnIndex == 6) { // Ширина
+                    double w = toDouble(aValue, r.width());
+                    var nr = r.withWidth(w);    // площадь пересчиталась
                     records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVolume(newVal);
-                } else return;
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                    fireTableCellUpdated(rowIndex, areaCol);
+                } else if (columnIndex == 8) { // Объём
+                    Double v = toNullableDouble(aValue, r.volume());
+                    var nr = r.withVolume(v);
+                    records.set(rowIndex, nr);
+                    if (nr.roomRef() != null) nr.roomRef().setVolume(v);
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                }
             } else {
-                if (columnIndex == 3) {
-                    int newVal = toInt(aValue, r.channels());
-                    VentilationRecord nr = r.withChannels(newVal);
+                if (columnIndex == 3) { // Каналы
+                    int v = toInt(aValue, r.channels());
+                    var nr = r.withChannels(v);
                     records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationChannels(newVal);
-                } else if (columnIndex == 4) {
-                    double newVal = toDouble(aValue, r.sectionArea());
-                    VentilationRecord nr = r.withSectionArea(newVal);
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationChannels(v);
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                } else if (columnIndex == 4) { // Форма
+                    var shape = (aValue instanceof VentilationRecord.DuctShape ds) ? ds
+                            : VentilationRecord.DuctShape.valueOf(aValue.toString());
+                    var nr = r.withShape(shape);
                     records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(newVal);
-                } else if (columnIndex == 5) {
-                    Double newVal = toNullableDouble(aValue, r.volume());
-                    VentilationRecord nr = r.withVolume(newVal);
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                    fireTableCellUpdated(rowIndex, areaCol);
+                } else if (columnIndex == 5) { // Ширина
+                    double w = toDouble(aValue, r.width());
+                    var nr = r.withWidth(w);
                     records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVolume(newVal);
-                } else return;
+                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                    fireTableCellUpdated(rowIndex, areaCol);
+                } else if (columnIndex == 7) { // Объём
+                    Double v = toNullableDouble(aValue, r.volume());
+                    var nr = r.withVolume(v);
+                    records.set(rowIndex, nr);
+                    if (nr.roomRef() != null) nr.roomRef().setVolume(v);
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                }
             }
-            fireTableRowsUpdated(rowIndex, rowIndex);
         } catch (Exception ignore) {}
     }
 
@@ -188,4 +224,11 @@ public class VentilationTableModel extends AbstractTableModel {
         if (s.isEmpty()) return null;
         return Double.parseDouble(s.replace(",", "."));
     }
+    public VentilationRecord getRecordAt(int row) { return records.get(row); }
+    public void setRecordAt(int row, VentilationRecord r) {
+        records.set(row, r);
+        if (r.roomRef() != null) r.roomRef().setVentilationSectionArea(r.sectionArea());
+        fireTableRowsUpdated(row, row);
+    }
+
 }

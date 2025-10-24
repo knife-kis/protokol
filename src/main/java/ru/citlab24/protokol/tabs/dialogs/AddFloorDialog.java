@@ -4,6 +4,8 @@ import ru.citlab24.protokol.tabs.models.Floor;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
 public class AddFloorDialog extends JDialog {
     private boolean confirmed = false;
@@ -31,6 +33,7 @@ public class AddFloorDialog extends JDialog {
         mainPanel.add(floorTypeCombo);
 
         // Кнопки
+        // Кнопки
         JButton okButton = new JButton("Добавить");
         okButton.addActionListener(e -> {
             if (floorNumberField.getText().trim().isEmpty()) {
@@ -41,6 +44,9 @@ public class AddFloorDialog extends JDialog {
             dispose();
         });
 
+// Enter в поле ввода = нажать «Добавить»
+        floorNumberField.addActionListener(e -> okButton.doClick());
+
         JButton cancelButton = new JButton("Отмена");
         cancelButton.addActionListener(e -> dispose());
 
@@ -50,6 +56,17 @@ public class AddFloorDialog extends JDialog {
 
         add(mainPanel, BorderLayout.CENTER);
         add(buttonPanel, BorderLayout.SOUTH);
+
+// Синяя «дефолтная» кнопка + реакция на Enter по всему диалогу
+        getRootPane().setDefaultButton(okButton);
+
+// Фокус сразу в поле (как в диалоге комнаты)
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowOpened(WindowEvent e) {
+                floorNumberField.requestFocusInWindow();
+                floorNumberField.selectAll();
+            }
+        });
     }
 
     public boolean showDialog() {

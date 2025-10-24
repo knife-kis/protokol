@@ -87,7 +87,7 @@ public final class LightingExcelExporter {
             IntRange jSeason = seasonalJRange(m);
 
             // собираем Rooms, сгруппировано по Space (квартире/офису) в порядке обхода
-            List<Entry> flat = collectEntries(building, sectionIndex);
+            List<Entry> flat = collectEntries(building, -1);
             LinkedHashMap<Space, List<Entry>> bySpace = new LinkedHashMap<>();
             for (Entry e : flat) bySpace.computeIfAbsent(e.space, k -> new ArrayList<>()).add(e);
 
@@ -427,38 +427,70 @@ public final class LightingExcelExporter {
         return res;
     }
 
-    private static String buildBLabel(Building building, Entry e) {
-        String sect = "";
-        try {
-            if (building.getSections() != null && !building.getSections().isEmpty()) {
-                Section s = building.getSections().get(Math.max(0, e.floor.getSectionIndex()));
-                if (s != null && s.getName() != null && !s.getName().isBlank()) sect = s.getName();
-            }
-        } catch (Exception ignored) {}
+    // для импорта: import ru.citlab24.protokol.tabs.models.Section;
 
+    private static String buildBLabel(Building building, Entry e) {
+        // 1) Этаж — используем только то, что ввели руками, без типа этажа
         String floorNameRaw = (e.floor.getName() != null && !e.floor.getName().isBlank())
                 ? e.floor.getName()
                 : (e.floor.getNumber() != null ? e.floor.getNumber() : "Этаж");
         String floorName = cleanedFloorName(floorNameRaw);
 
-        String spaceName = spaceDisplayName(e.space);
-        String roomName  = e.room.getName() != null ? e.room.getName() : "Комната";
+        String roomName = e.room.getName() != null ? e.room.getName() : "Комната";
 
-        String label = String.join(", ",
-                nonEmpty(sect), nonEmpty(floorName), nonEmpty(spaceName), nonEmpty(roomName));
-        if (label.endsWith(", ")) label = label.substring(0, label.length() - 2);
-        if (!label.isBlank()) label += ", ";
-        label += "нормируемая поверхность";
+        boolean isOffice = isOffice(e.space); // если нет такого — см. helper ниже
+
+        String label;
+        if (isOffice) {
+            // ОФИСЫ: «Секция, этаж, комната, нормируемая поверхность»
+            String sect = "";
+            try {
+                if (building.getSections() != null && !building.getSections().isEmpty()) {
+                    Section s = building.getSections().get(Math.max(0, e.floor.getSectionIndex()));
+                    if (s != null && s.getName() != null && !s.getName().isBlank()) sect = s.getName();
+                }
+            } catch (Exception ignored) {}
+            label = joinComma(sect, floorName, roomName) + ", нормируемая поверхность";
+        } else {
+            // Квартиры/прочие: как сейчас, но чистим префиксы у этажа
+            String sect = "";
+            try {
+                if (building.getSections() != null && !building.getSections().isEmpty()) {
+                    Section s = building.getSections().get(Math.max(0, e.floor.getSectionIndex()));
+                    if (s != null && s.getName() != null && !s.getName().isBlank()) sect = s.getName();
+                }
+            } catch (Exception ignored) {}
+            String spaceName = spaceDisplayName(e.space);
+            label = joinComma(sect, floorName, spaceName, roomName) + ", нормируемая поверхность";
+        }
         return label;
     }
 
+    // помогающие штуки (добавь, если их нет в классе)
+    private static String joinComma(String... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (p != null && !p.isBlank()) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(p.trim());
+            }
+        }
+        return sb.toString();
+    }
+
+    private static boolean isOffice(Space space) {
+        if (space == null || space.getType() == null) return false;
+        return space.getType() == Space.SpaceType.OFFICE;
+    }
+
+
     private static String cleanedFloorName(String raw) {
         if (raw == null) return "Этаж";
-        String s = raw.replaceAll("(?iu)\\bжил(ой|ая|ое|ые|ых|ом)?\\b\\s*", "");
+        // убираем ТОЛЬКО В НАЧАЛЕ слова «смешанный/офисный/жилой …»
+        String s = raw.replaceFirst("(?iu)^(\\s*)(смешанн(?:ый|ая|ое|ые|ых|ом)?|офисн(?:ый|ая|ое|ые|ых|ом)?|жил(?:ой|ая|ое|ые|ых|ом)?)[\\s,]+", "");
         s = s.replaceAll(" +", " ").trim();
         return s.isEmpty() ? raw : s;
     }
-
     private static String nonEmpty(String s) { return (s == null) ? "" : s.trim(); }
 
     private static String spaceDisplayName(Space s) {

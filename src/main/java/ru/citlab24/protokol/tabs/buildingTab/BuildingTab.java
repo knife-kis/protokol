@@ -9,6 +9,7 @@ import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.dialogs.*;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
+import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
@@ -530,6 +531,7 @@ public class BuildingTab extends JPanel {
         refreshFloorListForSelectedSection();
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
 
     }
 
@@ -562,9 +564,9 @@ public class BuildingTab extends JPanel {
         projectNameField.setText(loadedBuilding.getName());
         refreshAllLists();
         updateVentilationTab(loadedBuilding);
-        // Показываем ровно сохранённые состояния: без принудительного проставления и без авто-правил
         updateRadiationTab(loadedBuilding, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(loadedBuilding, /*autoApplyDefaults=*/false);
+        updateMicroclimateTab(loadedBuilding, /*autoApplyDefaults=*/false);
         showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен", "Загрузка", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -577,7 +579,6 @@ public class BuildingTab extends JPanel {
             radiationTab.updateRoomSelectionStates(); // Сохраняем ручные изменения
         }
 
-        // 2) Синхронизируем UI → модель (освещение)  ←← ВСТАВИЛИ ЭТО
         LightingTab lightingTab = getLightingTab();
         if (lightingTab != null) {
             lightingTab.updateRoomSelectionStates();
@@ -607,6 +608,7 @@ public class BuildingTab extends JPanel {
         // Переинициализируем вкладки без авто-проставления
         updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(newProject, /*autoApplyDefaults=*/false);
+        updateMicroclimateTab(newProject, /*autoApplyDefaults=*/false);
 
         logger.info("Проект успешно сохранен");
     }
@@ -633,7 +635,7 @@ public class BuildingTab extends JPanel {
                     .filter(Matcher::find)
                     .mapToInt(matcher -> matcher.group(1) != null ? Integer.parseInt(matcher.group(1)) : 1)
                     .max()
-                    .orElse(1);
+                    .orElse(0);
 
             return maxVersion + 1;
         } catch (SQLException e) {
@@ -704,6 +706,8 @@ public class BuildingTab extends JPanel {
             // Переписываем position по новому порядку
             for (int i = 0; i < model.size(); i++) model.get(i).setPosition(i);
             updateLightingTab(building, /*autoApplyDefaults=*/true);
+            updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+
         }
     };
 
@@ -711,6 +715,8 @@ public class BuildingTab extends JPanel {
         @Override protected void afterReorder(DefaultListModel<Room> model) {
             for (int i = 0; i < model.size(); i++) model.get(i).setPosition(i);
             updateLightingTab(building, /*autoApplyDefaults=*/true);
+            updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+
         }
     };
 
@@ -795,6 +801,7 @@ public class BuildingTab extends JPanel {
         // Обновляем вкладку с новым зданием
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
 
         // Восстанавливаем состояния ТОЛЬКО для исходных комнат
         restoreRadiationSelections(savedSelections);
@@ -897,6 +904,7 @@ public class BuildingTab extends JPanel {
             refreshFloorListForSelectedSection();
             updateRadiationTab(building, true);
             updateLightingTab(building, /*autoApplyDefaults=*/true);
+            updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
 
         }
     }
@@ -934,12 +942,9 @@ public class BuildingTab extends JPanel {
         if (radiationTab != null) {
             allRoomStates.putAll(radiationTab.globalRoomSelectionMap);
         }
-        Window mainFrame = SwingUtilities.getWindowAncestor(this);
-        if (mainFrame instanceof MainFrame) {
-            LightingTab lightingTab = ((MainFrame) mainFrame).getLightingTab();
-            if (lightingTab != null) {
-                lightingTab.updateRoomSelectionStates();
-            }
+        LightingTab lightingTab = getLightingTab();
+        if (lightingTab != null) {
+            lightingTab.updateRoomSelectionStates();
         }
 
         // 2. Создаем копию этажа
@@ -966,6 +971,7 @@ public class BuildingTab extends JPanel {
         floorList.setSelectedValue(copiedFloor, true);
 // Освещение: при копировании этажа авто-правила НЕ применяем — галочки должны быть пустыми
         updateLightingTab(building, /*autoApplyDefaults=*/false);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
         // 5. Восстанавливаем ВСЕ состояния комнат
         if (radiationTab != null) {
@@ -1106,6 +1112,7 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
     }
 
     private Map<String, Boolean> saveRadiationSelections() {
@@ -1137,6 +1144,7 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
     }
 
     // Операции с помещениями
@@ -1159,6 +1167,7 @@ public class BuildingTab extends JPanel {
 
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
 
         // Проверяем, что space был создан
         RadiationTab radiationTab = getRadiationTab();
@@ -1192,6 +1201,8 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+
     }
 
     private void removeSpace(ActionEvent e) {
@@ -1203,6 +1214,8 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+
     }
 
 
@@ -1246,8 +1259,9 @@ public class BuildingTab extends JPanel {
         }
 
         updateRadiationTab(building, true);
-// ВКЛЮЧАЕМ автопроставление: новые комнаты на первом жилом/совмещённом этаже получат галочки
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+
     }
 
 
@@ -1278,6 +1292,7 @@ public class BuildingTab extends JPanel {
                     roomListModel.set(index, room);
                     updateRadiationTab(building, true);
                     updateLightingTab(building, /*autoApplyDefaults=*/true);
+                    updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
                 }
             }
         } else {
@@ -1287,6 +1302,8 @@ public class BuildingTab extends JPanel {
                 room.setName(newName.trim());
                 roomListModel.set(index, room);
                 updateRadiationTab(building, true);
+                updateLightingTab(building, /*autoApplyDefaults=*/true);
+                updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
             }
         }
     }
@@ -1302,6 +1319,7 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
     }
 
     // Вспомогательные методы
@@ -1363,13 +1381,10 @@ public class BuildingTab extends JPanel {
     }
 
     private void updateLightingTab(Building building, boolean autoApplyDefaults) {
-        Window mainFrame = SwingUtilities.getWindowAncestor(this);
-        if (mainFrame instanceof MainFrame) {
-            LightingTab tab = ((MainFrame) mainFrame).getLightingTab();
-            if (tab != null) {
-                tab.setBuilding(building, autoApplyDefaults);
-                tab.refreshData();
-            }
+        LightingTab tab = getLightingTab();
+        if (tab != null) {
+            tab.setBuilding(building, autoApplyDefaults);
+            tab.refreshData();
         }
     }
     private void updateVentilationTab(Building building) {
@@ -1413,6 +1428,7 @@ public class BuildingTab extends JPanel {
         if (this.building == null) this.building = new Building();
         updateRadiationTab(this.building, true);
         updateLightingTab(building, true);
+        updateMicroclimateTab(building, true);
 
         if (floorList != null && !floorListModel.isEmpty()) {
             floorList.setSelectedIndex(0);
@@ -1549,11 +1565,25 @@ public class BuildingTab extends JPanel {
         return copy;
     }
     private LightingTab getLightingTab() {
-        Window mainFrame = SwingUtilities.getWindowAncestor(this);
-        if (mainFrame instanceof MainFrame) {
-            return ((MainFrame) mainFrame).getLightingTab();
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            JTabbedPane tabs = ((MainFrame) wnd).getTabbedPane();
+            for (Component c : tabs.getComponents()) {
+                if (c instanceof LightingTab) return (LightingTab) c;
+            }
         }
         return null;
     }
-
+    private void updateMicroclimateTab(Building building, boolean autoApplyDefaults) {
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            JTabbedPane tabs = ((MainFrame) wnd).getTabbedPane();
+            for (Component c : tabs.getComponents()) {
+                if (c instanceof MicroclimateTab) {
+                    ((MicroclimateTab) c).display(building, autoApplyDefaults);
+                    break;
+                }
+            }
+        }
+    }
 }

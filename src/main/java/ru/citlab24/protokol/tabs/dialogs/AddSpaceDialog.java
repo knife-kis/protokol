@@ -5,6 +5,8 @@ import ru.citlab24.protokol.tabs.models.Space;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
 public class AddSpaceDialog extends JDialog {
     private boolean confirmed = false;
@@ -38,6 +40,9 @@ public class AddSpaceDialog extends JDialog {
             dispose();
         });
 
+        // Enter в поле = нажать «Добавить»
+        identifierField.addActionListener(e -> okButton.doClick());
+
         JButton cancelButton = new JButton("Отмена");
         cancelButton.addActionListener(e -> dispose());
 
@@ -47,6 +52,17 @@ public class AddSpaceDialog extends JDialog {
 
         add(mainPanel, BorderLayout.CENTER);
         add(buttonPanel, BorderLayout.SOUTH);
+
+        // «Добавить» — дефолтная кнопка (синяя) + Enter по всему диалогу
+        getRootPane().setDefaultButton(okButton);
+
+        // Фокус в поле при открытии
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowOpened(WindowEvent e) {
+                identifierField.requestFocusInWindow();
+                identifierField.selectAll();
+            }
+        });
     }
 
     private Space.SpaceType[] getAllowedSpaceTypes(Floor.FloorType floorType) {
@@ -77,6 +93,7 @@ public class AddSpaceDialog extends JDialog {
     public Space.SpaceType getSpaceType() {
         return (Space.SpaceType) spaceTypeCombo.getSelectedItem();
     }
+
     public void setSpaceIdentifier(String identifier) {
         identifierField.setText(identifier);
     }

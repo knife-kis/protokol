@@ -117,8 +117,8 @@ public class MainFrame extends JFrame {
     private void initUI() {
         // Вкладки (без сторонних иконок, чтобы исключить ошибки зависимостей)
         tabbedPane.addTab("Характеристики здания", new BuildingTab(building));
-        tabbedPane.addTab("Микроклимат",           new MicroclimateTab());
-        tabbedPane.addTab("Вентиляция",            new VentilationTab(building)); // <-- фикс конструктора
+        tabbedPane.addTab("Микроклимат",           new MicroclimateTab(building));
+        tabbedPane.addTab("Вентиляция",            new VentilationTab(building));
         tabbedPane.addTab("Ионизирующее излучение",new RadiationTab());
         tabbedPane.addTab("Освещение",             new LightingTab(building));
     }
@@ -139,9 +139,9 @@ public class MainFrame extends JFrame {
             }
         }
     }
-    public LightingTab getLightingTab() {
+    public MicroclimateTab getMicroclimateTab() {
         for (Component comp : tabbedPane.getComponents()) {
-            if (comp instanceof LightingTab) return (LightingTab) comp;
+            if (comp instanceof MicroclimateTab) return (MicroclimateTab) comp;
         }
         return null;
     }

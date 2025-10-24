@@ -9,6 +9,7 @@ public class Room {
     private Double volume = null;
     private int ventilationChannels = 1;
     private double ventilationSectionArea = 0.008;
+    private Integer externalWallsCount = null; // Микроклимат: 0..4, null = не задано (проставим по умолчанию)
 
     private int position = 0;
     public int getPosition() { return position; }
@@ -67,4 +68,16 @@ public class Room {
     public void setSelected(boolean selected) {
         this.selected = selected;
     }
+    public Integer getExternalWallsCount() {
+        return externalWallsCount;
+    }
+    public void setExternalWallsCount(Integer count) {
+        if (count == null) {
+            this.externalWallsCount = null;
+            return;
+        }
+        int v = Math.max(0, Math.min(4, count));
+        this.externalWallsCount = v;
+    }
+
 }

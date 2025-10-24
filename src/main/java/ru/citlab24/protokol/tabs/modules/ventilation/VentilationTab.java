@@ -15,6 +15,11 @@ import java.util.List;
 import java.util.Locale;
 
 public class VentilationTab extends JPanel {
+    private boolean suppressApplyDialog = false;
+
+    private VentilationRecord lastSnapshot;
+    private int lastRow = -1, lastCol = -1;
+
     private Building building;
     private final VentilationTableModel tableModel = new VentilationTableModel();
     private final JTable ventilationTable = new JTable(tableModel);
@@ -56,7 +61,7 @@ public class VentilationTab extends JPanel {
                 ((JLabel) c).setHorizontalAlignment(JLabel.CENTER);
 
                 // индекс столбца "Объем" зависит от наличия колонки "Блок-секция"
-                int volumeCol = tableModel.isShowSectionColumn() ? 6 : 5;
+                int volumeCol = tableModel.isShowSectionColumn() ? 8 : 7;
                 if (column == volumeCol) {
                     if (value == null) {
                         ((JLabel) c).setText("");
@@ -76,24 +81,97 @@ public class VentilationTab extends JPanel {
         header.setFont(new Font("Segoe UI", Font.BOLD, 14));
         header.setReorderingAllowed(false);
         ((DefaultTableCellRenderer) header.getDefaultRenderer()).setHorizontalAlignment(JLabel.CENTER);
-        ventilationTable.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+        ventilationTable.putClientProperty("terminateEditOnFocusLost", Boolean.FALSE);
+
+// Подтверждение при изменении сечения/ширины/формы, если каналов > 1
+        // Запоминаем что было в ячейке до правки
+        ventilationTable.getSelectionModel().addListSelectionListener(e -> captureSnapshot());
+        ventilationTable.getColumnModel().getSelectionModel().addListSelectionListener(e -> captureSnapshot());
+
+        tableModel.addTableModelListener(evt -> {
+            if (suppressApplyDialog) return; // массовое применение — молчим
+            if (evt.getType() != javax.swing.event.TableModelEvent.UPDATE) return;
+
+            int row = evt.getFirstRow();
+            int col = evt.getColumn();
+            if (row < 0 || col < 0) return;
+
+            int off = tableModel.isShowSectionColumn() ? 1 : 0;
+            int shapeCol = 4 + off;
+            int widthCol = 5 + off;
+
+            if (col == shapeCol || col == widthCol) {
+                VentilationRecord changed = tableModel.getRecordAt(row);
+
+                Object[] options = {"Да", "Нет", "Отмена"};
+                int choice = JOptionPane.showOptionDialog(
+                        this,
+                        (col == shapeCol
+                                ? "Сделать такую ФОРМУ для всех одноименных комнат («" + changed.room() + "»)?"
+                                : "Сделать такую ШИРИНУ для всех одноименных комнат («" + changed.room() + "»)?"),
+                        "Применить к одноимённым",
+                        JOptionPane.YES_NO_CANCEL_OPTION,
+                        JOptionPane.QUESTION_MESSAGE,
+                        null, options, options[1] // по умолчанию — «Нет»
+                );
+
+                if (choice == JOptionPane.CANCEL_OPTION) {
+                    if (lastSnapshot != null && lastRow == row) tableModel.setRecordAt(row, lastSnapshot);
+                    return;
+                }
+                if (choice == JOptionPane.YES_OPTION) {
+                    suppressApplyDialog = true;
+                    try {
+                        String key = changed.room() == null ? "" : changed.room().trim();
+                        for (int r = 0; r < tableModel.getRowCount(); r++) {
+                            if (r == row) continue;
+                            VentilationRecord cur = tableModel.getRecordAt(r);
+                            if (cur.room() != null && cur.room().trim().equalsIgnoreCase(key)) {
+                                if (col == shapeCol) tableModel.setRecordAt(r, cur.withShape(changed.shape()));
+                                else                  tableModel.setRecordAt(r, cur.withWidth(changed.width()));
+                            }
+                        }
+                    } finally {
+                        suppressApplyDialog = false;
+                    }
+                }
+            }
+        });
 
         add(new JScrollPane(ventilationTable), BorderLayout.CENTER);
         add(createButtonPanel(), BorderLayout.SOUTH);
     }
 
     private void configureEditorsAndWidths() {
-        // после любого изменения структуры колонок (fireTableStructureChanged)
-        int offset = tableModel.isShowSectionColumn() ? 1 : 0;
+        boolean withSection = tableModel.isShowSectionColumn();
 
-        ventilationTable.getColumnModel().getColumn(3 + offset).setCellEditor(
-                new SpinnerEditor(1, 0, 300, 1));
-        ventilationTable.getColumnModel().getColumn(4 + offset).setCellEditor(
-                new SpinnerEditor(0.008, 0.001, 0.1, 0.001));
-        ventilationTable.getColumnModel().getColumn(5 + offset).setCellEditor(
-                new SpinnerEditor(0.0, 0.0, 1000.0, 0.1));
+        int channelsCol = withSection ? 4 : 3;
+        int shapeCol    = channelsCol + 1; // 5 / 4
+        int widthCol    = channelsCol + 2; // 6 / 5
+        int areaCol     = channelsCol + 3; // 7 / 6 (НЕ редактируем)
+        int volumeCol   = channelsCol + 4; // 8 / 7
 
-        if (tableModel.isShowSectionColumn()) {
+        // Каналы (целое) — текстовый ввод
+        ventilationTable.getColumnModel().getColumn(channelsCol)
+                .setCellEditor(new NumberTextEditor());
+
+        // Форма — комбобокс
+        JComboBox<VentilationRecord.DuctShape> shapeCombo =
+                new JComboBox<>(VentilationRecord.DuctShape.values());
+        ventilationTable.getColumnModel().getColumn(shapeCol)
+                .setCellEditor(new DefaultCellEditor(shapeCombo));
+
+        // Ширина — текстовый ввод
+        ventilationTable.getColumnModel().getColumn(widthCol)
+                .setCellEditor(new NumberTextEditor());
+
+        // Сечение — без редактора
+
+        // Объём — текстовый ввод
+        ventilationTable.getColumnModel().getColumn(volumeCol)
+                .setCellEditor(new NumberTextEditor());
+
+        if (withSection) {
             DefaultTableCellRenderer center = new DefaultTableCellRenderer();
             center.setHorizontalAlignment(SwingConstants.CENTER);
             ventilationTable.getColumnModel().getColumn(0).setCellRenderer(center);
@@ -157,11 +235,14 @@ public class VentilationTab extends JPanel {
         VentilationExcelExporter.export(tableModel.getRecords(), this);
     }
 
-
     public void refreshData() {
-        System.out.println("Обновление данных вентиляции...");
-        System.out.println("Ссылка на здание: " + (building != null ? "не null" : "null"));
-        if (building != null) System.out.println("Количество этажей: " + building.getFloors().size());
+        boolean showSection = building != null
+                && building.getSections() != null
+                && building.getSections().size() > 1;
+
+        tableModel.setShowSectionColumn(showSection);
+        configureEditorsAndWidths();
+
         loadVentilationData();
     }
 
@@ -275,7 +356,44 @@ public class VentilationTab extends JPanel {
             }
         }
     }
+    private void captureSnapshot() {
+        int r = ventilationTable.getSelectedRow();
+        if (r < 0) return;
+        lastRow = r;
+        lastCol = ventilationTable.getSelectedColumn();
+        VentilationRecord x = tableModel.getRecordAt(r);
+        if (x != null) {
+            lastSnapshot = new VentilationRecord(
+                    x.floor(), x.space(), x.room(), x.channels(),
+                    x.sectionArea(), x.volume(), x.roomRef(), x.sectionIndex(),
+                    x.shape(), x.width()
+            );
+        }
+    }
+    // Текстовый редактор чисел: без стрелок, при старте поле очищается.
+// Если оставить пусто и подтвердить — значение не меняется.
+    private static final class NumberTextEditor extends DefaultCellEditor {
+        private Object original;
 
-
+        NumberTextEditor() {
+            super(new JTextField());
+            JTextField tf = (JTextField) getComponent();
+            tf.setHorizontalAlignment(JTextField.CENTER);
+        }
+        @Override
+        public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+            original = value;
+            JTextField tf = (JTextField) getComponent();
+            tf.setText("");             // очищаем для быстрого ввода
+            tf.requestFocusInWindow();
+            return tf;
+        }
+        @Override
+        public Object getCellEditorValue() {
+            String s = ((JTextField) getComponent()).getText().trim();
+            if (s.isEmpty()) return original;              // пусто → не менять
+            return s.replace(',', '.');                    // поддержка запятой
+        }
+    }
     public Building getBuilding() { return building; }
 }
