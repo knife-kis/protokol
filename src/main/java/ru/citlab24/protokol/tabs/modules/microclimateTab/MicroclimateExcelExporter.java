@@ -16,7 +16,6 @@ import java.util.*;
 
 /**
  * Экспорт микроклимата в Excel по заданному шаблону.
- * Логика похожа на LightingExcelExporter, но с другой шапкой.
  */
 public final class MicroclimateExcelExporter {
 
@@ -41,8 +40,8 @@ public final class MicroclimateExcelExporter {
             // ===== высота строк (в поинтах) =====
             ensureRow(sh, 0).setHeightInPoints(20);  // 1
             ensureRow(sh, 1).setHeightInPoints(20);  // 2
-            ensureRow(sh, 2).setHeightInPoints(48);  // 3
-            ensureRow(sh, 3).setHeightInPoints(121); // 4
+            ensureRow(sh, 2).setHeightInPoints(48);  // 3 (wrap)
+            ensureRow(sh, 3).setHeightInPoints(121); // 4 (wrap)
             ensureRow(sh, 4).setHeightInPoints(20);  // 5
 
             // ===== заголовки =====
@@ -59,22 +58,22 @@ public final class MicroclimateExcelExporter {
             mergeWithBorder(sh, "D3:D4"); put(sh, 2, 3, "Категория работ по интенсивности", S.head8Vertical);
             mergeWithBorder(sh, "E3:E4"); put(sh, 2, 4, "Высота от пола, м", S.head8Vertical);
 
-            mergeWithBorder(sh, "F3:I3"); put(sh, 2, 5, "Температура воздуха, ºС", S.head8);
+            mergeWithBorder(sh, "F3:I3"); put(sh, 2, 5, "Температура воздуха, ºС", S.head8Wrap);
             mergeWithBorder(sh, "F4:H4"); put(sh, 3, 5, "Измеренная (± расширенная неопределенность)", S.head8Vertical);
             put(sh, 3, 8, "Допустимый уровень", S.head8Vertical);
 
-            put(sh, 2, 9,  "Температура поверхностей, ºС", S.head8);
+            put(sh, 2, 9,  "Температура поверхностей, ºС", S.head8Wrap);
             put(sh, 3, 9,  "Пол. Измеренная (± расширенная неопределенность)", S.head8Vertical);
 
-            mergeWithBorder(sh, "K3:N3"); put(sh, 2, 10, "Результирующая температура,  ºС", S.head8);
+            mergeWithBorder(sh, "K3:N3"); put(sh, 2, 10, "Результирующая температура,  ºС", S.head8Wrap);
             mergeWithBorder(sh, "K4:M4"); put(sh, 3, 10, "Измеренная (± расширенная неопределенность)", S.head8Vertical);
             put(sh, 3, 13, "Допустимый уровень", S.head8Vertical);
 
-            mergeWithBorder(sh, "O3:R3"); put(sh, 2, 14, "Относительная влажность воздуха, %", S.head8);
+            mergeWithBorder(sh, "O3:R3"); put(sh, 2, 14, "Относительная влажность воздуха, %", S.head8Wrap);
             mergeWithBorder(sh, "O4:Q4"); put(sh, 3, 14, "Измеренная (± расширенная неопределенность)", S.head8Vertical);
             put(sh, 3, 17, "Допустимый уровень", S.head8Vertical);
 
-            mergeWithBorder(sh, "S3:V3"); put(sh, 2, 18, "Скорость движения воздуха,  м/с", S.head8);
+            mergeWithBorder(sh, "S3:V3"); put(sh, 2, 18, "Скорость движения воздуха,  м/с", S.head8Wrap);
             mergeWithBorder(sh, "S4:U4"); put(sh, 3, 18, "Измеренная (± расширенная неопределенность)", S.head8Vertical);
             put(sh, 3, 21, "Допустимый уровень", S.head8Vertical);
 
@@ -88,7 +87,7 @@ public final class MicroclimateExcelExporter {
             put(sh, 4, 2,  3, S.centerBorder);
             put(sh, 4, 3,  4, S.centerBorder);
             put(sh, 4, 4,  5, S.centerBorder);
-            put(sh, 4, 5,  6, S.centerBorder); // F5-H5 (левый столбец объединённой области)
+            put(sh, 4, 5,  6, S.centerBorder); // F5-H5
             put(sh, 4, 8,  7, S.centerBorder);
             put(sh, 4, 9,  8, S.centerBorder);
             put(sh, 4, 10, 9, S.centerBorder); // K5-M5
@@ -103,7 +102,6 @@ public final class MicroclimateExcelExporter {
             // ===== данные =====
             int row = 5; // дальше начинаем вывод с 6-й строки (0-based)
             int seq = 1;
-            boolean multipleSections = building.getSections() != null && building.getSections().size() > 1;
 
             DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy");
             String today = LocalDate.now().format(dateFmt);
@@ -138,10 +136,8 @@ public final class MicroclimateExcelExporter {
                 floors.sort(Comparator.comparingInt(MicroclimateExcelExporter::parseFloorNumSafe));
 
                 for (Floor f : floors) {
-                    // заголовок Секция/Этаж (A:V объединено)
-                    String title = multipleSections
-                            ? joinNotEmpty("Секция " + safeSectionName(building, secIdx), safeFloorName(f))
-                            : safeFloorName(f);
+                    // заголовок (A:V объединено): Пишем просто названия — секции и этажа БЕЗ типа
+                    String title = joinNotEmpty(sectionOnlyName(building, secIdx), floorNameNoType(f));
                     mergeWithBorder(sh, "A" + (row + 1) + ":V" + (row + 1));
                     put(sh, row, 0, title, S.sectionHeader);
                     row++;
@@ -166,8 +162,8 @@ public final class MicroclimateExcelExporter {
                             row = emitBlock(sh, row, seq++, building, f, space, room,
                                     Position.CENTER, today, isResidential, isOffice, S);
 
-                            // 2) у наружной стены — по числу стен (пока заглушка 0)
-                            int walls = externalWallsCount(room); // заменить, когда появятся данные
+                            // 2) у наружной стены — по числу стен (0..N)
+                            int walls = externalWallsCount(room);
                             if (isOffice) {
                                 if (walls >= 1) {
                                     row = emitBlock(sh, row, seq++, building, f, space, room,
@@ -223,11 +219,12 @@ public final class MicroclimateExcelExporter {
         mergeWithBorder(sh, "B" + (start + 1) + ":B" + (start + 3));
         put(sh, start, 1, where, S.textLeftBorderWrap);
 
-        // C — дата (каждую из 3 строк, вертикально)
-        for (int i = 0; i < 3; i++) put(sh, start + i, 2, date, S.vertCenterBorder);
+        // C — ДАТА: ОБЪЕДИНЁННО на 3 строки блока
+        mergeWithBorder(sh, "C" + (start + 1) + ":C" + (start + 3));
+        put(sh, start, 2, date, S.centerBorder);
 
-        // D — категория работ (для офисов "3а", для жилья — пусто пока)
-        String cat = isOffice ? "3а" : "";
+        // D — категория работ: офис — «3а», иначе «-»
+        String cat = isOffice ? "3а" : "-";
         mergeWithBorder(sh, "D" + (start + 1) + ":D" + (start + 3));
         put(sh, start, 3, cat, S.centerBorder);
 
@@ -235,7 +232,16 @@ public final class MicroclimateExcelExporter {
         double[] heights = isOffice ? new double[]{1.7, 0.6, 0.1} : new double[]{1.5, 0.6, 0.1};
         for (int i = 0; i < 3; i++) put(sh, start + i, 4, heights[i], S.num1);
 
-        // Остальные графы пока просто в рамке (заполним позже)
+        // I, J, N — по правилам: записываем в КАЖДУЮ строку блока
+        String summer = tSummer(room.getName());
+        String winter = tWinter(room.getName());
+        for (int r = 0; r < 3; r++) {
+            put(sh, start + r, 8,  summer, S.centerBorder); // I: допустимый (лето)
+            put(sh, start + r, 9,  "-",     S.centerBorder); // J: прочерк
+            put(sh, start + r, 13, winter, S.centerBorder); // N: допустимый (зима)
+        }
+
+        // Остальные графы — просто рамка и фикс. высота
         for (int r = 0; r < 3; r++) {
             for (int c = 5; c <= 21; c++) {
                 Cell cell = cell(ensureRow(sh, start + r), c);
@@ -250,20 +256,26 @@ public final class MicroclimateExcelExporter {
     }
 
     // ===== утилиты модели/текста =====
-    private static String safeSectionName(Building b, int idx) {
+    private static String sectionOnlyName(Building b, int idx) {
         try {
             Section s = b.getSections().get(Math.max(0, idx));
-            return s != null && s.getName() != null && !s.getName().isBlank()
-                    ? s.getName() : String.valueOf(idx + 1);
-        } catch (Exception e) { return String.valueOf(idx + 1); }
+            return s != null && s.getName() != null ? s.getName().trim() : "";
+        } catch (Exception e) { return ""; }
+    }
+    private static String floorNameNoType(Floor f) {
+        if (f == null) return "";
+        String nm = (f.getName() != null && !f.getName().isBlank()) ? f.getName().trim() : (f.getNumber() == null ? "" : f.getNumber().trim());
+        if (f.getType() != null && f.getType().title != null) {
+            String prefix = f.getType().title + " ";
+            if (nm.startsWith(prefix)) nm = nm.substring(prefix.length()).trim();
+        }
+        // на всякий случай уберём явные русские слова типа
+        nm = nm.replaceFirst("(?i)^(жилая|смешанная|офисная)\\s+", "").trim();
+        return nm;
     }
     private static String spaceDisplayName(Space s) {
         String id = (s.getIdentifier() != null) ? s.getIdentifier().trim() : "";
         return id.isBlank() ? "Помещение" : id;
-    }
-    private static String safeFloorName(Floor f) {
-        String nm = (f.getName() != null && !f.getName().isBlank()) ? f.getName() : f.getNumber();
-        return (nm != null) ? nm : "Этаж";
     }
     private static Space findRoomSpace(Floor f, Room r) {
         for (Space s : f.getSpaces()) if (s.getRooms().contains(r)) return s;
@@ -292,8 +304,8 @@ public final class MicroclimateExcelExporter {
         return name.contains("OFFICE") || name.contains("PUBLIC");
     }
     private static int externalWallsCount(Room r) {
-        // TODO: заменить когда появится поле в модели (сейчас считаем 0)
-        return 0;
+        Integer v = (r != null) ? r.getExternalWallsCount() : null;
+        return (v == null) ? 0 : Math.max(0, v);
     }
     private static String joinComma(String... parts) {
         List<String> xs = new ArrayList<>();
@@ -301,6 +313,51 @@ public final class MicroclimateExcelExporter {
         return String.join(", ", xs);
     }
     private static String joinNotEmpty(String... parts) { return joinComma(parts); }
+
+    // ===== классификация комнат и правила (I/J/N) =====
+    private static boolean isKitchen(String n) {
+        if (n == null) return false;
+        String s = n.toLowerCase(Locale.ROOT);
+        return s.contains("кух"); // кухня, кухня-ниша, кухня-гостиная, и т.д.
+    }
+    private static boolean isBathroomToilet(String n) {
+        if (n == null) return false;
+        String s = n.toLowerCase(Locale.ROOT);
+        return s.contains("сануз") || s.contains("сан уз") || s.contains("с/у") || s.equals("су") || s.contains("туалет");
+    }
+    private static boolean isCombinedBathroom(String n) {
+        if (n == null) return false;
+        String s = n.toLowerCase(Locale.ROOT);
+        return (s.contains("совмещ") && (s.contains("сануз") || s.contains("с/у") || s.equals("су")));
+    }
+    private static boolean isBathRoomProper(String n) {
+        if (n == null) return false;
+        String s = n.toLowerCase(Locale.ROOT);
+        return s.contains("ванн") || s.contains("душ");
+    }
+    private static boolean isLiving(String n) {
+        if (n == null) return false;
+        String s = n.toLowerCase(Locale.ROOT);
+        // жилая/комната/спальня/гостиная (но не кухня-гостиная — это кухня)
+        return (s.contains("жила") || s.contains("комната") || s.contains("спальн") || s.contains("гостиная")) && !isKitchen(n);
+    }
+    /** Столбец I (лето) */
+    private static String tSummer(String roomName) {
+        if (isKitchen(roomName))            return "18-26";
+        if (isBathroomToilet(roomName))     return "18-26";
+        if (isBathRoomProper(roomName))     return "18-26";
+        if (isLiving(roomName))             return "20-24";
+        return "-";
+    }
+    /** Столбец N (зима) */
+    private static String tWinter(String roomName) {
+        if (isKitchen(roomName))            return "17-26";
+        if (isCombinedBathroom(roomName))   return "17-26";
+        if (isBathRoomProper(roomName))     return "17-26";
+        if (isBathroomToilet(roomName))     return "17-25";
+        if (isLiving(roomName))             return "19-23";
+        return "-";
+    }
 
     // ===== табличные утилиты =====
     private static Row ensureRow(Sheet sh, int r0) {
