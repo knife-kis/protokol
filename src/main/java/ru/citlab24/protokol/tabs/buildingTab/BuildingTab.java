@@ -241,9 +241,12 @@ public class BuildingTab extends JPanel {
         return createButtonPanel(
                 createStyledButton("Загрузить проект", FontAwesomeSolid.FOLDER_OPEN, new Color(33, 150, 243), this::loadProject),
                 createStyledButton("Сохранить проект", FontAwesomeSolid.SAVE, new Color(0, 115, 200), this::saveProject),
-                createStyledButton("Рассчитать показатели", FontAwesomeSolid.CALCULATOR, new Color(103, 58, 183), this::calculateMetrics)
+                createStyledButton("Рассчитать показатели", FontAwesomeSolid.CALCULATOR, new Color(103, 58, 183), this::calculateMetrics),
+                // НОВОЕ: кнопка-отчёт
+                createStyledButton("Сводка квартир", FontAwesomeSolid.TABLE, new Color(96, 125, 139), this::showApartmentSummary)
         );
     }
+
     private void copySection(ActionEvent e) {
         if (sectionList == null || sectionList.isSelectionEmpty()) {
             showMessage("Выберите секцию для копирования", "Информация", JOptionPane.INFORMATION_MESSAGE);
@@ -775,6 +778,11 @@ public class BuildingTab extends JPanel {
         }
         showMessage("Данные для вентиляции обновлены!", "Расчет завершен", JOptionPane.INFORMATION_MESSAGE);
     }
+    private void showApartmentSummary(ActionEvent e) {
+        // Безопасность: если вдруг building == null, создаём пустой
+        if (this.building == null) this.building = new Building();
+        ApartmentSummaryDialog.show(this, this.building);
+    }
 
     // Операции с помещениями
     private void copySpace(ActionEvent e) {
@@ -949,7 +957,7 @@ public class BuildingTab extends JPanel {
 
         // 2. Создаем копию этажа
         Floor copiedFloor = createFloorCopy(selectedFloor);
-        String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber());
+        String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber(), selectedFloor.getSectionIndex());
         copiedFloor.setNumber(newFloorNumber);
         copiedFloor.setSectionIndex(selectedFloor.getSectionIndex());
 
@@ -1003,58 +1011,48 @@ public class BuildingTab extends JPanel {
         return input.replaceAll("\\D", ""); // Удаляем все не-цифры
     }
 
-    private String generateNextFloorNumber(String currentNumber) {
-        // Пытаемся извлечь число из названия этажа
+    // Новый: считает следующий номер ТОЛЬКО в пределах указанной секции.
+    private String generateNextFloorNumber(String currentNumber, int sectionIndex) {
         Pattern p = Pattern.compile("\\d+");
         Matcher m = p.matcher(currentNumber);
 
         if (m.find()) {
-            int num = Integer.parseInt(m.group());
+            int baseNum = Integer.parseInt(m.group());
             String prefix = currentNumber.substring(0, m.start());
             String suffix = currentNumber.substring(m.end());
 
-            // Ищем максимальный существующий номер
-            int maxNumber = building.getFloors().stream()
+            // максимум среди этажей ТЕКУЩЕЙ секции
+            int maxNumberInSection = building.getFloors().stream()
+                    .filter(f -> f.getSectionIndex() == sectionIndex)
                     .map(Floor::getNumber)
                     .mapToInt(n -> {
-                        Matcher matcher = p.matcher(n);
-                        return matcher.find() ? Integer.parseInt(matcher.group()) : Integer.MIN_VALUE;
+                        Matcher mm = p.matcher(n);
+                        return mm.find() ? Integer.parseInt(mm.group()) : Integer.MIN_VALUE;
                     })
                     .max()
-                    .orElse(num);
+                    .orElse(baseNum);
 
-            // Генерируем следующий номер
-            int nextNumber = (maxNumber != Integer.MIN_VALUE) ? maxNumber + 1 : num + 1;
-            return prefix + nextNumber + suffix;
+            int next = (maxNumberInSection != Integer.MIN_VALUE)
+                    ? Math.max(baseNum, maxNumberInSection) + 1
+                    : baseNum + 1;
+
+            return prefix + next + suffix;
         }
 
-        // Для нечисловых названий
-        return generateUniqueNonNumericName(currentNumber);
+        // Не нашли цифр — делаем уникальное имя в рамках секции
+        return generateUniqueNonNumericNameWithinSection(currentNumber, sectionIndex);
     }
 
-    private String findNextAvailableNumber(int baseNumber) {
-        int candidate = baseNumber + 1;
-        Set<Integer> existingNumbers = new HashSet<>();
-
-        // Собираем все числовые номера этажей
-        for (Floor f : building.getFloors()) {
-            try {
-                existingNumbers.add(Integer.parseInt(f.getNumber()));
-            } catch (NumberFormatException ignored) {
-                // Игнорируем нечисловые этажи
-            }
-        }
-
-        // Ищем ближайшее свободное число
-        while (existingNumbers.contains(candidate)) {
-            candidate++;
-        }
-        return String.valueOf(candidate);
+    // Сохранённый «обёртка»-вариант, если где-то ещё вызывается без секции — поведение как раньше.
+    private String generateNextFloorNumber(String currentNumber) {
+        return generateNextFloorNumber(currentNumber, -1);
     }
 
-    private String generateUniqueNonNumericName(String base) {
+    // Уникальное имя для НЕчисловых этажей — только в пределах секции
+    private String generateUniqueNonNumericNameWithinSection(String base, int sectionIndex) {
         Pattern pattern = Pattern.compile(Pattern.quote(base) + "(?: \\(копия (\\d+)\\))?");
         int maxCopy = building.getFloors().stream()
+                .filter(f -> sectionIndex < 0 || f.getSectionIndex() == sectionIndex)
                 .map(Floor::getNumber)
                 .map(pattern::matcher)
                 .filter(Matcher::matches)
