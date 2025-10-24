@@ -56,8 +56,10 @@ final class MicroclimateRoomsTableModel extends AbstractTableModel {
     public Object getValueAt(int rowIndex, int columnIndex) {
         Room room = rooms.get(rowIndex);
         switch (columnIndex) {
-            case 0: // чекбокс
-                return Boolean.valueOf(globalSelectionMap.getOrDefault(room.getId(), room.isSelected()));
+            case 0: { // чекбокс
+                int k = roomKey(room);
+                return Boolean.valueOf(globalSelectionMap.getOrDefault(k, room.isSelected()));
+            }
             case 1: // имя
                 return room.getName();
             case 2: { // нар. стены
@@ -79,9 +81,10 @@ final class MicroclimateRoomsTableModel extends AbstractTableModel {
         switch (columnIndex) {
             case 0: {
                 boolean val = (aValue instanceof Boolean) && (Boolean) aValue;
-                globalSelectionMap.put(room.getId(), val);
+                int k = roomKey(room);
+                globalSelectionMap.put(k, val);
                 room.setSelected(val);
-                if (onUserTouched != null) onUserTouched.accept(room.getId());
+                if (onUserTouched != null) onUserTouched.accept(k); // важно: передаём roomKey
                 fireTableRowsUpdated(rowIndex, rowIndex);
                 break;
             }
@@ -109,4 +112,12 @@ final class MicroclimateRoomsTableModel extends AbstractTableModel {
         }
         return false;
     }
+    private static int roomKey(Room r) {
+        if (r == null) return 0;
+        if (r.getId() > 0) return r.getId();
+        Integer orig = r.getOriginalRoomId();
+        if (orig != null && orig != 0) return orig;
+        return System.identityHashCode(r);
+    }
+
 }

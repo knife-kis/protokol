@@ -69,7 +69,9 @@ public class DatabaseManager {
                     "ventilation_channels INT," +
                     "ventilation_section_area DOUBLE," +
                     "is_selected BOOLEAN DEFAULT FALSE," +
+                    "external_walls_count INT," +
                     "position INT)");
+
 
             // миграции (безопасны, если столбцы уже есть)
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
@@ -80,6 +82,7 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "room",  "ventilation_channels", "INT");
             addColumnIfMissing(stmt, "room",  "ventilation_section_area", "DOUBLE");
             addColumnIfMissing(stmt, "room",  "is_selected", "BOOLEAN DEFAULT FALSE");
+            addColumnIfMissing(stmt, "room",  "external_walls_count", "INT");
         }
     }
 
@@ -269,16 +272,28 @@ public class DatabaseManager {
 
     private static void saveRoom(int spaceId, Room room) throws SQLException {
         logger.debug("Сохранение комнаты: {}", room.getName());
-        String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, ventilation_section_area, is_selected, position) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, ventilation_section_area, " +
+                "is_selected, external_walls_count, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, spaceId);
             stmt.setString(2, room.getName());
+
+// volume (nullable)
             if (room.getVolume() == null) stmt.setNull(3, Types.DOUBLE); else stmt.setDouble(3, room.getVolume());
+
+// вентиляция
             stmt.setInt(4, room.getVentilationChannels());
             stmt.setDouble(5, room.getVentilationSectionArea());
+
+// selected
             stmt.setBoolean(6, room.isSelected());
-            stmt.setInt(7, room.getPosition());
+
+// external_walls_count (nullable)
+            Integer walls = room.getExternalWallsCount();
+            if (walls == null) stmt.setNull(7, Types.INTEGER); else stmt.setInt(7, walls);
+
+// position
+            stmt.setInt(8, room.getPosition());
             stmt.executeUpdate();
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
@@ -353,11 +368,22 @@ public class DatabaseManager {
                     room.setId(rs.getInt("id"));
                     room.setName(rs.getString("name"));
                     room.setSelected(rs.getBoolean("is_selected"));
+
+// volume (nullable)
                     double volume = rs.getDouble("volume");
                     if (!rs.wasNull()) room.setVolume(volume);
+
+// вентиляция
                     room.setVentilationChannels(rs.getInt("ventilation_channels"));
                     room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
+                    room.setSelected(rs.getBoolean("is_selected"));
+                    Object wallsObj = rs.getObject("external_walls_count");
+                    room.setExternalWallsCount(wallsObj == null ? null : ((Number) wallsObj).intValue());
+
+// external_walls_count (nullable)
+// порядок
                     room.setPosition(rs.getInt("position"));
+
                     space.addRoom(room);
                 }
             }

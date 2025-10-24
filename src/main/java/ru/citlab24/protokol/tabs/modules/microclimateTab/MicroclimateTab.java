@@ -82,14 +82,20 @@ public class MicroclimateTab extends JPanel {
         Map<Integer, Boolean> oldMap = new HashMap<>(globalRoomSelectionMap);
         Set<Integer> oldTouched = new HashSet<>(userTouchedRooms);
         Set<Integer> oldIds = new HashSet<>();
-        for (Floor f : bld.getFloors()) for (Space s : f.getSpaces()) for (Room r : s.getRooms()) oldIds.add(r.getId());
+        for (Floor f : bld.getFloors())
+            for (Space s : f.getSpaces())
+                for (Room r : s.getRooms())
+                    oldIds.add(roomKey(r));
+
 
         // 2) Переносим старые галочки (по id)
         globalRoomSelectionMap.clear();
         for (Floor f : bld.getFloors())
             for (Space s : f.getSpaces())
-                for (Room r : s.getRooms())
-                    globalRoomSelectionMap.put(r.getId(), oldMap.getOrDefault(r.getId(), r.isSelected()));
+                for (Room r : s.getRooms()) {
+                    int k = roomKey(r);
+                    globalRoomSelectionMap.put(k, oldMap.getOrDefault(k, r.isSelected()));
+                }
 
         // 3) Сбрасываем служебные наборы
         userTouchedRooms.clear();
@@ -119,7 +125,7 @@ public class MicroclimateTab extends JPanel {
         for (Floor f : currentBuilding.getFloors())
             for (Space s : f.getSpaces())
                 for (Room r : s.getRooms()) {
-                    Boolean v = globalRoomSelectionMap.get(r.getId());
+                    Boolean v = globalRoomSelectionMap.get(roomKey(r));
                     if (v != null) r.setSelected(v);
                 }
     }
@@ -132,9 +138,10 @@ public class MicroclimateTab extends JPanel {
             for (Space s : f.getSpaces()) {
                 if (s.getType() != Space.SpaceType.OFFICE) continue;
                 for (Room r : s.getRooms()) {
-                    if (userTouchedRooms.contains(r.getId())) continue; // ручные не трогаем
+                    int k = roomKey(r);
+                    if (userTouchedRooms.contains(k)) continue;
                     boolean excluded = isExcludedRoom(r.getName());
-                    globalRoomSelectionMap.put(r.getId(), !excluded);   // все, кроме санузлов и т.п.
+                    globalRoomSelectionMap.put(k, !excluded);
                 }
             }
         }
@@ -154,10 +161,10 @@ public class MicroclimateTab extends JPanel {
             for (Space s : f.getSpaces()) {
                 if (s.getType() != Space.SpaceType.APARTMENT) continue;
                 for (Room r : s.getRooms()) {
-                    if (oldIds.contains(r.getId())) continue;
-                    if (userTouchedRooms.contains(r.getId())) continue;
-                    // ВАЖНО: для жилого — без исключений (санузлы тоже отмечаем)
-                    globalRoomSelectionMap.put(r.getId(), true);
+                    int k = roomKey(r);
+                    if (oldIds.contains(k)) continue;
+                    if (userTouchedRooms.contains(k)) continue;
+                    globalRoomSelectionMap.put(k, true);
                 }
             }
         }
@@ -180,8 +187,9 @@ public class MicroclimateTab extends JPanel {
             if (processedSpaceKeys.contains(key)) continue;
 
             for (Room r : s.getRooms()) {
-                if (!userTouchedRooms.contains(r.getId())) {
-                    globalRoomSelectionMap.put(r.getId(), true); // без исключений
+                int k = roomKey(r);
+                if (!userTouchedRooms.contains(k)) {
+                    globalRoomSelectionMap.put(k, true);
                 }
             }
             processedSpaceKeys.add(key);
@@ -195,7 +203,7 @@ public class MicroclimateTab extends JPanel {
         if (f == null) return;
         for (Space s : f.getSpaces())
             for (Room r : s.getRooms()) {
-                globalRoomSelectionMap.put(r.getId(), true);
+                globalRoomSelectionMap.put(roomKey(r), true);
             }
         roomTable.repaint();
     }
@@ -299,14 +307,25 @@ public class MicroclimateTab extends JPanel {
         });
 
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+
         JButton selectAllOnFloorBtn = new JButton("Проставить галочки на этаже");
         selectAllOnFloorBtn.addActionListener(e -> selectAllRoomsOnSelectedFloor());
         btns.add(selectAllOnFloorBtn);
+
+        // ⬇⬇⬇ ДОБАВЛЕННАЯ КНОПКА ЭКСПОРТА ⬇⬇⬇
+        JButton exportBtn = new JButton("Экспорт (микроклимат)");
+        exportBtn.addActionListener(e -> {
+            // экспорт по выбранной секции; если нужно «все секции» — вместо computeRawSectionIndex() поставь -1
+            int sectionIndex = computeRawSectionIndex();
+            MicroclimateExcelExporter.export(currentBuilding, sectionIndex, MicroclimateTab.this);
+        });
+        btns.add(exportBtn);
 
         panel.add(new JScrollPane(floorList), BorderLayout.CENTER);
         panel.add(btns, BorderLayout.SOUTH);
         return panel;
     }
+
 
     private JPanel createSpacePanel() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -542,6 +561,14 @@ public class MicroclimateTab extends JPanel {
 
             return panel;
         }
+    }
+    // Стабильный ключ комнаты для карт галочек: работает до и после сохранения
+    private static int roomKey(Room r) {
+        if (r == null) return 0;
+        if (r.getId() > 0) return r.getId();
+        Integer orig = r.getOriginalRoomId();
+        if (orig != null && orig != 0) return orig;
+        return System.identityHashCode(r);
     }
 
 }

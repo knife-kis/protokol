@@ -576,29 +576,47 @@ public class BuildingTab extends JPanel {
     private void saveProject(ActionEvent e) {
         logger.info("BuildingTab.saveProject() - Начало сохранения проекта");
 
+        // 0) Финализируем активное редактирование таблиц (чтобы текущее значение попало в модель)
+        try {
+            java.awt.KeyboardFocusManager kfm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager();
+            java.awt.Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
+            JTable editingTable = (fo == null) ? null
+                    : (JTable) javax.swing.SwingUtilities.getAncestorOfClass(JTable.class, fo);
+            if (editingTable != null && editingTable.isEditing()) {
+                try { editingTable.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
+            }
+        } catch (Exception ignore) {}
+
         // 1) Синхронизируем UI → модель (радиация)
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null) {
             radiationTab.updateRoomSelectionStates(); // Сохраняем ручные изменения
         }
 
+        // 1.1) Пробрасываем выбранность из «Освещения»
         LightingTab lightingTab = getLightingTab();
         if (lightingTab != null) {
             lightingTab.updateRoomSelectionStates();
         }
 
-        // Генерация имени проекта
+        // 1.2) Пробрасываем выбранность из «Микроклимата»
+        MicroclimateTab microTab = getMicroclimateTab();
+        if (microTab != null) {
+            microTab.updateRoomSelectionStates();
+        }
+
+        // 2) Генерация имени проекта
         String baseName = projectNameField.getText().trim();
         if (baseName.isEmpty()) {
             showMessage("Введите название проекта!", "Ошибка", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        // Создаем копию проекта с сохранением состояний
+        // 3) Создаем копию проекта с сохранением состояний
         Building newProject = createBuildingCopy();
         newProject.setName(generateProjectVersionName(baseName));
 
-        // Сохраняем в БД
+        // 4) Сохраняем в БД
         try {
             DatabaseManager.saveBuilding(newProject);
             this.building = newProject;
@@ -608,14 +626,13 @@ public class BuildingTab extends JPanel {
             return;
         }
 
-        // Переинициализируем вкладки без авто-проставления
+        // 5) Переинициализируем вкладки без авто-проставления
         updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(newProject, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(newProject, /*autoApplyDefaults=*/false);
 
         logger.info("Проект успешно сохранен");
     }
-
 
     private String generateProjectVersionName(String baseName) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy");
@@ -1548,7 +1565,7 @@ public class BuildingTab extends JPanel {
         copy.setIdentifier(original.getIdentifier());
         copy.setType(original.getType());
         copy.setPosition(original.getPosition());
-        // Сохраняем комнаты как есть (id + selected)
+        // Сохраняем комнаты как есть (id + selected + наружные стены)
         for (Room or : original.getRooms()) {
             Room r = new Room();
             r.setId(or.getId());                   // сохраняем id
@@ -1556,12 +1573,15 @@ public class BuildingTab extends JPanel {
             r.setVolume(or.getVolume());
             r.setVentilationChannels(or.getVentilationChannels());
             r.setVentilationSectionArea(or.getVentilationSectionArea());
-            r.setSelected(or.isSelected());        // ВАЖНО: сохраняем выбранность
+            r.setSelected(or.isSelected());        // сохраняем выбранность
             r.setOriginalRoomId(or.getOriginalRoomId());
+            // НОВОЕ: переносим количество наружных стен, чтобы не терялось при сохранении
+            try { r.setExternalWallsCount(or.getExternalWallsCount()); } catch (Throwable ignore) {}
             copy.addRoom(r);
         }
         return copy;
     }
+
     private LightingTab getLightingTab() {
         Window wnd = SwingUtilities.getWindowAncestor(this);
         if (wnd instanceof MainFrame) {
@@ -1584,4 +1604,17 @@ public class BuildingTab extends JPanel {
             }
         }
     }
+    private MicroclimateTab getMicroclimateTab() {
+        java.awt.Window wnd = javax.swing.SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof ru.citlab24.protokol.MainFrame) {
+            javax.swing.JTabbedPane tabs = ((ru.citlab24.protokol.MainFrame) wnd).getTabbedPane();
+            for (java.awt.Component c : tabs.getComponents()) {
+                if (c instanceof ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab) {
+                    return (ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab) c;
+                }
+            }
+        }
+        return null;
+    }
+
 }
