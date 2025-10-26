@@ -510,10 +510,12 @@ public class RadiationTab extends JPanel {
             for (Room r : s.getRooms()) {
                 // сперва смотрим в живую карту чекбоксов, затем в сохранённое состояние комнаты
                 Boolean v = globalRoomSelectionMap.get(r.getId());
-                if (Boolean.TRUE.equals(v) || r.isSelected()) {
+                boolean chosen = (v != null) ? v : r.isRadiationSelected(); // ← fallback к сохранённому флагу радиации
+                if (chosen) {
                     String n = safe(r.getName());
                     if (!isExcludedRoom(n)) return true;
                 }
+
             }
         }
         return false;
@@ -574,15 +576,15 @@ public class RadiationTab extends JPanel {
         processedSpaces.clear();
 
         // Перенос состояний из модели
+        // Перенос состояний из модели (РАДИАЦИЯ — своё поле)
         globalRoomSelectionMap.clear();
         for (Floor floor : building.getFloors()) {
             for (Space space : floor.getSpaces()) {
                 for (Room room : space.getRooms()) {
-                    globalRoomSelectionMap.put(room.getId(), room.isSelected());
+                    globalRoomSelectionMap.put(room.getId(), room.isRadiationSelected());
                 }
             }
         }
-
         if (forceOfficeSelection) {
             forceSelectOfficeRooms();
         }
@@ -596,16 +598,14 @@ public class RadiationTab extends JPanel {
         logger.info("RadiationTab.updateRoomSelectionStates() - Начало обновления состояний комнат");
         int updatedCount = 0;
 
+        if (currentBuilding == null) return;
+
         for (Floor floor : currentBuilding.getFloors()) {
             for (Space space : floor.getSpaces()) {
                 for (Room room : space.getRooms()) {
-                    // Получаем состояние чекбокса из глобальной карты
                     Boolean selected = globalRoomSelectionMap.get(room.getId());
                     if (selected != null) {
-                        // Обновляем состояние комнаты
-                        room.setSelected(selected);
-                        logger.trace("Обновление комнаты {}: {} -> {}",
-                                room.getName(), room.isSelected(), selected);
+                        room.setRadiationSelected(selected); // ← ВАЖНО: радиация в свой флаг
                         updatedCount++;
                     }
                 }
@@ -613,6 +613,7 @@ public class RadiationTab extends JPanel {
         }
         logger.info("RadiationTab.updateRoomSelectionStates() - Обновлено {} комнат", updatedCount);
     }
+
 
     public void refreshFloors() {
         String selectedFloorNumber = null;

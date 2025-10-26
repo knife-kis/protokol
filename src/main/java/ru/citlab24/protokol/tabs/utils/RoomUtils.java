@@ -1,5 +1,7 @@
 package ru.citlab24.protokol.tabs.utils;
 
+import ru.citlab24.protokol.tabs.models.Room;
+
 import java.util.List;
 import java.util.Locale;
 
@@ -44,4 +46,17 @@ public class RoomUtils {
                 .trim()
                 .toLowerCase(Locale.ROOT);
     }
+    public static void applyDefaultsForNewRoom(Room r) {
+        if (r == null) return;
+        // Всегда без галочки измерений при создании/копировании
+        r.setSelected(false);
+        // Колонка «Наружные стены»: изначально ничего не выбрано
+        // (если поля ещё нет — см. п.4 ниже)
+        try {
+            r.setExternalWallsCount(null);
+        } catch (Throwable ignore) {
+            // поле может отсутствовать до внедрения — безопасно игнорируем
+        }
+    }
+
 }

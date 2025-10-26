@@ -70,8 +70,9 @@ public class DatabaseManager {
                     "ventilation_section_area DOUBLE," +
                     "is_selected BOOLEAN DEFAULT FALSE," +
                     "external_walls_count INT," +
+                    "microclimate_selected BOOLEAN DEFAULT FALSE," +   // ← ДОБАВИЛИ
+                    "radiation_selected  BOOLEAN DEFAULT FALSE," +     // ← ДОБАВИЛИ
                     "position INT)");
-
 
             // миграции (безопасны, если столбцы уже есть)
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
@@ -83,6 +84,9 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "room",  "ventilation_section_area", "DOUBLE");
             addColumnIfMissing(stmt, "room",  "is_selected", "BOOLEAN DEFAULT FALSE");
             addColumnIfMissing(stmt, "room",  "external_walls_count", "INT");
+            addColumnIfMissing(stmt, "room",  "microclimate_selected", "BOOLEAN DEFAULT FALSE"); // ← ДОБАВЬ ЭТО
+            addColumnIfMissing(stmt, "room",  "radiation_selected",   "BOOLEAN DEFAULT FALSE");
+
         }
     }
 
@@ -268,40 +272,45 @@ public class DatabaseManager {
             }
         }
     }
-
-
     private static void saveRoom(int spaceId, Room room) throws SQLException {
         logger.debug("Сохранение комнаты: {}", room.getName());
-        String sql = "INSERT INTO room (space_id, name, volume, ventilation_channels, ventilation_section_area, " +
-                "is_selected, external_walls_count, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO room (" +
+                "space_id, name, volume, ventilation_channels, ventilation_section_area, " +
+                "is_selected, external_walls_count, microclimate_selected, radiation_selected, position" +
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, spaceId);
             stmt.setString(2, room.getName());
 
-// volume (nullable)
-            if (room.getVolume() == null) stmt.setNull(3, Types.DOUBLE); else stmt.setDouble(3, room.getVolume());
+            // volume (nullable)
+            if (room.getVolume() == null) stmt.setNull(3, Types.DOUBLE);
+            else stmt.setDouble(3, room.getVolume());
 
-// вентиляция
+            // вентиляция
             stmt.setInt(4, room.getVentilationChannels());
             stmt.setDouble(5, room.getVentilationSectionArea());
 
-// selected
+            // освещение (как было)
             stmt.setBoolean(6, room.isSelected());
 
-// external_walls_count (nullable)
+            // external_walls_count (nullable)
             Integer walls = room.getExternalWallsCount();
-            if (walls == null) stmt.setNull(7, Types.INTEGER); else stmt.setInt(7, walls);
+            if (walls == null) stmt.setNull(7, Types.INTEGER);
+            else stmt.setInt(7, walls);
 
-// position
-            stmt.setInt(8, room.getPosition());
+            // микроклимат / радиация — НОВЫЕ ФЛАГИ
+            stmt.setBoolean(8, room.isMicroclimateSelected());
+            stmt.setBoolean(9, room.isRadiationSelected());
+
+            // position
+            stmt.setInt(10, room.getPosition());
+
             stmt.executeUpdate();
-
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) room.setId(rs.getInt(1));
             }
         }
     }
-
 
     public static Building loadBuilding(int buildingId) throws SQLException {
         Building building = new Building();
@@ -367,21 +376,33 @@ public class DatabaseManager {
                     Room room = new Room();
                     room.setId(rs.getInt("id"));
                     room.setName(rs.getString("name"));
-                    room.setSelected(rs.getBoolean("is_selected"));
 
-// volume (nullable)
+                    // Объём (nullable)
                     double volume = rs.getDouble("volume");
-                    if (!rs.wasNull()) room.setVolume(volume);
+                    room.setVolume(rs.wasNull() ? null : volume);
 
-// вентиляция
+                    // Вентиляция
                     room.setVentilationChannels(rs.getInt("ventilation_channels"));
                     room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
+
+                    // Освещение ( как было )
                     room.setSelected(rs.getBoolean("is_selected"));
+
+                    // Наружные стены (nullable)
                     Object wallsObj = rs.getObject("external_walls_count");
                     room.setExternalWallsCount(wallsObj == null ? null : ((Number) wallsObj).intValue());
 
-// external_walls_count (nullable)
-// порядок
+                    // МИКРОКЛИМАТ — независимая галочка
+                    try {
+                        room.setMicroclimateSelected(rs.getBoolean("microclimate_selected"));
+                    } catch (SQLException ignore) { /* колонка может отсутствовать на старой схеме */ }
+
+                    // РАДИАЦИЯ — независимая галочка
+                    try {
+                        room.setRadiationSelected(rs.getBoolean("radiation_selected"));
+                    } catch (SQLException ignore) { /* колонка может отсутствовать на старой схеме */ }
+
+                    // Порядок
                     room.setPosition(rs.getInt("position"));
 
                     space.addRoom(room);
@@ -389,6 +410,7 @@ public class DatabaseManager {
             }
         }
     }
+
 
     private static void loadSections(Building building, int buildingId) throws SQLException {
         String sql = "SELECT * FROM section WHERE building_id = " + buildingId + " ORDER BY position";
@@ -421,12 +443,27 @@ public class DatabaseManager {
                     room.setId(rs.getInt("id"));
                     room.setName(rs.getString("name"));
 
-                    // Обработка NULL значения для объема
+                    // Объём (nullable)
                     double volume = rs.getDouble("volume");
                     room.setVolume(rs.wasNull() ? null : volume);
 
+                    // Вентиляция
                     room.setVentilationChannels(rs.getInt("ventilation_channels"));
                     room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
+
+                    // Освещение
+                    try { room.setSelected(rs.getBoolean("is_selected")); } catch (SQLException ignore) {}
+
+                    // Наружные стены (nullable)
+                    try {
+                        Object wallsObj = rs.getObject("external_walls_count");
+                        room.setExternalWallsCount(wallsObj == null ? null : ((Number) wallsObj).intValue());
+                    } catch (SQLException ignore) {}
+
+                    // Микроклимат / Радиация
+                    try { room.setMicroclimateSelected(rs.getBoolean("microclimate_selected")); } catch (SQLException ignore) {}
+                    try { room.setRadiationSelected(rs.getBoolean("radiation_selected")); } catch (SQLException ignore) {}
+
                     rooms.add(room);
                 }
             }
@@ -438,4 +475,5 @@ public class DatabaseManager {
         }
         return rooms;
     }
+
 }

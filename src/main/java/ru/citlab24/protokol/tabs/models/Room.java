@@ -64,6 +64,16 @@ public class Room {
     public boolean isSelected() {
         return selected;
     }
+    // --- Микроклимат: независимая галочка выбора (НЕ связана с освещением) ---
+    private boolean microclimateSelected;
+    public boolean isMicroclimateSelected() { return microclimateSelected; }
+    public void setMicroclimateSelected(boolean microclimateSelected) { this.microclimateSelected = microclimateSelected; }
+    // --- Радиация (ионизирующие излучения): независимая галочка выбора ---
+    private boolean radiationSelected;
+    public boolean isRadiationSelected() { return radiationSelected; }
+    public void setRadiationSelected(boolean radiationSelected) { this.radiationSelected = radiationSelected; }
+
+
 
     public void setSelected(boolean selected) {
         this.selected = selected;

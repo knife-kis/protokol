@@ -252,10 +252,20 @@ public class BuildingTab extends JPanel {
             showMessage("Выберите секцию для копирования", "Информация", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+
+        // 0) Сначала зафиксируем состояния из вкладок в модель
+        MicroclimateTab microTab = getMicroclimateTab();
+        if (microTab != null) microTab.updateRoomSelectionStates(); // ← МИКРОКЛИМАТ в Room
+        RadiationTab radiationTab = getRadiationTab();
+        // Освещение сохраняет само своё состояние в Room через updateLightingTab(...)
+
+        // 1) Сохраняем «снимки» галочек
+        Map<String, Boolean> savedMicroSelections = saveMicroclimateSelections(); // МИКРОКЛИМАТ
+        Map<String, Boolean> savedRadSelections   = saveRadiationSelections();    // РАДИАЦИЯ (как было)
+
         int srcIdx = sectionList.getSelectedIndex();
         Section src = sectionListModel.get(srcIdx);
 
-        // спросим имя новой секции
         String suggested = generateUniqueSectionName(src.getName());
         String newName = showInputDialog("Копировать секцию", "Название новой секции:", suggested);
         if (newName == null || newName.trim().isEmpty()) return;
@@ -267,38 +277,44 @@ public class BuildingTab extends JPanel {
         dst.setPosition(newPosition);
         building.addSection(dst);
 
-        // индекс новой секции
         int dstIdx = newPosition;
 
-        // Копируем все этажи исходной секции
+        // 2) Глубоко копируем этажи исходной секции (rooms с НОВЫМИ id)
         java.util.List<Floor> toAdd = new java.util.ArrayList<>();
         for (Floor f : building.getFloors()) {
             if (f.getSectionIndex() == srcIdx) {
-                Floor fCopy = createFloorCopy(f);               // уже умеет глубоко копировать помещения/комнаты
-                fCopy.setSectionIndex(dstIdx);                  // привязываем к новой секции
+                Floor fCopy = createFloorCopy(f);
+                fCopy.setSectionIndex(dstIdx);
                 toAdd.add(fCopy);
             }
         }
-        // добавляем скопированные этажи в здание
-        for (Floor fCopy : toAdd) {
-            building.addFloor(fCopy);
-        }
+        for (Floor fCopy : toAdd) building.addFloor(fCopy);
 
-        // UI: показать новую секцию и её этажи
+        // 3) ВОССТАНОВЛЕНИЕ МИКРОКЛИМАТА: применяем снимок к ВСЕМ комнатам здания
+        restoreMicroclimateSelections(savedMicroSelections);
+
+        // 4) UI
         refreshSectionListModel();
         sectionList.setSelectedIndex(dstIdx);
         refreshFloorListForSelectedSection();
         updateSpaceList();
         updateRoomList();
 
-        // Обновим вкладки расчётов
-        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
-        updateVentilationTab(building);
+        // 5) Обновляем вкладки (порядок важен)
+        //    Микроклимат читает из Room -> покажем уже восстановленные состояния
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
-// ВАЖНО: обновляем Освещение и запускаем авто-проставление
-// → на НОВОЙ секции отметится только самый нижний жилой/совмещённый этаж,
-// существующие галочки не трогаются.
+        //    Радиация: без авто; затем восстановим галочки через RadiationTab API
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        restoreRadiationSelections(savedRadSelections);
+
+        //    Освещение — как и было
         updateLightingTab(building, /*autoApplyDefaults=*/true);
+
+        // (необязательно) Фокуснуть «Микроклимат» на новую секцию
+        if (microTab != null) {
+            try { microTab.selectSectionByIndex(dstIdx); } catch (Throwable ignore) {}
+        }
 
         showMessage("Секция «" + src.getName() + "» успешно скопирована в «" + newName + "».",
                 "Готово", JOptionPane.INFORMATION_MESSAGE);
@@ -534,7 +550,7 @@ public class BuildingTab extends JPanel {
         refreshFloorListForSelectedSection();
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
     }
 
@@ -726,7 +742,7 @@ public class BuildingTab extends JPanel {
             // Переписываем position по новому порядку
             for (int i = 0; i < model.size(); i++) model.get(i).setPosition(i);
             updateLightingTab(building, /*autoApplyDefaults=*/true);
-            updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+            updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
         }
     };
@@ -735,7 +751,8 @@ public class BuildingTab extends JPanel {
         @Override protected void afterReorder(DefaultListModel<Room> model) {
             for (int i = 0; i < model.size(); i++) model.get(i).setPosition(i);
             updateLightingTab(building, /*autoApplyDefaults=*/true);
-            updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+            updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
 
         }
     };
@@ -776,8 +793,15 @@ public class BuildingTab extends JPanel {
         roomCopy.setVolume(originalRoom.getVolume());
         roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
         roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
+
+        // Освещение: копии по умолчанию без галочки
         roomCopy.setSelected(false);
-        roomCopy.setOriginalRoomId(originalRoom.getId()); // Сохраняем ссылку на оригинал
+
+        // МИКРОКЛИМАТ/РАДИАЦИЯ: состояния будут храниться отдельно (см. ниже).
+        // Наружные стены — КОПИРУЕМ как есть:
+        try { roomCopy.setExternalWallsCount(originalRoom.getExternalWallsCount()); } catch (Throwable ignore) {}
+
+        roomCopy.setOriginalRoomId(originalRoom.getId());
         return roomCopy;
     }
 
@@ -826,7 +850,7 @@ public class BuildingTab extends JPanel {
         // Обновляем вкладку с новым зданием
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
         // Восстанавливаем состояния ТОЛЬКО для исходных комнат
         restoreRadiationSelections(savedSelections);
@@ -851,8 +875,13 @@ public class BuildingTab extends JPanel {
 
         for (Room originalRoom : originalSpace.getRooms()) {
             Room roomCopy = createRoomCopy(originalRoom);
-// Освещение: при копировании всегда без галочки
+
+            // Освещение: копии без галочки
             roomCopy.setSelected(false);
+
+            // Наружные стены — ПЕРЕНОСИМ
+            try { roomCopy.setExternalWallsCount(originalRoom.getExternalWallsCount()); } catch (Throwable ignore) {}
+
             spaceCopy.addRoom(roomCopy);
         }
         return spaceCopy;
@@ -929,7 +958,7 @@ public class BuildingTab extends JPanel {
             refreshFloorListForSelectedSection();
             updateRadiationTab(building, true);
             updateLightingTab(building, /*autoApplyDefaults=*/true);
-            updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+            updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
         }
     }
@@ -1127,7 +1156,8 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
     }
 
     private Map<String, Boolean> saveRadiationSelections() {
@@ -1159,7 +1189,8 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
     }
 
     // Операции с помещениями
@@ -1182,7 +1213,7 @@ public class BuildingTab extends JPanel {
 
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
         // Проверяем, что space был создан
         RadiationTab radiationTab = getRadiationTab();
@@ -1216,7 +1247,8 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
 
     }
 
@@ -1229,7 +1261,7 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
     }
 
@@ -1258,24 +1290,44 @@ public class BuildingTab extends JPanel {
                 if (name != null && !name.isBlank()) {
                     Room room = new Room();
                     room.setName(name.trim());
+
+// дефолты
+                    room.setSelected(false); // галочка микроклимата/освещения всегда пустая при создании
+                    try {
+                        int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
+                        room.setExternalWallsCount(walls);
+                    } catch (Throwable ignore) {}
+
                     selectedSpace.addRoom(room);
                     roomListModel.addElement(room);
+
                 }
             }
+
         } else {
             // Для НЕ-квартир — простое поле ввода без «быстрого выбора»
             String name = showInputDialog("Добавление комнаты", "Название комнаты:", "");
             if (name != null && !name.isBlank()) {
                 Room room = new Room();
                 room.setName(name.trim());
+
+// дефолты
+                room.setSelected(false);
+                try {
+                    int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
+                    room.setExternalWallsCount(walls);
+                } catch (Throwable ignore) {}
+
                 selectedSpace.addRoom(room);
                 roomListModel.addElement(room);
+
             }
+
         }
 
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
     }
 
@@ -1307,7 +1359,7 @@ public class BuildingTab extends JPanel {
                     roomListModel.set(index, room);
                     updateRadiationTab(building, true);
                     updateLightingTab(building, /*autoApplyDefaults=*/true);
-                    updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+                    updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
                 }
             }
         } else {
@@ -1334,7 +1386,8 @@ public class BuildingTab extends JPanel {
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
-        updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
     }
 
     // Вспомогательные методы
@@ -1443,7 +1496,7 @@ public class BuildingTab extends JPanel {
         if (this.building == null) this.building = new Building();
         updateRadiationTab(this.building, true);
         updateLightingTab(building, true);
-        updateMicroclimateTab(building, true);
+        updateMicroclimateTab(building, false);
 
         if (floorList != null && !floorListModel.isEmpty()) {
             floorList.setSelectedIndex(0);
@@ -1565,7 +1618,7 @@ public class BuildingTab extends JPanel {
         copy.setIdentifier(original.getIdentifier());
         copy.setType(original.getType());
         copy.setPosition(original.getPosition());
-        // Сохраняем комнаты как есть (id + selected + наружные стены)
+        // Сохраняем комнаты как есть (id + все флаги + стены и пр.)
         for (Room or : original.getRooms()) {
             Room r = new Room();
             r.setId(or.getId());                   // сохраняем id
@@ -1573,10 +1626,15 @@ public class BuildingTab extends JPanel {
             r.setVolume(or.getVolume());
             r.setVentilationChannels(or.getVentilationChannels());
             r.setVentilationSectionArea(or.getVentilationSectionArea());
-            r.setSelected(or.isSelected());        // сохраняем выбранность
+
+            r.setSelected(or.isSelected());                       // освещение (как было)
+            r.setMicroclimateSelected(or.isMicroclimateSelected()); // ← ДОБАВЛЕНО
+            r.setRadiationSelected(or.isRadiationSelected());       // ← ДОБАВЛЕНО
+
             r.setOriginalRoomId(or.getOriginalRoomId());
-            // НОВОЕ: переносим количество наружных стен, чтобы не терялось при сохранении
             try { r.setExternalWallsCount(or.getExternalWallsCount()); } catch (Throwable ignore) {}
+            r.setPosition(or.getPosition());
+
             copy.addRoom(r);
         }
         return copy;
@@ -1615,6 +1673,40 @@ public class BuildingTab extends JPanel {
             }
         }
         return null;
+    }
+    private static boolean looksLikeSanitary(String name) {
+        if (name == null) return false;
+        String s = name.toLowerCase(Locale.ROOT);
+        return s.contains("сануз") || s.contains("с/у") || s.contains("сан.уз")
+                || s.contains("туалет") || s.contains("унитаз")
+                || s.contains("ванн") || s.contains("душ")
+                || s.contains("уборная") || s.contains("wc") || s.contains("toilet");
+    }
+    // ===== МИКРОКЛИМАТ: сохранение/восстановление по ключу "этаж|помещение|комната" =====
+    private Map<String, Boolean> saveMicroclimateSelections() {
+        Map<String, Boolean> map = new HashMap<>();
+        for (Floor f : building.getFloors()) {
+            for (Space s : f.getSpaces()) {
+                for (Room r : s.getRooms()) {
+                    String key = f.getNumber() + "|" + s.getIdentifier() + "|" + r.getName();
+                    map.put(key, r.isMicroclimateSelected());
+                }
+            }
+        }
+        return map;
+    }
+
+    private void restoreMicroclimateSelections(Map<String, Boolean> saved) {
+        if (saved == null || saved.isEmpty()) return;
+        for (Floor f : building.getFloors()) {
+            for (Space s : f.getSpaces()) {
+                for (Room r : s.getRooms()) {
+                    String key = f.getNumber() + "|" + s.getIdentifier() + "|" + r.getName();
+                    Boolean v = saved.get(key);
+                    if (v != null) r.setMicroclimateSelected(v);
+                }
+            }
+        }
     }
 
 }

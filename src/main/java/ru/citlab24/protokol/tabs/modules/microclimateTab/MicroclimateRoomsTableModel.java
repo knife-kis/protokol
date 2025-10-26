@@ -4,120 +4,47 @@ import ru.citlab24.protokol.tabs.models.Room;
 
 import javax.swing.table.AbstractTableModel;
 import java.util.*;
-import java.util.function.Consumer;
 
-/** Таблица комнат для «Микроклимата»: [чекбокс | комната | нар. стены 0..4] */
 final class MicroclimateRoomsTableModel extends AbstractTableModel {
+    private final String[] NAMES = {"Измерения", "Комната", "Наружные стены"};
+    private final Class<?>[] TYPES = {Boolean.class, String.class, Integer.class};
 
-    private final String[] COLUMN_NAMES = {"Измерения", "Комната", "Нар. стены"};
-    private final Class<?>[] COLUMN_TYPES = {Boolean.class, String.class, Integer.class};
-
-    private final Map<Integer, Boolean> globalSelectionMap; // по id комнаты
+    private final Map<Integer, Boolean> selectionMap; // по id комнаты — ТОЛЬКО для микроклимата
     private final List<Room> rooms = new ArrayList<>();
-    private final Consumer<Integer> onUserTouched; // зовём, когда юзер кликает чекбокс
 
-    // Ключевые слова «влажных»/санитарных помещений — по умолчанию 0 внешних стен
-    private static final List<String> WET_KEYWORDS = Arrays.asList(
-            "санузел", "сан узел", "сан. узел", "туалет", "с/у", "су",
-            "ванная", "душ", "душевая", "совмещенный", "совмещённый",
-            "моечная", "уборная", "санитар", "wc"
-    );
-
-    MicroclimateRoomsTableModel(Map<Integer, Boolean> globalSelectionMap,
-                                Consumer<Integer> onUserTouched) {
-        this.globalSelectionMap = globalSelectionMap;
-        this.onUserTouched = onUserTouched;
+    MicroclimateRoomsTableModel(Map<Integer, Boolean> selectionMap) {
+        this.selectionMap = selectionMap;
     }
 
-    void setRooms(List<Room> newRooms) {
-        rooms.clear();
-        if (newRooms != null) rooms.addAll(newRooms);
-        fireTableDataChanged();
-    }
-
-    List<Room> getRooms() { return rooms; }
-
-    Room getRoomAt(int row) {
-        return (row >= 0 && row < rooms.size()) ? rooms.get(row) : null;
-    }
+    void setRooms(List<Room> list) { rooms.clear(); rooms.addAll(list); fireTableDataChanged(); }
+    void clear() { rooms.clear(); fireTableDataChanged(); }
 
     @Override public int getRowCount() { return rooms.size(); }
-    @Override public int getColumnCount() { return COLUMN_NAMES.length; }
-    @Override public String getColumnName(int column) { return COLUMN_NAMES[column]; }
-    @Override public Class<?> getColumnClass(int columnIndex) { return COLUMN_TYPES[columnIndex]; }
+    @Override public int getColumnCount() { return NAMES.length; }
+    @Override public String getColumnName(int c) { return NAMES[c]; }
+    @Override public Class<?> getColumnClass(int c) { return TYPES[c]; }
+    @Override public boolean isCellEditable(int row, int col) { return col != 1; }
 
-    @Override
-    public boolean isCellEditable(int rowIndex, int columnIndex) {
-        // чекбокс и «Нар. стены» редактируемы
-        return columnIndex == 0 || columnIndex == 2;
+    @Override public Object getValueAt(int row, int col) {
+        Room r = rooms.get(row);
+        return switch (col) {
+            case 0 -> selectionMap.getOrDefault(r.getId(), r.isMicroclimateSelected());
+            case 1 -> r.getName();
+            case 2 -> r.getExternalWallsCount();
+            default -> null;
+        };
     }
 
-    @Override
-    public Object getValueAt(int rowIndex, int columnIndex) {
-        Room room = rooms.get(rowIndex);
-        switch (columnIndex) {
-            case 0: { // чекбокс
-                int k = roomKey(room);
-                return Boolean.valueOf(globalSelectionMap.getOrDefault(k, room.isSelected()));
-            }
-            case 1: // имя
-                return room.getName();
-            case 2: { // нар. стены
-                Integer v = room.getExternalWallsCount();
-                if (v == null) {
-                    v = isWetRoom(room.getName()) ? 0 : 1; // по умолчанию: санузлы/ванные = 0, остальные = 1
-                    room.setExternalWallsCount(v);
-                }
-                return v;
-            }
-            default:
-                return null;
+    @Override public void setValueAt(Object aValue, int row, int col) {
+        Room r = rooms.get(row);
+        if (col == 0) {
+            boolean v = (aValue instanceof Boolean) && (Boolean) aValue;
+            selectionMap.put(r.getId(), v);
+            r.setMicroclimateSelected(v);     // <<< ВАЖНО: НЕ setSelected()
+        } else if (col == 2) {
+            Integer val = (aValue instanceof Integer) ? (Integer) aValue : null;
+            r.setExternalWallsCount(val);
         }
+        fireTableRowsUpdated(row, row);
     }
-
-    @Override
-    public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
-        Room room = rooms.get(rowIndex);
-        switch (columnIndex) {
-            case 0: {
-                boolean val = (aValue instanceof Boolean) && (Boolean) aValue;
-                int k = roomKey(room);
-                globalSelectionMap.put(k, val);
-                room.setSelected(val);
-                if (onUserTouched != null) onUserTouched.accept(k); // важно: передаём roomKey
-                fireTableRowsUpdated(rowIndex, rowIndex);
-                break;
-            }
-            case 2: {
-                Integer v = null;
-                if (aValue instanceof Number) v = ((Number) aValue).intValue();
-                if (v == null && aValue instanceof String) {
-                    try { v = Integer.parseInt(((String) aValue).trim()); } catch (Exception ignore) {}
-                }
-                if (v == null) return;
-                if (v < 0) v = 0;
-                if (v > 4) v = 4;
-                room.setExternalWallsCount(v);
-                fireTableRowsUpdated(rowIndex, rowIndex);
-                break;
-            }
-        }
-    }
-
-    private static boolean isWetRoom(String name) {
-        if (name == null) return false;
-        String n = name.toLowerCase(Locale.ROOT);
-        for (String kw : WET_KEYWORDS) {
-            if (n.contains(kw)) return true;
-        }
-        return false;
-    }
-    private static int roomKey(Room r) {
-        if (r == null) return 0;
-        if (r.getId() > 0) return r.getId();
-        Integer orig = r.getOriginalRoomId();
-        if (orig != null && orig != 0) return orig;
-        return System.identityHashCode(r);
-    }
-
 }

@@ -117,7 +117,7 @@ public class MainFrame extends JFrame {
     private void initUI() {
         // Вкладки (без сторонних иконок, чтобы исключить ошибки зависимостей)
         tabbedPane.addTab("Характеристики здания", new BuildingTab(building));
-        tabbedPane.addTab("Микроклимат",           new MicroclimateTab(building));
+        tabbedPane.addTab("Микроклимат",           new MicroclimateTab());
         tabbedPane.addTab("Вентиляция",            new VentilationTab(building));
         tabbedPane.addTab("Ионизирующее излучение",new RadiationTab());
         tabbedPane.addTab("Освещение",             new LightingTab(building));
