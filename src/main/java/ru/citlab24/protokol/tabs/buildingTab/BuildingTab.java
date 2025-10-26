@@ -1208,6 +1208,8 @@ public class BuildingTab extends JPanel {
             space.setIdentifier(dialog.getSpaceIdentifier());
             space.setType(dialog.getSpaceType());
             selectedFloor.addSpace(space);
+            // Автопроставление микроклимата для офисов (только не для санузлов)
+            applyMicroDefaultsForOfficeSpace(space);
             spaceListModel.addElement(space);
         }
 
@@ -1242,6 +1244,7 @@ public class BuildingTab extends JPanel {
         if (dialog.showDialog()) {
             space.setIdentifier(dialog.getSpaceIdentifier());
             space.setType(dialog.getSpaceType());
+            applyMicroDefaultsForOfficeSpace(space);
             spaceListModel.set(index, space);
             updateRoomList();
         }
@@ -1310,6 +1313,10 @@ public class BuildingTab extends JPanel {
             if (name != null && !name.isBlank()) {
                 Room room = new Room();
                 room.setName(name.trim());
+// Микроклимат: если помещение — ОФИС, ставим галочку, кроме санузлов и т.п.
+                if (selectedSpace.getType() == Space.SpaceType.OFFICE) {
+                    room.setMicroclimateSelected(!looksLikeSanitary(room.getName()));
+                }
 
 // дефолты
                 room.setSelected(false);
@@ -1706,6 +1713,15 @@ public class BuildingTab extends JPanel {
                     if (v != null) r.setMicroclimateSelected(v);
                 }
             }
+        }
+    }
+    /** Микроклимат: в офисе проставляем чекбокс всем, кроме санузлов и т.п. */
+    private void applyMicroDefaultsForOfficeSpace(Space s) {
+        if (s == null) return;
+        if (s.getType() != Space.SpaceType.OFFICE) return;
+        for (Room r : s.getRooms()) {
+            String n = (r.getName() == null) ? "" : r.getName();
+            r.setMicroclimateSelected(!looksLikeSanitary(n));
         }
     }
 
