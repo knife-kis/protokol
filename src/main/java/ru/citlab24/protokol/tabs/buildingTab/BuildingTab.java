@@ -239,10 +239,16 @@ public class BuildingTab extends JPanel {
                 createStyledButton("Загрузить проект", FontAwesomeSolid.FOLDER_OPEN, new Color(33, 150, 243), this::loadProject),
                 createStyledButton("Сохранить проект", FontAwesomeSolid.SAVE, new Color(0, 115, 200), this::saveProject),
                 createStyledButton("Рассчитать показатели", FontAwesomeSolid.CALCULATOR, new Color(103, 58, 183), this::calculateMetrics),
-                // НОВОЕ: кнопка-отчёт
-                createStyledButton("Сводка квартир", FontAwesomeSolid.TABLE, new Color(96, 125, 139), this::showApartmentSummary)
+                createStyledButton("Сводка квартир", FontAwesomeSolid.TABLE, new Color(96, 125, 139), this::showApartmentSummary),
+                // НОВОЕ: ЕДИНАЯ КНОПКА ЭКСПОРТА
+                createStyledButton("Экспорт: все модули (одной книгой)", FontAwesomeSolid.FILE_EXCEL, new Color(0, 98, 204), e -> {
+                    java.awt.Window w = javax.swing.SwingUtilities.getWindowAncestor(this);
+                    ru.citlab24.protokol.MainFrame frame = (w instanceof ru.citlab24.protokol.MainFrame) ? (ru.citlab24.protokol.MainFrame) w : null;
+                    ru.citlab24.protokol.export.AllExcelExporter.exportAll(frame, building, this);
+                })
         );
     }
+
 
     private void copySection(ActionEvent e) {
         if (sectionList == null || sectionList.isSelectionEmpty()) {

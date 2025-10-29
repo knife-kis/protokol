@@ -123,10 +123,18 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Освещение",             new LightingTab(building));
     }
 
-    // ===== Утилиты доступа к вкладкам (по желанию) =====
+    // ===== Утилиты доступа к вкладкам =====
     public RadiationTab getRadiationTab() {
         for (Component comp : tabbedPane.getComponents()) {
             if (comp instanceof RadiationTab) return (RadiationTab) comp;
+        }
+        return null;
+    }
+
+    // NEW: нужен AllExcelExporter
+    public VentilationTab getVentilationTab() {
+        for (Component comp : tabbedPane.getComponents()) {
+            if (comp instanceof VentilationTab) return (VentilationTab) comp;
         }
         return null;
     }
@@ -139,6 +147,7 @@ public class MainFrame extends JFrame {
             }
         }
     }
+
     public MicroclimateTab getMicroclimateTab() {
         for (Component comp : tabbedPane.getComponents()) {
             if (comp instanceof MicroclimateTab) return (MicroclimateTab) comp;

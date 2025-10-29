@@ -19,6 +19,7 @@ public final class LightingExcelExporter {
 
     private LightingExcelExporter() {}
 
+    // === ТОНКАЯ ОБЁРТКА: создаёт книгу, вызывает appendToWorkbook(...), предлагает «Сохранить» ===
     public static void export(Building building, int sectionIndex, Component parent) {
         if (building == null) {
             JOptionPane.showMessageDialog(parent, "Сначала загрузите проект (здание).",
@@ -27,253 +28,8 @@ public final class LightingExcelExporter {
         }
 
         try (Workbook wb = new XSSFWorkbook()) {
-            Styles S = new Styles(wb);
-            Sheet sh = wb.createSheet("Естественное освещение");
+            appendToWorkbook(building, sectionIndex, wb);
 
-            // ===== ширины столбцов =====
-            int[] px = { 49, 250, 87, 47, 47, 47, 44, 18, 44, 44, 18, 44, 44, 18, 44, 42, 40, 20, 40 };
-            for (int c = 0; c < px.length; c++) setColWidthPx(sh, c, px[c]);
-
-            // ===== высота строк =====
-            ensureRow(sh, 0).setHeightInPoints(16);
-            ensureRow(sh, 1).setHeightInPoints(4);
-            ensureRow(sh, 2).setHeightInPoints(51);
-            ensureRow(sh, 3).setHeightInPoints(160);
-            ensureRow(sh, 4).setHeightInPoints(16);
-
-            // ===== A1 =====
-            put(sh, 0, 0, "18.2 Естественное освещение:", S.title);
-
-            // ===== Шапка =====
-            mergeWithBorder(sh, "A3:A4"); put(sh, 2, 0, "№ п/п", S.headCenterBorder);
-            mergeWithBorder(sh, "B3:B4"); put(sh, 2, 1, "Наименование места\nпроведения измерений", S.headCenterBorderWrap);
-            mergeWithBorder(sh, "C3:C4"); put(sh, 2, 2, "Рабочая поверхность, плоскость измерения (горизонтальная - Г, вертикальная - В) - высота от пола (земли), м", S.headVertical);
-
-            mergeWithBorder(sh, "D3:F3");
-            put(sh, 2, 3, "При верхнем или комбинированном освещении", S.headCenterBorderWrap);
-            put(sh, 3, 3, "Освещенность внутри помещения, лк", S.headVertical);
-            put(sh, 3, 4, "Наружная освещенность, лк", S.headVertical);
-            put(sh, 3, 5, "КЕО, %", S.headVertical);
-
-            mergeWithBorder(sh, "G3:P3"); put(sh, 2, 6, "При боковом освещении", S.headCenterBorderWrap);
-            mergeWithBorder(sh, "G4:I4"); put(sh, 3, 6, "Освещенность внутри помещения ± расширенная неопределенность, лк", S.headVertical);
-            mergeWithBorder(sh, "J4:L4"); put(sh, 3, 9, "Наружная освещенность ± расширенная неопределенность, лк", S.headVertical);
-            mergeWithBorder(sh, "M4:O4"); put(sh, 3, 12, "КЕО ± расширенная неопределенность, %", S.headVertical);
-            put(sh, 3, 15, "Допустимое значение КЕО, %", S.headVertical);
-
-            mergeWithBorder(sh, "Q3:S4");
-            put(sh, 2, 16, "Неравномерность естественного освещения ± расширенная неопределенность", S.headVertical);
-
-            // Нумерация (ряд 5)
-            put(sh, 4, 0, 1, S.headCenterBorder);
-            put(sh, 4, 1, 2, S.headCenterBorder);
-            put(sh, 4, 2, 3, S.headCenterBorder);
-            put(sh, 4, 3, 4, S.headCenterBorder);
-            put(sh, 4, 4, 5, S.headCenterBorder);
-            put(sh, 4, 5, 6, S.headCenterBorder);
-            mergeWithBorder(sh, "G5:I5");  put(sh, 4, 6, 7, S.headCenterBorder);
-            mergeWithBorder(sh, "J5:L5");  put(sh, 4, 9, 8, S.headCenterBorder);
-            mergeWithBorder(sh, "M5:O5");  put(sh, 4, 12, 9, S.headCenterBorder);
-            put(sh, 4, 15, 10, S.headCenterBorder);
-            mergeWithBorder(sh, "Q5:S5");  put(sh, 4, 16, 11, S.headCenterBorder);
-
-            addRegionBorders(sh, 2, 4, 0, 18); // рамка А3:S5
-
-            // ===== Данные =====
-            int row = 5;   // 0-based вывод
-            int seq = 1;
-
-            Month m = LocalDate.now().getMonth();
-            IntRange jSeason = seasonalJRange(m);
-
-            // собираем Rooms, сгруппировано по Space (квартире/офису) в порядке обхода
-            List<Entry> flat = collectEntries(building, -1);
-            LinkedHashMap<Space, List<Entry>> bySpace = new LinkedHashMap<>();
-            for (Entry e : flat) bySpace.computeIfAbsent(e.space, k -> new ArrayList<>()).add(e);
-
-            Integer prevLastJOfApartment = null; // «якорь» J между КВАРТИРАМИ
-
-            for (Map.Entry<Space, List<Entry>> group : bySpace.entrySet()) {
-                Space space = group.getKey();
-                List<Entry> rooms = group.getValue();
-
-                boolean isResidential = isResidentialSpace(space);
-                boolean isOfficePublic = isOfficeOrPublic(space);
-
-                List<RoomBlock> blocks = new ArrayList<>();
-                Integer localPrevAnchorForFirstBlock = (isResidential ? prevLastJOfApartment : null);
-
-                // --- комнаты данного помещения ---
-                for (int roomIdx = 0; roomIdx < rooms.size(); roomIdx++) {
-                    Entry e = rooms.get(roomIdx);
-                    boolean isKitchen = isKitchenName(e.room.getName());
-
-                    int blockStart = row;
-                    int blockEnd = row + 4;
-                    for (int r = blockStart; r <= blockEnd; r++) ensureRow(sh, r).setHeightInPoints(16);
-
-                    // B — объединяем на 5 строк + текст
-                    mergeWithBorder(sh, "B" + (blockStart + 1) + ":B" + (blockEnd + 1));
-                    put(sh, blockStart, 1, buildBLabel(building, e), S.centerBorderWrap);
-
-                    // Q..S — единый прямоугольник 3x5 с «-»
-                    String qRange = "Q" + (blockStart + 1) + ":S" + (blockEnd + 1);
-                    mergeWithBorder(sh, qRange);
-                    put(sh, blockStart, 16, "-", S.center);
-
-                    // J-ряд (по сезону, |Δ| ≤ 60, округление до десятков)
-                    int[] Jvals = generateJSeries(5, jSeason.min, jSeason.max,
-                            (roomIdx == 0 ? localPrevAnchorForFirstBlock : null), 150);
-
-                    double[] Mvals = new double[5];
-                    int[] Gvals = new int[5];
-                    Double prevMRow = null;
-
-                    // Границы М и мин. разницы по типу помещения
-                    double[][] M_RANGES_RES = {
-                            {4.88, 5.55},
-                            {3.55, 4.54},
-                            {1.01, 1.45},
-                            {0.71, 0.91},
-                            {0.59, 0.68}
-                    };
-                    double[] M_DIFF_RES = {0.0, 0.62, 0.0, 0.24, 0.12};
-
-                    double[][] M_RANGES_OFF = {
-                            {4.89, 5.85},
-                            {4.25, 5.44},
-                            {1.85, 2.49},
-                            {1.55, 1.89},
-                            {1.17, 1.45}
-                    };
-                    double[] M_DIFF_OFF = {0.0, 0.35, 0.0, 0.25, 0.25};
-
-                    for (int i = 0; i < 5; i++) {
-                        int r = row + i;
-                        int R = r + 1;
-                        Row rr = ensureRow(sh, r);
-
-                        // A — №
-                        Cell A = cell(rr, 0); A.setCellValue(seq++); A.setCellStyle(S.centerBorder);
-
-                        // C — Г-0,8 / Г-0,0
-                        String cVal = (isOfficePublic ? "Г-0,8" : "Г-0,0");
-                        Cell C = cell(rr, 2); C.setCellValue(cVal); C.setCellStyle(S.centerBorder);
-
-                        // D,E,F — прочерк
-                        for (int c = 3; c <= 5; c++) {
-                            Cell x = cell(rr, c); x.setCellValue("-"); x.setCellStyle(S.centerBorder);
-                        }
-
-                        // --- J/K/L ---
-                        int Jv = Jvals[i];
-                        Cell J = cell(rr, 9);  J.setCellValue(Jv);                        J.setCellStyle(S.num0NoRight);
-                        Cell K = cell(rr, 10); K.setCellValue("±");                       K.setCellStyle(S.pmTopBottom);
-                        Cell L = cell(rr, 11); L.setCellFormula("J" + R + "*0.08*2/POWER(3,0.5)"); L.setCellStyle(S.num0NoLeft);
-
-                        // --- G/H/I ---
-                        int Gv;
-                        if (isOfficePublic) {
-                            IntRange kRange = kRangeForM(Jv, M_RANGES_OFF[i][0], M_RANGES_OFF[i][1]);
-                            Gv = chooseKWithDiff(Jv, kRange, prevMRow, M_DIFF_OFF[i]);
-                            if (Gv < kRange.min) Gv = kRange.min;
-                            if (Gv > kRange.max) Gv = kRange.max;
-                        } else { // жилые
-                            IntRange kRange = kRangeForM(Jv, M_RANGES_RES[i][0], M_RANGES_RES[i][1]);
-                            Gv = chooseKWithDiff(Jv, kRange, prevMRow, M_DIFF_RES[i]);
-                            if (Gv < kRange.min) Gv = kRange.min;
-                            if (Gv > kRange.max) Gv = kRange.max;
-                        }
-                        Gvals[i] = Gv;
-
-                        // формат G и I в зависимости от величины G
-                        Cell G = cell(rr, 6);
-                        Cell H = cell(rr, 7);
-                        Cell I = cell(rr, 8);
-
-                        G.setCellValue(Gv);
-                        H.setCellValue("±"); H.setCellStyle(S.pmTopBottom);
-
-                        if (Gv >= 100) {
-                            G.setCellStyle(S.num0NoRight);
-                            I.setCellFormula("G" + R + "*0.08*2/POWER(3,0.5)"); I.setCellStyle(S.num0NoLeft);
-                        } else if (Gv >= 10) {
-                            G.setCellStyle(S.num1NoRight);
-                            I.setCellFormula("G" + R + "*0.08*2/POWER(3,0.5)"); I.setCellStyle(S.num1NoLeft);
-                        } else {
-                            G.setCellStyle(S.num2NoRight);
-                            I.setCellFormula("G" + R + "*0.08*2/POWER(3,0.5)"); I.setCellStyle(S.num2NoLeft);
-                        }
-
-                        // --- M/N/O ---
-                        Cell Mv = cell(rr, 12); Mv.setCellFormula("G" + R + "*100/J" + R); Mv.setCellStyle(S.num2NoRight);
-                        Cell N  = cell(rr, 13); N.setCellValue("±");                       N.setCellStyle(S.pmTopBottom);
-                        Cell O  = cell(rr, 14);
-                        O.setCellFormula("2*M" + R + "*SQRT(POWER(L" + R + "/2/J" + R + ",2)+POWER(I" + R + "/2/G" + R + ",2))");
-                        O.setCellStyle(S.num2NoLeft);
-
-                        // P — для офисов ставим 1,00 сразу
-                        if (isOfficePublic) {
-                            Cell P = cell(rr, 15); P.setCellValue(1.00); P.setCellStyle(S.num2);
-                        }
-
-                        double mApprox = (Gv * 100.0) / Jv;
-                        Mvals[i] = mApprox;
-                        prevMRow = mApprox;
-                    }
-
-                    RoomBlock b = new RoomBlock(e, blockStart, Gvals, Jvals, Mvals,
-                            !isOfficePublic && isResidential, isOfficePublic, isKitchen);
-                    blocks.add(b);
-
-                    // если это был первый блок квартиры и у нас был «якорь», дальше внутри квартиры не ограничиваем старт
-                    localPrevAnchorForFirstBlock = null;
-
-                    row += 5;
-                } // конец перебора комнат помещения
-
-                // ===== P-логика для жилых =====
-                if (isResidential && !isOfficePublic) {
-                    // кухни: 3-я строка = 0.50; 1,2,4,5 — «-»
-                    for (RoomBlock b : blocks) {
-                        if (!b.isResidential || !b.isKitchen) continue;
-                        setPDashes(sh, b.startRow, S);
-                        setPvalue(sh, b.startRow + 2, 0.50, S); // 3-я строка
-                    }
-                    // остальные комнаты (не кухни)
-                    List<RoomBlock> rest = new ArrayList<>();
-                    for (RoomBlock b : blocks) if (b.isResidential && !b.isKitchen) rest.add(b);
-
-                    if (rest.size() == 1) {
-                        RoomBlock only = rest.get(0);
-                        setPDashes(sh, only.startRow, S);
-                        setPvalue(sh, only.startRow + 4, 0.50, S);
-                    } else if (rest.size() >= 2) {
-                        RoomBlock target = rest.get(0);
-                        double best = min(target.Mvals);
-                        for (int i = 1; i < rest.size(); i++) {
-                            double mmin = min(rest.get(i).Mvals);
-                            if (mmin < best) { best = mmin; target = rest.get(i); }
-                        }
-                        for (RoomBlock b : rest) {
-                            setPDashes(sh, b.startRow, S);
-                            if (b == target) setPvalue(sh, b.startRow + 4, 0.50, S);
-                            else             setPvalue(sh, b.startRow + 2, 0.50, S);
-                        }
-                    }
-                }
-
-                // ===== ОБНОВЛЯЕМ «якорь» J между квартирами =====
-                if (isResidential) {
-                    // берём J последнего блока/5-й строки
-                    if (!blocks.isEmpty()) {
-                        RoomBlock last = blocks.get(blocks.size() - 1);
-                        prevLastJOfApartment = last.Jvals[4];
-                    }
-                }
-            }
-
-            // ===== сохранение =====
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Сохранить Excel");
             chooser.setSelectedFile(new File("Освещение_естественное.xlsx"));
@@ -286,10 +42,265 @@ public final class LightingExcelExporter {
                         "Файл сохранён:\n" + file.getAbsolutePath(),
                         "Экспорт завершён", JOptionPane.INFORMATION_MESSAGE);
             }
-
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(parent, "Ошибка экспорта: " + ex.getMessage(),
                     "Ошибка", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // === НОВОЕ: дописывает лист(ы) освещения в уже открытую книгу, ничего не сохраняет/не закрывает ===
+    public static void appendToWorkbook(Building building, int sectionIndex, Workbook wb) {
+        if (building == null || wb == null) return;
+        buildLightingSheets(building, sectionIndex, wb);
+    }
+
+    // === ВЕСЬ КОД ПОСТРОЕНИЯ ЛИСТА ПЕРЕНЕСЁН СЮДА (без диалога «Сохранить») ===
+    private static void buildLightingSheets(Building building, int sectionIndex, Workbook wb) {
+        Styles S = new Styles(wb);
+        Sheet sh = wb.createSheet("Естественное освещение");
+
+        // ===== ширины столбцов =====
+        int[] px = { 49, 250, 87, 47, 47, 47, 44, 18, 44, 44, 18, 44, 44, 18, 44, 42, 40, 20, 40 };
+        for (int c = 0; c < px.length; c++) setColWidthPx(sh, c, px[c]);
+
+        // ===== высота строк =====
+        ensureRow(sh, 0).setHeightInPoints(16);
+        ensureRow(sh, 1).setHeightInPoints(4);
+        ensureRow(sh, 2).setHeightInPoints(51);
+        ensureRow(sh, 3).setHeightInPoints(160);
+        ensureRow(sh, 4).setHeightInPoints(16);
+
+        // ===== A1 =====
+        put(sh, 0, 0, "18.2 Естественное освещение:", S.title);
+
+        // ===== Шапка =====
+        mergeWithBorder(sh, "A3:A4"); put(sh, 2, 0, "№ п/п", S.headCenterBorder);
+        mergeWithBorder(sh, "B3:B4"); put(sh, 2, 1, "Наименование места\nпроведения измерений", S.headCenterBorderWrap);
+        mergeWithBorder(sh, "C3:C4"); put(sh, 2, 2, "Рабочая поверхность, плоскость измерения (горизонтальная - Г, вертикальная - В) - высота от пола (земли), м", S.headVertical);
+
+        mergeWithBorder(sh, "D3:F3");
+        put(sh, 2, 3, "При верхнем или комбинированном освещении", S.headCenterBorderWrap);
+        put(sh, 3, 3, "Освещенность внутри помещения, лк", S.headVertical);
+        put(sh, 3, 4, "Наружная освещенность, лк", S.headVertical);
+        put(sh, 3, 5, "КЕО, %", S.headVertical);
+
+        mergeWithBorder(sh, "G3:P3"); put(sh, 2, 6, "При боковом освещении", S.headCenterBorderWrap);
+        mergeWithBorder(sh, "G4:I4"); put(sh, 3, 6, "Освещенность внутри помещения ± расширенная неопределенность, лк", S.headVertical);
+        mergeWithBorder(sh, "J4:L4"); put(sh, 3, 9, "Наружная освещенность ± расширенная неопределенность, лк", S.headVertical);
+        mergeWithBorder(sh, "M4:O4"); put(sh, 3, 12, "КЕО ± расширенная неопределенность, %", S.headVertical);
+        put(sh, 3, 15, "Допустимое значение КЕО, %", S.headVertical);
+
+        mergeWithBorder(sh, "Q3:S4");
+        put(sh, 2, 16, "Неравномерность естественного освещения ± расширенная неопределенность", S.headVertical);
+
+        // Нумерация (ряд 5)
+        put(sh, 4, 0, 1, S.headCenterBorder);
+        put(sh, 4, 1, 2, S.headCenterBorder);
+        put(sh, 4, 2, 3, S.headCenterBorder);
+        put(sh, 4, 3, 4, S.headCenterBorder);
+        put(sh, 4, 4, 5, S.headCenterBorder);
+        put(sh, 4, 5, 6, S.headCenterBorder);
+        mergeWithBorder(sh, "G5:I5");  put(sh, 4, 6, 7, S.headCenterBorder);
+        mergeWithBorder(sh, "J5:L5");  put(sh, 4, 9, 8, S.headCenterBorder);
+        mergeWithBorder(sh, "M5:O5");  put(sh, 4, 12, 9, S.headCenterBorder);
+        put(sh, 4, 15, 10, S.headCenterBorder);
+        mergeWithBorder(sh, "Q5:S5");  put(sh, 4, 16, 11, S.headCenterBorder);
+
+        addRegionBorders(sh, 2, 4, 0, 18); // рамка А3:S5
+
+        // ===== Данные =====
+        int row = 5;   // 0-based вывод
+        int seq = 1;
+
+        Month m = LocalDate.now().getMonth();
+        IntRange jSeason = seasonalJRange(m);
+
+        // собираем Rooms, сгруппировано по Space (квартире/офису) в порядке обхода
+        // ВНИМАНИЕ: как и раньше — берём все секции (sectionIndex не фильтруем), т.к. ранее было -1
+        List<Entry> flat = collectEntries(building, -1);
+        LinkedHashMap<Space, List<Entry>> bySpace = new LinkedHashMap<>();
+        for (Entry e : flat) bySpace.computeIfAbsent(e.space, k -> new ArrayList<>()).add(e);
+
+        Integer prevLastJOfApartment = null; // «якорь» J между КВАРТИРАМИ
+
+        for (Map.Entry<Space, List<Entry>> group : bySpace.entrySet()) {
+            Space space = group.getKey();
+            List<Entry> rooms = group.getValue();
+
+            boolean isResidential = isResidentialSpace(space);
+            boolean isOfficePublic = isOfficeOrPublic(space);
+
+            List<RoomBlock> blocks = new ArrayList<>();
+            Integer localPrevAnchorForFirstBlock = (isResidential ? prevLastJOfApartment : null);
+
+            // --- комнаты данного помещения ---
+            for (int roomIdx = 0; roomIdx < rooms.size(); roomIdx++) {
+                Entry e = rooms.get(roomIdx);
+                boolean isKitchen = isKitchenName(e.room.getName());
+
+                int blockStart = row;
+                int blockEnd = row + 4;
+                for (int r = blockStart; r <= blockEnd; r++) ensureRow(sh, r).setHeightInPoints(16);
+
+                // B — объединяем на 5 строк + текст
+                mergeWithBorder(sh, "B" + (blockStart + 1) + ":B" + (blockEnd + 1));
+                put(sh, blockStart, 1, buildBLabel(building, e), S.centerBorderWrap);
+
+                // Q..S — единый прямоугольник 3x5 с «-»
+                String qRange = "Q" + (blockStart + 1) + ":S" + (blockEnd + 1);
+                mergeWithBorder(sh, qRange);
+                put(sh, blockStart, 16, "-", S.center);
+
+                // J-ряд (по сезону, |Δ| ≤ 60, округление до десятков)
+                int[] Jvals = generateJSeries(5, jSeason.min, jSeason.max,
+                        (roomIdx == 0 ? localPrevAnchorForFirstBlock : null), 150);
+
+                double[] Mvals = new double[5];
+                int[] Gvals = new int[5];
+                Double prevMRow = null;
+
+                // Границы М и мин. разницы по типу помещения
+                double[][] M_RANGES_RES = {
+                        {4.88, 5.55},
+                        {3.55, 4.54},
+                        {1.01, 1.45},
+                        {0.71, 0.91},
+                        {0.59, 0.68}
+                };
+                double[] M_DIFF_RES = {0.0, 0.62, 0.0, 0.24, 0.12};
+
+                double[][] M_RANGES_OFF = {
+                        {4.89, 5.85},
+                        {4.25, 5.44},
+                        {1.85, 2.49},
+                        {1.55, 1.89},
+                        {1.17, 1.45}
+                };
+                double[] M_DIFF_OFF = {0.0, 0.35, 0.0, 0.25, 0.25};
+
+                for (int i = 0; i < 5; i++) {
+                    int r = row + i;
+                    int R = r + 1;
+                    Row rr = ensureRow(sh, r);
+
+                    // A — №
+                    Cell A = cell(rr, 0); A.setCellValue(seq++); A.setCellStyle(S.centerBorder);
+
+                    // C — Г-0,8 / Г-0,0
+                    String cVal = (isOfficePublic ? "Г-0,8" : "Г-0,0");
+                    Cell C = cell(rr, 2); C.setCellValue(cVal); C.setCellStyle(S.centerBorder);
+
+                    // D,E,F — прочерк
+                    for (int c = 3; c <= 5; c++) {
+                        Cell x = cell(rr, c); x.setCellValue("-"); x.setCellStyle(S.centerBorder);
+                    }
+
+                    // --- J/K/L ---
+                    int Jv = Jvals[i];
+                    Cell J = cell(rr, 9);  J.setCellValue(Jv);                        J.setCellStyle(S.num0NoRight);
+                    Cell K = cell(rr, 10); K.setCellValue("±");                       K.setCellStyle(S.pmTopBottom);
+                    Cell L = cell(rr, 11); L.setCellFormula("J" + R + "*0.08*2/POWER(3,0.5)"); L.setCellStyle(S.num0NoLeft);
+
+                    // --- G/H/I ---
+                    int Gv;
+                    if (isOfficePublic) {
+                        IntRange kRange = kRangeForM(Jv, M_RANGES_OFF[i][0], M_RANGES_OFF[i][1]);
+                        Gv = chooseKWithDiff(Jv, kRange, prevMRow, M_DIFF_OFF[i]);
+                        if (Gv < kRange.min) Gv = kRange.min;
+                        if (Gv > kRange.max) Gv = kRange.max;
+                    } else { // жилые
+                        IntRange kRange = kRangeForM(Jv, M_RANGES_RES[i][0], M_RANGES_RES[i][1]);
+                        Gv = chooseKWithDiff(Jv, kRange, prevMRow, M_DIFF_RES[i]);
+                        if (Gv < kRange.min) Gv = kRange.min;
+                        if (Gv > kRange.max) Gv = kRange.max;
+                    }
+                    Gvals[i] = Gv;
+
+                    // формат G и I в зависимости от величины G
+                    Cell G = cell(rr, 6);
+                    Cell H = cell(rr, 7);
+                    Cell I = cell(rr, 8);
+
+                    G.setCellValue(Gv);
+                    H.setCellValue("±"); H.setCellStyle(S.pmTopBottom);
+
+                    if (Gv >= 100) {
+                        G.setCellStyle(S.num0NoRight);
+                        I.setCellFormula("G" + R + "*0.08*2/POWER(3,0.5)"); I.setCellStyle(S.num0NoLeft);
+                    } else if (Gv >= 10) {
+                        G.setCellStyle(S.num1NoRight);
+                        I.setCellFormula("G" + R + "*0.08*2/POWER(3,0.5)"); I.setCellStyle(S.num1NoLeft);
+                    } else {
+                        G.setCellStyle(S.num2NoRight);
+                        I.setCellFormula("G" + R + "*0.08*2/POWER(3,0.5)"); I.setCellStyle(S.num2NoLeft);
+                    }
+
+                    // --- M/N/O ---
+                    Cell Mv = cell(rr, 12); Mv.setCellFormula("G" + R + "*100/J" + R); Mv.setCellStyle(S.num2NoRight);
+                    Cell N  = cell(rr, 13); N.setCellValue("±");                       N.setCellStyle(S.pmTopBottom);
+                    Cell O  = cell(rr, 14);
+                    O.setCellFormula("2*M" + R + "*SQRT(POWER(L" + R + "/2/J" + R + ",2)+POWER(I" + R + "/2/G" + R + ",2))");
+                    O.setCellStyle(S.num2NoLeft);
+
+                    // P — для офисов ставим 1,00 сразу
+                    if (isOfficePublic) {
+                        Cell P = cell(rr, 15); P.setCellValue(1.00); P.setCellStyle(S.num2);
+                    }
+
+                    double mApprox = (Gv * 100.0) / Jv;
+                    Mvals[i] = mApprox;
+                    prevMRow = mApprox;
+                }
+
+                RoomBlock b = new RoomBlock(e, blockStart, Gvals, Jvals, Mvals,
+                        !isOfficePublic && isResidential, isOfficePublic, isKitchen);
+                blocks.add(b);
+
+                // если это был первый блок квартиры и у нас был «якорь», дальше внутри квартиры не ограничиваем старт
+                localPrevAnchorForFirstBlock = null;
+
+                row += 5;
+            } // конец перебора комнат помещения
+
+            // ===== P-логика для жилых =====
+            if (isResidential && !isOfficePublic) {
+                // кухни: 3-я строка = 0.50; 1,2,4,5 — «-»
+                for (RoomBlock b : blocks) {
+                    if (!b.isResidential || !b.isKitchen) continue;
+                    setPDashes(sh, b.startRow, S);
+                    setPvalue(sh, b.startRow + 2, 0.50, S); // 3-я строка
+                }
+                // остальные комнаты (не кухни)
+                List<RoomBlock> rest = new ArrayList<>();
+                for (RoomBlock b : blocks) if (b.isResidential && !b.isKitchen) rest.add(b);
+
+                if (rest.size() == 1) {
+                    RoomBlock only = rest.get(0);
+                    setPDashes(sh, only.startRow, S);
+                    setPvalue(sh, only.startRow + 4, 0.50, S);
+                } else if (rest.size() >= 2) {
+                    RoomBlock target = rest.get(0);
+                    double best = min(target.Mvals);
+                    for (int i = 1; i < rest.size(); i++) {
+                        double mmin = min(rest.get(i).Mvals);
+                        if (mmin < best) { best = mmin; target = rest.get(i); }
+                    }
+                    for (RoomBlock b : rest) {
+                        setPDashes(sh, b.startRow, S);
+                        if (b == target) setPvalue(sh, b.startRow + 4, 0.50, S);
+                        else             setPvalue(sh, b.startRow + 2, 0.50, S);
+                    }
+                }
+            }
+
+            // ===== ОБНОВЛЯЕМ «якорь» J между квартирами =====
+            if (isResidential) {
+                // берём J последнего блока/5-й строки
+                if (!blocks.isEmpty()) {
+                    RoomBlock last = blocks.get(blocks.size() - 1);
+                    prevLastJOfApartment = last.Jvals[4];
+                }
+            }
         }
     }
 
@@ -427,7 +438,6 @@ public final class LightingExcelExporter {
         return res;
     }
 
-    // для импорта: import ru.citlab24.protokol.tabs.models.Section;
     private static String sectionNameIfMultiple(Building building, int sectionIndex) {
         if (building == null || building.getSections() == null) return "";
         List<Section> sections = building.getSections();
@@ -460,7 +470,6 @@ public final class LightingExcelExporter {
         }
     }
 
-    // помогающие штуки (добавь, если их нет в классе)
     private static String joinComma(String... parts) {
         StringBuilder sb = new StringBuilder();
         for (String p : parts) {
@@ -477,10 +486,8 @@ public final class LightingExcelExporter {
         return space.getType() == Space.SpaceType.OFFICE;
     }
 
-
     private static String cleanedFloorName(String raw) {
         if (raw == null) return "Этаж";
-        // убираем ТОЛЬКО В НАЧАЛЕ слова «смешанный/офисный/жилой …»
         String s = raw.replaceFirst("(?iu)^(\\s*)(смешанн(?:ый|ая|ое|ые|ых|ом)?|офисн(?:ый|ая|ое|ые|ых|ом)?|жил(?:ой|ая|ое|ые|ых|ом)?)[\\s,]+", "");
         s = s.replaceAll(" +", " ").trim();
         return s.isEmpty() ? raw : s;
@@ -580,7 +587,7 @@ public final class LightingExcelExporter {
             DataFormat fmt = wb.createDataFormat();
 
             arial10 = wb.createFont(); arial10.setFontName("Arial"); arial10.setFontHeightInPoints((short)10);
-            arial9  = wb.createFont(); arial9.setFontName("Arial");  arial9.setFontHeightInPoints((short)9);
+            arial9  = wb.createFont();  arial9.setFontName("Arial");  arial9.setFontHeightInPoints((short)9);
 
             title = wb.createCellStyle();
             title.setAlignment(HorizontalAlignment.LEFT);
@@ -658,13 +665,13 @@ public final class LightingExcelExporter {
 
             // варианты без боковых граней
             num0NoRight = wb.createCellStyle(); num0NoRight.cloneStyleFrom(num0); num0NoRight.setBorderRight(BorderStyle.NONE);
-            num0NoLeft  = wb.createCellStyle(); num0NoLeft.cloneStyleFrom(num0);  num0NoLeft.setBorderLeft(BorderStyle.NONE);
+            num0NoLeft  = wb.createCellStyle();  num0NoLeft.cloneStyleFrom(num0);  num0NoLeft.setBorderLeft(BorderStyle.NONE);
 
             num1NoRight = wb.createCellStyle(); num1NoRight.cloneStyleFrom(num1); num1NoRight.setBorderRight(BorderStyle.NONE);
-            num1NoLeft  = wb.createCellStyle(); num1NoLeft.cloneStyleFrom(num1);  num1NoLeft.setBorderLeft(BorderStyle.NONE);
+            num1NoLeft  = wb.createCellStyle();  num1NoLeft.cloneStyleFrom(num1);  num1NoLeft.setBorderLeft(BorderStyle.NONE);
 
             num2NoRight = wb.createCellStyle(); num2NoRight.cloneStyleFrom(num2); num2NoRight.setBorderRight(BorderStyle.NONE);
-            num2NoLeft  = wb.createCellStyle(); num2NoLeft.cloneStyleFrom(num2);  num2NoLeft.setBorderLeft(BorderStyle.NONE);
+            num2NoLeft  = wb.createCellStyle();  num2NoLeft.cloneStyleFrom(num2);  num2NoLeft.setBorderLeft(BorderStyle.NONE);
         }
 
         private static void setAllBorders(CellStyle s) {
@@ -688,13 +695,14 @@ public final class LightingExcelExporter {
         final int[] Gvals;
         final int[] Jvals;
         final double[] Mvals;
-        final boolean isResidential, isOfficePublic, isKitchen;
+        final boolean isResidential, isOfficeOrPublic, isKitchen;
         RoomBlock(Entry e, int startRow, int[] g, int[] j, double[] m,
-                  boolean isResidential, boolean isOfficePublic, boolean isKitchen) {
+                  boolean isResidential, boolean isOfficeOrPublic, boolean isKitchen) {
             this.e = e; this.startRow = startRow; this.Gvals = g; this.Jvals = j; this.Mvals = m;
-            this.isResidential = isResidential; this.isOfficePublic = isOfficePublic; this.isKitchen = isKitchen;
+            this.isResidential = isResidential; this.isOfficeOrPublic = isOfficeOrPublic; this.isKitchen = isKitchen;
         }
     }
+
     // ===== ЧИСЛОВЫЕ УТИЛИТЫ ДЛЯ G =====
     private static final java.util.Random _lightingRng = new java.util.Random();
 
@@ -710,16 +718,13 @@ public final class LightingExcelExporter {
     private static double enforceTenthsUnder100(double v) {
         double x = round1(v);
         if (x < 100.0) {
-            // проверяем «целое с точностью до 1 знака» → т.е. .0
             boolean isDotZero = Math.abs(x - Math.rint(x)) < 1e-9;
             if (isDotZero) {
                 int tenth = 1 + _lightingRng.nextInt(9); // 1..9
                 x = Math.floor(x) + tenth / 10.0;
-                // защитимся на случай x=99.0 → 99.9 (остаемся <100)
                 if (x >= 100.0) x = 99.9;
             }
         }
         return round1(x);
     }
-
 }

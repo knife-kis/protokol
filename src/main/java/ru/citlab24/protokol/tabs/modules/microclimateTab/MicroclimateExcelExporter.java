@@ -18,189 +18,23 @@ public final class MicroclimateExcelExporter {
 
     private MicroclimateExcelExporter() {}
 
-    /** sectionIndex = -1 -> все секции (или одна, если она единственная) */
+    /* ===== ПУБЛИЧНЫЕ API ===== */
+
+    /** append: строит «большой» лист точь-в-точь как при экспорте из вкладки. */
+    public static void appendToWorkbook(Building building, int sectionIndex, Workbook wb) {
+        if (building == null || wb == null) return;
+        buildMicroclimateSheets(wb, building, sectionIndex);
+    }
+
+    /** export: обёртка — создаёт книгу, вызывает builder и предлагает сохранить. */
     public static void export(Building building, int sectionIndex, Component parent) {
         if (building == null) {
             JOptionPane.showMessageDialog(parent, "Сначала загрузите проект (здание).",
                     "Экспорт", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
         try (Workbook wb = new XSSFWorkbook()) {
-            Styles S = new Styles(wb);
-            Sheet sh = wb.createSheet("Микроклимат");
-
-            // Ориентация страницы: альбомная
-            PrintSetup ps = sh.getPrintSetup();
-            ps.setLandscape(true);
-            ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
-
-            // ===== ширина столбцов (A..V) в пикселях =====
-            int[] px = {33,200,28,31,30,34,22,31,40,99,34,14,31,40,34,20,31,40,23,23,23,86};
-            for (int c = 0; c < px.length; c++) setColWidthPx(sh, c, px[c]);
-
-            // ===== высота строк (в поинтах) =====
-            ensureRow(sh, 0).setHeightInPoints(15);  // ~20 px
-            ensureRow(sh, 1).setHeightInPoints(15);  // ~20 px
-            ensureRow(sh, 2).setHeightInPoints(48);  // 3-я
-            ensureRow(sh, 3).setHeightInPoints(121); // 4-я
-            ensureRow(sh, 4).setHeightInPoints(15);  // ~20 px (5-я)
-
-            // ===== заголовки =====
-            put(sh, 0, 0, "15. Результаты измерений параметров микроклимата", S.title);
-            put(sh, 1, 0, "15.2.  Показатели микроклимата в помещениях:", S.title);
-
-            // ===== шапка =====
-            mergeWithBorder(sh, "A3:A4"); put(sh, 2, 0, "№ п/п", S.head8);
-            mergeWithBorder(sh, "B3:B4"); put(sh, 2, 1,
-                    "Рабочее место, место проведения измерений, цех, участок, наименование профессии или должности",
-                    S.head8Wrap);
-
-            mergeWithBorder(sh, "C3:C4"); put(sh, 2, 2, "Дата, проведения  измерений", S.head8Vertical);
-            mergeWithBorder(sh, "D3:D4"); put(sh, 2, 3, "Категория работ по интенсивности", S.head8Vertical);
-            mergeWithBorder(sh, "E3:E4"); put(sh, 2, 4, "Высота от пола, м", S.head8Vertical);
-
-            mergeWithBorder(sh, "F3:I3"); put(sh, 2, 5, "Температура воздуха, ºС", S.head8Wrap);
-            mergeWithBorder(sh, "F4:H4"); put(sh, 3, 5, "Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
-            put(sh, 3, 8,  "Допустимый уровень", S.head8Vertical);
-
-            put(sh, 2, 9,  "Температура поверхностей, ºС", S.head8Wrap);
-            put(sh, 3, 9,  "Пол. Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
-
-            mergeWithBorder(sh, "K3:N3"); put(sh, 2, 10, "Результирующая температура,  ºС", S.head8Wrap);
-            mergeWithBorder(sh, "K4:M4"); put(sh, 3, 10, "Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
-            put(sh, 3, 13, "Допустимый уровень", S.head8Vertical);
-
-            mergeWithBorder(sh, "O3:R3"); put(sh, 2, 14, "Относительная влажность воздуха, %", S.head8Wrap);
-            mergeWithBorder(sh, "O4:Q4"); put(sh, 3, 14, "Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
-            put(sh, 3, 17, "Допустимый уровень", S.head8Vertical);
-
-            mergeWithBorder(sh, "S3:V3"); put(sh, 2, 18, "Скорость движения воздуха,  м/с", S.head8Wrap);
-            mergeWithBorder(sh, "S4:U4"); put(sh, 3, 18, "Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
-            put(sh, 3, 21, "Допустимый уровень", S.head8Vertical);
-
-            // ===== строка 5 (номера граф) =====
-            mergeWithBorder(sh, "F5:H5");
-            mergeWithBorder(sh, "K5:M5");
-            mergeWithBorder(sh, "O5:Q5");
-            mergeWithBorder(sh, "S5:U5");
-            put(sh, 4, 0,  1, S.centerBorder);
-            put(sh, 4, 1,  2, S.centerBorder);
-            put(sh, 4, 2,  3, S.centerBorder);
-            put(sh, 4, 3,  4, S.centerBorder);
-            put(sh, 4, 4,  5, S.centerBorder);
-            put(sh, 4, 5,  6, S.centerBorder); // F5-H5
-            put(sh, 4, 8,  7, S.centerBorder);
-            put(sh, 4, 9,  8, S.centerBorder);
-            put(sh, 4, 10, 9, S.centerBorder); // K5-M5
-            put(sh, 4, 13,10, S.centerBorder);
-            put(sh, 4, 14,11, S.centerBorder); // O5-Q5
-            put(sh, 4, 17,12, S.centerBorder);
-            put(sh, 4, 18,13, S.centerBorder); // S5-U5
-            put(sh, 4, 21,14, S.centerBorder);
-
-            addRegionBorders(sh, 2, 4, 0, 21); // A3:V5
-
-            // ===== генераторы =====
-            Random rng = new Random();
-            Map<Space, Double> spaceOBase = new IdentityHashMap<>();
-            Map<Room,  Double> roomOBase  = new IdentityHashMap<>();
-
-            // ===== данные =====
-            int row = 5; // начинаем вывод с 6-й строки (0-based)
-            int seq = 1;
-
-            DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy");
-            String today = LocalDate.now().format(dateFmt);
-
-            // секция -> этаж -> список выбранных комнат
-            Map<Integer, Map<Floor, List<Room>>> bySection = new LinkedHashMap<>();
-            for (Floor floor : building.getFloors()) {
-                if (floor == null) continue;
-                if (sectionIndex >= 0 && floor.getSectionIndex() != sectionIndex) continue;
-
-                for (Space space : floor.getSpaces()) {
-                    if (space == null) continue;
-
-                    List<Room> selected = new ArrayList<>();
-                    for (Room r : space.getRooms()) {
-                        // ВАЖНО: теперь берём галочки именно микроклимата!
-                        if (r != null && r.isMicroclimateSelected()) selected.add(r);
-                    }
-                    if (selected.isEmpty()) continue;
-
-                    bySection.computeIfAbsent(floor.getSectionIndex(), k -> new LinkedHashMap<>())
-                            .computeIfAbsent(floor, k -> new ArrayList<>())
-                            .addAll(selected);
-                }
-            }
-
-            List<Integer> secOrder = new ArrayList<>(bySection.keySet());
-            secOrder.sort(Comparator.naturalOrder());
-
-            for (Integer secIdx : secOrder) {
-                Map<Floor, List<Room>> byFloor = bySection.get(secIdx);
-
-                // этажи по возрастанию номера
-                List<Floor> floors = new ArrayList<>(byFloor.keySet());
-                floors.sort(Comparator.comparingInt(MicroclimateExcelExporter::parseFloorNumSafe));
-
-                for (Floor f : floors) {
-                    // заголовок (A:V объединено); если секция одна — не печатаем её имя
-                    String secName = sectionOnlyName(building, secIdx);
-                    String title = joinNotEmpty(secName, floorNameNoType(f)).trim();
-                    mergeWithBorder(sh, "A" + (row + 1) + ":V" + (row + 1));
-                    put(sh, row, 0, title, S.sectionHeader); // по центру
-                    row++;
-
-                    // сгруппировать по помещению
-                    Map<Space, List<Room>> bySpace = new LinkedHashMap<>();
-                    for (Room r : byFloor.get(f)) {
-                        Space sp = findRoomSpace(f, r);
-                        if (sp == null) continue;
-                        bySpace.computeIfAbsent(sp, k -> new ArrayList<>()).add(r);
-                    }
-
-                    for (Map.Entry<Space, List<Room>> g : bySpace.entrySet()) {
-                        Space space = g.getKey();
-                        List<Room> rooms = g.getValue();
-
-                        boolean isResidential = isApartment(space);
-                        boolean isOffice      = isOfficeOrPublic(space);
-
-                        // базовый O для квартиры (Space)
-                        spaceOBase.computeIfAbsent(space, s -> rnd(rng, 34.0, 42.0));
-
-                        for (Room room : rooms) {
-                            // базовый O для комнаты (внутри ±0.5 от квартиры)
-                            roomOBase.computeIfAbsent(room, r -> clamp(rnd(rng, spaceOBase.get(space) - 0.5, spaceOBase.get(space) + 0.5), 34.0, 42.0));
-
-                            // 1) центральная точка (3 строки по высотам)
-                            row = emitBlock(sh, row, seq++, building, f, space, room,
-                                    Position.CENTER, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
-
-                            // 2) у наружной стены — по числу стен (0..N)
-                            int walls = externalWallsCount(room);
-                            if (isOffice) {
-                                if (walls >= 1) {
-                                    row = emitBlock(sh, row, seq++, building, f, space, room,
-                                            Position.NEAR_WALL, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
-                                }
-                            } else {
-                                for (int i = 0; i < Math.min(walls, 2); i++) {
-                                    row = emitBlock(sh, row, seq++, building, f, space, room,
-                                            Position.NEAR_WALL, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // после 5-й — все строки по ~20 px
-            for (int r = 5; r <= Math.max(5, sh.getLastRowNum()); r++) {
-                ensureRow(sh, r).setHeightInPoints(15f);
-            }
+            buildMicroclimateSheets(wb, building, sectionIndex);
 
             // ===== сохранение =====
             JFileChooser chooser = new JFileChooser();
@@ -222,6 +56,187 @@ public final class MicroclimateExcelExporter {
         }
     }
 
+    /* ===== ВЕСЬ СТРОИТЕЛЬ ЛИСТА — как во вкладке ===== */
+
+    /** Весь «большой» шаблон (A..V, объединения, стили, допуски и т. п.). */
+    private static void buildMicroclimateSheets(Workbook wb, Building building, int sectionIndex) {
+        Styles S = new Styles(wb);
+        Sheet sh = wb.createSheet(uniqueName(wb, "Микроклимат"));
+
+        // Ориентация страницы: альбомная
+        PrintSetup ps = sh.getPrintSetup();
+        ps.setLandscape(true);
+        ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
+
+        // ===== ширина столбцов (A..V) в пикселях =====
+        int[] px = {33,200,28,31,30,34,22,31,40,99,34,14,31,40,34,20,31,40,23,23,23,86};
+        for (int c = 0; c < px.length; c++) setColWidthPx(sh, c, px[c]);
+
+        // ===== высота строк (в поинтах) =====
+        ensureRow(sh, 0).setHeightInPoints(15);  // ~20 px
+        ensureRow(sh, 1).setHeightInPoints(15);  // ~20 px
+        ensureRow(sh, 2).setHeightInPoints(48);  // 3-я
+        ensureRow(sh, 3).setHeightInPoints(121); // 4-я
+        ensureRow(sh, 4).setHeightInPoints(15);  // ~20 px (5-я)
+
+        // ===== заголовки =====
+        put(sh, 0, 0, "15. Результаты измерений параметров микроклимата", S.title);
+        put(sh, 1, 0, "15.2.  Показатели микроклимата в помещениях:", S.title);
+
+        // ===== шапка =====
+        mergeWithBorder(sh, "A3:A4"); put(sh, 2, 0, "№ п/п", S.head8);
+        mergeWithBorder(sh, "B3:B4"); put(sh, 2, 1,
+                "Рабочее место, место проведения измерений, цех, участок, наименование профессии или должности",
+                S.head8Wrap);
+
+        mergeWithBorder(sh, "C3:C4"); put(sh, 2, 2, "Дата, проведения  измерений", S.head8Vertical);
+        mergeWithBorder(sh, "D3:D4"); put(sh, 2, 3, "Категория работ по интенсивности", S.head8Vertical);
+        mergeWithBorder(sh, "E3:E4"); put(sh, 2, 4, "Высота от пола, м", S.head8Vertical);
+
+        mergeWithBorder(sh, "F3:I3"); put(sh, 2, 5, "Температура воздуха, ºС", S.head8Wrap);
+        mergeWithBorder(sh, "F4:H4"); put(sh, 3, 5, "Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
+        put(sh, 3, 8,  "Допустимый уровень", S.head8Vertical);
+
+        put(sh, 2, 9,  "Температура поверхностей, ºС", S.head8Wrap);
+        put(sh, 3, 9,  "Пол. Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
+
+        mergeWithBorder(sh, "K3:N3"); put(sh, 2, 10, "Результирующая температура,  ºС", S.head8Wrap);
+        mergeWithBorder(sh, "K4:M4"); put(sh, 3, 10, "Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
+        put(sh, 3, 13, "Допустимый уровень", S.head8Vertical);
+
+        mergeWithBorder(sh, "O3:R3"); put(sh, 2, 14, "Относительная влажность воздуха, %", S.head8Wrap);
+        mergeWithBorder(sh, "O4:Q4"); put(sh, 3, 14, "Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
+        put(sh, 3, 17, "Допустимый уровень", S.head8Vertical);
+
+        mergeWithBorder(sh, "S3:V3"); put(sh, 2, 18, "Скорость движения воздуха,  м/с", S.head8Wrap);
+        mergeWithBorder(sh, "S4:U4"); put(sh, 3, 18, "Измеренная\n(± расширенная неопределенность)", S.head8Wrap);
+        put(sh, 3, 21, "Допустимый уровень", S.head8Vertical);
+
+        // ===== строка 5 (номера граф) =====
+        mergeWithBorder(sh, "F5:H5");
+        mergeWithBorder(sh, "K5:M5");
+        mergeWithBorder(sh, "O5:Q5");
+        mergeWithBorder(sh, "S5:U5");
+        put(sh, 4, 0,  1, S.centerBorder);
+        put(sh, 4, 1,  2, S.centerBorder);
+        put(sh, 4, 2,  3, S.centerBorder);
+        put(sh, 4, 3,  4, S.centerBorder);
+        put(sh, 4, 4,  5, S.centerBorder);
+        put(sh, 4, 5,  6, S.centerBorder); // F5-H5
+        put(sh, 4, 8,  7, S.centerBorder);
+        put(sh, 4, 9,  8, S.centerBorder);
+        put(sh, 4, 10, 9, S.centerBorder); // K5-M5
+        put(sh, 4, 13,10, S.centerBorder);
+        put(sh, 4, 14,11, S.centerBorder); // O5-Q5
+        put(sh, 4, 17,12, S.centerBorder);
+        put(sh, 4, 18,13, S.centerBorder); // S5-U5
+        put(sh, 4, 21,14, S.centerBorder);
+
+        addRegionBorders(sh, 2, 4, 0, 21); // A3:V5
+
+        // ===== генераторы =====
+        Random rng = new Random();
+        Map<Space, Double> spaceOBase = new IdentityHashMap<>();
+        Map<Room,  Double> roomOBase  = new IdentityHashMap<>();
+
+        // ===== данные =====
+        int row = 5; // начинаем вывод с 6-й строки (0-based)
+        int seq = 1;
+
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        String today = LocalDate.now().format(dateFmt);
+
+        // секция -> этаж -> список выбранных комнат (именно MicroclimateSelected)
+        Map<Integer, Map<Floor, List<Room>>> bySection = new LinkedHashMap<>();
+        for (Floor floor : building.getFloors()) {
+            if (floor == null) continue;
+            if (sectionIndex >= 0 && floor.getSectionIndex() != sectionIndex) continue;
+
+            for (Space space : floor.getSpaces()) {
+                if (space == null) continue;
+
+                List<Room> selected = new ArrayList<>();
+                for (Room r : space.getRooms()) {
+                    if (r != null && r.isMicroclimateSelected()) selected.add(r);
+                }
+                if (selected.isEmpty()) continue;
+
+                bySection.computeIfAbsent(floor.getSectionIndex(), k -> new LinkedHashMap<>())
+                        .computeIfAbsent(floor, k -> new ArrayList<>())
+                        .addAll(selected);
+            }
+        }
+
+        List<Integer> secOrder = new ArrayList<>(bySection.keySet());
+        secOrder.sort(Comparator.naturalOrder());
+
+        for (Integer secIdx : secOrder) {
+            Map<Floor, List<Room>> byFloor = bySection.get(secIdx);
+
+            // этажи по возрастанию номера
+            List<Floor> floors = new ArrayList<>(byFloor.keySet());
+            floors.sort(Comparator.comparingInt(MicroclimateExcelExporter::parseFloorNumSafe));
+
+            for (Floor f : floors) {
+                // заголовок (A:V объединено); если секция одна — не печатаем её имя
+                String secName = sectionOnlyName(building, secIdx);
+                String title = joinNotEmpty(secName, floorNameNoType(f)).trim();
+                mergeWithBorder(sh, "A" + (row + 1) + ":V" + (row + 1));
+                put(sh, row, 0, title, S.sectionHeader); // по центру
+                row++;
+
+                // сгруппировать по помещению
+                Map<Space, List<Room>> bySpace = new LinkedHashMap<>();
+                for (Room r : byFloor.get(f)) {
+                    Space sp = findRoomSpace(f, r);
+                    if (sp == null) continue;
+                    bySpace.computeIfAbsent(sp, k -> new ArrayList<>()).add(r);
+                }
+
+                for (Map.Entry<Space, List<Room>> g : bySpace.entrySet()) {
+                    Space space = g.getKey();
+                    List<Room> rooms = g.getValue();
+
+                    boolean isResidential = isApartment(space);
+                    boolean isOffice      = isOfficeOrPublic(space);
+
+                    // базовый O для квартиры (Space)
+                    spaceOBase.computeIfAbsent(space, s -> rnd(rng, 34.0, 42.0));
+
+                    for (Room room : rooms) {
+                        // базовый O для комнаты (внутри ±0.5 от квартиры)
+                        roomOBase.computeIfAbsent(room, r -> clamp(rnd(rng, spaceOBase.get(space) - 0.5, spaceOBase.get(space) + 0.5), 34.0, 42.0));
+
+                        // 1) центральная точка (3 строки по высотам)
+                        row = emitBlock(sh, row, seq++, building, f, space, room,
+                                Position.CENTER, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
+
+                        // 2) у наружной стены — по числу стен (0..N)
+                        int walls = externalWallsCount(room);
+                        if (isOffice) {
+                            if (walls >= 1) {
+                                row = emitBlock(sh, row, seq++, building, f, space, room,
+                                        Position.NEAR_WALL, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
+                            }
+                        } else {
+                            for (int i = 0; i < Math.min(walls, 2); i++) {
+                                row = emitBlock(sh, row, seq++, building, f, space, room,
+                                        Position.NEAR_WALL, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // после 5-й — все строки по ~20 px
+        for (int r = 5; r <= Math.max(5, sh.getLastRowNum()); r++) {
+            ensureRow(sh, r).setHeightInPoints(15f);
+        }
+    }
+
+    /* ======== ВСЁ НИЖЕ — БЕЗ ИЗМЕНЕНИЙ (утилиты, стили, генерация) ======== */
+
     private enum Position { CENTER, NEAR_WALL }
 
     /** вывод одного блока (3 строки) + генерация значений */
@@ -241,7 +256,6 @@ public final class MicroclimateExcelExporter {
         String spaceName = spaceDisplayName(space);
         String postfix   = (pos == Position.CENTER) ? "(в центре помещения)" : "(0,5 метра от наружной стены)";
 
-        // базовая часть: для офисов без помещения, для жилых — помещение, комната
         String base = isOffice ? nonEmpty(roomName) : joinComma(spaceName, roomName);
         String where = base + (postfix.isBlank() ? "" : " " + postfix);
 
@@ -295,9 +309,9 @@ public final class MicroclimateExcelExporter {
         // --- O/P/Q ---
         double roomBase = roomOBase.get(room);
         double[] oVals = {
-                round1(clamp(roomBase + rnd(rng, -0.1, 0.1), 34.0, 42.0)),
-                round1(clamp(roomBase + rnd(rng, -0.1, 0.1), 34.0, 42.0)),
-                round1(clamp(roomBase + rnd(rng, -0.1, 0.1), 34.0, 42.0))
+                round1(clamp(rnd(rng, roomBase - 0.1, roomBase + 0.1), 34.0, 42.0)),
+                round1(clamp(rnd(rng, roomBase - 0.1, roomBase + 0.1), 34.0, 42.0)),
+                round1(clamp(rnd(rng, roomBase - 0.1, roomBase + 0.1), 34.0, 42.0))
         };
         for (int i = 0; i < 3; i++) {
             put(sh, start + i, 14, oVals[i], S.centerNoRightNum1); // O 0.0
@@ -434,7 +448,6 @@ public final class MicroclimateExcelExporter {
     private static String joinNotEmpty(String... parts) { return joinComma(parts); }
     private static String nonEmpty(String s) { return (s == null) ? "" : s.trim(); }
 
-    // ===== классификация комнат и правила (I/J/N/R) =====
     private static boolean isKitchen(String n) {
         if (n == null) return false;
         String s = n.toLowerCase(Locale.ROOT);
@@ -534,6 +547,12 @@ public final class MicroclimateExcelExporter {
     private static double rnd(Random rng, double a, double b) { return a + (b - a) * rng.nextDouble(); }
     private static double clamp(double v, double a, double b) { return Math.max(a, Math.min(b, v)); }
     private static double round1(double v) { return Math.round(v * 10.0) / 10.0; }
+
+    private static String uniqueName(Workbook wb, String base) {
+        String name = base; int i = 2;
+        while (wb.getSheet(name) != null) name = base + " (" + (i++) + ")";
+        return name;
+    }
 
     // ===== стили =====
     private static final class Styles {

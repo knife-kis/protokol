@@ -17,28 +17,14 @@ public final class RadiationExcelExporter {
     private static final String LIMIT_TEXT =
             "Превышение мощности дозы, измеренной на открытой местности, не более чем на 0,3 мкЗв/ч";
 
-
     private RadiationExcelExporter() {}
 
-    /** Вызов из вкладки: экспорт обеих листов — «МЭД» и «МЭД (2)». */
+    // === ТОНКАЯ ОБЁРТКА: создаёт книгу, вызывает appendToWorkbook(...), предлагает «Сохранить» ===
     public static void export(Building building, int sectionIndex, Component parent) {
         try (Workbook wb = new XSSFWorkbook()) {
+            appendToWorkbook(building, sectionIndex, wb);
 
-            // ===== общие стили =====
-            Styles S = new Styles(wb);
-
-            // ===== 1) Лист «МЭД» (как согласовали) =====
-            double[] gamma5 = buildSheetMED(wb, building, sectionIndex, S);
-
-            // ===== 2) Лист «МЭД (2)» (новый по твоему примеру) =====
-            buildSheetMED2(wb, building, sectionIndex, S, gamma5);
-
-// ===== 3) Лист «ЭРОА радона» =====
-            buildSheetRadon(wb, building, sectionIndex, S);
-
-// ===== сохранение =====
             JFileChooser chooser = new JFileChooser();
-
             chooser.setDialogTitle("Сохранить Excel");
             chooser.setSelectedFile(new File("Ионизирующее_излучение.xlsx"));
             if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
@@ -52,11 +38,31 @@ public final class RadiationExcelExporter {
                         "Файл сохранён:\n" + file.getAbsolutePath(),
                         "Экспорт завершён", JOptionPane.INFORMATION_MESSAGE);
             }
-
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(parent, "Ошибка экспорта: " + ex.getMessage(),
                     "Ошибка", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    // === НОВОЕ: дописывает лист(ы) радиации в уже открытую книгу, ничего не сохраняет/не закрывает ===
+    public static void appendToWorkbook(Building building, int sectionIndex, Workbook wb) {
+        if (building == null || wb == null) return;
+        buildRadiationSheets(building, sectionIndex, wb);
+    }
+
+    // === ВЕСЬ КОД ПОСТРОЕНИЯ ЛИСТОВ ПЕРЕНЕСЁН СЮДА (без диалога «Сохранить») ===
+    private static void buildRadiationSheets(Building building, int sectionIndex, Workbook wb) {
+        // ===== общие стили =====
+        Styles S = new Styles(wb);
+
+        // ===== 1) Лист «МЭД» =====
+        double[] gamma5 = buildSheetMED(wb, building, sectionIndex, S);
+
+        // ===== 2) Лист «МЭД (2)» =====
+        buildSheetMED2(wb, building, sectionIndex, S, gamma5);
+
+        // ===== 3) Лист «ЭРОА радона» =====
+        buildSheetRadon(wb, building, sectionIndex, S);
     }
 
     /* ============================ Лист 1: «МЭД» ============================ */
@@ -182,7 +188,6 @@ public final class RadiationExcelExporter {
         return gamma5;
     }
 
-
     /* ============================ Лист 2: «МЭД (2)» ============================ */
 
     private static void buildSheetMED2(Workbook wb, Building building, int sectionIndex, Styles S, double[] gamma5) {
@@ -238,7 +243,7 @@ public final class RadiationExcelExporter {
             String secName = (sec != null && notBlank(sec.getName())) ? sec.getName() : ("Секция " + (si + 1));
 
             List<Floor> floors = floorsOfSection(building, si);
-            // оставляем только этажи, где есть хотя бы одна отмеченная комната
+            // оставляем только этажи, где есть хотя бы одну отмеченную комнату
             floors.removeIf(f -> !floorHasAnyChecked(f));
             if (floors.isEmpty()) continue;
 
@@ -249,7 +254,6 @@ public final class RadiationExcelExporter {
                 String header = (sections.size() > 1 ? (secName + ", ") : "") + floorTitle;
                 styleMerge(sh, "A" + (row+1) + ":F" + (row+1), S.headerCenterBorder);
                 put(sh, row, 0, header, S.headerCenterBorder);
-
 
                 // комнаты этого этажа (только отмеченные)
                 List<RoomEntry> entries = checkedRoomEntriesOnFloor(f);
@@ -270,8 +274,7 @@ public final class RadiationExcelExporter {
                     String bText = isPublicSpace(re.space) ? roomLabel : (spaceDisplayName(re.space) + ", " + roomLabel);
                     Cell b = cell(rr, 1); b.setCellValue(bText); b.setCellStyle(S.textLeftBorder);
 
-
-                    // C — значение (ср. ≈ 0,135)
+                    // C — значение (ср. ≈ 0.135)
                     double cVal = sampleMEDValue();
                     Cell c = cell(rr, 2); c.setCellValue(parse2(df2, cVal)); c.setCellStyle(S.num2NoRight);
 
@@ -288,15 +291,16 @@ public final class RadiationExcelExporter {
                     dataEnd = row; // последняя строка данных
                 }
 
-                // NEW: объединяем F по всему блоку комнат и пишем текст
+                // объединяем F по всему блоку комнат и пишем текст
                 if (!entries.isEmpty()) {
-                    String rng = "F" + (dataStart+1) + ":F" + (dataEnd+1); // A1-индексация
+                    String rng = "F" + (dataStart+1) + ":F" + (dataEnd+1);
                     styleMerge(sh, rng, S.headerCenterBorder);
-                    put(sh, dataStart, 5, LIMIT_TEXT, S.headerCenterBorder); // значение в верхнюю ячейку merged-области
+                    put(sh, dataStart, 5, LIMIT_TEXT, S.headerCenterBorder);
                 }
             }
         }
     }
+
     /* ============================ Лист 3: «ЭРОА радона» ============================ */
 
     private static void buildSheetRadon(Workbook wb, Building building, int sectionIndex, Styles S) {
@@ -308,42 +312,41 @@ public final class RadiationExcelExporter {
         setColWidthPx(sh, 2, 104); // C
         setColWidthPx(sh, 3, 104); // D
         setColWidthPx(sh, 4, 104); // E
-        // ===== шапка (строки 1–5) как в образце ЭРОА.xlsx =====
 
-// 1-я строка — общий заголовок
+        // 1-я строка — общий заголовок
         merge(sh, "A1:G1");
         put(sh, 0, 0, "17.3. ЭРОА радона, ЭРОА торона, среднегодовое значение ЭРОА изотопов радона:", S.textLeft);
 
-// 2-я строка — пустая техническая (для отступа/границ)
+        // 2-я строка — пустая техническая (для отступа/границ)
         Row r2 = ensureRow(sh, 1);
         r2.setHeightInPoints(3f);
         for (int c = 0; c <= 6; c++) {
             cell(r2, c).setCellStyle(S.bottomOnly);
         }
 
-// 3-я строка — внешний уровень
+        // 3-я строка — внешний уровень
         styleMerge(sh, "A3:A4", S.headerCenterBorder);
         put(sh, 2, 0, "№ п/п", S.headerCenterBorder);
 
         styleMerge(sh, "B3:B4", S.headerCenterBorder);
         put(sh, 2, 1, "Наименование места\nпроведения измерений", S.headerCenterBorder);
 
-// «Результаты измерений, Бк/м³» на C3:F3
+        // «Результаты измерений, Бк/м³» на C3:F3
         styleMerge(sh, "C3:F3", S.headerCenterBorder);
         put(sh, 2, 2, "Результаты измерений, Бк/м³", S.headerCenterBorder);
 
-// Правый столбец
+        // Правый столбец
         styleMerge(sh, "G3:G4", S.headerCenterBorder);
         put(sh, 2, 6, "Допустимый уровень, Бк/м³", S.headerCenterBorder);
 
-// 4-я строка — внутренние подписи блока результатов
+        // 4-я строка — внутренние подписи блока результатов
         styleMerge(sh, "C4:D4", S.headerCenterBorder);
         put(sh, 3, 2, "Измеренное значение ЭРОА радона (ЭРОА торона)", S.headerCenterBorder);
 
         put(sh, 3, 4, "Среднегодовое значение ЭРОА\nизотопов радона, Бк/м³", S.headerCenterBorder);
         put(sh, 3, 5, "Суммарная\nнеопределённость", S.headerCenterBorder);
 
-// 5-я строка — номера столбцов (как в образце) + объединение C5:D5
+        // 5-я строка — номера столбцов (как в образце) + объединение C5:D5
         put(sh, 4, 0, 1, S.headerCenterBorder);
         put(sh, 4, 1, 2, S.headerCenterBorder);
         styleMerge(sh, "C5:D5", S.headerCenterBorder);
@@ -351,7 +354,6 @@ public final class RadiationExcelExporter {
         put(sh, 4, 4, 4, S.headerCenterBorder);
         put(sh, 4, 5, 5, S.headerCenterBorder);
         put(sh, 4, 6, 7, S.headerCenterBorder);
-
 
         // данные с 6-й строки
         int row = 4;     // 0-based → 6-я
@@ -385,7 +387,6 @@ public final class RadiationExcelExporter {
                 styleMerge(sh, "A" + (row+1) + ":G" + (row+1), S.headerCenterBorder);
                 put(sh, row, 0, header, S.headerCenterBorder);
 
-
                 // элементы (офисы/общественные — ВСЕ отмеченные; квартиры — по 1 комнате)
                 List<RadonEntry> entries = radonEntriesOnFloor(f);
 
@@ -413,7 +414,7 @@ public final class RadiationExcelExporter {
                     // D — всегда 1
                     Cell d = cell(rr, 3); d.setCellValue(1); d.setCellStyle(S.headerCenterBorder);
 
-                    // E — =(C+4.6*D)*K  (десятичные ТОЧКИ для формул Excel)
+                    // E — =(C+4.6*D)*K
                     String baseE = String.format(java.util.Locale.US, "(C%d+4.6*D%d)*%s", row+1, row+1, seasonKStr);
                     Cell e = cell(rr, 4); e.setCellFormula("ROUND(" + baseE + ",0)"); e.setCellStyle(S.num0);
 
@@ -422,14 +423,13 @@ public final class RadiationExcelExporter {
                             row+1, seasonKStr, row+1, seasonKStr);
                     Cell fcell = cell(rr, 5); fcell.setCellFormula("ROUND(" + baseF + ",0)"); fcell.setCellStyle(S.num0);
 
-
                     // G — значение заполним после merge
                     Cell g = cell(rr, 6); g.setCellStyle(S.headerCenterBorder);
 
                     dataEnd = row;
                 }
 
-                // G объединяем на блок комнат этажа и ставим "10"
+                // G объединяем на блок комнат этажа и ставим "100"
                 if (!entries.isEmpty()) {
                     String rng = "G" + (dataStart+1) + ":G" + (dataEnd+1);
                     styleMerge(sh, rng, S.headerCenterBorder);
@@ -439,26 +439,13 @@ public final class RadiationExcelExporter {
         }
     }
 
-    private static String buildRoomsList(List<Room> rooms) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < rooms.size(); i++) {
-            String n = safeName(rooms.get(i).getName());
-            if (n != null && !n.isBlank()) {
-                if (sb.length() > 0) sb.append(", ");
-                sb.append(n);
-            }
-        }
-        return sb.toString();
-    }
-
     private static class RadonEntry {
         final Space space;
         final List<Room> rooms;
         RadonEntry(Space s, List<Room> r) { this.space = s; this.rooms = r; }
     }
 
-    // Офисы/общественные — все отмеченные комнаты;
-// Квартиры — если отмечено >=1, берём случайно одну.
+    // Офисы/общественные — все отмеченные комнаты; квартиры — если отмечено >=1, берём случайно одну.
     private static List<RadonEntry> radonEntriesOnFloor(Floor floor) {
         List<RadonEntry> res = new ArrayList<>();
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
@@ -518,9 +505,9 @@ public final class RadiationExcelExporter {
             num2.setDataFormat(wb.createDataFormat().getFormat("0.00"));
             cloneIntoBorders(num2);
 
-            // ← стиль для столбца D (±): только верх/низ
+            // стиль для столбца D (±): только верх/низ
             plusMinusTB = wb.createCellStyle();
-            plusMinusTB.cloneStyleFrom(headerCenter);     // выравнивание по центру
+            plusMinusTB.cloneStyleFrom(headerCenter);
             plusMinusTB.setBorderTop(BorderStyle.THIN);
             plusMinusTB.setBorderBottom(BorderStyle.THIN);
             plusMinusTB.setBorderLeft(BorderStyle.NONE);
@@ -528,13 +515,13 @@ public final class RadiationExcelExporter {
 
             num2NoRight = wb.createCellStyle();
             num2NoRight.cloneStyleFrom(num2);
-            num2NoRight.setBorderRight(BorderStyle.NONE); // убираем правую
+            num2NoRight.setBorderRight(BorderStyle.NONE);
 
             num2NoLeft = wb.createCellStyle();
             num2NoLeft.cloneStyleFrom(num2);
             num2NoLeft.setBorderLeft(BorderStyle.NONE);
 
-// формат целых чисел
+            // формат целых чисел
             num0 = wb.createCellStyle();
             num0.setFont(base);
             num0.setAlignment(HorizontalAlignment.CENTER);
@@ -542,7 +529,7 @@ public final class RadiationExcelExporter {
             num0.setDataFormat(wb.createDataFormat().getFormat("0"));
             cloneIntoBorders(num0);
 
-// только нижняя граница (для строки 2 листа ЭРОА)
+            // только нижняя граница (для строки 2 листа ЭРОА)
             bottomOnly = wb.createCellStyle();
             bottomOnly.setBorderBottom(BorderStyle.THIN);
             bottomOnly.setBorderTop(BorderStyle.NONE);
@@ -599,12 +586,10 @@ public final class RadiationExcelExporter {
     private static void styleMerge(Sheet sh, String addr, CellStyle style) {
         CellRangeAddress range = CellRangeAddress.valueOf(addr);
 
-        // если диапазон состоит из одной ячейки — не выполняем merge,
-        // только применяем стиль
         boolean singleCell = range.getFirstRow() == range.getLastRow()
                 && range.getFirstColumn() == range.getLastColumn();
         if (!singleCell) {
-            merge(sh, addr); // безопасно: не добавит дубликат
+            merge(sh, addr);
         }
 
         for (int r = range.getFirstRow(); r <= range.getLastRow(); r++) {
@@ -641,7 +626,7 @@ public final class RadiationExcelExporter {
         return out;
     }
 
-    /** Есть ли на этаже хотя бы одна отмеченная комната */
+    /** Есть ли на этаже хотя бы одна отмеченная комната (радиация) */
     private static boolean floorHasAnyChecked(Floor floor) {
         if (floor == null) return false;
         for (Space s : floor.getSpaces()) {
@@ -650,15 +635,6 @@ public final class RadiationExcelExporter {
             }
         }
         return false;
-    }
-
-    /** Список отмеченных комнат этого этажа (по всем помещениям) */
-    private static List<Room> checkedRoomsOnFloor(Floor floor) {
-        List<Room> res = new ArrayList<>();
-        for (Space s : floor.getSpaces()) {
-            for (Room r : s.getRooms()) if (r != null && r.isSelected()) res.add(r);
-        }
-        return res;
     }
 
     /** 5 чисел 0.10–0.19 с средним близко к 0.135 */
@@ -716,9 +692,9 @@ public final class RadiationExcelExporter {
     private static double sampleMEDValue() {
         double[] values = {0.10, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.20};
         double[] probs  = {0.015,0.080,0.160,0.300,0.240,0.100,0.045,0.030,0.015,0.010,0.005};
-        // Проверка: сумма = 1.000, матожидание = 0.135
         return pickDiscrete(values, probs);
     }
+
     private static class RoomEntry {
         final Space space;
         final Room room;
@@ -737,12 +713,10 @@ public final class RadiationExcelExporter {
         return res;
     }
 
-
     private static String spaceDisplayName(Space s) {
         if (s == null) return "";
         String id = s.getIdentifier();
         if (id != null && !id.isBlank()) return id;
-        // если в модели есть getName() — можно подставить:
         try {
             java.lang.reflect.Method m = s.getClass().getMethod("getName");
             Object v = m.invoke(s);
@@ -753,11 +727,13 @@ public final class RadiationExcelExporter {
         } catch (Exception ignored) {}
         return "Помещение";
     }
+
     private static void setColWidthPx(Sheet sh, int col, int px) {
         int width = (int) Math.round((px - 5) / 7.0 * 256); // прибл. формула Excel
         if (width < 0) width = 0;
         sh.setColumnWidth(col, width);
     }
+
     private static boolean isPublicSpace(Space s) {
         if (s == null) return false;
         Space.SpaceType t = s.getType();
@@ -765,5 +741,4 @@ public final class RadiationExcelExporter {
         String txt = (t.name() + " " + String.valueOf(t)).toLowerCase(java.util.Locale.ROOT);
         return txt.contains("public") || txt.contains("обще");
     }
-
 }

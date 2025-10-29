@@ -396,4 +396,12 @@ public class VentilationTab extends JPanel {
         }
     }
     public Building getBuilding() { return building; }
+    // ВНИМАНИЕ: новый метод для общего экспорта (кнопки в "Характеристиках здания")
+    public java.util.List<VentilationRecord> getRecordsForExport() {
+        commitActiveEditor();        // завершить ввод в ячейке, если редактируется
+        saveCalculationsToModel();   // записать channels/sectionArea/volume обратно в Room
+        // вернуть копию текущих записей (включая «нулевые» — отфильтруем в экспортере)
+        return new java.util.ArrayList<>(tableModel.getRecords());
+    }
+
 }

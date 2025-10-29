@@ -18,6 +18,59 @@ import java.util.stream.Collectors;
 
 public class VentilationExcelExporter {
 
+    // ВНИМАНИЕ: это новый метод, просто вставь в класс VentilationExcelExporter.
+    public static void appendToWorkbook(java.util.List<VentilationRecord> records, org.apache.poi.ss.usermodel.Workbook wb) {
+        if (wb == null || records == null || records.isEmpty()) return;
+
+        // 1) Имя листа без коллизий
+        String baseName = "Вентиляция";
+        String sheetName = baseName;
+        int i = 2;
+        while (wb.getSheet(sheetName) != null) sheetName = baseName + " (" + (i++) + ")";
+
+        org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(sheetName);
+
+        // 2) Базовый шрифт
+        org.apache.poi.ss.usermodel.Font baseFont = wb.createFont();
+        baseFont.setFontName("Arial");
+        baseFont.setFontHeightInPoints((short) 10);
+
+        // 3) Стили (используем уже имеющиеся фабрики)
+        org.apache.poi.ss.usermodel.CellStyle headerStyle        = createHeaderStyle(wb, baseFont);
+        org.apache.poi.ss.usermodel.CellStyle rotatedHeaderStyle = createRotatedHeaderStyle(wb, baseFont);
+        org.apache.poi.ss.usermodel.CellStyle titleStyle         = createTitleStyle(wb, baseFont);
+        org.apache.poi.ss.usermodel.CellStyle dataStyle          = createDataStyle(wb, baseFont);
+        org.apache.poi.ss.usermodel.CellStyle floorHeaderStyle   = createFloorHeaderStyle(wb, baseFont);
+        org.apache.poi.ss.usermodel.CellStyle wrappedDataStyle   = createWrappedDataStyle(wb, baseFont);
+
+        org.apache.poi.ss.usermodel.CellStyle plusMinusStyle     = createPlusMinusStyle(wb, baseFont);
+        org.apache.poi.ss.usermodel.CellStyle leftInGroupStyle   = createLeftInGroupStyle(wb, baseFont);
+        org.apache.poi.ss.usermodel.CellStyle rightInGroupStyle  = createRightInGroupStyle(wb, baseFont);
+
+        org.apache.poi.ss.usermodel.CellStyle twoDigitStyle   = createNumberStyle(wb, baseFont, "0.00");
+        org.apache.poi.ss.usermodel.CellStyle integerStyle    = createNumberStyle(wb, baseFont, "0");
+        org.apache.poi.ss.usermodel.CellStyle oneDigitStyle   = createNumberStyle(wb, baseFont, "0.0");
+        org.apache.poi.ss.usermodel.CellStyle threeDigitStyle = createNumberStyle(wb, baseFont, "0.000");
+
+        // 4) Шапка/структура/габариты
+        createDocumentStructure(sheet, titleStyle);
+        createTableHeaders(sheet, headerStyle, rotatedHeaderStyle);
+        createColumnNumbers(sheet, headerStyle, rotatedHeaderStyle);
+        setColumnsWidth(sheet);
+        setRowsHeight(sheet);
+
+        // 5) Данные (как в export, только без сохранения)
+        java.util.List<VentilationRecord> filtered = records.stream()
+                .filter(r -> r != null && r.channels() > 0)
+                .collect(java.util.stream.Collectors.toList());
+
+        fillData(filtered, sheet, dataStyle, wrappedDataStyle, threeDigitStyle, integerStyle, oneDigitStyle,
+                floorHeaderStyle, plusMinusStyle, leftInGroupStyle, rightInGroupStyle);
+
+        // 6) Автовысота строк для текста в C
+        adjustRowsWithText((org.apache.poi.xssf.usermodel.XSSFSheet) sheet);
+    }
+
     public static void export(List<VentilationRecord> records, java.awt.Component parent) {
         // Фильтруем записи: оставляем только те, у которых количество каналов > 0
         List<VentilationRecord> filteredRecords = records.stream()
