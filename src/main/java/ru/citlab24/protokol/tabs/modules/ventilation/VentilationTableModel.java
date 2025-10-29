@@ -145,62 +145,84 @@ public class VentilationTableModel extends AbstractTableModel {
         try {
             int areaCol  = showSectionColumn ? 7 : 6; // индекс «Сечение»
             if (showSectionColumn) {
-                if (columnIndex == 4) { // Каналы
-                    int v = toInt(aValue, r.channels());
-                    var nr = r.withChannels(v);
-                    records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationChannels(v);
-                    fireTableCellUpdated(rowIndex, columnIndex);
-                } else if (columnIndex == 5) { // Форма
-                    var shape = (aValue instanceof VentilationRecord.DuctShape ds) ? ds
-                            : VentilationRecord.DuctShape.valueOf(aValue.toString());
-                    var nr = r.withShape(shape); // площадь пересчиталась
-                    records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
-                    fireTableCellUpdated(rowIndex, columnIndex);
-                    fireTableCellUpdated(rowIndex, areaCol); // обновить «Сечение»
-                } else if (columnIndex == 6) { // Ширина
-                    double w = toDouble(aValue, r.width());
-                    var nr = r.withWidth(w);    // площадь пересчиталась
-                    records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
-                    fireTableCellUpdated(rowIndex, columnIndex);
-                    fireTableCellUpdated(rowIndex, areaCol);
-                } else if (columnIndex == 8) { // Объём
-                    Double v = toNullableDouble(aValue, r.volume());
-                    var nr = r.withVolume(v);
-                    records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVolume(v);
-                    fireTableCellUpdated(rowIndex, columnIndex);
+                switch (columnIndex) {
+                    case 4 -> { // Каналы
+                        int v = toInt(aValue, r.channels());
+                        var nr = r.withChannels(v); // площадь пересчиталась
+                        records.set(rowIndex, nr);
+                        if (nr.roomRef() != null) {
+                            nr.roomRef().setVentilationChannels(v);
+                            nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                        }
+                        fireTableCellUpdated(rowIndex, columnIndex);
+                        fireTableCellUpdated(rowIndex, areaCol);
+                        // НОВОЕ: спросить «сохранить для похожих комнат?»
+                        maybePropagateChannels(rowIndex, v);
+                    }
+                    case 5 -> { // Форма
+                        var shape = (aValue instanceof VentilationRecord.DuctShape ds) ? ds
+                                : VentilationRecord.DuctShape.valueOf(aValue.toString());
+                        var nr = r.withShape(shape); // площадь пересчиталась
+                        records.set(rowIndex, nr);
+                        if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                        fireTableCellUpdated(rowIndex, columnIndex);
+                        fireTableCellUpdated(rowIndex, areaCol);
+                    }
+                    case 6 -> { // Ширина
+                        double w = toDouble(aValue, r.width());
+                        var nr = r.withWidth(w);     // площадь пересчиталась
+                        records.set(rowIndex, nr);
+                        if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                        fireTableCellUpdated(rowIndex, columnIndex);
+                        fireTableCellUpdated(rowIndex, areaCol);
+                    }
+                    case 8 -> { // Объём
+                        Double v = toNullableDouble(aValue, r.volume());
+                        var nr = r.withVolume(v);
+                        records.set(rowIndex, nr);
+                        if (nr.roomRef() != null) nr.roomRef().setVolume(v);
+                        fireTableCellUpdated(rowIndex, columnIndex);
+                    }
                 }
             } else {
-                if (columnIndex == 3) { // Каналы
-                    int v = toInt(aValue, r.channels());
-                    var nr = r.withChannels(v);
-                    records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationChannels(v);
-                    fireTableCellUpdated(rowIndex, columnIndex);
-                } else if (columnIndex == 4) { // Форма
-                    var shape = (aValue instanceof VentilationRecord.DuctShape ds) ? ds
-                            : VentilationRecord.DuctShape.valueOf(aValue.toString());
-                    var nr = r.withShape(shape);
-                    records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
-                    fireTableCellUpdated(rowIndex, columnIndex);
-                    fireTableCellUpdated(rowIndex, areaCol);
-                } else if (columnIndex == 5) { // Ширина
-                    double w = toDouble(aValue, r.width());
-                    var nr = r.withWidth(w);
-                    records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
-                    fireTableCellUpdated(rowIndex, columnIndex);
-                    fireTableCellUpdated(rowIndex, areaCol);
-                } else if (columnIndex == 7) { // Объём
-                    Double v = toNullableDouble(aValue, r.volume());
-                    var nr = r.withVolume(v);
-                    records.set(rowIndex, nr);
-                    if (nr.roomRef() != null) nr.roomRef().setVolume(v);
-                    fireTableCellUpdated(rowIndex, columnIndex);
+                switch (columnIndex) {
+                    case 3 -> { // Каналы
+                        int v = toInt(aValue, r.channels());
+                        var nr = r.withChannels(v); // площадь пересчиталась
+                        records.set(rowIndex, nr);
+                        if (nr.roomRef() != null) {
+                            nr.roomRef().setVentilationChannels(v);
+                            nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                        }
+                        fireTableCellUpdated(rowIndex, columnIndex);
+                        fireTableCellUpdated(rowIndex, areaCol);
+                        // НОВОЕ: спросить «сохранить для похожих комнат?»
+                        maybePropagateChannels(rowIndex, v);
+                    }
+                    case 4 -> { // Форма
+                        var shape = (aValue instanceof VentilationRecord.DuctShape ds) ? ds
+                                : VentilationRecord.DuctShape.valueOf(aValue.toString());
+                        var nr = r.withShape(shape);
+                        records.set(rowIndex, nr);
+                        if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                        fireTableCellUpdated(rowIndex, columnIndex);
+                        fireTableCellUpdated(rowIndex, areaCol);
+                    }
+                    case 5 -> { // Ширина
+                        double w = toDouble(aValue, r.width());
+                        var nr = r.withWidth(w);
+                        records.set(rowIndex, nr);
+                        if (nr.roomRef() != null) nr.roomRef().setVentilationSectionArea(nr.sectionArea());
+                        fireTableCellUpdated(rowIndex, columnIndex);
+                        fireTableCellUpdated(rowIndex, areaCol);
+                    }
+                    case 7 -> { // Объём
+                        Double v = toNullableDouble(aValue, r.volume());
+                        var nr = r.withVolume(v);
+                        records.set(rowIndex, nr);
+                        if (nr.roomRef() != null) nr.roomRef().setVolume(v);
+                        fireTableCellUpdated(rowIndex, columnIndex);
+                    }
                 }
             }
         } catch (Exception ignore) {}
@@ -229,6 +251,44 @@ public class VentilationTableModel extends AbstractTableModel {
         records.set(row, r);
         if (r.roomRef() != null) r.roomRef().setVentilationSectionArea(r.sectionArea());
         fireTableRowsUpdated(row, row);
+    }
+    // НОВОЕ: спросить и применить «Каналы» ко всем похожим комнатам (с тем же названием)
+    private void maybePropagateChannels(int sourceRow, int newChannels) {
+        String[] opts = {"Да", "Нет", "Отмена"};
+        int res = javax.swing.JOptionPane.showOptionDialog(
+                null,
+                "Сохранить значение «Каналы = " + newChannels + "» для похожих комнат (с тем же названием)?",
+                "Применить к похожим комнатам",
+                javax.swing.JOptionPane.YES_NO_CANCEL_OPTION,
+                javax.swing.JOptionPane.QUESTION_MESSAGE,
+                null, opts, opts[0]
+        );
+        if (res != javax.swing.JOptionPane.YES_OPTION) return;
+
+        VentilationRecord src = records.get(sourceRow);
+        String key = normalizeRoomName(src.room());
+
+        int chCol   = showSectionColumn ? 4 : 3;
+        int areaCol = showSectionColumn ? 7 : 6;
+
+        for (int i = 0; i < records.size(); i++) {
+            if (i == sourceRow) continue;
+            VentilationRecord x = records.get(i);
+            if (normalizeRoomName(x.room()).equals(key)) {
+                VentilationRecord nx = x.withChannels(newChannels); // площадь пересчиталась
+                records.set(i, nx);
+                if (nx.roomRef() != null) {
+                    nx.roomRef().setVentilationChannels(newChannels);
+                    nx.roomRef().setVentilationSectionArea(nx.sectionArea());
+                }
+                fireTableCellUpdated(i, chCol);
+                fireTableCellUpdated(i, areaCol);
+            }
+        }
+    }
+
+    private static String normalizeRoomName(String s) {
+        return (s == null) ? "" : s.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
 }

@@ -3,6 +3,8 @@ package ru.citlab24.protokol.tabs.dialogs;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.List;
 import java.util.Objects;
 
@@ -53,6 +55,13 @@ public class AddRoomDialog extends JDialog {
 
         pack();
         setLocationRelativeTo(parent);
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowOpened(WindowEvent e) {
+                nameField.requestFocusInWindow();
+                // Если есть префилл — он уже selectAll(); если пусто, лишним не будет
+                nameField.selectAll();
+            }
+        });
 
         // После показа — фокус в поле
         addWindowListener(new java.awt.event.WindowAdapter() {

@@ -23,10 +23,7 @@ import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -1476,15 +1473,51 @@ public class BuildingTab extends JPanel {
     }
 
     private String showInputDialog(String title, String message, String initialValue) {
-        JPanel panel = new JPanel(new GridLayout(1, 2, 5, 5));
-        panel.add(new JLabel(message));
         JTextField field = new JTextField(initialValue);
-        panel.add(field);
 
-        int result = JOptionPane.showConfirmDialog(
-                this, panel, title, JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        JPanel panel = new JPanel(new BorderLayout(8, 0));
+        panel.add(new JLabel(message), BorderLayout.WEST);
+        panel.add(field, BorderLayout.CENTER);
 
-        return (result == JOptionPane.OK_OPTION) ? field.getText() : null;
+        // Создаём диалог вручную, чтобы управлять фокусом и клавишами
+        final JOptionPane pane = new JOptionPane(
+                panel,
+                JOptionPane.PLAIN_MESSAGE,
+                JOptionPane.OK_CANCEL_OPTION
+        );
+        final JDialog dialog = pane.createDialog(this, title);
+        dialog.setModal(true);
+        dialog.setResizable(false);
+
+        // Enter = OK
+        field.addActionListener(e -> {
+            pane.setValue(JOptionPane.OK_OPTION);
+            dialog.dispose();
+        });
+
+        // Esc = Cancel
+        dialog.getRootPane().registerKeyboardAction(
+                e -> {
+                    pane.setValue(JOptionPane.CANCEL_OPTION);
+                    dialog.dispose();
+                },
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                JComponent.WHEN_IN_FOCUSED_WINDOW
+        );
+
+        // Автофокус и выделение текста сразу после показа
+        dialog.addWindowListener(new WindowAdapter() {
+            @Override public void windowOpened(WindowEvent e) {
+                field.requestFocusInWindow();
+                field.selectAll();
+            }
+        });
+
+        dialog.setVisible(true);
+
+        Object value = pane.getValue();
+        boolean ok = (value != null) && Integer.valueOf(JOptionPane.OK_OPTION).equals(value);
+        return ok ? field.getText() : null;
     }
 
     private void showMessage(String message, String title, int messageType) {

@@ -128,10 +128,13 @@ public final class RadiationExcelExporter {
             floors.removeIf(f -> !floorHasAnyChecked(f));
             if (floors.isEmpty()) continue;
 
-            String secName = (sec != null && notBlank(sec.getName())) ? sec.getName() : ("Секция " + (si + 1));
-            styleMerge(sh, "A" + (row+1) + ":I" + (row+1), S.headerCenterBorder);
-            put(sh, row, 0, secName, S.headerCenterBorder);
-            row++;
+            boolean printSectionHeader = sections.size() > 1;
+            if (printSectionHeader) {
+                String secName = (sec != null && notBlank(sec.getName())) ? sec.getName() : ("Секция " + (si + 1));
+                styleMerge(sh, "A" + (row+1) + ":I" + (row+1), S.headerCenterBorder);
+                put(sh, row, 0, secName, S.headerCenterBorder);
+                row++;
+            }
 
             // запомним диапазон строк этажей этой секции, чтобы затем объединить I
             int dataStart = row;                // первая строка этажей
@@ -240,11 +243,13 @@ public final class RadiationExcelExporter {
             if (floors.isEmpty()) continue;
 
             for (Floor f : floors) {
-                // строка с «Секция, Этаж»
+                // строка с «[Секция, ]Этаж» (секцию не пишем, если она единственная)
                 row++;
                 String floorTitle = notBlank(f.getNumber()) ? f.getNumber() : "Этаж";
+                String header = (sections.size() > 1 ? (secName + ", ") : "") + floorTitle;
                 styleMerge(sh, "A" + (row+1) + ":F" + (row+1), S.headerCenterBorder);
-                put(sh, row, 0, secName + ", " + floorTitle, S.headerCenterBorder);
+                put(sh, row, 0, header, S.headerCenterBorder);
+
 
                 // комнаты этого этажа (только отмеченные)
                 List<RoomEntry> entries = checkedRoomEntriesOnFloor(f);
@@ -376,8 +381,10 @@ public final class RadiationExcelExporter {
                 // строка "Секция, Этаж"
                 row++;
                 String floorTitle = notBlank(f.getNumber()) ? f.getNumber() : "Этаж";
+                String header = (sections.size() > 1 ? (secName + ", ") : "") + floorTitle;
                 styleMerge(sh, "A" + (row+1) + ":G" + (row+1), S.headerCenterBorder);
-                put(sh, row, 0, secName + ", " + floorTitle, S.headerCenterBorder);
+                put(sh, row, 0, header, S.headerCenterBorder);
+
 
                 // элементы (офисы/общественные — ВСЕ отмеченные; квартиры — по 1 комнате)
                 List<RadonEntry> entries = radonEntriesOnFloor(f);
@@ -458,17 +465,15 @@ public final class RadiationExcelExporter {
         for (Space s : floor.getSpaces()) {
             List<Room> selected = new ArrayList<>();
             for (Room r : s.getRooms()) {
-                if (r != null && r.isSelected()) selected.add(r);
+                if (r != null && r.isRadiationSelected()) selected.add(r);
             }
             if (selected.isEmpty()) continue;
 
             Space.SpaceType tp = s.getType();
             if (tp == Space.SpaceType.APARTMENT) {
-                // квартиры — случайно одна комната
                 Room r = selected.get(selected.size() == 1 ? 0 : rnd.nextInt(selected.size()));
                 res.add(new RadonEntry(s, Collections.singletonList(r)));
             } else {
-                // офисы/общественные — КАЖДАЯ отмеченная комната отдельной строкой
                 for (Room r : selected) {
                     res.add(new RadonEntry(s, Collections.singletonList(r)));
                 }
@@ -476,7 +481,6 @@ public final class RadiationExcelExporter {
         }
         return res;
     }
-
 
     /* ============================ Вспомогательные ============================ */
 
@@ -641,7 +645,9 @@ public final class RadiationExcelExporter {
     private static boolean floorHasAnyChecked(Floor floor) {
         if (floor == null) return false;
         for (Space s : floor.getSpaces()) {
-            for (Room r : s.getRooms()) if (r != null && r.isSelected()) return true;
+            for (Room r : s.getRooms()) {
+                if (r != null && r.isRadiationSelected()) return true;
+            }
         }
         return false;
     }
@@ -723,13 +729,14 @@ public final class RadiationExcelExporter {
         List<RoomEntry> res = new ArrayList<>();
         for (Space s : floor.getSpaces()) {
             for (Room r : s.getRooms()) {
-                if (r != null && r.isSelected()) {
+                if (r != null && r.isRadiationSelected()) {
                     res.add(new RoomEntry(s, r));
                 }
             }
         }
         return res;
     }
+
 
     private static String spaceDisplayName(Space s) {
         if (s == null) return "";

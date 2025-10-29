@@ -51,6 +51,7 @@ public class MicroclimateTab extends JPanel {
         add(buildLeftPanel(), BorderLayout.WEST);
         add(buildCenterPanel(), BorderLayout.CENTER);
         add(buildRightPanel(), BorderLayout.EAST);
+        add(buildBottomPanel(), BorderLayout.SOUTH);
     }
 
     // ==== Публичные методы, которые вызывает BuildingTab ====
@@ -269,6 +270,49 @@ public class MicroclimateTab extends JPanel {
         // refreshFloors() вызовется через ListSelectionListener;
         // на всякий случай обновим вручную:
         refreshFloors();
+    }
+    private JPanel buildBottomPanel() {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton exportBtn = new JButton("Экспорт в Excel");
+
+        exportBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        exportBtn.setBackground(new Color(0, 100, 0));
+        exportBtn.setForeground(Color.WHITE);
+        exportBtn.setFocusPainted(false);
+        exportBtn.addActionListener(e -> {
+            commitEditors();                 // зафиксировать редактирование таблиц
+            updateRoomSelectionStates();     // перелить чекбоксы в модель Room
+            MicroclimateExcelExporter.export(
+                    currentBuilding,
+                    sectionIndexToExport(),  // текущая секция или все
+                    this
+            );
+        });
+        // hover
+        exportBtn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent e) { exportBtn.setBackground(new Color(0, 80, 0)); }
+            public void mouseExited (java.awt.event.MouseEvent e) { exportBtn.setBackground(new Color(0,100,0)); }
+        });
+
+        p.add(exportBtn);
+        return p;
+    }
+
+    private void commitEditors() {
+        // аккуратно завершаем редактирование в обеих таблицах
+        JTable[] tables = { spaceTable, roomTable };
+        for (JTable t : tables) {
+            if (t.isEditing()) {
+                try { t.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
+            }
+        }
+    }
+
+    private int sectionIndexToExport() {
+        if (currentBuilding == null || currentBuilding.getSections() == null) return -1;
+        if (currentBuilding.getSections().size() <= 1) return -1; // одна секция → экспорт всех (логика экспортера)
+        int idx = sectionList.getSelectedIndex();
+        return (idx >= 0) ? idx : -1; // если ничего не выбрано — все
     }
 
 }

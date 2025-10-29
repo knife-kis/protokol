@@ -428,42 +428,36 @@ public final class LightingExcelExporter {
     }
 
     // для импорта: import ru.citlab24.protokol.tabs.models.Section;
+    private static String sectionNameIfMultiple(Building building, int sectionIndex) {
+        if (building == null || building.getSections() == null) return "";
+        List<Section> sections = building.getSections();
+        if (sections.size() <= 1) return ""; // одна секция — не пишем её в столбец B
+        Section s = sections.get(Math.max(0, sectionIndex));
+        if (s == null || s.getName() == null || s.getName().isBlank()) return "";
+        return s.getName();
+    }
 
     private static String buildBLabel(Building building, Entry e) {
-        // 1) Этаж — используем только то, что ввели руками, без типа этажа
+        // Этаж — берём то, что ввели руками (без префиксов типа этажа)
         String floorNameRaw = (e.floor.getName() != null && !e.floor.getName().isBlank())
                 ? e.floor.getName()
                 : (e.floor.getNumber() != null ? e.floor.getNumber() : "Этаж");
         String floorName = cleanedFloorName(floorNameRaw);
 
-        String roomName = e.room.getName() != null ? e.room.getName() : "Комната";
+        String roomName = (e.room.getName() != null) ? e.room.getName() : "Комната";
+        boolean isOffice = isOffice(e.space);
 
-        boolean isOffice = isOffice(e.space); // если нет такого — см. helper ниже
+        // если секция одна — возвращаем "", чтобы в столбце B начать сразу с этажа
+        String sect = sectionNameIfMultiple(building, e.floor.getSectionIndex());
 
-        String label;
         if (isOffice) {
-            // ОФИСЫ: «Секция, этаж, комната, нормируемая поверхность»
-            String sect = "";
-            try {
-                if (building.getSections() != null && !building.getSections().isEmpty()) {
-                    Section s = building.getSections().get(Math.max(0, e.floor.getSectionIndex()));
-                    if (s != null && s.getName() != null && !s.getName().isBlank()) sect = s.getName();
-                }
-            } catch (Exception ignored) {}
-            label = joinComma(sect, floorName, roomName) + ", нормируемая поверхность";
+            // Офисы: «[Секция,] Этаж, Комната, нормируемая поверхность»
+            return joinComma(sect, floorName, roomName) + ", нормируемая поверхность";
         } else {
-            // Квартиры/прочие: как сейчас, но чистим префиксы у этажа
-            String sect = "";
-            try {
-                if (building.getSections() != null && !building.getSections().isEmpty()) {
-                    Section s = building.getSections().get(Math.max(0, e.floor.getSectionIndex()));
-                    if (s != null && s.getName() != null && !s.getName().isBlank()) sect = s.getName();
-                }
-            } catch (Exception ignored) {}
+            // Квартиры/прочие: «[Секция,] Этаж, Помещение, Комната, нормируемая поверхность»
             String spaceName = spaceDisplayName(e.space);
-            label = joinComma(sect, floorName, spaceName, roomName) + ", нормируемая поверхность";
+            return joinComma(sect, floorName, spaceName, roomName) + ", нормируемая поверхность";
         }
-        return label;
     }
 
     // помогающие штуки (добавь, если их нет в классе)
@@ -701,4 +695,31 @@ public final class LightingExcelExporter {
             this.isResidential = isResidential; this.isOfficePublic = isOfficePublic; this.isKitchen = isKitchen;
         }
     }
+    // ===== ЧИСЛОВЫЕ УТИЛИТЫ ДЛЯ G =====
+    private static final java.util.Random _lightingRng = new java.util.Random();
+
+    private static double round1(double v) {
+        return Math.round(v * 10.0) / 10.0;
+    }
+
+    /**
+     * Для значений < 100 возвращает число с 1 знаком после запятой.
+     * Если после округления получилось .0 — подставляем случайную десятичную 0.1..0.9.
+     * Для значений >= 100 — просто округляем до 1 знака без «достраивания» десятых.
+     */
+    private static double enforceTenthsUnder100(double v) {
+        double x = round1(v);
+        if (x < 100.0) {
+            // проверяем «целое с точностью до 1 знака» → т.е. .0
+            boolean isDotZero = Math.abs(x - Math.rint(x)) < 1e-9;
+            if (isDotZero) {
+                int tenth = 1 + _lightingRng.nextInt(9); // 1..9
+                x = Math.floor(x) + tenth / 10.0;
+                // защитимся на случай x=99.0 → 99.9 (остаемся <100)
+                if (x >= 100.0) x = 99.9;
+            }
+        }
+        return round1(x);
+    }
+
 }
