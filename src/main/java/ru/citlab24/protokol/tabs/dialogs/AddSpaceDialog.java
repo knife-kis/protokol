@@ -33,6 +33,13 @@ public class AddSpaceDialog extends JDialog {
         spaceTypeCombo = new JComboBox<>(getAllowedSpaceTypes(floorType));
         mainPanel.add(spaceTypeCombo);
 
+// Если доступен единственный тип (например, на PUBLIC этаже) — выделяем и блокируем выбор
+        if (spaceTypeCombo.getItemCount() == 1) {
+            spaceTypeCombo.setSelectedIndex(0);
+            spaceTypeCombo.setEnabled(false);
+        }
+
+
         // Кнопки
         JButton okButton = new JButton("Добавить");
         okButton.addActionListener(e -> {
@@ -73,9 +80,11 @@ public class AddSpaceDialog extends JDialog {
             case OFFICE:
                 return new Space.SpaceType[] { Space.SpaceType.OFFICE };
             case PUBLIC:
-                return Space.SpaceType.values();   // общественные — разрешаем любые
+                // ВАЖНО: только общественные помещения
+                return new Space.SpaceType[] { Space.SpaceType.PUBLIC_SPACE };
             case MIXED:
-                return Space.SpaceType.values();   // смешанные — разрешаем любые
+                // Смешанный этаж — оставляем все варианты, как и раньше
+                return Space.SpaceType.values();
             default:
                 return Space.SpaceType.values();
         }

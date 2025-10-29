@@ -103,19 +103,6 @@ public class BuildingTab extends JPanel {
         return s;
     }
 
-
-    private void setRussianLocale() {
-        Locale.setDefault(new Locale("ru", "RU"));
-        UIManager.put("OptionPane.yesButtonText", "Да");
-        UIManager.put("OptionPane.noButtonText", "Нет");
-        UIManager.put("OptionPane.cancelButtonText", "Отмена");
-
-        // Оптимизированная установка локали для UIManager
-        UIManager.getLookAndFeelDefaults().keySet().stream()
-                .filter(key -> key instanceof String && ((String) key).endsWith(".locale"))
-                .forEach(key -> UIManager.getLookAndFeelDefaults().put(key, Locale.getDefault()));
-    }
-
     private void initComponents() {
         setLayout(new BorderLayout());
         add(createProjectNamePanel(), BorderLayout.NORTH);
@@ -170,16 +157,13 @@ public class BuildingTab extends JPanel {
         // Сохраняем ссылки на списки + включаем DnD там, где нужно
         if ("Этажи здания".equals(title)) {
             floorList = (JList<Floor>) list;
-            // (перестановку этажей внутри секции мы вешаем в createSectionsAndFloorsPanel, тут не нужно)
         } else if ("Помещения на этаже".equals(title)) {
             spaceList = (JList<Space>) list;
-            // <<< ВОТ ЭТИ ТРИ СТРОКИ >>>
             spaceList.setDragEnabled(true);
             spaceList.setDropMode(DropMode.INSERT);
             spaceList.setTransferHandler(spaceReorderHandler);
         } else if ("Комнаты в помещении".equals(title)) {
             roomList = (JList<Room>) list;
-            // <<< И ВОТ ЭТИ ТРИ >>>
             roomList.setDragEnabled(true);
             roomList.setDropMode(DropMode.INSERT);
             roomList.setTransferHandler(roomReorderHandler);
@@ -240,12 +224,30 @@ public class BuildingTab extends JPanel {
                 createStyledButton("Сохранить проект", FontAwesomeSolid.SAVE, new Color(0, 115, 200), this::saveProject),
                 createStyledButton("Рассчитать показатели", FontAwesomeSolid.CALCULATOR, new Color(103, 58, 183), this::calculateMetrics),
                 createStyledButton("Сводка квартир", FontAwesomeSolid.TABLE, new Color(96, 125, 139), this::showApartmentSummary),
-                // НОВОЕ: ЕДИНАЯ КНОПКА ЭКСПОРТА
                 createStyledButton("Экспорт: все модули (одной книгой)", FontAwesomeSolid.FILE_EXCEL, new Color(0, 98, 204), e -> {
+                    // 0) зафиксировать редактирование в активной таблице, если оно открыто
+                    java.awt.KeyboardFocusManager kfm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager();
+                    java.awt.Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
+                    javax.swing.JTable editingTable = (fo == null) ? null
+                            : (javax.swing.JTable) javax.swing.SwingUtilities.getAncestorOfClass(javax.swing.JTable.class, fo);
+                    if (editingTable != null && editingTable.isEditing()) {
+                        try { editingTable.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
+                    }
+
+                    // 1) UI → модель: забираем состояния галочек из всех вкладок
+                    ru.citlab24.protokol.tabs.modules.med.RadiationTab rt = getRadiationTab();
+                    if (rt != null) rt.updateRoomSelectionStates();
+                    ru.citlab24.protokol.tabs.modules.lighting.LightingTab lt = getLightingTab();
+                    if (lt != null) lt.updateRoomSelectionStates();
+                    ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab mt = getMicroclimateTab();
+                    if (mt != null) mt.updateRoomSelectionStates();
+
+                    // 2) Экспорт
                     java.awt.Window w = javax.swing.SwingUtilities.getWindowAncestor(this);
                     ru.citlab24.protokol.MainFrame frame = (w instanceof ru.citlab24.protokol.MainFrame) ? (ru.citlab24.protokol.MainFrame) w : null;
                     ru.citlab24.protokol.export.AllExcelExporter.exportAll(frame, building, this);
                 })
+
         );
     }
 
@@ -967,8 +969,8 @@ public class BuildingTab extends JPanel {
     }
 
     private void updateRadiationTab(Building building, boolean forceOfficeSelection) {
-        // дефолт: старое поведение — авто-правила включены
-        updateRadiationTab(building, forceOfficeSelection, true);
+        // ВАЖНО: по умолчанию авто-правила выключены, чтобы не сбивать ручные галочки
+        updateRadiationTab(building, /*forceOfficeSelection=*/forceOfficeSelection, /*autoApplyRules=*/false);
     }
 
     private void updateRadiationTab(Building building, boolean forceOfficeSelection, boolean autoApplyRules) {
@@ -1150,12 +1152,9 @@ public class BuildingTab extends JPanel {
         if (dialog.showDialog()) {
             floor.setNumber(dialog.getFloorNumber());
             floor.setType(dialog.getFloorType());
-            // При смене типа на PUBLIC - создать помещение при необходимости
-            if (floor.getType() == Floor.FloorType.PUBLIC) {
-                createDefaultSpaceIfMissing(floor);
-            }
             floorListModel.set(index, floor);
             updateSpaceList();
+
         }
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
@@ -1419,19 +1418,6 @@ public class BuildingTab extends JPanel {
         }
     }
 
-    private void createDefaultSpaceIfMissing(Floor floor) {
-        boolean hasDefaultSpace = floor.getSpaces().stream()
-                .anyMatch(space -> "-".equals(space.getIdentifier()));
-
-        if (!hasDefaultSpace) {
-            Space defaultSpace = new Space();
-            defaultSpace.setIdentifier("-");
-            defaultSpace.setType(Space.SpaceType.PUBLIC_SPACE); // Используем соответствующий тип
-            floor.addSpace(defaultSpace);
-        }
-    }
-
-
     private void updateRoomList() {
         roomListModel.clear();
         Space selectedSpace = spaceList.getSelectedValue();
@@ -1540,8 +1526,8 @@ public class BuildingTab extends JPanel {
     public void addNotify() {
         super.addNotify();
         if (this.building == null) this.building = new Building();
-        updateRadiationTab(this.building, true);
-        updateLightingTab(building, true);
+        updateRadiationTab(this.building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        updateLightingTab(building, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(building, false);
 
         if (floorList != null && !floorListModel.isEmpty()) {

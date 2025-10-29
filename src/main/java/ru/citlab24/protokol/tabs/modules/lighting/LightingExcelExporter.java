@@ -492,7 +492,6 @@ public final class LightingExcelExporter {
         s = s.replaceAll(" +", " ").trim();
         return s.isEmpty() ? raw : s;
     }
-    private static String nonEmpty(String s) { return (s == null) ? "" : s.trim(); }
 
     private static String spaceDisplayName(Space s) {
         if (s == null) return "Помещение";
@@ -703,28 +702,4 @@ public final class LightingExcelExporter {
         }
     }
 
-    // ===== ЧИСЛОВЫЕ УТИЛИТЫ ДЛЯ G =====
-    private static final java.util.Random _lightingRng = new java.util.Random();
-
-    private static double round1(double v) {
-        return Math.round(v * 10.0) / 10.0;
-    }
-
-    /**
-     * Для значений < 100 возвращает число с 1 знаком после запятой.
-     * Если после округления получилось .0 — подставляем случайную десятичную 0.1..0.9.
-     * Для значений >= 100 — просто округляем до 1 знака без «достраивания» десятых.
-     */
-    private static double enforceTenthsUnder100(double v) {
-        double x = round1(v);
-        if (x < 100.0) {
-            boolean isDotZero = Math.abs(x - Math.rint(x)) < 1e-9;
-            if (isDotZero) {
-                int tenth = 1 + _lightingRng.nextInt(9); // 1..9
-                x = Math.floor(x) + tenth / 10.0;
-                if (x >= 100.0) x = 99.9;
-            }
-        }
-        return round1(x);
-    }
 }

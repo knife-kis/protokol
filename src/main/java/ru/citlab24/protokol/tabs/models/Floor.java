@@ -43,7 +43,6 @@ public class Floor {
     public void setSectionIndex(int sectionIndex) { this.sectionIndex = Math.max(0, sectionIndex); }
 
     public List<Space> getSpaces() { return spaces; }
-    public void setSpaces(List<Space> spaces) { this.spaces = spaces; }
 
     public void addSpace(Space space) { spaces.add(space); }
 }

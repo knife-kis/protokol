@@ -172,32 +172,6 @@ public class DatabaseManager {
     }
 
 
-    private static void deleteBuildingData(int buildingId) throws SQLException {
-        // Сначала удаляем комнаты
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "DELETE FROM room WHERE space_id IN (SELECT id FROM space WHERE floor_id IN (SELECT id FROM floor WHERE building_id = ?))"
-        )) {
-            stmt.setInt(1, buildingId);
-            stmt.executeUpdate();
-        }
-
-        // Затем удаляем помещения
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "DELETE FROM space WHERE floor_id IN (SELECT id FROM floor WHERE building_id = ?)"
-        )) {
-            stmt.setInt(1, buildingId);
-            stmt.executeUpdate();
-        }
-
-        // Затем удаляем этажи
-        try (PreparedStatement stmt = connection.prepareStatement(
-                "DELETE FROM floor WHERE building_id = ?"
-        )) {
-            stmt.setInt(1, buildingId);
-            stmt.executeUpdate();
-        }
-    }
-
     public static List<Building> getAllBuildings() throws SQLException {
         List<Building> buildings = new ArrayList<>();
         String sql = "SELECT * FROM building";

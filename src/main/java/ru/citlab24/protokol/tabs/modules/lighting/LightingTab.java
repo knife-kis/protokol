@@ -25,12 +25,6 @@ public final class LightingTab extends JPanel {
     private static java.util.Comparator<Section> SECTION_ORDER =
             java.util.Comparator.comparingInt(Section::getPosition);
 
-    private static java.util.Comparator<Floor> FLOOR_ORDER =
-            java.util.Comparator.comparingInt(Floor::getPosition);
-
-    private static java.util.Comparator<Space> SPACE_ORDER =
-            java.util.Comparator.comparingInt(Space::getPosition);
-
     private static java.util.Comparator<Room> ROOM_ORDER =
             java.util.Comparator.comparingInt(Room::getPosition);
 
@@ -386,28 +380,6 @@ public final class LightingTab extends JPanel {
             this.autoApplyRulesOnDisplay = prev;
         }
     }
-    /** Применить правила ко всему зданию (идемпотентно, не трогаем ручные клики). */
-    private void applyAutoOnFirstFloorsAcrossSections() {
-        if (currentBuilding == null) return;
-        Map<Integer, Integer> firstBySection = findFirstResidentialFloorPositionBySection(currentBuilding);
-
-        for (Floor f : currentBuilding.getFloors()) {
-            Integer firstPos = firstBySection.get(f.getSectionIndex());
-            if (firstPos == null || f.getPosition() != firstPos) continue;
-
-            for (Space s : f.getSpaces()) {
-                if (s.getType() != Space.SpaceType.APARTMENT) continue;
-                for (Room r : s.getRooms()) {
-                    if (isExcludedRoom(r.getName())) continue;
-                    if (!userTouchedRooms.contains(r.getId())) {
-                        globalRoomSelectionMap.put(r.getId(), true);
-                    }
-                }
-            }
-        }
-        if (roomTable != null) roomTable.repaint();
-    }
-    /** Автопроставление ТОЛЬКО для новых комнат (которых не было в старой карте). */
     /** Автопроставление галочек ТОЛЬКО для новых комнат на первом жилом/совмещённом этаже каждой секции. */
     private void applyAutoOnFirstFloorsAcrossSectionsOnlyForNewRooms(Set<Integer> oldIds) {
         if (currentBuilding == null) return;
@@ -430,21 +402,6 @@ public final class LightingTab extends JPanel {
             }
         }
         if (roomTable != null) roomTable.repaint();
-    }
-    /** Возвращает для каждой секции position первого жилого ИЛИ совмещённого этажа. */
-    private Map<Integer, Integer> findFirstResidentialOrCombinedFloorPositionBySection(Building b) {
-        Map<Integer, Integer> firstPos = new HashMap<>();
-        if (b == null) return firstPos;
-
-        for (Floor f : b.getFloors()) {
-            if (!isResidentialOrCombined(f)) continue;
-            int sec = f.getSectionIndex();
-            Integer cur = firstPos.get(sec);
-            if (cur == null || f.getPosition() < cur) {
-                firstPos.put(sec, f.getPosition());
-            }
-        }
-        return firstPos;
     }
 
     /** Универсальная проверка типа этажа: жилой или совмещённый (без жёсткой привязки к enum). */

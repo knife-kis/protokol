@@ -34,12 +34,6 @@ public class VentilationTableModel extends AbstractTableModel {
         records.add(r);
         fireTableRowsInserted(idx, idx);
     }
-    public void addRecords(Collection<VentilationRecord> toAdd) {
-        if (toAdd == null || toAdd.isEmpty()) return;
-        int from = records.size();
-        records.addAll(toAdd);
-        fireTableRowsInserted(from, records.size() - 1);
-    }
     public List<VentilationRecord> getRecords() { return new ArrayList<>(records); }
 
     // ===== AbstractTableModel =====

@@ -19,8 +19,6 @@ public class Building {
     public List<Floor> getFloors() { return floors; }
     public void addFloor(Floor floor) { floors.add(floor); }
 
-    public int getPlannedFloorsCount() { return plannedFloorsCount; }
-    public void setPlannedFloorsCount(int plannedFloorsCount) { this.plannedFloorsCount = plannedFloorsCount; }
 
     // секции
     public List<Section> getSections() { return sections; }

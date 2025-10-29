@@ -407,49 +407,6 @@ public class RadiationTab extends JPanel {
         }
         roomsTableModel.fireTableDataChanged();
     }
-    // === ПУБЛИЧНЫЕ ХУКИ, вызывать из BuildingTab при создании ===
-    public void onFloorCreated(Floor floor) {
-        // Ничего не делаем сразу: для жилых/смешанных отметим при создании квартиры (см. onSpaceCreated).
-        // Для офисных можно и здесь пройтись, но удобнее — в onSpaceCreated, чтобы не зависеть от порядка.
-    }
-
-    public void onSpaceCreated(Floor floor, Space space) {
-        if (floor == null || space == null) return;
-
-        switch (floor.getType()) {
-            case PUBLIC:
-                // общественный — ничего не ставим
-                break;
-
-            case OFFICE:
-                if (space.getType() == Space.SpaceType.OFFICE) {
-                    selectAllOfficeRooms(space);
-                }
-                break;
-
-            case RESIDENTIAL:
-                if (space.getType() == Space.SpaceType.APARTMENT) {
-                    // «только в одном помещении на этаже» — в первой добавленной квартире
-                    if (!hasResidentialSelectionOnFloor(floor)) {
-                        applyRoomSelectionRulesForResidentialSpace(space);
-                    }
-                }
-                break;
-
-            case MIXED:
-                if (space.getType() == Space.SpaceType.OFFICE) {
-                    selectAllOfficeRooms(space);
-                } else if (space.getType() == Space.SpaceType.APARTMENT) {
-                    if (!hasResidentialSelectionOnFloor(floor)) {
-                        applyRoomSelectionRulesForResidentialSpace(space);
-                    }
-                }
-                break;
-        }
-        // обновим таблицу комнат, если она уже показана
-        if (roomsTableModel != null) roomsTableModel.fireTableDataChanged();
-    }
-
 
     private void applyRoomSelectionRulesForResidentialSpace(Space space) {
         if (processedSpaces.contains(space.getId())) return;

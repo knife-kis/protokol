@@ -201,15 +201,6 @@ public final class ApartmentSummaryDialog extends JDialog {
             return rooms.stream().map(x -> abbreviate(x.getName())).collect(Collectors.joining(", "));
         }
     }
-    private static final class WrapCellRenderer extends JTextArea implements TableCellRenderer {
-        WrapCellRenderer() { setLineWrap(true); setWrapStyleWord(true); setOpaque(true); setBorder(BorderFactory.createEmptyBorder(4,6,4,6)); }
-        @Override public Component getTableCellRendererComponent(JTable t, Object v, boolean sel, boolean hf, int r, int c) {
-            setText(v == null ? "" : String.valueOf(v));
-            if (sel) { setBackground(t.getSelectionBackground()); setForeground(t.getSelectionForeground()); }
-            else { setBackground(t.getBackground()); setForeground(t.getForeground()); }
-            return this;
-        }
-    }
 
     // ===== сбор данных =====
     private static Map<Integer, List<Space>> collectApartmentsByFloorNumber(Building b, int sectionIndex) {
@@ -327,23 +318,6 @@ public final class ApartmentSummaryDialog extends JDialog {
             max = Math.max(max, h);
         }
         return Math.max(max, 1);
-    }
-    /** Навешивает слушатели, чтобы переупаковывать строки при ресайзе/перетаскивании границ колонок. */
-    private static void installAutoPack(JTable table) {
-        table.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override public void componentResized(java.awt.event.ComponentEvent e) {
-                SwingUtilities.invokeLater(() -> packRowHeights(table, 4));
-            }
-        });
-        table.getColumnModel().addColumnModelListener(new javax.swing.event.TableColumnModelListener() {
-            @Override public void columnMarginChanged(javax.swing.event.ChangeEvent e) {
-                SwingUtilities.invokeLater(() -> packRowHeights(table, 4));
-            }
-            @Override public void columnAdded(javax.swing.event.TableColumnModelEvent e) { }
-            @Override public void columnRemoved(javax.swing.event.TableColumnModelEvent e) { }
-            @Override public void columnMoved(javax.swing.event.TableColumnModelEvent e) { }
-            @Override public void columnSelectionChanged(javax.swing.event.ListSelectionEvent e) { }
-        });
     }
     /** Рендерер одной строки: текст не переносится, лишнее обрезается с «…», полный текст — в tooltip. */
     private static final class SingleLineCellRenderer extends JLabel implements TableCellRenderer {

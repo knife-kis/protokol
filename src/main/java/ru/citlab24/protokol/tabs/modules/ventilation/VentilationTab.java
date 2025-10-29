@@ -322,17 +322,6 @@ public class VentilationTab extends JPanel {
                         "Записи с нулевыми каналами не будут экспортированы в Excel.",
                 "Сохранение", JOptionPane.INFORMATION_MESSAGE);
     }
-
-
-    public String getRoomCategory(String roomName) {
-        if (roomName == null) return null;
-        String normalized = normalizeRoomName(roomName);
-        if (normalized.contains("кухня")) return "кухня";
-        if (normalized.contains("санузел") || normalized.contains("сан узел")
-                || normalized.contains("туалет") || normalized.contains("совмещенный")) return "санузел";
-        if (normalized.contains("ванная")) return "ванная";
-        return null;
-    }
     private String normalizeRoomName(String roomName) {
         return roomName.replaceAll("[\\s\\.-]+", " ").trim().toLowerCase(Locale.ROOT);
     }

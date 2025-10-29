@@ -89,7 +89,4 @@ public class AddFloorDialog extends JDialog {
         floorNumberField.setText(number);
     }
 
-    public void setFloorType(String type) {
-        floorTypeCombo.setSelectedItem(type);
-    }
 }

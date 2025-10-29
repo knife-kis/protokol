@@ -148,13 +148,6 @@ public class MainFrame extends JFrame {
         }
     }
 
-    public MicroclimateTab getMicroclimateTab() {
-        for (Component comp : tabbedPane.getComponents()) {
-            if (comp instanceof MicroclimateTab) return (MicroclimateTab) comp;
-        }
-        return null;
-    }
-
     public JTabbedPane getTabbedPane() {
         return tabbedPane;
     }
