@@ -46,6 +46,7 @@ public class BuildingTab extends JPanel {
     private static final Dimension BUTTON_PANEL_SIZE = new Dimension(5, 5);
 
     private Building building;
+    private BuildingModelOps ops;
     private final DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
     private final DefaultListModel<Space> spaceListModel = new DefaultListModel<>();
     private final DefaultListModel<Room> roomListModel = new DefaultListModel<>();
@@ -64,50 +65,15 @@ public class BuildingTab extends JPanel {
     public BuildingTab(Building building) {
         // 1) сохраняем в поле, 2) создаём дефолт, если пришёл null
         this.building = (building != null) ? building : new Building();
-
-        // гарантируем хотя бы одну секцию
         if (this.building.getSections().isEmpty()) {
             this.building.addSection(new Section("Секция 1", 0));
         }
-
+        this.ops = new BuildingModelOps(this.building); // ← добавили
         initComponents();
     }
-    // === НОРМАЛИЗАЦИЯ БАЗОВОГО НАЗВАНИЯ КОМНАТЫ (без площадей/осей/скобок) ===
-    private static final java.util.regex.Pattern TAIL_PLO =
-            java.util.regex.Pattern.compile(
-                    "\\s*[,;]?\\s*площад[ьяиуе][^\\d]*\\d+[\\d.,]*\\s*(?:кв\\.?\\s*м|м\\s*²|м2|м\\^2)\\.?\\s*$",
-                    java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
-
-    private static final java.util.regex.Pattern TAIL_AXES =
-            java.util.regex.Pattern.compile(
-                    "\\s*[,;]?\\s*в\\s+осях\\s+[\\p{L}\\p{N}]+(?:\\s*[-—–]\\s*[\\p{L}\\p{N}]+)?\\s*$",
-                    java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
-
-    // Удаляем хвостовые скобки вида "(...)" в конце
-    private static final java.util.regex.Pattern TAIL_PAREN =
-            java.util.regex.Pattern.compile("\\s*\\((?:[^)(]+|\\([^)(]*\\))*\\)\\s*$");
 
     private static String normalizeRoomBaseName(String name) {
-        if (name == null) return "";
-        String s = name.replace('\u00A0',' ').trim();      // NBSP → пробел
-        s = s.replaceAll("\\s+", " ");
-
-        // Сначала убираем финальные скобки "(площадью 15 кв. м)" / "(в осях 1-2)" и т.п.
-        boolean changed;
-        do {
-            changed = false;
-            java.util.regex.Matcher mp = TAIL_PAREN.matcher(s);
-            if (mp.find()) { s = s.substring(0, mp.start()).trim(); changed = true; }
-        } while (changed);
-
-        // Затем убираем явные хвосты "в осях …" и "площадью …"
-        s = TAIL_AXES.matcher(s).replaceAll("");
-        s = TAIL_PLO.matcher(s).replaceAll("");
-
-        // Чистим завершающие знаки/пробелы
-        s = s.replaceAll("[\\s\\.,;:—–-]+$", "").trim();
-
-        return s;
+        return BuildingModelOps.normalizeRoomBaseName(name);
     }
 
     private void initComponents() {
@@ -758,6 +724,7 @@ public class BuildingTab extends JPanel {
     private void loadSelectedProject(Building selectedProject) throws SQLException {
         Building loadedBuilding = DatabaseManager.loadBuilding(selectedProject.getId());
         this.building = loadedBuilding;
+        this.ops.setBuilding(this.building); // ← добавили
         projectNameField.setText(loadedBuilding.getName());
         refreshAllLists();
         updateVentilationTab(loadedBuilding);
@@ -814,6 +781,7 @@ public class BuildingTab extends JPanel {
         try {
             DatabaseManager.saveBuilding(newProject);
             this.building = newProject;
+            this.ops.setBuilding(this.building); // ← добавили
             projectNameField.setText(extractBaseName(newProject.getName()));
         } catch (SQLException ex) {
             handleError("Ошибка сохранения: " + ex.getMessage(), "Ошибка");
@@ -935,22 +903,7 @@ public class BuildingTab extends JPanel {
         }
     };
 
-    private Floor createFloorCopy(Floor originalFloor) {
-        Floor floorCopy = new Floor();
-        floorCopy.setNumber(originalFloor.getNumber());
-        floorCopy.setType(originalFloor.getType());
-        floorCopy.setName(originalFloor.getName());
-        floorCopy.setSectionIndex(originalFloor.getSectionIndex()); // ВАЖНО
-        floorCopy.setPosition(originalFloor.getPosition());          // ← сохраняем порядок в секции
-
-        for (Space origSpace : originalFloor.getSpaces()) {
-            Space spaceCopy = createSpaceCopyWithNewIds(origSpace);
-            floorCopy.addSpace(spaceCopy);
-        }
-        return floorCopy;
-
-    }
-
+    private Floor createFloorCopy(Floor originalFloor) { return ops.createFloorCopy(originalFloor); }
 
     public void refreshFloor(Floor floor) {
         int index = building.getFloors().indexOf(floor);
@@ -964,24 +917,7 @@ public class BuildingTab extends JPanel {
         }
     }
 
-    private Room createRoomCopy(Room originalRoom) {
-        Room roomCopy = new Room();
-        roomCopy.setId(generateUniqueRoomId());
-        roomCopy.setName(originalRoom.getName());
-        roomCopy.setVolume(originalRoom.getVolume());
-        roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
-        roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
-
-        // Освещение: копии по умолчанию без галочки
-        roomCopy.setSelected(false);
-
-        // МИКРОКЛИМАТ/РАДИАЦИЯ: состояния будут храниться отдельно (см. ниже).
-        // Наружные стены — КОПИРУЕМ как есть:
-        try { roomCopy.setExternalWallsCount(originalRoom.getExternalWallsCount()); } catch (Throwable ignore) {}
-
-        roomCopy.setOriginalRoomId(originalRoom.getId());
-        return roomCopy;
-    }
+    private Room createRoomCopy(Room originalRoom) { return ops.createRoomCopy(originalRoom); }
 
     private int generateUniqueRoomId() {
         return UUID.randomUUID().hashCode();
@@ -1044,26 +980,7 @@ public class BuildingTab extends JPanel {
         }
     }
 
-
-    // Создаем глубокую копию помещения с новыми ID комнат
-    private Space createSpaceCopyWithNewIds(Space originalSpace) {
-        Space spaceCopy = new Space();
-        spaceCopy.setIdentifier(originalSpace.getIdentifier());
-        spaceCopy.setType(originalSpace.getType());
-
-        for (Room originalRoom : originalSpace.getRooms()) {
-            Room roomCopy = createRoomCopy(originalRoom);
-
-            // Освещение: копии без галочки
-            roomCopy.setSelected(false);
-
-            // Наружные стены — ПЕРЕНОСИМ
-            try { roomCopy.setExternalWallsCount(originalRoom.getExternalWallsCount()); } catch (Throwable ignore) {}
-
-            spaceCopy.addRoom(roomCopy);
-        }
-        return spaceCopy;
-    }
+    private Space createSpaceCopyWithNewIds(Space originalSpace) { return ops.createSpaceCopyWithNewIds(originalSpace); }
 
     private String generateNextSpaceId(Floor floor, String currentId) {
         String prefix = "";
@@ -1231,40 +1148,11 @@ public class BuildingTab extends JPanel {
         }
     }
 
-    private String extractDigits(String input) {
-        return input.replaceAll("\\D", ""); // Удаляем все не-цифры
-    }
+    private String extractDigits(String input) { return ops.extractDigits(input); }
 
     // Новый: считает следующий номер ТОЛЬКО в пределах указанной секции.
     private String generateNextFloorNumber(String currentNumber, int sectionIndex) {
-        Pattern p = Pattern.compile("\\d+");
-        Matcher m = p.matcher(currentNumber);
-
-        if (m.find()) {
-            int baseNum = Integer.parseInt(m.group());
-            String prefix = currentNumber.substring(0, m.start());
-            String suffix = currentNumber.substring(m.end());
-
-            // максимум среди этажей ТЕКУЩЕЙ секции
-            int maxNumberInSection = building.getFloors().stream()
-                    .filter(f -> f.getSectionIndex() == sectionIndex)
-                    .map(Floor::getNumber)
-                    .mapToInt(n -> {
-                        Matcher mm = p.matcher(n);
-                        return mm.find() ? Integer.parseInt(mm.group()) : Integer.MIN_VALUE;
-                    })
-                    .max()
-                    .orElse(baseNum);
-
-            int next = (maxNumberInSection != Integer.MIN_VALUE)
-                    ? Math.max(baseNum, maxNumberInSection) + 1
-                    : baseNum + 1;
-
-            return prefix + next + suffix;
-        }
-
-        // Не нашли цифр — делаем уникальное имя в рамках секции
-        return generateUniqueNonNumericNameWithinSection(currentNumber, sectionIndex);
+        return ops.generateNextFloorNumber(currentNumber, sectionIndex);
     }
 
     // Сохранённый «обёртка»-вариант, если где-то ещё вызывается без секции — поведение как раньше.
@@ -1274,41 +1162,14 @@ public class BuildingTab extends JPanel {
 
     // Уникальное имя для НЕчисловых этажей — только в пределах секции
     private String generateUniqueNonNumericNameWithinSection(String base, int sectionIndex) {
-        Pattern pattern = Pattern.compile(Pattern.quote(base) + "(?: \\(копия (\\d+)\\))?");
-        int maxCopy = building.getFloors().stream()
-                .filter(f -> sectionIndex < 0 || f.getSectionIndex() == sectionIndex)
-                .map(Floor::getNumber)
-                .map(pattern::matcher)
-                .filter(Matcher::matches)
-                .mapToInt(m -> m.group(1) != null ? Integer.parseInt(m.group(1)) : 0)
-                .max()
-                .orElse(0);
-
-        return base + (maxCopy == 0 ? "" : " (копия " + (maxCopy + 1) + ")");
+        return ops.generateUniqueNonNumericNameWithinSection(base, sectionIndex);
     }
 
-    private void updateSpaceIdentifiers(Floor floor, String newFloorDigits) {
-        for (Space space : floor.getSpaces()) {
-            String newId = updateIdentifier(space.getIdentifier(), newFloorDigits);
-            space.setIdentifier(newId);
-        }
-    }
 
-    private String updateIdentifier(String identifier, String newFloorDigits) {
-        // Шаблон для поиска формата "X-Y" (например: "кв 1-1")
-        Pattern pattern = Pattern.compile("(.*?)(\\d+)-(\\d+)(.*)");
-        Matcher matcher = pattern.matcher(identifier);
+    private void updateSpaceIdentifiers(Floor floor, String newFloorDigits) { ops.updateSpaceIdentifiers(floor, newFloorDigits); }
 
-        if (matcher.matches()) {
-            String prefix = matcher.group(1);  // Префикс (например, "кв ")
-            String roomNum = matcher.group(3);  // Номер помещения
-            String suffix = matcher.group(4);   // Суффикс (если есть)
 
-            // Формируем новый идентификатор: префикс + цифры этажа + номер помещения
-            return prefix + newFloorDigits + "-" + roomNum + suffix;
-        }
-        return identifier; // Возвращаем оригинал, если паттерн не совпал
-    }
+    private String updateIdentifier(String identifier, String newFloorDigits) { return ops.updateIdentifier(identifier, newFloorDigits); }
 
     private void editFloor(ActionEvent e) {
         int index = floorList.getSelectedIndex();
@@ -1807,281 +1668,52 @@ public class BuildingTab extends JPanel {
     }
 
     private java.util.List<String> collectPopularApartmentRoomNames(Building b, int limit) {
-        // key — нормализованная «база» (в нижнем регистре), val — счётчик
-        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
-        // для отображения храним «красивый» вариант (первое встреченное написание базы)
-        java.util.Map<String, String> display = new java.util.LinkedHashMap<>();
-
-        if (b != null) {
-            for (Floor f : b.getFloors()) {
-                for (Space s : f.getSpaces()) {
-                    if (!isApartmentSpace(s)) continue;
-                    for (Room r : s.getRooms()) {
-                        String raw = (r.getName() == null) ? "" : r.getName().trim();
-                        if (raw.isEmpty()) continue;
-
-                        String base = normalizeRoomBaseName(raw);
-                        if (base.isEmpty()) continue;
-
-                        String key = base.toLowerCase(java.util.Locale.ROOT);
-                        freq.merge(key, 1, Integer::sum);
-                        display.putIfAbsent(key, base); // запоминаем первое «красивое» написание
-                    }
-                }
-            }
-        }
-
-        return freq.entrySet().stream()
-                .sorted((a, c) -> {
-                    int byCount = Integer.compare(c.getValue(), a.getValue());
-                    if (byCount != 0) return byCount;
-                    return display.get(a.getKey()).compareToIgnoreCase(display.get(c.getKey()));
-                })
-                .limit(limit)
-                .map(e -> display.get(e.getKey()))
-                .toList();
+        return ops.collectPopularApartmentRoomNames(limit);
     }
-
 
     // Возвращает true, если помещение — «квартира».
 // Не опираемся на конкретные enum-константы проекта, работаем по имени типа и по идентификатору.
-    private boolean isApartmentSpace(Space s) {
-        if (s == null) return false;
+    private boolean isApartmentSpace(Space s) { return ops.isApartmentSpace(s); }
 
-        // 1) По типу (через имя enum, чтобы не падать, если нет APARTMENT в исходном enum)
-        Space.SpaceType t = s.getType();
-        if (t != null) {
-            String tn = t.name();
-            if ("APARTMENT".equalsIgnoreCase(tn) ||
-                    "FLAT".equalsIgnoreCase(tn) ||
-                    "RESIDENTIAL".equalsIgnoreCase(tn) ||
-                    "LIVING".equalsIgnoreCase(tn)) {
-                return true;
-            }
-        }
-
-        // 2) По идентификатору (часто «кв 1-1», «квартира 12» и т.п.)
-        String id = s.getIdentifier();
-        if (id != null) {
-            String low = id.toLowerCase(java.util.Locale.ROOT);
-            if (low.startsWith("кв") || low.contains("квартира")) return true;
-            if (low.startsWith("apt") || low.contains("apartment")) return true;
-        }
-        return false;
-    }
     /** Находим родительский этаж для помещения (по ссылочному равенству) */
-    private Floor findFloorForSpace(Space s) {
-        if (s == null) return null;
-        for (Floor f : building.getFloors()) {
-            for (Space each : f.getSpaces()) {
-                if (each == s) return f;
-            }
-        }
-        return null;
-    }
+    private Floor findFloorForSpace(Space s) { return ops.findFloorForSpace(s); }
+
 
     /** true, если тип/заголовок этажа похож на «общественный» */
-    private boolean isPublicFloor(Floor f) {
-        if (f == null) return false;
-        try {
-            String n = (f.getType() != null) ? f.getType().name() : "";
-            if ("PUBLIC".equalsIgnoreCase(n) ||
-                    "PUBLIC_AREA".equalsIgnoreCase(n) ||
-                    "COMMON".equalsIgnoreCase(n) ||
-                    "COMMUNITY".equalsIgnoreCase(n)) return true;
-        } catch (Throwable ignore) {}
-        String title = (f.getType() != null && f.getType().title != null) ? f.getType().title : "";
-        return title.toLowerCase(java.util.Locale.ROOT).contains("обществен");
-    }
+    private boolean isPublicFloor(Floor f) { return ops.isPublicFloor(f); }
 
     /** true, если тип/заголовок этажа похож на «офисный» */
-    private boolean isOfficeFloor(Floor f) {
-        if (f == null) return false;
-        try {
-            String n = (f.getType() != null) ? f.getType().name() : "";
-            if ("OFFICE".equalsIgnoreCase(n)) return true;
-        } catch (Throwable ignore) {}
-        String title = (f.getType() != null && f.getType().title != null) ? f.getType().title : "";
-        String low = title.toLowerCase(java.util.Locale.ROOT);
-        return low.contains("офис");
-    }
+    private boolean isOfficeFloor(Floor f) { return ops.isOfficeFloor(f); }
 
     // Офисное помещение?
-    private boolean isOfficeSpace(Space s) {
-        if (s == null) return false;
-
-        // 1) По типу самого помещения
-        Space.SpaceType t = s.getType();
-        if (t != null) {
-            String tn = t.name();
-            if ("OFFICE".equalsIgnoreCase(tn)) return true;
-        }
-
-        // 2) По идентификатору помещения
-        String id = s.getIdentifier();
-        if (id != null) {
-            String low = id.toLowerCase(java.util.Locale.ROOT);
-            if (low.contains("офис") || low.contains("office")) return true;
-        }
-
-        // 3) ФОЛЛБЭК: по типу РОДИТЕЛЬСКОГО этажа
-        Floor f = findFloorForSpace(s);
-        return isOfficeFloor(f);
-    }
+    private boolean isOfficeSpace(Space s) { return ops.isOfficeSpace(s); }
 
     // Общественное помещение?
-    private boolean isPublicSpace(Space s) {
-        if (s == null) return false;
-
-        // 1) По типу помещения
-        Space.SpaceType t = s.getType();
-        if (t != null) {
-            String tn = t.name();
-            if ("PUBLIC".equalsIgnoreCase(tn) ||
-                    "PUBLIC_AREA".equalsIgnoreCase(tn) ||
-                    "COMMON".equalsIgnoreCase(tn) ||
-                    "COMMUNITY".equalsIgnoreCase(tn)) return true;
-        }
-
-        // 2) По идентификатору помещения
-        String id = s.getIdentifier();
-        if (id != null) {
-            String low = id.toLowerCase(java.util.Locale.ROOT);
-            if (low.contains("обществен") || low.contains("общ.") || low.contains("общее")) return true;
-        }
-
-        // 3) ФОЛЛБЭК: по типу РОДИТЕЛЬСКОГО этажа
-        Floor f = findFloorForSpace(s);
-        return isPublicFloor(f);
-    }
-
-    // Нормализация имени для общественных (убираем «(…)», "площадью …", "в осях …", финальные номера)
-    private static final java.util.regex.Pattern PUB_TAIL_NUM =
-            java.util.regex.Pattern.compile("\\s*(?:№\\s*)?\\d+\\s*$");
+    private boolean isPublicSpace(Space s) { return ops.isPublicSpace(s); }
 
     private static String normalizePublicBaseName(String name) {
-        String s = normalizeRoomBaseName(name); // используем уже существующую «квартирную» нормализацию
-        s = PUB_TAIL_NUM.matcher(s).replaceAll("");
-        s = s.replaceAll("[\\s\\.,;:—–-]+$", "").trim();
-        return s;
+        return BuildingModelOps.normalizePublicBaseName(name);
     }
 
     // Топ общественных названий по зданию
     private java.util.List<String> collectPopularPublicRoomNames(Building b, int limit) {
-        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
-        java.util.Map<String, String> display = new java.util.LinkedHashMap<>();
-        if (b != null) {
-            for (Floor f : b.getFloors()) {
-                for (Space s : f.getSpaces()) {
-                    if (!isPublicSpace(s)) continue;
-                    for (Room r : s.getRooms()) {
-                        String raw = (r.getName() == null) ? "" : r.getName().trim();
-                        if (raw.isEmpty()) continue;
-                        String base = normalizePublicBaseName(raw);
-                        if (base.isEmpty()) continue;
-                        String key = base.toLowerCase(java.util.Locale.ROOT);
-                        freq.merge(key, 1, Integer::sum);
-                        display.putIfAbsent(key, base);
-                    }
-                }
-            }
-        }
-        return freq.entrySet().stream()
-                .sorted((a, c) -> {
-                    int byCount = Integer.compare(c.getValue(), a.getValue());
-                    if (byCount != 0) return byCount;
-                    return display.get(a.getKey()).compareToIgnoreCase(display.get(c.getKey()));
-                })
-                .limit(limit)
-                .map(e -> display.get(e.getKey()))
-                .toList();
+        return ops.collectPopularPublicRoomNames(limit);
     }
 
-    // Нормализация офисных названий: обрезаем хвосты вида "№ 12", "кабинет 304"
-    private static final java.util.regex.Pattern OFFICE_TAIL_NUM =
-            java.util.regex.Pattern.compile("\\s*(?:№\\s*)?\\d+\\s*$");
-
     private static String normalizeOfficeBaseName(String name) {
-        if (name == null) return "";
-        String s = name.replace('\u00A0',' ').trim().replaceAll("\\s+", " ");
-        // убираем финальные номера
-        s = OFFICE_TAIL_NUM.matcher(s).replaceAll("");
-        // чистим завершающие символы
-        s = s.replaceAll("[\\s\\.,;:—–-]+$", "").trim();
-        return s;
+        return BuildingModelOps.normalizeOfficeBaseName(name);
     }
 
     // Сбор топа офисных названий по зданию (по "базе", без номеров)
     private java.util.List<String> collectPopularOfficeRoomNames(Building b, int limit) {
-        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
-        java.util.Map<String, String> display = new java.util.LinkedHashMap<>();
-        if (b != null) {
-            for (Floor f : b.getFloors()) {
-                for (Space s : f.getSpaces()) {
-                    if (!isOfficeSpace(s)) continue;
-                    for (Room r : s.getRooms()) {
-                        String raw = (r.getName() == null) ? "" : r.getName().trim();
-                        if (raw.isEmpty()) continue;
-                        String base = normalizeOfficeBaseName(raw);
-                        if (base.isEmpty()) continue;
-                        String key = base.toLowerCase(java.util.Locale.ROOT);
-                        freq.merge(key, 1, Integer::sum);
-                        display.putIfAbsent(key, base);
-                    }
-                }
-            }
-        }
-        return freq.entrySet().stream()
-                .sorted((a, c) -> {
-                    int byCount = Integer.compare(c.getValue(), a.getValue());
-                    if (byCount != 0) return byCount;
-                    return display.get(a.getKey()).compareToIgnoreCase(display.get(c.getKey()));
-                })
-                .limit(limit)
-                .map(e -> display.get(e.getKey()))
-                .toList();
+        return ops.collectPopularOfficeRoomNames(limit);
     }
 
     // КОПИЯ ДЛЯ СОХРАНЕНИЯ: сохраняем id и selected
-    private Floor createFloorCopyPreserve(Floor original) {
-        Floor copy = new Floor();
-        copy.setNumber(original.getNumber());
-        copy.setType(original.getType());
-        copy.setName(original.getName());
-        copy.setSectionIndex(original.getSectionIndex());
-        copy.setPosition(original.getPosition());
-        for (Space os : original.getSpaces()) {
-            copy.addSpace(createSpaceCopyPreserve(os));
-        }
-        return copy;
-    }
+    private Floor createFloorCopyPreserve(Floor original) { return ops.createFloorCopyPreserve(original); }
 
-    private Space createSpaceCopyPreserve(Space original) {
-        Space copy = new Space();
-        copy.setIdentifier(original.getIdentifier());
-        copy.setType(original.getType());
-        copy.setPosition(original.getPosition());
-        // Сохраняем комнаты как есть (id + все флаги + стены и пр.)
-        for (Room or : original.getRooms()) {
-            Room r = new Room();
-            r.setId(or.getId());                   // сохраняем id
-            r.setName(or.getName());
-            r.setVolume(or.getVolume());
-            r.setVentilationChannels(or.getVentilationChannels());
-            r.setVentilationSectionArea(or.getVentilationSectionArea());
 
-            r.setSelected(or.isSelected());                       // освещение (как было)
-            r.setMicroclimateSelected(or.isMicroclimateSelected()); // ← ДОБАВЛЕНО
-            r.setRadiationSelected(or.isRadiationSelected());       // ← ДОБАВЛЕНО
-
-            r.setOriginalRoomId(or.getOriginalRoomId());
-            try { r.setExternalWallsCount(or.getExternalWallsCount()); } catch (Throwable ignore) {}
-            r.setPosition(or.getPosition());
-
-            copy.addRoom(r);
-        }
-        return copy;
-    }
+    private Space createSpaceCopyPreserve(Space original) { return ops.createSpaceCopyPreserve(original); }
 
     private LightingTab getLightingTab() {
         Window wnd = SwingUtilities.getWindowAncestor(this);
@@ -2118,48 +1750,17 @@ public class BuildingTab extends JPanel {
         return null;
     }
     private static boolean looksLikeSanitary(String name) {
-        if (name == null) return false;
-        String s = name.toLowerCase(Locale.ROOT);
-        return s.contains("сануз") || s.contains("с/у") || s.contains("сан.уз")
-                || s.contains("туалет") || s.contains("унитаз")
-                || s.contains("ванн") || s.contains("душ")
-                || s.contains("уборная") || s.contains("wc") || s.contains("toilet");
-    }
-    // ===== МИКРОКЛИМАТ: сохранение/восстановление по ключу "этаж|помещение|комната" =====
-    private Map<String, Boolean> saveMicroclimateSelections() {
-        Map<String, Boolean> map = new HashMap<>();
-        for (Floor f : building.getFloors()) {
-            for (Space s : f.getSpaces()) {
-                for (Room r : s.getRooms()) {
-                    String key = f.getNumber() + "|" + s.getIdentifier() + "|" + r.getName();
-                    map.put(key, r.isMicroclimateSelected());
-                }
-            }
-        }
-        return map;
+        return BuildingModelOps.looksLikeSanitary(name);
     }
 
-    private void restoreMicroclimateSelections(Map<String, Boolean> saved) {
-        if (saved == null || saved.isEmpty()) return;
-        for (Floor f : building.getFloors()) {
-            for (Space s : f.getSpaces()) {
-                for (Room r : s.getRooms()) {
-                    String key = f.getNumber() + "|" + s.getIdentifier() + "|" + r.getName();
-                    Boolean v = saved.get(key);
-                    if (v != null) r.setMicroclimateSelected(v);
-                }
-            }
-        }
-    }
+    // ===== МИКРОКЛИМАТ: сохранение/восстановление по ключу "этаж|помещение|комната" =====
+    private Map<String, Boolean> saveMicroclimateSelections() { return ops.saveMicroclimateSelections(); }
+
+    private void restoreMicroclimateSelections(Map<String, Boolean> saved) { ops.restoreMicroclimateSelections(saved); }
+
     /** Микроклимат: для офисов (по типу помещения ИЛИ по типу этажа) ставим всем, кроме санузлов */
-    private void applyMicroDefaultsForOfficeSpace(Space s) {
-        if (s == null) return;
-        if (!isOfficeSpace(s)) return; // теперь учитывает и тип этажа
-        for (Room r : s.getRooms()) {
-            String n = (r.getName() == null) ? "" : r.getName();
-            r.setMicroclimateSelected(!looksLikeSanitary(n));
-        }
-    }
+    private void applyMicroDefaultsForOfficeSpace(Space s) { ops.applyMicroDefaultsForOfficeSpace(s); }
+
     /** true, если помещение проходит текущие тумблеры-фильтры. */
     private boolean isSpaceVisibleByFilter(Space s) {
         boolean showA = (filterApartmentBtn == null) || filterApartmentBtn.isSelected();
