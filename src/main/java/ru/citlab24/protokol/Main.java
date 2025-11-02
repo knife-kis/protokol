@@ -38,6 +38,10 @@ public class Main {
 // Дальше — ЛАФ
                     UIManager.setLookAndFeel(new com.formdev.flatlaf.FlatIntelliJLaf());
                     com.formdev.flatlaf.FlatLaf.updateUI();
+
+// JavaFX: не гасить платформу при закрытии FX-сцен (на всякий случай)
+                    javafx.application.Platform.setImplicitExit(false);
+
                 } catch (Exception ignore) {}
 
                 MainFrame frame = new MainFrame();

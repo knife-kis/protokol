@@ -1,5 +1,7 @@
 package ru.citlab24.protokol.tabs.buildingTab;
 
+import javafx.application.Platform;
+import javafx.embed.swing.JFXPanel;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
@@ -35,9 +37,10 @@ import java.util.regex.Pattern;
 public class BuildingTab extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(BuildingTab.class);
     // Константы для цветов и стилей
-    private static final Color FLOOR_PANEL_COLOR = new Color(0, 115, 200);
-    private static final Color SPACE_PANEL_COLOR = new Color(76, 175, 80);
-    private static final Color ROOM_PANEL_COLOR = new Color(156, 39, 176);
+    private static final java.awt.Color FLOOR_PANEL_COLOR = new java.awt.Color(0, 115, 200);
+    private static final java.awt.Color SPACE_PANEL_COLOR = new java.awt.Color(76, 175, 80);
+    private static final java.awt.Color ROOM_PANEL_COLOR  = new java.awt.Color(156, 39, 176);
+
     private static final Font HEADER_FONT =
             UIManager.getFont("Label.font").deriveFont(Font.PLAIN, 15f);
     private static final Dimension BUTTON_PANEL_SIZE = new Dimension(5, 5);
@@ -219,36 +222,117 @@ public class BuildingTab extends JPanel {
     }
 
     private JPanel createActionButtons() {
-        return createButtonPanel(
-                createStyledButton("Загрузить проект", FontAwesomeSolid.FOLDER_OPEN, new Color(33, 150, 243), this::loadProject),
-                createStyledButton("Сохранить проект", FontAwesomeSolid.SAVE, new Color(0, 115, 200), this::saveProject),
-                createStyledButton("Рассчитать показатели", FontAwesomeSolid.CALCULATOR, new Color(103, 58, 183), this::calculateMetrics),
-                createStyledButton("Сводка квартир", FontAwesomeSolid.TABLE, new Color(96, 125, 139), this::showApartmentSummary),
-                createStyledButton("Экспорт: все модули (одной книгой)", FontAwesomeSolid.FILE_EXCEL, new Color(0, 98, 204), e -> {
-                    // 0) зафиксировать редактирование в активной таблице, если оно открыто
-                    java.awt.KeyboardFocusManager kfm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager();
-                    java.awt.Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
-                    javax.swing.JTable editingTable = (fo == null) ? null
-                            : (javax.swing.JTable) javax.swing.SwingUtilities.getAncestorOfClass(javax.swing.JTable.class, fo);
+        JPanel wrap = new JPanel(new BorderLayout());
+        final JFXPanel fx = new JFXPanel();
+        wrap.add(fx, BorderLayout.CENTER);
+
+        Platform.runLater(() -> {
+            // Кнопки
+            javafx.scene.control.Button btnLoad    = new javafx.scene.control.Button("Загрузить проект");
+            javafx.scene.control.Button btnSave    = new javafx.scene.control.Button("Сохранить проект");
+            javafx.scene.control.Button btnCalc    = new javafx.scene.control.Button("Рассчитать показатели");
+            javafx.scene.control.Button btnSummary = new javafx.scene.control.Button("Сводка квартир");
+            javafx.scene.control.Button btnExport  = new javafx.scene.control.Button("Экспорт: все модули (одной книгой)");
+
+            // Иконки (Ikonli JavaFX)
+            org.kordamp.ikonli.javafx.FontIcon icLoad    = new org.kordamp.ikonli.javafx.FontIcon("fas-folder-open");
+            org.kordamp.ikonli.javafx.FontIcon icSave    = new org.kordamp.ikonli.javafx.FontIcon("fas-save");
+            org.kordamp.ikonli.javafx.FontIcon icCalc    = new org.kordamp.ikonli.javafx.FontIcon("fas-calculator");
+            org.kordamp.ikonli.javafx.FontIcon icSummary = new org.kordamp.ikonli.javafx.FontIcon("fas-table");
+            org.kordamp.ikonli.javafx.FontIcon icExport  = new org.kordamp.ikonli.javafx.FontIcon("fas-file-excel");
+            icLoad.setIconSize(16); icSave.setIconSize(16); icCalc.setIconSize(16); icSummary.setIconSize(16); icExport.setIconSize(16);
+            btnLoad.setGraphic(icLoad); btnSave.setGraphic(icSave); btnCalc.setGraphic(icCalc); btnSummary.setGraphic(icSummary); btnExport.setGraphic(icExport);
+
+            // CSS-классы для цветов/hover
+            btnLoad.getStyleClass().addAll("button", "btn-load");
+            btnSave.getStyleClass().addAll("button", "btn-save");
+            btnCalc.getStyleClass().addAll("button", "btn-calc");
+            btnSummary.getStyleClass().addAll("button", "btn-summary");
+            btnExport.getStyleClass().addAll("button", "btn-export");
+
+            // Растягиваем равномерно
+            javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(10, btnLoad, btnSave, btnCalc, btnSummary, btnExport);
+            box.getStyleClass().addAll("controls-bar", "theme-light");
+            for (javafx.scene.control.Button b : java.util.List.of(btnLoad, btnSave, btnCalc, btnSummary, btnExport)) {
+                b.setMaxWidth(Double.MAX_VALUE);
+                javafx.scene.layout.HBox.setHgrow(b, javafx.scene.layout.Priority.ALWAYS);
+            }
+
+            // Сцена + CSS
+            javafx.scene.Scene scene = new javafx.scene.Scene(box);
+            scene.getStylesheets().add(
+                    java.util.Objects.requireNonNull(getClass().getResource("/ui/protokol.css")).toExternalForm()
+            );
+            fx.setScene(scene);
+
+            // Горячая смена темы (Ctrl+T)
+            scene.setOnKeyPressed(ke -> {
+                if (ke.isControlDown() && ke.getCode() == javafx.scene.input.KeyCode.T) {
+                    java.util.List<String> cls = box.getStyleClass();
+                    if (cls.contains("theme-light")) { cls.remove("theme-light"); cls.add("theme-dark"); }
+                    else { cls.remove("theme-dark"); cls.add("theme-light"); }
+                }
+            });
+
+            // Цвета и "активность"
+            final String COL_LOAD    = "#3949ab";
+            final String COL_SAVE    = "#43a047";
+            final String COL_CALC    = "#1e88e5";
+            final String COL_SUMMARY = "#00897b";
+            final String COL_EXPORT  = "#ef6c00";
+
+            final java.util.List<javafx.scene.control.Button> all =
+                    java.util.List.of(btnLoad, btnSave, btnCalc, btnSummary, btnExport);
+
+            final java.util.function.BiConsumer<javafx.scene.control.Button, String> markActive = (btn, hex) -> {
+                all.forEach(ru.citlab24.protokol.ui.fx.ActiveGlow::clear);
+                // неон на ~50%
+                ru.citlab24.protokol.ui.fx.ActiveGlow.setActive(btn, hex, 0.5);
+            };
+
+            // Обработчики: сначала отметить активной, потом вызвать Swing-логику
+            btnLoad.setOnAction(ev -> {
+                markActive.accept(btnLoad, COL_LOAD);
+                javax.swing.SwingUtilities.invokeLater(() -> loadProject(null));
+            });
+            btnSave.setOnAction(ev -> {
+                markActive.accept(btnSave, COL_SAVE);
+                javax.swing.SwingUtilities.invokeLater(() -> saveProject(null));
+            });
+            btnCalc.setOnAction(ev -> {
+                markActive.accept(btnCalc, COL_CALC);
+                javax.swing.SwingUtilities.invokeLater(() -> calculateMetrics(null));
+            });
+            btnSummary.setOnAction(ev -> {
+                markActive.accept(btnSummary, COL_SUMMARY);
+                javax.swing.SwingUtilities.invokeLater(() -> showApartmentSummary(null));
+            });
+            btnExport.setOnAction(ev -> {
+                markActive.accept(btnExport, COL_EXPORT);
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    // фиксация редактирования и экспорт (твой код как был)
+                    KeyboardFocusManager kfm = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+                    Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
+                    JTable editingTable = (fo == null) ? null
+                            : (JTable) SwingUtilities.getAncestorOfClass(JTable.class, fo);
                     if (editingTable != null && editingTable.isEditing()) {
                         try { editingTable.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
                     }
-
-                    // 1) UI → модель: забираем состояния галочек из всех вкладок
-                    ru.citlab24.protokol.tabs.modules.med.RadiationTab rt = getRadiationTab();
+                    RadiationTab rt = getRadiationTab();
                     if (rt != null) rt.updateRoomSelectionStates();
-                    ru.citlab24.protokol.tabs.modules.lighting.LightingTab lt = getLightingTab();
+                    LightingTab lt = getLightingTab();
                     if (lt != null) lt.updateRoomSelectionStates();
-                    ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab mt = getMicroclimateTab();
+                    MicroclimateTab mt = getMicroclimateTab();
                     if (mt != null) mt.updateRoomSelectionStates();
 
-                    // 2) Экспорт
-                    java.awt.Window w = javax.swing.SwingUtilities.getWindowAncestor(this);
-                    ru.citlab24.protokol.MainFrame frame = (w instanceof ru.citlab24.protokol.MainFrame) ? (ru.citlab24.protokol.MainFrame) w : null;
+                    Window w = SwingUtilities.getWindowAncestor(this);
+                    MainFrame frame = (w instanceof MainFrame) ? (MainFrame) w : null;
                     ru.citlab24.protokol.export.AllExcelExporter.exportAll(frame, building, this);
-                })
+                });
+            });
+        });
 
-        );
+        return wrap;
     }
 
 
@@ -499,8 +583,8 @@ public class BuildingTab extends JPanel {
     }
 
 
-    private JButton createStyledButton(String text, FontAwesomeSolid icon, Color bgColor, ActionListener action) {
-        JButton btn = new JButton(text, FontIcon.of(icon, 16, Color.WHITE));
+    private JButton createStyledButton(String text, FontAwesomeSolid icon, java.awt.Color bgColor, ActionListener action) {
+        JButton btn = new JButton(text, FontIcon.of(icon, 16, java.awt.Color.WHITE));
         btn.setBackground(bgColor);
         btn.setForeground(Color.WHITE);
         btn.setFocusPainted(false);
@@ -1278,60 +1362,86 @@ public class BuildingTab extends JPanel {
             showMessage("Выберите помещение!", "Ошибка", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        // Только для квартир — быстрый набор через AddRoomDialog.
         if (isApartmentSpace(selectedSpace)) {
+            // квартиры — AddRoomDialog
             java.util.List<String> suggestions = collectPopularApartmentRoomNames(building, 30);
-
             JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
-            AddRoomDialog dlg = new AddRoomDialog(
-                    parent,
-                    suggestions,
-                    "",     // пусто при добавлении
-                    false
-            );
+            ru.citlab24.protokol.tabs.dialogs.AddRoomDialog dlg =
+                    new ru.citlab24.protokol.tabs.dialogs.AddRoomDialog(parent, suggestions, "", false);
             if (dlg.showDialog()) {
-                String name = dlg.getNameToAdd();
-                if (name != null && !name.isBlank()) {
+                java.util.List<String> names = dlg.getNamesToAddList();
+                for (String name : names) {
+                    if (name == null || name.isBlank()) continue;
                     Room room = new Room();
                     room.setName(name.trim());
-
-// дефолты
-                    room.setSelected(false); // галочка микроклимата/освещения всегда пустая при создании
+                    room.setSelected(false);
                     try {
                         int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
                         room.setExternalWallsCount(walls);
                     } catch (Throwable ignore) {}
-
                     selectedSpace.addRoom(room);
                     roomListModel.addElement(room);
-
                 }
             }
-
+        } else if (isOfficeSpace(selectedSpace)) {
+            // офисы — AddOfficeRoomsDialog
+            java.util.List<String> suggestions = collectPopularOfficeRoomNames(building, 30);
+            JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+            ru.citlab24.protokol.tabs.dialogs.AddOfficeRoomsDialog dlg =
+                    new ru.citlab24.protokol.tabs.dialogs.AddOfficeRoomsDialog(parent, suggestions, "", false);
+            if (dlg.showDialog()) {
+                java.util.List<String> names = dlg.getNamesToAddList();
+                for (String name : names) {
+                    if (name == null || name.isBlank()) continue;
+                    Room room = new Room();
+                    room.setName(name.trim());
+                    room.setSelected(false);
+                    // микроклимат в офисе — автоматом, кроме санузлов
+                    room.setMicroclimateSelected(!looksLikeSanitary(room.getName()));
+                    try {
+                        int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
+                        room.setExternalWallsCount(walls);
+                    } catch (Throwable ignore) {}
+                    selectedSpace.addRoom(room);
+                    roomListModel.addElement(room);
+                }
+            }
+        } else if (isPublicSpace(selectedSpace)) {
+            // ОБЩЕСТВЕННЫЕ — AddPublicRoomsDialog (никаких офис/жилых автопроставлений)
+            java.util.List<String> suggestions = collectPopularPublicRoomNames(building, 30);
+            JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+            ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog dlg =
+                    new ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog(parent, suggestions, "", false);
+            if (dlg.showDialog()) {
+                java.util.List<String> names = dlg.getNamesToAddList();
+                for (String name : names) {
+                    if (name == null || name.isBlank()) continue;
+                    Room room = new Room();
+                    room.setName(name.trim());
+                    room.setSelected(false);
+                    // микроклимат — БЕЗ автопроставления (по твоему требованию)
+                    try {
+                        int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
+                        room.setExternalWallsCount(walls);
+                    } catch (Throwable ignore) {}
+                    selectedSpace.addRoom(room);
+                    roomListModel.addElement(room);
+                }
+            }
         } else {
-            // Для НЕ-квартир — простое поле ввода без «быстрого выбора»
+            // прочие типы — простое поле ввода
             String name = showInputDialog("Добавление комнаты", "Название комнаты:", "");
             if (name != null && !name.isBlank()) {
                 Room room = new Room();
                 room.setName(name.trim());
-// Микроклимат: если помещение — ОФИС, ставим галочку, кроме санузлов и т.п.
-                if (selectedSpace.getType() == Space.SpaceType.OFFICE) {
-                    room.setMicroclimateSelected(!looksLikeSanitary(room.getName()));
-                }
-
-// дефолты
                 room.setSelected(false);
                 try {
                     int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
                     room.setExternalWallsCount(walls);
                 } catch (Throwable ignore) {}
-
                 selectedSpace.addRoom(room);
                 roomListModel.addElement(room);
-
             }
-
         }
 
         updateRadiationTab(building, true);
@@ -1355,12 +1465,8 @@ public class BuildingTab extends JPanel {
         if (isApartmentSpace(space)) {
             java.util.List<String> suggestions = collectPopularApartmentRoomNames(building, 30);
             JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
-            AddRoomDialog dlg = new AddRoomDialog(
-                    parent,
-                    suggestions,
-                    room.getName(),
-                    true
-            );
+            ru.citlab24.protokol.tabs.dialogs.AddRoomDialog dlg =
+                    new ru.citlab24.protokol.tabs.dialogs.AddRoomDialog(parent, suggestions, room.getName(), true);
             if (dlg.showDialog()) {
                 String newName = dlg.getNameToAdd();
                 if (newName != null && !newName.isBlank()) {
@@ -1371,17 +1477,58 @@ public class BuildingTab extends JPanel {
                     updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
                 }
             }
+        } else if (isOfficeSpace(space)) {
+            java.util.List<String> suggestions = collectPopularOfficeRoomNames(building, 30);
+            JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+            ru.citlab24.protokol.tabs.dialogs.AddOfficeRoomsDialog dlg =
+                    new ru.citlab24.protokol.tabs.dialogs.AddOfficeRoomsDialog(parent, suggestions, room.getName(), true);
+            if (dlg.showDialog()) {
+                String newName = dlg.getNameToAdd();
+                if (newName != null && !newName.isBlank()) {
+                    room.setName(newName.trim());
+                    // офис: подсвежим дефолты
+                    room.setMicroclimateSelected(!looksLikeSanitary(room.getName()));
+                    try {
+                        int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
+                        room.setExternalWallsCount(walls);
+                    } catch (Throwable ignore) {}
+                    roomListModel.set(index, room);
+                    updateRadiationTab(building, true);
+                    updateLightingTab(building, /*autoApplyDefaults=*/true);
+                    updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+                }
+            }
+        } else if (isPublicSpace(space)) {
+            java.util.List<String> suggestions = collectPopularPublicRoomNames(building, 30);
+            JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+            ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog dlg =
+                    new ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog(parent, suggestions, room.getName(), true);
+            if (dlg.showDialog()) {
+                String newName = dlg.getNameToAdd();
+                if (newName != null && !newName.isBlank()) {
+                    room.setName(newName.trim());
+                    // для общественных автопроставления МК по умолчанию не делаем
+                    try {
+                        int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
+                        room.setExternalWallsCount(walls);
+                    } catch (Throwable ignore) {}
+                    roomListModel.set(index, room);
+                    updateRadiationTab(building, true);
+                    updateLightingTab(building, /*autoApplyDefaults=*/true);
+                    updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+                }
+            }
         } else {
-            // Для НЕ-квартир — простое редактирование строкой
             String newName = showInputDialog("Редактирование комнаты", "Новое название комнаты:", room.getName());
             if (newName != null && !newName.isBlank()) {
                 room.setName(newName.trim());
                 roomListModel.set(index, room);
                 updateRadiationTab(building, true);
                 updateLightingTab(building, /*autoApplyDefaults=*/true);
-                updateMicroclimateTab(building, /*autoApplyDefaults=*/true);
+                updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
             }
         }
+
     }
 
 
@@ -1631,6 +1778,179 @@ public class BuildingTab extends JPanel {
         }
         return false;
     }
+    /** Находим родительский этаж для помещения (по ссылочному равенству) */
+    private Floor findFloorForSpace(Space s) {
+        if (s == null) return null;
+        for (Floor f : building.getFloors()) {
+            for (Space each : f.getSpaces()) {
+                if (each == s) return f;
+            }
+        }
+        return null;
+    }
+
+    /** true, если тип/заголовок этажа похож на «общественный» */
+    private boolean isPublicFloor(Floor f) {
+        if (f == null) return false;
+        try {
+            String n = (f.getType() != null) ? f.getType().name() : "";
+            if ("PUBLIC".equalsIgnoreCase(n) ||
+                    "PUBLIC_AREA".equalsIgnoreCase(n) ||
+                    "COMMON".equalsIgnoreCase(n) ||
+                    "COMMUNITY".equalsIgnoreCase(n)) return true;
+        } catch (Throwable ignore) {}
+        String title = (f.getType() != null && f.getType().title != null) ? f.getType().title : "";
+        return title.toLowerCase(java.util.Locale.ROOT).contains("обществен");
+    }
+
+    /** true, если тип/заголовок этажа похож на «офисный» */
+    private boolean isOfficeFloor(Floor f) {
+        if (f == null) return false;
+        try {
+            String n = (f.getType() != null) ? f.getType().name() : "";
+            if ("OFFICE".equalsIgnoreCase(n)) return true;
+        } catch (Throwable ignore) {}
+        String title = (f.getType() != null && f.getType().title != null) ? f.getType().title : "";
+        String low = title.toLowerCase(java.util.Locale.ROOT);
+        return low.contains("офис");
+    }
+
+    // Офисное помещение?
+    private boolean isOfficeSpace(Space s) {
+        if (s == null) return false;
+
+        // 1) По типу самого помещения
+        Space.SpaceType t = s.getType();
+        if (t != null) {
+            String tn = t.name();
+            if ("OFFICE".equalsIgnoreCase(tn)) return true;
+        }
+
+        // 2) По идентификатору помещения
+        String id = s.getIdentifier();
+        if (id != null) {
+            String low = id.toLowerCase(java.util.Locale.ROOT);
+            if (low.contains("офис") || low.contains("office")) return true;
+        }
+
+        // 3) ФОЛЛБЭК: по типу РОДИТЕЛЬСКОГО этажа
+        Floor f = findFloorForSpace(s);
+        return isOfficeFloor(f);
+    }
+
+    // Общественное помещение?
+    private boolean isPublicSpace(Space s) {
+        if (s == null) return false;
+
+        // 1) По типу помещения
+        Space.SpaceType t = s.getType();
+        if (t != null) {
+            String tn = t.name();
+            if ("PUBLIC".equalsIgnoreCase(tn) ||
+                    "PUBLIC_AREA".equalsIgnoreCase(tn) ||
+                    "COMMON".equalsIgnoreCase(tn) ||
+                    "COMMUNITY".equalsIgnoreCase(tn)) return true;
+        }
+
+        // 2) По идентификатору помещения
+        String id = s.getIdentifier();
+        if (id != null) {
+            String low = id.toLowerCase(java.util.Locale.ROOT);
+            if (low.contains("обществен") || low.contains("общ.") || low.contains("общее")) return true;
+        }
+
+        // 3) ФОЛЛБЭК: по типу РОДИТЕЛЬСКОГО этажа
+        Floor f = findFloorForSpace(s);
+        return isPublicFloor(f);
+    }
+
+    // Нормализация имени для общественных (убираем «(…)», "площадью …", "в осях …", финальные номера)
+    private static final java.util.regex.Pattern PUB_TAIL_NUM =
+            java.util.regex.Pattern.compile("\\s*(?:№\\s*)?\\d+\\s*$");
+
+    private static String normalizePublicBaseName(String name) {
+        String s = normalizeRoomBaseName(name); // используем уже существующую «квартирную» нормализацию
+        s = PUB_TAIL_NUM.matcher(s).replaceAll("");
+        s = s.replaceAll("[\\s\\.,;:—–-]+$", "").trim();
+        return s;
+    }
+
+    // Топ общественных названий по зданию
+    private java.util.List<String> collectPopularPublicRoomNames(Building b, int limit) {
+        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
+        java.util.Map<String, String> display = new java.util.LinkedHashMap<>();
+        if (b != null) {
+            for (Floor f : b.getFloors()) {
+                for (Space s : f.getSpaces()) {
+                    if (!isPublicSpace(s)) continue;
+                    for (Room r : s.getRooms()) {
+                        String raw = (r.getName() == null) ? "" : r.getName().trim();
+                        if (raw.isEmpty()) continue;
+                        String base = normalizePublicBaseName(raw);
+                        if (base.isEmpty()) continue;
+                        String key = base.toLowerCase(java.util.Locale.ROOT);
+                        freq.merge(key, 1, Integer::sum);
+                        display.putIfAbsent(key, base);
+                    }
+                }
+            }
+        }
+        return freq.entrySet().stream()
+                .sorted((a, c) -> {
+                    int byCount = Integer.compare(c.getValue(), a.getValue());
+                    if (byCount != 0) return byCount;
+                    return display.get(a.getKey()).compareToIgnoreCase(display.get(c.getKey()));
+                })
+                .limit(limit)
+                .map(e -> display.get(e.getKey()))
+                .toList();
+    }
+
+    // Нормализация офисных названий: обрезаем хвосты вида "№ 12", "кабинет 304"
+    private static final java.util.regex.Pattern OFFICE_TAIL_NUM =
+            java.util.regex.Pattern.compile("\\s*(?:№\\s*)?\\d+\\s*$");
+
+    private static String normalizeOfficeBaseName(String name) {
+        if (name == null) return "";
+        String s = name.replace('\u00A0',' ').trim().replaceAll("\\s+", " ");
+        // убираем финальные номера
+        s = OFFICE_TAIL_NUM.matcher(s).replaceAll("");
+        // чистим завершающие символы
+        s = s.replaceAll("[\\s\\.,;:—–-]+$", "").trim();
+        return s;
+    }
+
+    // Сбор топа офисных названий по зданию (по "базе", без номеров)
+    private java.util.List<String> collectPopularOfficeRoomNames(Building b, int limit) {
+        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
+        java.util.Map<String, String> display = new java.util.LinkedHashMap<>();
+        if (b != null) {
+            for (Floor f : b.getFloors()) {
+                for (Space s : f.getSpaces()) {
+                    if (!isOfficeSpace(s)) continue;
+                    for (Room r : s.getRooms()) {
+                        String raw = (r.getName() == null) ? "" : r.getName().trim();
+                        if (raw.isEmpty()) continue;
+                        String base = normalizeOfficeBaseName(raw);
+                        if (base.isEmpty()) continue;
+                        String key = base.toLowerCase(java.util.Locale.ROOT);
+                        freq.merge(key, 1, Integer::sum);
+                        display.putIfAbsent(key, base);
+                    }
+                }
+            }
+        }
+        return freq.entrySet().stream()
+                .sorted((a, c) -> {
+                    int byCount = Integer.compare(c.getValue(), a.getValue());
+                    if (byCount != 0) return byCount;
+                    return display.get(a.getKey()).compareToIgnoreCase(display.get(c.getKey()));
+                })
+                .limit(limit)
+                .map(e -> display.get(e.getKey()))
+                .toList();
+    }
+
     // КОПИЯ ДЛЯ СОХРАНЕНИЯ: сохраняем id и selected
     private Floor createFloorCopyPreserve(Floor original) {
         Floor copy = new Floor();
@@ -1740,10 +2060,10 @@ public class BuildingTab extends JPanel {
             }
         }
     }
-    /** Микроклимат: в офисе проставляем чекбокс всем, кроме санузлов и т.п. */
+    /** Микроклимат: для офисов (по типу помещения ИЛИ по типу этажа) ставим всем, кроме санузлов */
     private void applyMicroDefaultsForOfficeSpace(Space s) {
         if (s == null) return;
-        if (s.getType() != Space.SpaceType.OFFICE) return;
+        if (!isOfficeSpace(s)) return; // теперь учитывает и тип этажа
         for (Room r : s.getRooms()) {
             String n = (r.getName() == null) ? "" : r.getName();
             r.setMicroclimateSelected(!looksLikeSanitary(n));

@@ -1,0 +1,44 @@
+/* Общий контейнер с кнопками */
+.controls-bar {
+    -fx-padding: 8 10 8 10;
+}
+
+/* Базовый вид всех нижних кнопок */
+.controls-bar .button {
+    -fx-background-radius: 10;
+    -fx-text-fill: white;
+    -fx-font-weight: 600;
+    -fx-letter-spacing: 0.2px;
+    -fx-padding: 10 14 10 14;
+    -fx-effect: null;               /* никаких теней по умолчанию */
+}
+
+/* HOVER — только лёгкое подсветление, без тени */
+.controls-bar .button:hover {
+    /* цвет подменяем в конкретных классах через derive() */
+}
+
+/* Светлая/тёмная тема на контейнере — если нужно менять фон панели */
+.controls-bar.theme-light { -fx-background-color: transparent; }
+.controls-bar.theme-dark  { -fx-background-color: transparent; }
+
+/* базовые свойства оставить как есть (controls-bar .button и т. д.) */
+
+/* По умолчанию — очень светлый тон: derive(..., 85%) ≈ 10–15% насыщенности */
+.btn-load    { -fx-background-color: derive(#3949ab, 30%); }
+.btn-save    { -fx-background-color: derive(#43a047, 30%); }
+.btn-calc    { -fx-background-color: derive(#1e88e5, 30%); }
+.btn-summary { -fx-background-color: derive(#00897b, 30%); }
+.btn-export  { -fx-background-color: derive(#ef6c00, 30%); }
+
+/* При наведении — почти полный цвет (80–90%).
+   Здесь даём «почти базу»: чуть приглушим через -5% чтобы не бить по глазам */
+.btn-load:hover    { -fx-background-color: derive(#3949ab, 55%); }
+.btn-save:hover    { -fx-background-color: derive(#43a047, 55%); }
+.btn-calc:hover    { -fx-background-color: derive(#1e88e5, 55%); }
+.btn-summary:hover { -fx-background-color: derive(#00897b, 55%); }
+.btn-export:hover  { -fx-background-color: derive(#ef6c00, 55%); }
+
+
+
+

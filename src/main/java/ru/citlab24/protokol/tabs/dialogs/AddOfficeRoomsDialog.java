@@ -4,59 +4,55 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
-import java.util.List;
 
 /**
- * Диалог добавления/редактирования комнат:
- * - Снизу во всю ширину — поле ввода.
- * - Справа — вертикальная панель "Быстрый выбор" (скролл), обновляется мгновенно при добавлении.
- * - По центру — список "Будут добавлены" с кнопками редактирования/перемещения/удаления.
- * - Enter: добавить в список, Ctrl+Enter: OK, Esc: Отмена.
- * - Ctrl+клик по кнопке в правой колонке — сразу добавить в список.
- * - Левый список: выбранный элемент ярко подсвечен; все добавленные в эту сессию — полужирным.
- * - Окно увеличено на 20% (864×528). Шапки слева/справа выровнены. Разделитель стартует на 70% слева.
+ * Диалог пакетного добавления/редактирования комнат ДЛЯ ОФИСНЫХ помещений.
+ * — Снизу широкая строка ввода.
+ * — Справа «Быстрый выбор (офис)»; пополняется мгновенно при добавлении.
+ * — По центру список «Будут добавлены» с перемещением/переименованием/удалением.
+ * — Enter: добавить в список; Ctrl+Enter: OK; Esc: Отмена.
+ * — Ctrl+клик по быстрым — сразу в список.
+ * — Выравнивание шапок слева/справа; разделитель стартует на 70% слева; компактные отступы.
  */
-public class AddRoomDialog extends JDialog {
+public class AddOfficeRoomsDialog extends JDialog {
 
-    // ===== Ввод (снизу) =====
+    // ===== ввод =====
     private final JTextField input = new JTextField();
 
-    // ===== Список "что добавляем" (по центру слева) =====
+    // ===== список по центру =====
     private final DefaultListModel<String> model = new DefaultListModel<>();
     private final JList<String> list = new JList<>(model);
 
-    // Набор ключей добавленных в эту сессию (для визуального акцента)
+    // Список «новых в этой сессии» — выделяем полужирным
     private final Set<String> sessionNew = new HashSet<>();
 
-    // ===== Быстрый выбор (справа) =====
+    // ===== быстрый выбор справа =====
     private final JPanel quickRight = new JPanel();
-
-    // Базовые подсказки, пришедшие извне (часто — из здания)
-    private final List<String> baseSuggestions;
-
-    // «Рекенты» — всё, что пользователь добавил в ЭТОЙ СЕССИИ (показываем первыми)
-    private final Deque<String> recentQuick = new ArrayDeque<>();
-
+    private final java.util.Deque<String> recentQuick = new ArrayDeque<>();
     private static final int QUICK_LIMIT = 30;
 
-    // Уникальность внутри текущего списка к добавлению
-    private final Set<String> unique = new HashSet<>();
+    // Базовые подсказки, пришедшие извне (из BuildingTab)
+    private final java.util.List<String> baseSuggestions;
 
+    // Контроль уникальности в текущем наборе
+    private final Set<String> unique = new HashSet<>();
     private boolean confirmed = false;
     private final boolean editMode;
 
-    // Фикс для Ctrl+клика по кнопке быстрого выбора
+    // флаг для Ctrl+клика
     private boolean ctrlClickDown = false;
 
-    public AddRoomDialog(JFrame parent,
-                         List<String> suggestions,
-                         String prefillName,
-                         boolean editMode) {
-        super(parent, editMode ? "Редактировать комнату" : "Добавить комнаты", true);
-        this.baseSuggestions = (suggestions != null) ? suggestions : List.of();
+    public AddOfficeRoomsDialog(JFrame parent,
+                                java.util.List<String> suggestions,
+                                String prefillName,
+                                boolean editMode) {
+        super(parent, editMode ? "Редактировать (офис)" : "Добавить комнаты (офис)", true);
+        this.baseSuggestions = (suggestions != null && !suggestions.isEmpty())
+                ? suggestions
+                : defaultOfficeSuggestions();
         this.editMode = editMode;
 
-        // +20% к прежнему 720×440
+        // окно +20%
         Dimension pref = new Dimension(864, 528);
         setPreferredSize(pref);
         setMinimumSize(pref);
@@ -68,34 +64,29 @@ public class AddRoomDialog extends JDialog {
         add(buildBottomBar(), BorderLayout.SOUTH);
         add(buildButtons(), BorderLayout.NORTH);
 
-        // Режим редактирования: положим префилл в список для инлайн-редакта
         if (editMode && prefillName != null && !prefillName.isBlank()) {
-            addToModel(clean(prefillName)); // это также пометит как sessionNew
+            addToModel(clean(prefillName));
         }
 
-        // Горячие клавиши
-        // Esc = отмена
+        // клавиши
         getRootPane().registerKeyboardAction(
                 e -> { confirmed = false; setVisible(false); dispose(); },
                 KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
 
-        // Ctrl+Enter = OK
         getRootPane().registerKeyboardAction(
                 e -> onOk(),
                 KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.CTRL_DOWN_MASK),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
 
-        // Enter в поле ввода — добавить
         input.addActionListener(e -> addCurrentText());
 
         pack();
         setLocationRelativeTo(parent);
     }
 
-    // ===== Центральная область: слева список, справа быстрый выбор =====
     private JComponent buildCenter() {
-        // ===== СЛЕВА: список с тулбаром =====
+        // слева — список с тулбаром
         JPanel left = new JPanel(new BorderLayout(6, 6));
         left.add(buildListToolbar(), BorderLayout.NORTH);
 
@@ -104,14 +95,13 @@ public class AddRoomDialog extends JDialog {
         list.setCellRenderer(new FancyListRenderer());
         left.add(new JScrollPane(list), BorderLayout.CENTER);
 
-        // двойной клик — переименовать
         list.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) renameSelected();
             }
         });
 
-        // ===== СПРАВА: быстрый выбор (шапка выровнена с левой) =====
+        // справа — быстрый выбор
         quickRight.setLayout(new BoxLayout(quickRight, BoxLayout.Y_AXIS));
         quickRight.setBorder(BorderFactory.createEmptyBorder(6,6,6,6));
         fillQuickButtons();
@@ -121,15 +111,14 @@ public class AddRoomDialog extends JDialog {
 
         JPanel rightWrap = new JPanel(new BorderLayout());
         JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
-        rightHeader.add(new JLabel("Быстрый выбор"));
+        rightHeader.add(new JLabel("Быстрый выбор (офис)"));
         rightWrap.add(rightHeader, BorderLayout.NORTH);
         rightWrap.add(rightScroll, BorderLayout.CENTER);
 
-        // ===== Разделитель =====
+        // разделитель
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, rightWrap);
         split.setContinuousLayout(true);
-// шире зона редактирования: ~80% слева
-        SwingUtilities.invokeLater(() -> split.setDividerLocation(0.80));
+        javax.swing.SwingUtilities.invokeLater(() -> split.setDividerLocation(1.80));
         split.setResizeWeight(0.5);
         return split;
     }
@@ -138,39 +127,22 @@ public class AddRoomDialog extends JDialog {
         JToolBar tb = new JToolBar();
         tb.setFloatable(false);
 
-        JButton up = new JButton("↑");
-        up.setToolTipText("Переместить вверх");
-        up.addActionListener(e -> moveSelected(-1));
+        JButton up = new JButton("↑"); up.setToolTipText("Выше"); up.addActionListener(e -> moveSelected(-1));
+        JButton dn = new JButton("↓"); dn.setToolTipText("Ниже"); dn.addActionListener(e -> moveSelected(+1));
+        JButton rn = new JButton("Переименовать"); rn.addActionListener(e -> renameSelected());
+        JButton rm = new JButton("Удалить"); rm.addActionListener(e -> removeSelected());
+        JButton cl = new JButton("Очистить");
+        cl.addActionListener(e -> { model.clear(); unique.clear(); sessionNew.clear(); input.requestFocusInWindow(); });
 
-        JButton down = new JButton("↓");
-        down.setToolTipText("Переместить вниз");
-        down.addActionListener(e -> moveSelected(+1));
-
-        JButton rename = new JButton("Переименовать");
-        rename.addActionListener(e -> renameSelected());
-
-        JButton del = new JButton("Удалить");
-        del.addActionListener(e -> removeSelected());
-
-        JButton clear = new JButton("Очистить");
-        clear.addActionListener(e -> {
-            model.clear();
-            unique.clear();
-            sessionNew.clear();
-            input.requestFocusInWindow();
-        });
-
-        tb.add(up); tb.add(down);
+        tb.add(up); tb.add(dn);
         tb.addSeparator();
-        tb.add(rename); tb.add(del);
+        tb.add(rn); tb.add(rm);
         tb.addSeparator();
-        tb.add(clear);
-
+        tb.add(cl);
         return tb;
     }
 
     private JComponent buildBottomBar() {
-        // компактнее поля: меньше «воздуха»
         JPanel south = new JPanel(new BorderLayout(6, 4));
         south.setBorder(BorderFactory.createEmptyBorder(2, 8, 4, 8));
 
@@ -181,25 +153,19 @@ public class AddRoomDialog extends JDialog {
         JButton add = new JButton("Добавить");
         add.setToolTipText("Enter");
         add.addActionListener(e -> addCurrentText());
-
         btns.add(add);
+
         south.add(btns, BorderLayout.EAST);
         return south;
     }
 
     private JComponent buildButtons() {
-        // компактнее: меньше зазоры и внешняя кромка
         JPanel north = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         north.setBorder(BorderFactory.createEmptyBorder(2, 8, 6, 8));
 
         JButton cancel = new JButton("Отмена");
         JButton ok = new JButton(editMode ? "Сохранить" : "Добавить комнаты");
-
-        cancel.addActionListener(e -> {
-            confirmed = false;
-            setVisible(false);
-            dispose();
-        });
+        cancel.addActionListener(e -> { confirmed = false; setVisible(false); dispose(); });
         ok.addActionListener(e -> onOk());
 
         north.add(cancel);
@@ -208,7 +174,6 @@ public class AddRoomDialog extends JDialog {
         return north;
     }
 
-    // ===== Быстрый выбор: сбор актуального списка (recent + base), генерация кнопок =====
     private void fillQuickButtons() {
         quickRight.removeAll();
 
@@ -217,23 +182,19 @@ public class AddRoomDialog extends JDialog {
         quickRight.add(tip);
         quickRight.add(Box.createVerticalStrut(6));
 
-        // Собираем уникальный пул: сначала «рекенты», затем базовые
+        // пул: recent → base
         LinkedHashSet<String> pool = new LinkedHashSet<>();
         for (String r : recentQuick) pool.add(r);
-        for (String b : baseSuggestions) {
-            if (b != null && !b.isBlank()) pool.add(b);
-        }
+        for (String b : baseSuggestions) if (b != null && !b.isBlank()) pool.add(b);
 
         int i = 0;
         for (String s : pool) {
             if (i >= QUICK_LIMIT) break;
-            if (s == null || s.isBlank()) continue;
             JButton b = makeQuickButton(s);
             quickRight.add(b);
             quickRight.add(Box.createVerticalStrut(4));
             i++;
         }
-
         quickRight.revalidate();
         quickRight.repaint();
     }
@@ -243,7 +204,6 @@ public class AddRoomDialog extends JDialog {
         b.setAlignmentX(Component.LEFT_ALIGNMENT);
         b.setFocusPainted(false);
 
-        // Фикс Ctrl+клика — читаем MouseEvent
         b.addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent me) {
                 ctrlClickDown =
@@ -255,9 +215,9 @@ public class AddRoomDialog extends JDialog {
 
         b.addActionListener(e -> {
             if (ctrlClickDown) {
-                addToModel(clean(text));   // сразу в список
+                addToModel(clean(text));
             } else {
-                input.setText(text);       // просто подставить вниз
+                input.setText(text);
                 input.requestFocusInWindow();
                 input.selectAll();
             }
@@ -267,7 +227,6 @@ public class AddRoomDialog extends JDialog {
         return b;
     }
 
-    // ===== Логика добавления =====
     private void addCurrentText() {
         String txt = clean(input.getText());
         if (txt.isBlank()) {
@@ -280,57 +239,40 @@ public class AddRoomDialog extends JDialog {
         }
     }
 
-    /**
-     * Добавить строку в модель (с уникальностью), отметить как «новую»,
-     * и сразу поместить в быстрый выбор (в начало).
-     */
     private boolean addToModel(String name) {
         String key = normalize(name);
         if (key.isEmpty()) return false;
-
         if (unique.contains(key)) {
-            // подсветим уже имеющийся элемент
             int idx = indexOfKey(key);
-            if (idx >= 0) {
-                list.setSelectedIndex(idx);
-                list.ensureIndexIsVisible(idx);
-            }
+            if (idx >= 0) { list.setSelectedIndex(idx); list.ensureIndexIsVisible(idx); }
             return false;
         }
-
         unique.add(key);
         model.addElement(name);
         sessionNew.add(key);
         list.setSelectedIndex(model.size() - 1);
         list.ensureIndexIsVisible(model.getSize() - 1);
 
-        // Мгновенно добавить в быстрый выбор и перерисовать панель
         addToRecentQuick(name);
         fillQuickButtons();
         return true;
     }
 
-    private int indexOfKey(String key) {
-        for (int i = 0; i < model.size(); i++) {
-            if (normalize(model.get(i)).equals(key)) return i;
-        }
-        return -1;
-    }
-
     private void addToRecentQuick(String name) {
-        String key = clean(name);
-        // убрать прежние вхождения и положить в начало
-        recentQuick.removeIf(s -> s.equalsIgnoreCase(key));
-        recentQuick.addFirst(key);
-        // ограничить размер
+        String s = clean(name);
+        recentQuick.removeIf(x -> x.equalsIgnoreCase(s));
+        recentQuick.addFirst(s);
         while (recentQuick.size() > QUICK_LIMIT) recentQuick.removeLast();
     }
 
-    private void moveSelected(int delta) {
-        int i = list.getSelectedIndex();
-        if (i < 0) return;
-        int j = i + delta;
-        if (j < 0 || j >= model.size()) return;
+    private int indexOfKey(String key) {
+        for (int i = 0; i < model.size(); i++) if (normalize(model.get(i)).equals(key)) return i;
+        return -1;
+    }
+
+    private void moveSelected(int d) {
+        int i = list.getSelectedIndex(); if (i < 0) return;
+        int j = i + d; if (j < 0 || j >= model.size()) return;
         String a = model.get(i);
         model.set(i, model.get(j));
         model.set(j, a);
@@ -339,8 +281,7 @@ public class AddRoomDialog extends JDialog {
     }
 
     private void renameSelected() {
-        int i = list.getSelectedIndex();
-        if (i < 0) return;
+        int i = list.getSelectedIndex(); if (i < 0) return;
         String old = model.get(i);
         String neu = prompt("Переименовать", "Новое название:", old);
         if (neu == null) return;
@@ -348,7 +289,6 @@ public class AddRoomDialog extends JDialog {
         String key = normalize(neu);
         if (key.isEmpty()) return;
 
-        // если переименованием получился дубликат — перейти к нему
         if (unique.contains(key) && !normalize(old).equals(key)) {
             int idx = indexOfKey(key);
             if (idx >= 0) {
@@ -366,22 +306,17 @@ public class AddRoomDialog extends JDialog {
         sessionNew.add(key);
         model.set(i, neu);
 
-        // обновим быстрый выбор (переместим в «рекенты»)
         addToRecentQuick(neu);
         fillQuickButtons();
     }
 
     private void removeSelected() {
-        int i = list.getSelectedIndex();
-        if (i < 0) return;
+        int i = list.getSelectedIndex(); if (i < 0) return;
         String key = normalize(model.get(i));
         unique.remove(key);
         sessionNew.remove(key);
         model.remove(i);
-        if (!model.isEmpty()) {
-            int j = Math.min(i, model.size() - 1);
-            list.setSelectedIndex(j);
-        }
+        if (!model.isEmpty()) list.setSelectedIndex(Math.min(i, model.size() - 1));
     }
 
     private void onOk() {
@@ -410,10 +345,7 @@ public class AddRoomDialog extends JDialog {
         String t = s.replace('\u00A0',' ').trim();
         return t.replaceAll("\\s+", " ");
     }
-
-    private static String normalize(String s) {
-        return clean(s).toLowerCase(Locale.ROOT);
-    }
+    private static String normalize(String s) { return clean(s).toLowerCase(java.util.Locale.ROOT); }
 
     private String prompt(String title, String label, String init) {
         JTextField tf = new JTextField(init == null ? "" : init);
@@ -424,28 +356,21 @@ public class AddRoomDialog extends JDialog {
         final JOptionPane pane = new JOptionPane(p, JOptionPane.PLAIN_MESSAGE, JOptionPane.OK_CANCEL_OPTION);
         final JDialog dialog = pane.createDialog(this, title);
 
-        // Enter = OK
         tf.addActionListener(e -> { pane.setValue(JOptionPane.OK_OPTION); dialog.dispose(); });
-
-        // Esc = Cancel
         dialog.getRootPane().registerKeyboardAction(
                 e -> { pane.setValue(JOptionPane.CANCEL_OPTION); dialog.dispose(); },
                 KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         dialog.setVisible(true);
-        Object value = pane.getValue();
-        boolean ok = (value != null) && Integer.valueOf(JOptionPane.OK_OPTION).equals(value);
+        Object v = pane.getValue();
+        boolean ok = (v != null) && Integer.valueOf(JOptionPane.OK_OPTION).equals(v);
         return ok ? tf.getText() : null;
     }
 
-    // ==== Публичные API ====
-    public boolean showDialog() {
-        setVisible(true);
-        return confirmed;
-    }
+    // ==== публичный API ====
+    public boolean showDialog() { setVisible(true); return confirmed; }
 
-    /** Все имена (для пакетного добавления). Пустой список — если Отмена. */
     public java.util.List<String> getNamesToAddList() {
         if (!confirmed) return java.util.List.of();
         java.util.List<String> out = new java.util.ArrayList<>();
@@ -456,46 +381,41 @@ public class AddRoomDialog extends JDialog {
         return out;
     }
 
-    /** Совместимость для editMode: вернёт одно имя. */
-    public String getNameToAdd() {
+    public String getNameToAdd() { // для editMode
         if (!confirmed) return null;
         if (!model.isEmpty()) return clean(model.get(0));
         String v = clean(input.getText());
         return v.isBlank() ? null : v;
     }
 
-    // ===== Кастомный рендерер левого списка =====
+    // ===== рендерер левого списка =====
     private final class FancyListRenderer extends DefaultListCellRenderer {
-        private final Color selBg = new Color(25, 118, 210);   // синий, читаемый в тёмной/светлой теме
+        private final Color selBg = new Color(25,118,210);
         private final Color selFg = Color.WHITE;
         private final Color normBg = UIManager.getColor("List.background");
         private final Color normFg = UIManager.getColor("List.foreground");
 
         @Override
-        public Component getListCellRendererComponent(JList<?> list,
-                                                      Object value,
-                                                      int index,
-                                                      boolean isSelected,
-                                                      boolean cellHasFocus) {
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             JLabel lbl = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
             String text = (value == null) ? "" : value.toString();
 
-            // Яркое выделение выбранного
-            if (isSelected) {
-                lbl.setBackground(selBg);
-                lbl.setForeground(selFg);
-            } else {
-                lbl.setBackground(normBg);
-                lbl.setForeground(normFg);
-            }
+            if (isSelected) { lbl.setBackground(selBg); lbl.setForeground(selFg); }
+            else { lbl.setBackground(normBg); lbl.setForeground(normFg); }
 
-            // Все добавленные «в этой сессии» — полужирным (заметнее)
             boolean isNew = sessionNew.contains(normalize(text));
             lbl.setFont(lbl.getFont().deriveFont(isNew ? Font.BOLD : Font.PLAIN));
-
-            // Чуть больше вертикальная плотность
             lbl.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
             return lbl;
         }
+    }
+
+    // ===== дефолтные офисные подсказки на случай пустой базы =====
+    private static java.util.List<String> defaultOfficeSuggestions() {
+        return java.util.List.of(
+                "Кабинет", "Оpen space", "Переговорная", "Ресепшн",
+                "Серверная", "Архив", "Склад", "Кухня",
+                "Комната отдыха", "Кладовая", "Гардероб", "Коридор", "Санузел"
+        );
     }
 }
