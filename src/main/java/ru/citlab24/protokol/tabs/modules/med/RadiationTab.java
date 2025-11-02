@@ -24,6 +24,8 @@ public class RadiationTab extends JPanel {
     private static final Color SPACE_PANEL_COLOR = new Color(76, 175, 80);
     private static final Color ROOM_PANEL_COLOR = new Color(156, 39, 176);
     private static final Font HEADER_FONT = new Font("Segoe UI", Font.BOLD, 14);
+    // ===== Подсветка (радиация) ===============================================
+    private static final java.awt.Color HL_GREEN = new java.awt.Color(232, 245, 233); // лёгкий зелёный
     private static final List<String> EXCLUDED_ROOMS = Arrays.asList(
             "санузел", "сан узел", "сан. узел",
             "ванная", "ванная комната",
@@ -100,7 +102,27 @@ public class RadiationTab extends JPanel {
 
         // Список этажей
         floorList = new JList<>(floorListModel);
-        floorList.setCellRenderer(new FloorListRenderer());
+
+        // БЫЛО:
+        // floorList.setCellRenderer(new FloorListRenderer());
+
+        // СТАЛО: рендерер с подсветкой этажей, где есть хотя бы одна галочка радиации
+        floorList.setCellRenderer(new ListCellRenderer<Floor>() {
+            private final FloorListRenderer base = new FloorListRenderer();
+            @Override
+            public Component getListCellRendererComponent(JList<? extends Floor> list,
+                                                          Floor value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                Component c = base.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (!isSelected && c instanceof JComponent) {
+                    boolean highlight = rad_hasAnyOnFloor(value);
+                    ((JComponent) c).setOpaque(true);
+                    c.setBackground(highlight ? HL_GREEN : UIManager.getColor("List.background"));
+                }
+                return c;
+            }
+        });
+
         floorList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 updateSpaceList();
@@ -108,11 +130,10 @@ public class RadiationTab extends JPanel {
             }
         });
 
-        // Создаем панель для списка и кнопки
+        // Панель списка и кнопок
         JPanel floorListPanel = new JPanel(new BorderLayout());
         floorListPanel.add(new JScrollPane(floorList), BorderLayout.CENTER);
 
-        // Кнопка для обработки всех квартир
         JButton selectForAllButton = new JButton("Проставить чекбоксы на этаже");
         selectForAllButton.addActionListener(e -> applyRulesForWholeFloor());
 
@@ -121,13 +142,14 @@ public class RadiationTab extends JPanel {
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         buttonPanel.add(selectForAllButton);
-        buttonPanel.add(exportBtn); // NEW
+        buttonPanel.add(exportBtn);
 
         floorListPanel.add(buttonPanel, BorderLayout.SOUTH);
 
         panel.add(floorListPanel, BorderLayout.CENTER);
         return panel;
     }
+
     private void exportToExcel() {
         if (currentBuilding == null) {
             JOptionPane.showMessageDialog(this, "Сначала загрузите проект (здание).",
@@ -185,12 +207,28 @@ public class RadiationTab extends JPanel {
         spaceTable = new JTable(spaceTableModel);
         spaceTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                updateRoomList(); // Обновляем комнаты при выборе помещения
+                updateRoomList();
             }
         });
         spaceTable.getTableHeader().setFont(HEADER_FONT);
         spaceTable.setRowHeight(25);
         spaceTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        // Подсветка помещений, где есть хотя бы одна галочка радиации
+        spaceTable.getColumnModel().getColumn(0).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus,
+                                                           int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    Space s = spaceTableModel.getSpaceAt(row);
+                    boolean highlight = rad_hasAnyInSpace(s);
+                    c.setBackground(highlight ? HL_GREEN : UIManager.getColor("Table.background"));
+                }
+                return c;
+            }
+        });
 
         panel.add(new JScrollPane(spaceTable), BorderLayout.CENTER);
         return panel;
@@ -371,8 +409,7 @@ public class RadiationTab extends JPanel {
     }
     private void selectAllOfficeRooms(Space space) {
         if (space.getRooms().isEmpty()) {
-            // Нет комнат — ничего не делаем и не помечаем как обработанное.
-            return;
+            return; // не помечаем как обработанное, если нет комнат
         }
         for (Room room : space.getRooms()) {
             if (!isExcludedRoom(room.getName())) {
@@ -382,7 +419,9 @@ public class RadiationTab extends JPanel {
             }
         }
         processedSpaces.add(space.getId());
+        rad_refreshHighlights();
     }
+
     private boolean isFirstResidentialSpaceOnFloor(Space space, Floor floor) {
         for (Space sp : floor.getSpaces()) {
             if (isResidentialSpace(sp)) {
@@ -397,39 +436,33 @@ public class RadiationTab extends JPanel {
 
         for (Space space : currentFloor.getSpaces()) {
             if (space.getType() == Space.SpaceType.APARTMENT) {
-                // правило «2 галочки»: кухня (если есть) + одна не санузел
                 applyRoomSelectionRulesForResidentialSpace(space);
                 processedSpaces.add(space.getId());
             } else if (space.getType() == Space.SpaceType.OFFICE) {
-                // офисы: все комнаты, кроме исключений
                 selectAllOfficeRooms(space);
             } // PUBLIC — ничего не трогаем
         }
         roomsTableModel.fireTableDataChanged();
+        rad_refreshHighlights();
     }
 
     private void applyRoomSelectionRulesForResidentialSpace(Space space) {
         if (processedSpaces.contains(space.getId())) return;
         try {
-            // Валидные комнаты (не в списке исключений)
             List<Room> validRooms = space.getRooms().stream()
                     .filter(Objects::nonNull)
                     .filter(r -> !containsAny(r.getName().toLowerCase(), EXCLUDED_ROOMS))
                     .collect(Collectors.toList());
 
-            // Пусто? Не помечаем как обработанное — подождём, пока появятся комнаты.
             if (validRooms.isEmpty()) {
-                return;
+                return; // не помечаем как обработанное — ждём комнат
             }
 
-            // Сбрасываем все галочки в этом помещении
+            // Сбросим все галочки в помещении
             for (Room room : space.getRooms()) {
-                if (room != null) {
-                    globalRoomSelectionMap.put(room.getId(), false);
-                }
+                if (room != null) globalRoomSelectionMap.put(room.getId(), false);
             }
 
-            // Разделяем на кухни и не-кухни
             List<Room> kitchenRooms = validRooms.stream()
                     .filter(r -> containsAny(r.getName().toLowerCase(), KITCHEN_KEYWORDS))
                     .collect(Collectors.toList());
@@ -437,7 +470,6 @@ public class RadiationTab extends JPanel {
                     .filter(r -> !containsAny(r.getName().toLowerCase(), KITCHEN_KEYWORDS))
                     .collect(Collectors.toList());
 
-            // Правило выбора двух комнат
             if (kitchenRooms.isEmpty()) {
                 int count = 0;
                 for (Room room : otherRooms) {
@@ -445,9 +477,7 @@ public class RadiationTab extends JPanel {
                     if (++count >= 2) break;
                 }
             } else {
-                // одна кухня
                 globalRoomSelectionMap.put(kitchenRooms.get(0).getId(), true);
-                // и одна не-кухня, если есть, иначе вторая кухня
                 if (!otherRooms.isEmpty()) {
                     globalRoomSelectionMap.put(otherRooms.get(0).getId(), true);
                 } else if (kitchenRooms.size() > 1) {
@@ -456,10 +486,12 @@ public class RadiationTab extends JPanel {
             }
 
             processedSpaces.add(space.getId());
+            rad_refreshHighlights();
         } catch (Exception e) {
             logger.error("Ошибка при обработке помещения {}: {}", space.getIdentifier(), e.getMessage());
         }
     }
+
     private boolean hasResidentialSelectionOnFloor(Floor floor) {
         // Есть ли уже хоть одна отмеченная не-санузловая комната в любой квартире этого этажа?
         for (Space s : floor.getSpaces()) {
@@ -562,15 +594,15 @@ public class RadiationTab extends JPanel {
                 for (Room room : space.getRooms()) {
                     Boolean selected = globalRoomSelectionMap.get(room.getId());
                     if (selected != null) {
-                        room.setRadiationSelected(selected); // ← ВАЖНО: радиация в свой флаг
+                        room.setRadiationSelected(selected);
                         updatedCount++;
                     }
                 }
             }
         }
         logger.info("RadiationTab.updateRoomSelectionStates() - Обновлено {} комнат", updatedCount);
+        rad_refreshHighlights();
     }
-
 
     public void refreshFloors() {
         String selectedFloorNumber = null;
@@ -580,12 +612,10 @@ public class RadiationTab extends JPanel {
 
         floorListModel.clear();
         if (currentBuilding != null) {
-            // индекс выбранной секции; если ничего не выбрано — 0
             int secIdx = 0;
             if (sectionList != null && sectionList.getSelectedIndex() >= 0) {
                 secIdx = sectionList.getSelectedIndex();
             }
-            // собираем только этажи выбранной секции и сортируем по position
             java.util.List<Floor> list = new java.util.ArrayList<>();
             for (Floor f : currentBuilding.getFloors()) {
                 if (f.getSectionIndex() == secIdx) list.add(f);
@@ -594,7 +624,6 @@ public class RadiationTab extends JPanel {
             list.forEach(floorListModel::addElement);
         }
 
-        // восстановление выделения этажа, если он остался в текущей секции
         boolean restored = false;
         if (selectedFloorNumber != null) {
             for (int i = 0; i < floorListModel.size(); i++) {
@@ -611,6 +640,7 @@ public class RadiationTab extends JPanel {
 
         updateSpaceList();
         updateRoomList();
+        rad_refreshHighlights();
     }
 
     public void refreshData() {
@@ -858,4 +888,32 @@ public class RadiationTab extends JPanel {
     private int generateUniqueRoomId() {
         return UUID.randomUUID().hashCode();
     }
+
+
+    /** Есть ли в помещении хотя бы одна комната с галочкой радиации? */
+    private boolean rad_hasAnyInSpace(Space s) {
+        if (s == null) return false;
+        for (Room r : s.getRooms()) {
+            Boolean v = globalRoomSelectionMap.get(r.getId());
+            boolean chosen = (v != null) ? v : r.isRadiationSelected();
+            if (chosen) return true;
+        }
+        return false;
+    }
+
+    /** Есть ли на этом этаже хотя бы одно помещение с галочкой радиации? */
+    private boolean rad_hasAnyOnFloor(Floor f) {
+        if (f == null) return false;
+        for (Space s : f.getSpaces()) {
+            if (rad_hasAnyInSpace(s)) return true;
+        }
+        return false;
+    }
+
+    /** Перерисовать списки/таблицы с учётом подсветки. */
+    private void rad_refreshHighlights() {
+        try { if (floorList != null) floorList.repaint(); } catch (Throwable ignore) {}
+        try { if (spaceTable != null) spaceTable.repaint(); } catch (Throwable ignore) {}
+    }
+
 }

@@ -120,7 +120,7 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Микроклимат",           new MicroclimateTab());
         tabbedPane.addTab("Вентиляция",            new VentilationTab(building));
         tabbedPane.addTab("Ионизирующее излучение",new RadiationTab());
-        tabbedPane.addTab("Освещение",             new LightingTab(building));
+        tabbedPane.addTab("КЕО",             new LightingTab(building));
     }
 
     // ===== Утилиты доступа к вкладкам =====

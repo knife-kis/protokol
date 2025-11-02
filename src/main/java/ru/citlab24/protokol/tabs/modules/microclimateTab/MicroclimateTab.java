@@ -15,6 +15,8 @@ public class MicroclimateTab extends JPanel {
 
     private static final Font HEADER_FONT =
             UIManager.getFont("Label.font").deriveFont(Font.PLAIN, 15f);
+    // ===== Подсветка (микроклимат) ===============================================
+    private static final java.awt.Color HL_GREEN = new java.awt.Color(232, 245, 233); // лёгкий зелёный
 
     // Порядок: как в модели (по position)
     private static final Comparator<Section> SECTION_ORDER =
@@ -56,7 +58,6 @@ public class MicroclimateTab extends JPanel {
 
     // ==== Публичные методы, которые вызывает BuildingTab ====
 
-    /** Установить/показать здание. autoApplyDefaults — игнорируем (никакой автологики). */
     public void display(Building building, boolean autoApplyDefaults) {
         this.currentBuilding = building;
 
@@ -70,22 +71,22 @@ public class MicroclimateTab extends JPanel {
         }
         refreshSections();
         refreshFloors();
+        micro_refreshHighlights();
     }
 
     /** Перелить состояния чекбоксов обратно в доменную модель (перед сохранением проекта). */
     // ==== Публичные методы, которые вызывает BuildingTab ====
-
-// Перелить состояния чекбоксов обратно в доменную модель (перед сохранением проекта).
     public void updateRoomSelectionStates() {
         if (currentBuilding == null) return;
         for (Floor f : currentBuilding.getFloors()) {
             for (Space s : f.getSpaces()) {
                 for (Room r : s.getRooms()) {
                     Boolean val = globalRoomSelectionMap.get(r.getId());
-                    r.setMicroclimateSelected(val != null && val); // ← ВАЖНО: микроклимат в свой флаг
+                    r.setMicroclimateSelected(val != null && val);
                 }
             }
         }
+        micro_refreshHighlights();
     }
 
     // ==== UI: левые панели ====
@@ -109,7 +110,6 @@ public class MicroclimateTab extends JPanel {
             }
         });
 
-
         sectionList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) refreshFloors();
         });
@@ -119,7 +119,27 @@ public class MicroclimateTab extends JPanel {
         JPanel floorPanel = new JPanel(new BorderLayout());
         floorPanel.setBorder(new TitledBorder("Этажи"));
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        floorList.setCellRenderer(new FloorListRenderer());
+
+        // БЫЛО:
+        // floorList.setCellRenderer(new FloorListRenderer());
+
+        // СТАЛО: рендерер с подсветкой этажей, где есть хотя бы одна галочка микроклимата
+        floorList.setCellRenderer(new ListCellRenderer<Floor>() {
+            private final FloorListRenderer base = new FloorListRenderer();
+            @Override
+            public Component getListCellRendererComponent(JList<? extends Floor> list,
+                                                          Floor value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                Component c = base.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (!isSelected && c instanceof JComponent) {
+                    boolean highlight = micro_hasAnyOnFloor(value);
+                    ((JComponent) c).setOpaque(true);
+                    c.setBackground(highlight ? HL_GREEN : UIManager.getColor("List.background"));
+                }
+                return c;
+            }
+        });
+
         floorList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 updateSpaceList();
@@ -150,9 +170,26 @@ public class MicroclimateTab extends JPanel {
             if (!e.getValueIsAdjusting()) updateRoomList();
         });
 
+        // Подсветка помещений, где есть хотя бы одна галочка микроклимата
+        spaceTable.getColumnModel().getColumn(0).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus,
+                                                           int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    Space s = spaceTableModel.getAt(row);
+                    boolean highlight = micro_hasAnyInSpace(s);
+                    c.setBackground(highlight ? HL_GREEN : UIManager.getColor("Table.background"));
+                }
+                return c;
+            }
+        });
+
         panel.add(new JScrollPane(spaceTable), BorderLayout.CENTER);
         return panel;
     }
+
 
     private JPanel buildRightPanel() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -240,6 +277,7 @@ public class MicroclimateTab extends JPanel {
             }
         }
         roomTableModel.fireTableDataChanged();
+        micro_refreshHighlights();
     }
 
     // ==== Вспомогательные модели/клетки ====
@@ -313,6 +351,33 @@ public class MicroclimateTab extends JPanel {
         if (currentBuilding.getSections().size() <= 1) return -1; // одна секция → экспорт всех (логика экспортера)
         int idx = sectionList.getSelectedIndex();
         return (idx >= 0) ? idx : -1; // если ничего не выбрано — все
+    }
+
+
+    /** Есть ли в помещении хотя бы одна комната с галочкой микроклимата? */
+    private boolean micro_hasAnyInSpace(Space s) {
+        if (s == null) return false;
+        for (Room r : s.getRooms()) {
+            Boolean v = globalRoomSelectionMap.get(r.getId());
+            boolean chosen = (v != null) ? v : r.isMicroclimateSelected();
+            if (chosen) return true;
+        }
+        return false;
+    }
+
+    /** Есть ли на этом этаже хотя бы одно помещение с галочкой микроклимата? */
+    private boolean micro_hasAnyOnFloor(Floor f) {
+        if (f == null) return false;
+        for (Space s : f.getSpaces()) {
+            if (micro_hasAnyInSpace(s)) return true;
+        }
+        return false;
+    }
+
+    /** Перерисовать списки/таблицы с учётом подсветки. */
+    private void micro_refreshHighlights() {
+        try { if (floorList != null) floorList.repaint(); } catch (Throwable ignore) {}
+        try { if (spaceTable != null) spaceTable.repaint(); } catch (Throwable ignore) {}
     }
 
 }

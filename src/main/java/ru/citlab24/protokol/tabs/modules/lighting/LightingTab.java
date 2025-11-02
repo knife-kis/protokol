@@ -21,6 +21,8 @@ public final class LightingTab extends JPanel {
 
     private static final Color PANEL_COLOR = new Color(0,115,200);
     private static final Font HEADER_FONT = UIManager.getFont("Label.font").deriveFont(Font.PLAIN, 15f);
+    // ===== Подсветка для Освещения (КЕО) =========================================
+    private static final java.awt.Color HL_GREEN = new java.awt.Color(232, 245, 233); // лёгкий зелёный
     // === Порядок как в модели здания (НЕ по строкам), а по position ===
     private static java.util.Comparator<Section> SECTION_ORDER =
             java.util.Comparator.comparingInt(Section::getPosition);
@@ -62,38 +64,84 @@ public final class LightingTab extends JPanel {
         add(buildMainPanel(), BorderLayout.CENTER);
         add(buildFooterPanel(), BorderLayout.SOUTH);
 
-        // Лиснеры выбора
+        // ===== Секции =====
         sectionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         sectionList.setFixedCellHeight(28);
-        sectionList.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) refreshFloors(); });
+        sectionList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) refreshFloors();
+        });
 
+        // ===== Этажи =====
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorList.setFixedCellHeight(28);
-        floorList.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) updateSpaceList(); });
-        try {
-            // Если у тебя есть кастомные рендереры — используем
-            floorList.setCellRenderer(new ru.citlab24.protokol.tabs.renderers.FloorListRenderer());
-        } catch (Throwable ignore) { /* не критично */ }
 
+        // Рендерер этажей с лёгкой зелёной подсветкой, если на этаже есть хотя бы одна галочка
+        floorList.setCellRenderer(new ListCellRenderer<Floor>() {
+            private final ru.citlab24.protokol.tabs.renderers.FloorListRenderer base = new ru.citlab24.protokol.tabs.renderers.FloorListRenderer();
+            @Override
+            public Component getListCellRendererComponent(JList<? extends Floor> list,
+                                                          Floor value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                Component c = base.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (c instanceof JComponent jc) {
+                    if (!isSelected) {
+                        boolean highlight = lit_hasAnyOnFloor(value);
+                        jc.setOpaque(true);
+                        jc.setBackground(highlight ? HL_GREEN : UIManager.getColor("List.background"));
+                    } else {
+                        // оставляем стандартный цвет выделения
+                    }
+                }
+                return c;
+            }
+        });
+
+        floorList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) updateSpaceList();
+        });
+
+        // ===== Помещения =====
         spaceTable.getTableHeader().setFont(HEADER_FONT);
         spaceTable.setRowHeight(25);
         spaceTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        spaceTable.getSelectionModel().addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) updateRoomList(); });
+        spaceTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) updateRoomList();
+        });
 
+        // Подсветка строк таблицы помещений, если в помещении есть хотя бы одна галочка
+        spaceTable.getColumnModel().getColumn(0).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                                                           boolean isSelected, boolean hasFocus,
+                                                           int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    Space s = spaceTableModel.getSpaceAt(row);
+                    boolean highlight = lit_hasAnyInSpace(s);
+                    c.setBackground(highlight ? HL_GREEN : UIManager.getColor("Table.background"));
+                }
+                return c;
+            }
+        });
+
+        // ===== Комнаты =====
         roomTable.getTableHeader().setFont(HEADER_FONT);
         roomTable.setRowHeight(26);
         roomTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         roomsTableModel.addTableModelListener(e -> {
-            if (e.getType() == TableModelEvent.UPDATE && e.getColumn() == 0) {
+            if (e.getType() == javax.swing.event.TableModelEvent.UPDATE && e.getColumn() == 0) {
                 int row = e.getFirstRow();
                 Room r = roomsTableModel.getRoomAt(row);
                 if (r != null) userTouchedRooms.add(r.getId());
+                // Перерисовываем подсветку этажей/помещений при изменении галочек
+                lit_refreshHighlights();
             }
         });
 
-        // Инициализация
+        // Инициализация данными
         setBuilding(building, true);
     }
+
 
     // ====== Публичные API (как в Радиации) ======
     public void setBuilding(Building building, boolean autoApplyDefaults) {
@@ -125,18 +173,20 @@ public final class LightingTab extends JPanel {
         userTouchedRooms.clear();
         userTouchedRooms.addAll(prevTouched);
 
-        // 5) При необходимости — авто-только-для-НОВЫХ комнат на первом жилом/совмещённом этаже
+        // 5) При необходимости — авто-только-для-НОВЫХ комнат
         if (autoApplyDefaults) {
-            // Сначала офисы (новые комнаты в офисных помещениях → галочки)
             applyOfficeAutoOnlyForNewRooms(oldIds);
-            // Затем — правило для «первого жилого/совмещённого»
             applyAutoOnFirstFloorsAcrossSectionsOnlyForNewRooms(oldIds);
         }
 
         // 6) Обновляем UI
         refreshSections();
         refreshFloors();
+
+        // 7) Перерисовать подсветку
+        lit_refreshHighlights();
     }
+
     /** Автопроставление галочек для офисов: только для НОВЫХ комнат. */
     private void applyOfficeAutoOnlyForNewRooms(Set<Integer> oldIds) {
         if (currentBuilding == null) return;
@@ -158,12 +208,16 @@ public final class LightingTab extends JPanel {
     /** Пробросить состояния чекбоксов обратно в доменную модель. */
     public void updateRoomSelectionStates() {
         if (currentBuilding == null) return;
-        for (Floor f : currentBuilding.getFloors())
-            for (Space s : f.getSpaces())
+        for (Floor f : currentBuilding.getFloors()) {
+            for (Space s : f.getSpaces()) {
                 for (Room r : s.getRooms()) {
                     Boolean v = globalRoomSelectionMap.get(r.getId());
                     if (v != null) r.setSelected(v);
                 }
+            }
+        }
+        // После фиксации состояний — обновим подсветку
+        lit_refreshHighlights();
     }
 
     // ====== UI ======
@@ -257,6 +311,7 @@ public final class LightingTab extends JPanel {
         if (floor == null) {
             spaceTableModel.setSpaces(Collections.emptyList());
             updateRoomList();
+            lit_refreshHighlights();
             return;
         }
         List<Space> spaces = new ArrayList<>(floor.getSpaces());
@@ -269,16 +324,26 @@ public final class LightingTab extends JPanel {
             spaceTable.setRowSelectionInterval(0,0);
         }
         updateRoomList();
+        lit_refreshHighlights();
     }
 
     private void updateRoomList() {
         int row = spaceTable.getSelectedRow();
-        if (row < 0) { roomsTableModel.setRooms(Collections.emptyList()); return; }
+        if (row < 0) {
+            roomsTableModel.setRooms(Collections.emptyList());
+            lit_refreshHighlights();
+            return;
+        }
         Space s = spaceTableModel.getSpaceAt(row);
-        if (s == null) { roomsTableModel.setRooms(Collections.emptyList()); return; }
+        if (s == null) {
+            roomsTableModel.setRooms(Collections.emptyList());
+            lit_refreshHighlights();
+            return;
+        }
         List<Room> rooms = new ArrayList<>(s.getRooms());
         rooms.sort(ROOM_ORDER);
         roomsTableModel.setRooms(rooms);
+        lit_refreshHighlights();
     }
 
     // ====== Автопроставление для первого жилого этажа ======
@@ -430,6 +495,33 @@ public final class LightingTab extends JPanel {
 
         // 3) Поехали
         LightingExcelExporter.export(currentBuilding, secIdx, this);
+    }
+
+
+    /** Есть ли в помещении хотя бы одна комната с галочкой освещения? */
+    private boolean lit_hasAnyInSpace(Space s) {
+        if (s == null) return false;
+        for (Room r : s.getRooms()) {
+            Boolean v = globalRoomSelectionMap.get(r.getId());
+            boolean chosen = (v != null) ? v : r.isSelected(); // освещение хранит флаг в Room.isSelected()
+            if (chosen) return true;
+        }
+        return false;
+    }
+
+    /** Есть ли на этаже хотя бы одно помещение с галочкой освещения? */
+    private boolean lit_hasAnyOnFloor(Floor f) {
+        if (f == null) return false;
+        for (Space s : f.getSpaces()) {
+            if (lit_hasAnyInSpace(s)) return true;
+        }
+        return false;
+    }
+
+    /** Перерисовать списки/таблицы с учётом подсветки. */
+    private void lit_refreshHighlights() {
+        try { if (floorList != null) floorList.repaint(); } catch (Throwable ignore) {}
+        try { if (spaceTable != null) spaceTable.repaint(); } catch (Throwable ignore) {}
     }
 
 }

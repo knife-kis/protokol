@@ -23,6 +23,20 @@ public class VentilationTab extends JPanel {
     private Building building;
     private final VentilationTableModel tableModel = new VentilationTableModel();
     private final JTable ventilationTable = new JTable(tableModel);
+    // === Зебра по группам (квартира/офис) ===
+    private static final Color STRIPE_A = Color.WHITE;
+    private static final Color STRIPE_B = new Color(240, 248, 240); // мягкий зелёно-серый
+
+    /** Порядковый номер «полосы» для группы (section|floor|space) */
+    private final java.util.Map<String, Integer> groupStripeIndex = new java.util.LinkedHashMap<>();
+
+    // Сохраняем «родные» рендереры до переустановки,
+    private javax.swing.table.TableCellRenderer baseObjRenderer;
+    private javax.swing.table.TableCellRenderer baseStrRenderer;
+    private javax.swing.table.TableCellRenderer baseNumRenderer;
+    private javax.swing.table.TableCellRenderer baseIntRenderer;
+    private javax.swing.table.TableCellRenderer baseDblRenderer;
+    private javax.swing.table.TableCellRenderer baseEnumRenderer;
 
     private static final List<String> TARGET_ROOMS = RoomUtils.RESIDENTIAL_ROOM_KEYWORDS;
     private static final List<String> TARGET_FLOORS = List.of("жилой", "смешанный", "офисный");
@@ -46,34 +60,6 @@ public class VentilationTab extends JPanel {
         ventilationTable.setGridColor(new Color(220, 220, 220));
         ventilationTable.setIntercellSpacing(new Dimension(1, 1));
 
-        // Универсальный рендерер: центрирование + зебра + форматирование столбца "Объем"
-        ventilationTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value,
-                                                           boolean isSelected, boolean hasFocus,
-                                                           int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-
-                // чередование строк
-                if (!isSelected) {
-                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
-                }
-                ((JLabel) c).setHorizontalAlignment(JLabel.CENTER);
-
-                // индекс столбца "Объем" зависит от наличия колонки "Блок-секция"
-                int volumeCol = tableModel.isShowSectionColumn() ? 8 : 7;
-                if (column == volumeCol) {
-                    if (value == null) {
-                        ((JLabel) c).setText("");
-                    } else if (value instanceof Number d) {
-                        double dv = d.doubleValue();
-                        ((JLabel) c).setText(dv == 0.0 ? "" : String.format(Locale.ROOT, "%.1f", dv));
-                    }
-                }
-                return c;
-            }
-        });
-
         // Стили заголовка
         JTableHeader header = ventilationTable.getTableHeader();
         header.setBackground(new Color(70, 130, 180)); // SteelBlue
@@ -81,10 +67,11 @@ public class VentilationTab extends JPanel {
         header.setFont(new Font("Segoe UI", Font.BOLD, 14));
         header.setReorderingAllowed(false);
         ((DefaultTableCellRenderer) header.getDefaultRenderer()).setHorizontalAlignment(JLabel.CENTER);
+
+        // Не завершать редактор при потере фокуса
         ventilationTable.putClientProperty("terminateEditOnFocusLost", Boolean.FALSE);
 
-// Подтверждение при изменении сечения/ширины/формы, если каналов > 1
-        // Запоминаем что было в ячейке до правки
+        // Снимок до правки (для диалогов массового применения)
         ventilationTable.getSelectionModel().addListSelectionListener(e -> captureSnapshot());
         ventilationTable.getColumnModel().getSelectionModel().addListSelectionListener(e -> captureSnapshot());
 
@@ -137,6 +124,9 @@ public class VentilationTab extends JPanel {
                 }
             }
         });
+
+        // Устанавливаем рендереры «зебры по группам»
+        installGroupStripeRenderers();
 
         add(new JScrollPane(ventilationTable), BorderLayout.CENTER);
         add(createButtonPanel(), BorderLayout.SOUTH);
@@ -235,17 +225,6 @@ public class VentilationTab extends JPanel {
         VentilationExcelExporter.export(tableModel.getRecords(), this);
     }
 
-    public void refreshData() {
-        boolean showSection = building != null
-                && building.getSections() != null
-                && building.getSections().size() > 1;
-
-        tableModel.setShowSectionColumn(showSection);
-        configureEditorsAndWidths();
-
-        loadVentilationData();
-    }
-
     private void loadVentilationData() {
         tableModel.clearData();
         if (building == null) { System.out.println("Здание не загружено!"); return; }
@@ -302,6 +281,10 @@ public class VentilationTab extends JPanel {
         }
         System.out.println("Загружено записей: " + tableModel.getRowCount());
         tableModel.fireTableDataChanged();
+
+        // === ПЕРЕСЧЁТ «зебры по группам» и перерисовка
+        recomputeGroupStripes();
+        ventilationTable.repaint();
     }
 
     private boolean containsAny(String source, List<String> targets) {
@@ -391,6 +374,114 @@ public class VentilationTab extends JPanel {
         saveCalculationsToModel();   // записать channels/sectionArea/volume обратно в Room
         // вернуть копию текущих записей (включая «нулевые» — отфильтруем в экспортере)
         return new java.util.ArrayList<>(tableModel.getRecords());
+    }
+    public void refreshData() {
+        boolean showSection = building != null
+                && building.getSections() != null
+                && building.getSections().size() > 1;
+
+        tableModel.setShowSectionColumn(showSection);
+        configureEditorsAndWidths();
+
+        // после смены структуры безопасно переустановим рендереры
+        installGroupStripeRenderers();
+
+        loadVentilationData();       // внутри — пересчёт зебры
+    }
+    /** Установить рендереры, которые подкрашивают ВСЕ столбцы «полосами» по группам. */
+    private void installGroupStripeRenderers() {
+        // Сохраняем «родные» делегаты один раз
+        baseObjRenderer  = ventilationTable.getDefaultRenderer(Object.class);
+        baseStrRenderer  = ventilationTable.getDefaultRenderer(String.class);
+        baseNumRenderer  = ventilationTable.getDefaultRenderer(Number.class);
+        baseIntRenderer  = ventilationTable.getDefaultRenderer(Integer.class);
+        baseDblRenderer  = ventilationTable.getDefaultRenderer(Double.class);
+        baseEnumRenderer = ventilationTable.getDefaultRenderer(Enum.class);
+
+        // На все базовые типы ставим наш обёрточный рендерер
+        ventilationTable.setDefaultRenderer(Object.class,  new GroupStripeRenderer(baseObjRenderer));
+        ventilationTable.setDefaultRenderer(String.class,  new GroupStripeRenderer(baseStrRenderer));
+        ventilationTable.setDefaultRenderer(Number.class,  new GroupStripeRenderer(baseNumRenderer));
+        ventilationTable.setDefaultRenderer(Integer.class, new GroupStripeRenderer(baseIntRenderer));
+        ventilationTable.setDefaultRenderer(Double.class,  new GroupStripeRenderer(baseDblRenderer));
+        ventilationTable.setDefaultRenderer(Enum.class,    new GroupStripeRenderer(baseEnumRenderer));
+    }
+
+    /** Пересчитать «зебру» так, чтобы все строки одной квартиры/офиса были одного цвета. */
+    private void recomputeGroupStripes() {
+        groupStripeIndex.clear();
+        int band = 0;
+
+        // идём по текущему порядку строк модели: новая группа → следующий цвет
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            VentilationRecord r = tableModel.getRecordAt(i);
+            String key = groupKeyForRecord(r);
+
+            if (!groupStripeIndex.containsKey(key)) {
+                groupStripeIndex.put(key, band++);
+            }
+        }
+    }
+
+    /** Ключ группы: секция|этаж|помещение (офисы тоже входят) */
+    private String groupKeyForRecord(VentilationRecord r) {
+        String floor = r.floor() == null ? "" : r.floor();
+        String space = r.space() == null ? "" : r.space();
+        return r.sectionIndex() + "|" + floor + "|" + space;
+    }
+
+    /** Ключ группы по номеру строки модели. */
+    private String groupKeyForRow(int modelRow) {
+        VentilationRecord r = tableModel.getRecordAt(modelRow);
+        return groupKeyForRecord(r);
+    }
+
+    /** Обёртка-рендерер: делегирует базовому, но красит фон «полосами по группам» и центрирует текст. */
+    private final class GroupStripeRenderer implements javax.swing.table.TableCellRenderer {
+        private final javax.swing.table.TableCellRenderer delegate;
+
+        GroupStripeRenderer(javax.swing.table.TableCellRenderer delegate) {
+            this.delegate = (delegate != null) ? delegate : new DefaultTableCellRenderer();
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                                                       boolean isSelected, boolean hasFocus,
+                                                       int row, int column) {
+            // делегируем базовому
+            Component c = delegate.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+            // центрирование для наглядности
+            if (c instanceof JLabel lbl) {
+                lbl.setHorizontalAlignment(JLabel.CENTER);
+            }
+
+            // Определяем цвет полосы по группе
+            if (!isSelected) {
+                int modelRow = table.convertRowIndexToModel(row);
+                String key = groupKeyForRow(modelRow);
+                Integer band = groupStripeIndex.get(key);
+                Color bg = (band != null && (band % 2 == 1)) ? STRIPE_B : STRIPE_A;
+                c.setBackground(bg);
+            }
+
+            // Спец-форматирование столбца «Объем (куб.м)» — показывать 1 знак, 0.0 → пусто
+            try {
+                int volumeCol = tableModel.isShowSectionColumn() ? 8 : 7;
+                if (column == volumeCol && c instanceof JLabel lbl) {
+                    if (value == null) {
+                        lbl.setText("");
+                    } else if (value instanceof Number n) {
+                        double dv = n.doubleValue();
+                        lbl.setText(dv == 0.0 ? "" : String.format(Locale.ROOT, "%.1f", dv));
+                    } else {
+                        // текст оставляем как есть
+                    }
+                }
+            } catch (Throwable ignore) {}
+
+            return c;
+        }
     }
 
 }
