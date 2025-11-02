@@ -56,6 +56,10 @@ public class BuildingTab extends JPanel {
     private JList<Space> spaceList;
     private JList<Room> roomList;
     private JTextField projectNameField;
+    // === Фильтр типов помещений (Жилые / Офисные / Общественные) ===
+    private JToggleButton filterApartmentBtn;
+    private JToggleButton filterOfficeBtn;
+    private JToggleButton filterPublicBtn;
 
     public BuildingTab(Building building) {
         // 1) сохраняем в поле, 2) создаём дефолт, если пришёл null
@@ -140,11 +144,66 @@ public class BuildingTab extends JPanel {
     private JPanel createBuildingPanel() {
         JPanel panel = new JPanel(new GridLayout(1, 3, 15, 15));
         panel.add(createSectionsAndFloorsPanel());
-        panel.add(createListPanel("Помещения на этаже", SPACE_PANEL_COLOR, spaceListModel,
-                new SpaceListRenderer(), this::createSpaceButtons));
+        panel.add(createSpacesPanelWithFilter()); // ← ТУТ теперь панель с фильтром
         panel.add(createListPanel("Комнаты в помещении", ROOM_PANEL_COLOR, roomListModel,
                 new RoomListRenderer(), this::createRoomButtons));
         return panel;
+    }
+    /** Средняя колонка: «Помещения на этаже» + панель фильтров (Жилые/Офисные/Общественные). */
+    private JPanel createSpacesPanelWithFilter() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(createTitledBorder("Помещения на этаже", SPACE_PANEL_COLOR));
+
+        // ===== Список помещений =====
+        spaceList = new JList<>(spaceListModel);
+        spaceList.setCellRenderer(new SpaceListRenderer());
+        spaceList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        spaceList.setDragEnabled(true);
+        spaceList.setDropMode(DropMode.INSERT);
+        spaceList.setTransferHandler(spaceReorderHandler);
+
+        // ===== Фильтры =====
+        JPanel filters = buildSpaceFilterPanel();
+
+        panel.add(filters, BorderLayout.NORTH);
+        panel.add(new JScrollPane(spaceList), BorderLayout.CENTER);
+        panel.add(createSpaceButtons(), BorderLayout.SOUTH);
+        return panel;
+    }
+    //** Верхняя панель с 3 переключателями-фильтрами. Любая комбинация допустима. */
+    private JPanel buildSpaceFilterPanel() {
+        JPanel wrap = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+
+        filterApartmentBtn = new JToggleButton("Жилые");
+        filterOfficeBtn    = new JToggleButton("Офисные");
+        filterPublicBtn    = new JToggleButton("Общественные");
+
+        // По умолчанию показываем всё
+        filterApartmentBtn.setSelected(true);
+        filterOfficeBtn.setSelected(true);
+        filterPublicBtn.setSelected(true);
+
+        // Стиль
+        java.util.List<JToggleButton> all = java.util.List.of(filterApartmentBtn, filterOfficeBtn, filterPublicBtn);
+        for (JToggleButton b : all) {
+            b.setFocusPainted(false);
+            b.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        }
+
+        // Любое изменение тумблеров → пересобрать список этажей и помещений
+        java.awt.event.ItemListener l = e -> {
+            refreshFloorListForSelectedSection(); // отфильтруем этажи
+            updateSpaceList();                    // и сами помещения на выбранном этаже
+        };
+        filterApartmentBtn.addItemListener(l);
+        filterOfficeBtn.addItemListener(l);
+        filterPublicBtn.addItemListener(l);
+
+        wrap.add(new JLabel("Фильтр:"));
+        wrap.add(filterApartmentBtn);
+        wrap.add(filterOfficeBtn);
+        wrap.add(filterPublicBtn);
+        return wrap;
     }
 
     private <T> JPanel createListPanel(String title, Color color, ListModel<T> model,
@@ -571,17 +630,47 @@ public class BuildingTab extends JPanel {
 
     private void refreshFloorListForSelectedSection() {
         floorListModel.clear();
+        if (sectionList == null) return;
+
         int secIdx = Math.max(0, sectionList.getSelectedIndex());
-        java.util.List<Floor> list = new java.util.ArrayList<>();
-        for (Floor f : building.getFloors())
-            if (f.getSectionIndex() == secIdx) list.add(f);
-        list.sort(java.util.Comparator.comparingInt(Floor::getPosition));
-        floorListModel.clear();
-        list.forEach(floorListModel::addElement);
 
-        if (!floorListModel.isEmpty()) floorList.setSelectedIndex(0);
+        // Снимем текущий выбор, чтобы попытаться восстановить
+        Floor previouslySelected = (floorList != null) ? floorList.getSelectedValue() : null;
+
+        java.util.List<Floor> all = new java.util.ArrayList<>();
+        for (Floor f : building.getFloors()) {
+            if (f.getSectionIndex() == secIdx) all.add(f);
+        }
+        all.sort(java.util.Comparator.comparingInt(Floor::getPosition));
+
+        // Состояние фильтров
+        boolean filtersReady = (filterApartmentBtn != null && filterOfficeBtn != null && filterPublicBtn != null);
+
+        for (Floor f : all) {
+            boolean include;
+            if (!filtersReady) {
+                include = true; // до инициализации фильтров ведём себя как раньше
+            } else if (f.getSpaces().isEmpty()) {
+                include = true; // пустые этажи всегда видны
+            } else {
+                include = false;
+                for (Space s : f.getSpaces()) {
+                    if (isSpaceVisibleByFilter(s)) { include = true; break; }
+                }
+            }
+            if (include) floorListModel.addElement(f);
+        }
+
+        // Восстановление/установка выделения
+        if (!floorListModel.isEmpty()) {
+            int idx = (previouslySelected != null) ? floorListModel.indexOf(previouslySelected) : -1;
+            floorList.setSelectedIndex(idx >= 0 ? idx : 0);
+        } else {
+            // Если фильтр скрыл все этажи секции — очистим зависимые списки
+            if (spaceListModel != null) spaceListModel.clear();
+            if (roomListModel  != null) roomListModel.clear();
+        }
     }
-
 
     private JButton createStyledButton(String text, FontAwesomeSolid icon, java.awt.Color bgColor, ActionListener action) {
         JButton btn = new JButton(text, FontIcon.of(icon, 16, java.awt.Color.WHITE));
@@ -1546,22 +1635,24 @@ public class BuildingTab extends JPanel {
 
     }
 
-    // Вспомогательные методы
     private void updateSpaceList() {
         spaceListModel.clear();
-        Floor selectedFloor = floorList.getSelectedValue();
+        Floor selectedFloor = (floorList != null) ? floorList.getSelectedValue() : null;
         if (selectedFloor == null) return;
 
-        // просто показываем реальные помещения, ничего не добавляем автоматически
-        List<Space> sorted = new ArrayList<>(selectedFloor.getSpaces());
-        sorted.sort(Comparator.comparingInt(Space::getPosition));
-        sorted.forEach(spaceListModel::addElement);
+        java.util.List<Space> sorted = new java.util.ArrayList<>(selectedFloor.getSpaces());
+        sorted.sort(java.util.Comparator.comparingInt(Space::getPosition));
+
+        for (Space s : sorted) {
+            if (isSpaceVisibleByFilter(s)) spaceListModel.addElement(s);
+        }
 
         if (!spaceListModel.isEmpty()) {
-            // попытка сохранить текущее выделение (если есть)
             Space prev = spaceList.getSelectedValue();
-            int idx = (prev != null) ? sorted.indexOf(prev) : -1;
+            int idx = (prev != null) ? spaceListModel.indexOf(prev) : -1;
             spaceList.setSelectedIndex(idx >= 0 ? idx : 0);
+        } else {
+            roomListModel.clear();
         }
     }
 
@@ -2068,6 +2159,25 @@ public class BuildingTab extends JPanel {
             String n = (r.getName() == null) ? "" : r.getName();
             r.setMicroclimateSelected(!looksLikeSanitary(n));
         }
+    }
+    /** true, если помещение проходит текущие тумблеры-фильтры. */
+    private boolean isSpaceVisibleByFilter(Space s) {
+        boolean showA = (filterApartmentBtn == null) || filterApartmentBtn.isSelected();
+        boolean showO = (filterOfficeBtn    == null) || filterOfficeBtn.isSelected();
+        boolean showP = (filterPublicBtn    == null) || filterPublicBtn.isSelected();
+
+        boolean isA = isApartmentSpace(s);
+        boolean isO = isOfficeSpace(s);
+        boolean isP = isPublicSpace(s);
+
+        if (isA && showA) return true;
+        if (isO && showO) return true;
+        if (isP && showP) return true;
+
+        // Нераспознанный тип показываем только если включены все тумблеры
+        if (!isA && !isO && !isP) return showA && showO && showP;
+
+        return false;
     }
 
 }
