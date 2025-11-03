@@ -10,6 +10,7 @@ import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.dialogs.*;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
+import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
@@ -751,20 +752,27 @@ public class BuildingTab extends JPanel {
         // 1) Синхронизируем UI → модель (радиация)
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null) {
-            radiationTab.updateRoomSelectionStates(); // Сохраняем ручные изменения
+            radiationTab.updateRoomSelectionStates();
         }
 
-        // 1.1) Пробрасываем выбранность из «Освещения»
+// 1.1) КЕО (как и было)
         LightingTab lightingTab = getLightingTab();
         if (lightingTab != null) {
             lightingTab.updateRoomSelectionStates();
         }
 
-        // 1.2) Пробрасываем выбранность из «Микроклимата»
+// чтобы именно эта вкладка окончательно зафиксировала is_selected
+        ArtificialLightingTab artificialTab = getArtificialLightingTab();
+        if (artificialTab != null) {
+            artificialTab.updateRoomSelectionStates();
+        }
+
+// 1.3) Микроклимат (как и было)
         MicroclimateTab microTab = getMicroclimateTab();
         if (microTab != null) {
             microTab.updateRoomSelectionStates();
         }
+
 
         // 2) Генерация имени проекта
         String baseName = projectNameField.getText().trim();
@@ -787,6 +795,7 @@ public class BuildingTab extends JPanel {
             handleError("Ошибка сохранения: " + ex.getMessage(), "Ошибка");
             return;
         }
+        refreshAllLists();
 
         // 5) Переинициализируем вкладки без авто-проставления
         updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
@@ -905,24 +914,6 @@ public class BuildingTab extends JPanel {
 
     private Floor createFloorCopy(Floor originalFloor) { return ops.createFloorCopy(originalFloor); }
 
-    public void refreshFloor(Floor floor) {
-        int index = building.getFloors().indexOf(floor);
-        if (index >= 0) {
-            floorListModel.set(index, floor);
-
-            if (floorList.getSelectedIndex() == index) {
-                updateSpaceList();
-                spaceList.setSelectedIndex(0);
-            }
-        }
-    }
-
-    private Room createRoomCopy(Room originalRoom) { return ops.createRoomCopy(originalRoom); }
-
-    private int generateUniqueRoomId() {
-        return UUID.randomUUID().hashCode();
-    }
-
     private void calculateMetrics(ActionEvent e) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
@@ -949,19 +940,28 @@ public class BuildingTab extends JPanel {
             return;
         }
 
-        // Сохраняем состояния чекбоксов ДО копирования
+        // Сохраняем состояния чекбоксов ДО копирования (радиация)
         Map<String, Boolean> savedSelections = saveRadiationSelections();
 
-        // Создаем копию помещения с НОВЫМИ ID комнат
+        // Создаём копию помещения с НОВЫМИ id комнат
         Space copiedSpace = createSpaceCopyWithNewIds(selectedSpace);
         copiedSpace.setIdentifier(generateNextSpaceId(selectedFloor, selectedSpace.getIdentifier()));
 
-        // Добавляем новое помещение
+        // позиция в КОНЕЦ
+        int maxPos = selectedFloor.getSpaces().stream()
+                .mapToInt(Space::getPosition)
+                .max().orElse(-1);
+        copiedSpace.setPosition(maxPos + 1);
+
+
+        // Добавляем
         selectedFloor.addSpace(copiedSpace);
-        spaceListModel.addElement(copiedSpace);
+
+        // Правильно пересобираем UI-список
+        updateSpaceList();
         spaceList.setSelectedValue(copiedSpace, true);
 
-        // Обновляем вкладку с новым зданием
+        // Обновляем вкладки
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
@@ -969,14 +969,11 @@ public class BuildingTab extends JPanel {
         // Восстанавливаем состояния ТОЛЬКО для исходных комнат
         restoreRadiationSelections(savedSelections);
 
-        // Явно выделяем новое помещение в RadiationTab
+        // Явно выделим новое помещение в RadiationTab
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null) {
-            // Находим индекс нового помещения
             int newIndex = selectedFloor.getSpaces().indexOf(copiedSpace);
-            if (newIndex >= 0) {
-                radiationTab.selectSpaceByIndex(newIndex);
-            }
+            if (newIndex >= 0) radiationTab.selectSpaceByIndex(newIndex);
         }
     }
 
@@ -1155,17 +1152,6 @@ public class BuildingTab extends JPanel {
         return ops.generateNextFloorNumber(currentNumber, sectionIndex);
     }
 
-    // Сохранённый «обёртка»-вариант, если где-то ещё вызывается без секции — поведение как раньше.
-    private String generateNextFloorNumber(String currentNumber) {
-        return generateNextFloorNumber(currentNumber, -1);
-    }
-
-    // Уникальное имя для НЕчисловых этажей — только в пределах секции
-    private String generateUniqueNonNumericNameWithinSection(String base, int sectionIndex) {
-        return ops.generateUniqueNonNumericNameWithinSection(base, sectionIndex);
-    }
-
-
     private void updateSpaceIdentifiers(Floor floor, String newFloorDigits) { ops.updateSpaceIdentifiers(floor, newFloorDigits); }
 
 
@@ -1238,27 +1224,42 @@ public class BuildingTab extends JPanel {
         }
 
         AddSpaceDialog dialog = new AddSpaceDialog((JFrame) SwingUtilities.getWindowAncestor(this), selectedFloor.getType());
-        Space space = null; // Объявляем здесь
+        Space space = null;
         if (dialog.showDialog()) {
-            space = new Space(); // Инициализируем здесь
+            space = new Space();
             space.setIdentifier(dialog.getSpaceIdentifier());
             space.setType(dialog.getSpaceType());
+
+            // позиция в КОНЕЦ текущего этажа
+            int maxPos = selectedFloor.getSpaces().stream()
+                    .mapToInt(Space::getPosition)
+                    .max().orElse(-1);
+            space.setPosition(maxPos + 1);
+
             selectedFloor.addSpace(space);
-            // Автопроставление микроклимата для офисов (только не для санузлов)
+
+            // офисам — МК по умолчанию (кроме санузлов)
             applyMicroDefaultsForOfficeSpace(space);
-            spaceListModel.addElement(space);
+
+            // ПЕРЕСОБРАТЬ список с учётом сортировки и фильтров
+            updateSpaceList();
+            if (spaceListModel.getSize() > 0) {
+                spaceList.setSelectedValue(space, true);
+            }
         }
 
+        // обновляем вкладки
         updateRadiationTab(building, true);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
-        // Проверяем, что space был создан
+        // фокус в RadiationTab на новое помещение
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null && space != null) {
-            int newIndex = selectedFloor.getSpaces().indexOf(space);
-            if (newIndex >= 0) {
-                radiationTab.selectSpaceByIndex(newIndex);
+            Floor f = floorList.getSelectedValue();
+            if (f != null) {
+                int newIndex = f.getSpaces().indexOf(space);
+                if (newIndex >= 0) radiationTab.selectSpaceByIndex(newIndex);
             }
         }
     }
@@ -1544,12 +1545,20 @@ public class BuildingTab extends JPanel {
     }
 
     private void updateLightingTab(Building building, boolean autoApplyDefaults) {
-        LightingTab tab = getLightingTab();
-        if (tab != null) {
-            tab.setBuilding(building, autoApplyDefaults);
-            tab.refreshData();
+        // КЕО — как было
+        LightingTab keo = getLightingTab();
+        if (keo != null) {
+            keo.setBuilding(building, autoApplyDefaults);
+            keo.refreshData();
+        }
+        // НОВОЕ: отдельная вкладка «Освещение» со своей картой галочек
+        ArtificialLightingTab alt = getArtificialLightingTab();
+        if (alt != null) {
+            alt.setBuilding(building, autoApplyDefaults); // при true – авто-галочки для офис/общественных
+            alt.refreshData();
         }
     }
+
     private void updateVentilationTab(Building building) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
@@ -1643,29 +1652,6 @@ public class BuildingTab extends JPanel {
             });
         }
     }
-    // Вспомогательная функция: топ часто встречающихся названий комнат в здании
-    private java.util.List<String> collectPopularRoomNames(Building b, int limit) {
-        java.util.Map<String, Integer> freq = new java.util.HashMap<>();
-        if (b != null) {
-            for (Floor f : b.getFloors()) {
-                for (Space s : f.getSpaces()) {
-                    for (Room r : s.getRooms()) {
-                        String n = (r.getName() == null) ? "" : r.getName().trim();
-                        if (!n.isEmpty()) freq.merge(n, 1, Integer::sum);
-                    }
-                }
-            }
-        }
-        return freq.entrySet().stream()
-                .sorted((a, c) -> {
-                    int byCount = Integer.compare(c.getValue(), a.getValue());
-                    if (byCount != 0) return byCount;
-                    return a.getKey().compareToIgnoreCase(c.getKey());
-                })
-                .limit(limit)
-                .map(java.util.Map.Entry::getKey)
-                .toList();
-    }
 
     private java.util.List<String> collectPopularApartmentRoomNames(Building b, int limit) {
         return ops.collectPopularApartmentRoomNames(limit);
@@ -1675,25 +1661,12 @@ public class BuildingTab extends JPanel {
 // Не опираемся на конкретные enum-константы проекта, работаем по имени типа и по идентификатору.
     private boolean isApartmentSpace(Space s) { return ops.isApartmentSpace(s); }
 
-    /** Находим родительский этаж для помещения (по ссылочному равенству) */
-    private Floor findFloorForSpace(Space s) { return ops.findFloorForSpace(s); }
-
-
-    /** true, если тип/заголовок этажа похож на «общественный» */
-    private boolean isPublicFloor(Floor f) { return ops.isPublicFloor(f); }
-
-    /** true, если тип/заголовок этажа похож на «офисный» */
-    private boolean isOfficeFloor(Floor f) { return ops.isOfficeFloor(f); }
 
     // Офисное помещение?
     private boolean isOfficeSpace(Space s) { return ops.isOfficeSpace(s); }
 
     // Общественное помещение?
     private boolean isPublicSpace(Space s) { return ops.isPublicSpace(s); }
-
-    private static String normalizePublicBaseName(String name) {
-        return BuildingModelOps.normalizePublicBaseName(name);
-    }
 
     // Топ общественных названий по зданию
     private java.util.List<String> collectPopularPublicRoomNames(Building b, int limit) {
@@ -1725,6 +1698,17 @@ public class BuildingTab extends JPanel {
         }
         return null;
     }
+    private ArtificialLightingTab getArtificialLightingTab() {
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            JTabbedPane tabs = ((MainFrame) wnd).getTabbedPane();
+            for (Component c : tabs.getComponents()) {
+                if (c instanceof ArtificialLightingTab) return (ArtificialLightingTab) c;
+            }
+        }
+        return null;
+    }
+
     private void updateMicroclimateTab(Building building, boolean autoApplyDefaults) {
         Window wnd = SwingUtilities.getWindowAncestor(this);
         if (wnd instanceof MainFrame) {

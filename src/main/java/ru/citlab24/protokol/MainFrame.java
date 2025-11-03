@@ -2,7 +2,9 @@ package ru.citlab24.protokol;
 
 import ru.citlab24.protokol.tabs.buildingTab.BuildingTab;
 import ru.citlab24.protokol.tabs.models.Building;
+import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
+import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
@@ -120,7 +122,8 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Микроклимат",           new MicroclimateTab());
         tabbedPane.addTab("Вентиляция",            new VentilationTab(building));
         tabbedPane.addTab("Ионизирующее излучение",new RadiationTab());
-        tabbedPane.addTab("КЕО",             new LightingTab(building));
+        tabbedPane.addTab("КЕО",                   new LightingTab(building));
+        tabbedPane.addTab("Освещение",             new ArtificialLightingTab(building));
     }
 
     // ===== Утилиты доступа к вкладкам =====
@@ -135,6 +138,12 @@ public class MainFrame extends JFrame {
     public VentilationTab getVentilationTab() {
         for (Component comp : tabbedPane.getComponents()) {
             if (comp instanceof VentilationTab) return (VentilationTab) comp;
+        }
+        return null;
+    }
+    public ArtificialLightingTab getArtificialLightingTab() {
+        for (Component comp : tabbedPane.getComponents()) {
+            if (comp instanceof ArtificialLightingTab) return (ArtificialLightingTab) comp;
         }
         return null;
     }
