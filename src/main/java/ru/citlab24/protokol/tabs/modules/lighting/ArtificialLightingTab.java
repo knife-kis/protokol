@@ -6,10 +6,16 @@ import ru.citlab24.protokol.tabs.models.*;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.util.*;
 import java.util.List;
+
+import org.kordamp.ikonli.swing.FontIcon;
+import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
+
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
 import ru.citlab24.protokol.tabs.renderers.SpaceListRenderer;
+
 /**
  * Вкладка «Освещение» (искусственное).
  * Внешне похожа на КЕО: Секции → Этажи → Помещения → Комнаты.
@@ -19,6 +25,7 @@ import ru.citlab24.protokol.tabs.renderers.SpaceListRenderer;
  *  - состояние хранится ЛОКАЛЬНО в этой вкладке (Map<Integer, Boolean>), модель Room не меняем.
  */
 public final class ArtificialLightingTab extends JPanel {
+
 
     private Building building = new Building();
     private final BuildingModelOps ops = new BuildingModelOps(building);
@@ -91,7 +98,9 @@ public final class ArtificialLightingTab extends JPanel {
     private void initUI() {
         add(buildToolbar(), BorderLayout.NORTH);
         add(buildCenter(), BorderLayout.CENTER);
+        add(createExportBar(), BorderLayout.SOUTH);
     }
+
 
     private JComponent buildToolbar() {
         JToolBar tb = new JToolBar();
@@ -202,9 +211,10 @@ public final class ArtificialLightingTab extends JPanel {
         spaceList.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) refreshRooms(); });
 
         // Кладём ТРИ ПАНЕЛИ РЯДОМ
-        p.add(wrap("Секции", new JScrollPane(sectionList)));
-        p.add(wrap("Этажи", new JScrollPane(floorList)));
-        p.add(wrap("Помещения (офис/общественные)", new JScrollPane(spaceList)));
+        p.add(wrap("Секции", sectionList));
+        p.add(wrap("Этажи", floorList));
+        p.add(wrap("Помещения (офис/общественные)", spaceList));
+
 
         return p;
     }
@@ -365,6 +375,43 @@ public final class ArtificialLightingTab extends JPanel {
             if (hasAnyInSpace(s)) return true;
         }
         return false;
+    }
+
+    /** Нижняя панель с кнопкой «Экспорт в Excel (искусств.)» */
+    private JComponent createExportBar() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
+        JButton btn = new JButton("Экспорт: искусственное освещение", FontIcon.of(FontAwesomeSolid.FILE_EXCEL, 16, Color.WHITE));
+        btn.setBackground(new Color(106, 27, 154)); // фиолетовый, как договорились
+        btn.setForeground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.addActionListener(this::onExportExcel);
+        bar.add(btn);
+        return bar;
+    }
+
+    /** Обработчик экспорта */
+    private void onExportExcel(ActionEvent e) {
+        // 1) Зафиксируем активное редактирование таблиц, если открыто
+        try {
+            KeyboardFocusManager kfm = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+            Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
+            JTable editingTable = (fo == null) ? null
+                    : (JTable) SwingUtilities.getAncestorOfClass(JTable.class, fo);
+            if (editingTable != null && editingTable.isEditing()) {
+                try { editingTable.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
+            }
+        } catch (Exception ignore) {}
+
+        // 2) Синхронизируем чекбоксы вкладки в модель комнат (если у вас есть такой метод)
+        try { this.updateRoomSelectionStates(); } catch (Throwable ignore) {}
+
+        // 3) Экспорт одного листа «Иск освещение» по всем секциям (sectionIndex = -1)
+        if (this.building == null) {
+            JOptionPane.showMessageDialog(this, "Сначала загрузите/выберите проект (здание).",
+                    "Экспорт", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        ArtificialLightingExcelExporter.export(this.building, -1, this);
     }
 
 }

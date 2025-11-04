@@ -361,18 +361,14 @@ public class BuildingTab extends JPanel {
         return wrap;
     }
 
-
     private void copySection(ActionEvent e) {
         if (sectionList == null || sectionList.isSelectionEmpty()) {
             showMessage("Выберите секцию для копирования", "Информация", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-
         // 0) Сначала зафиксируем состояния из вкладок в модель
         MicroclimateTab microTab = getMicroclimateTab();
         if (microTab != null) microTab.updateRoomSelectionStates(); // ← МИКРОКЛИМАТ в Room
-        RadiationTab radiationTab = getRadiationTab();
-        // Освещение сохраняет само своё состояние в Room через updateLightingTab(...)
 
         // 1) Сохраняем «снимки» галочек
         Map<String, Boolean> savedMicroSelections = saveMicroclimateSelections(); // МИКРОКЛИМАТ
@@ -416,17 +412,13 @@ public class BuildingTab extends JPanel {
         updateRoomList();
 
         // 5) Обновляем вкладки (порядок важен)
-        //    Микроклимат читает из Room -> покажем уже восстановленные состояния
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
-        //    Радиация: без авто; затем восстановим галочки через RadiationTab API
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         restoreRadiationSelections(savedRadSelections);
 
-        //    Освещение — как и было
         updateLightingTab(building, /*autoApplyDefaults=*/true);
 
-        // (необязательно) Фокуснуть «Микроклимат» на новую секцию
         if (microTab != null) {
             try { microTab.selectSectionByIndex(dstIdx); } catch (Throwable ignore) {}
         }
@@ -466,34 +458,24 @@ public class BuildingTab extends JPanel {
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorList.setFixedCellHeight(28);
 
-// начальная выборка
         if (!sectionListModel.isEmpty()) sectionList.setSelectedIndex(0);
         refreshFloorListForSelectedSection();
 
-// DnD: секции ↔ секции (перестановка) И перенос этажей на секцию
         sectionList.setDragEnabled(true);
         sectionList.setDropMode(DropMode.INSERT);
         sectionList.setTransferHandler(sectionReorderHandler);
 
-// DnD: перестановка этажей внутри секции
+        floorList.setDragEnabled(true);
+        floorList.setDropMode(DropMode.INSERT);
+        floorList.setTransferHandler(floorReorderHandler);
         floorList.setDragEnabled(true);
         floorList.setDropMode(DropMode.INSERT);
         floorList.setTransferHandler(floorReorderHandler);
 
-
-
-// Этажи: перестановка внутри секции
-        floorList.setDragEnabled(true);
-        floorList.setDropMode(DropMode.INSERT);
-        floorList.setTransferHandler(floorReorderHandler);
-
-
-        // слушатели
         sectionList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) refreshFloorListForSelectedSection();
         });
 
-        // раскладка
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
                 new JScrollPane(sectionList), new JScrollPane(floorList));
         split.setResizeWeight(0.35);
@@ -501,7 +483,6 @@ public class BuildingTab extends JPanel {
         panel.add(createFloorButtons(), BorderLayout.SOUTH);
         return panel;
     }
-
     // Флажки, чтобы понимать откуда тянем (этажи → на секцию, или секции ↔ секции)
     private boolean draggingFromFloor = false;
 
@@ -520,8 +501,6 @@ public class BuildingTab extends JPanel {
         }
     };
 
-    // Перестановка секций МЕЖДУ собой + приём "этажа" (перенос этажа на секцию)
-    // Перестановка секций МЕЖДУ собой (ПЕРЕНОС ЭТАЖЕЙ НА СЕКЦИЮ ЗАПРЕЩЁН)
     // Перестановка секций МЕЖДУ собой (ПЕРЕНОС ЭТАЖЕЙ НА СЕКЦИЮ ЗАПРЕЩЁН)
     private final TransferHandler sectionReorderHandler = new ReorderHandler<Section>() {
 
@@ -555,13 +534,11 @@ public class BuildingTab extends JPanel {
                 s.setPosition(i);
                 newSections.add(s);
             }
-
             // 4) Карта: ссылка на секцию → новый индекс
             java.util.Map<Section, Integer> newIndexByRef = new java.util.HashMap<>();
             for (int i = 0; i < newSections.size(); i++) {
                 newIndexByRef.put(newSections.get(i), i);
             }
-
             // 5) Ремапим sectionIndex у этажей так, чтобы они остались в СВОИХ секциях
             for (Floor f : building.getFloors()) {
                 int oldIdx = f.getSectionIndex();
@@ -573,22 +550,18 @@ public class BuildingTab extends JPanel {
                     f.setSectionIndex(0);
                 }
             }
-
             // 6) Фиксируем новые секции в модели здания и обновляем UI
             building.setSections(newSections);
             refreshSectionListModel();
-
             if (selected != null) {
                 int selIdx = building.getSections().indexOf(selected);
                 sectionList.setSelectedIndex(selIdx >= 0 ? selIdx : 0);
             } else if (!sectionListModel.isEmpty()) {
                 sectionList.setSelectedIndex(0);
             }
-
             refreshFloorListForSelectedSection();
         }
     };
-
 
     private void refreshSectionListModel() {
         sectionListModel.clear();
