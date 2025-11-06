@@ -357,10 +357,12 @@ public class RadiationTab extends JPanel {
                 Space firstApartmentWithRooms = selectedFloor.getSpaces().stream()
                         .filter(s -> s.getType() == Space.SpaceType.APARTMENT)
                         .filter(s -> !s.getRooms().isEmpty())
+                        .filter(s -> !processedSpaces.contains(s.getId()))
+                        .filter(this::hasEligibleResidentialRoom) // использовать хелпер из п.1
                         .findFirst()
                         .orElse(null);
 
-                if (firstApartmentWithRooms != null && !processedSpaces.contains(firstApartmentWithRooms.getId())) {
+                if (firstApartmentWithRooms != null) {
                     applyRoomSelectionRulesForResidentialSpace(firstApartmentWithRooms);
                 }
             }
@@ -434,16 +436,23 @@ public class RadiationTab extends JPanel {
         Floor currentFloor = floorList.getSelectedValue();
         if (currentFloor == null) return;
 
+        // Форсируем применение правил для ВСЕХ помещений этажа:
+        // - офисы: все комнаты (кроме исключений)
+        // - квартиры: ровно две комнаты (кухня + одна), ДЛЯ КАЖДОЙ квартиры на этаже
         for (Space space : currentFloor.getSpaces()) {
-            if (space.getType() == Space.SpaceType.APARTMENT) {
-                applyRoomSelectionRulesForResidentialSpace(space);
-                processedSpaces.add(space.getId());
-            } else if (space.getType() == Space.SpaceType.OFFICE) {
-                selectAllOfficeRooms(space);
-            } // PUBLIC — ничего не трогаем
+            applyDefaultsForSpace(space, /*forceResidential=*/true);
         }
         roomsTableModel.fireTableDataChanged();
         rad_refreshHighlights();
+    }
+
+    /** Есть ли в квартире хотя бы одна подходящая комната (не санузел/ванная/мусорка и т.п.) */
+    private boolean hasEligibleResidentialRoom(Space s) {
+        if (s == null || s.getRooms() == null) return false;
+        for (Room r : s.getRooms()) {
+            if (r != null && !isExcludedRoom(safe(r.getName()))) return true;
+        }
+        return false;
     }
 
     private void applyRoomSelectionRulesForResidentialSpace(Space space) {
@@ -451,11 +460,11 @@ public class RadiationTab extends JPanel {
         try {
             List<Room> validRooms = space.getRooms().stream()
                     .filter(Objects::nonNull)
-                    .filter(r -> !containsAny(r.getName().toLowerCase(), EXCLUDED_ROOMS))
+                    .filter(r -> !isExcludedRoom(safe(r.getName()))) // исключаем санузлы/ванные/мусорки и т.п.
                     .collect(Collectors.toList());
 
             if (validRooms.isEmpty()) {
-                return; // не помечаем как обработанное — ждём комнат
+                return; // ждём появление нормальных комнат
             }
 
             // Сбросим все галочки в помещении
@@ -463,25 +472,30 @@ public class RadiationTab extends JPanel {
                 if (room != null) globalRoomSelectionMap.put(room.getId(), false);
             }
 
+            // Разделим на "кухни" и "прочие"
             List<Room> kitchenRooms = validRooms.stream()
-                    .filter(r -> containsAny(r.getName().toLowerCase(), KITCHEN_KEYWORDS))
+                    .filter(r -> containsAny(safe(r.getName()), KITCHEN_KEYWORDS))
                     .collect(Collectors.toList());
             List<Room> otherRooms = validRooms.stream()
-                    .filter(r -> !containsAny(r.getName().toLowerCase(), KITCHEN_KEYWORDS))
+                    .filter(r -> !containsAny(safe(r.getName()), KITCHEN_KEYWORDS))
                     .collect(Collectors.toList());
 
-            if (kitchenRooms.isEmpty()) {
-                int count = 0;
-                for (Room room : otherRooms) {
-                    globalRoomSelectionMap.put(room.getId(), true);
-                    if (++count >= 2) break;
-                }
-            } else {
+            // Выбираем РОВНО ДВЕ: кухня + одна "другая"; если кухни нет — первые две "другие"; если нет "других" — две кухни (если есть)
+            if (!kitchenRooms.isEmpty()) {
+                // 1) кухня
                 globalRoomSelectionMap.put(kitchenRooms.get(0).getId(), true);
+                // 2) ещё одна
                 if (!otherRooms.isEmpty()) {
                     globalRoomSelectionMap.put(otherRooms.get(0).getId(), true);
                 } else if (kitchenRooms.size() > 1) {
                     globalRoomSelectionMap.put(kitchenRooms.get(1).getId(), true);
+                }
+            } else {
+                // кухни нет — берём до двух первых "других"
+                int count = 0;
+                for (Room room : otherRooms) {
+                    globalRoomSelectionMap.put(room.getId(), true);
+                    if (++count >= 2) break;
                 }
             }
 
@@ -492,29 +506,9 @@ public class RadiationTab extends JPanel {
         }
     }
 
-    private boolean hasResidentialSelectionOnFloor(Floor floor) {
-        // Есть ли уже хоть одна отмеченная не-санузловая комната в любой квартире этого этажа?
-        for (Space s : floor.getSpaces()) {
-            if (s.getType() != Space.SpaceType.APARTMENT) continue;
-            for (Room r : s.getRooms()) {
-                // сперва смотрим в живую карту чекбоксов, затем в сохранённое состояние комнаты
-                Boolean v = globalRoomSelectionMap.get(r.getId());
-                boolean chosen = (v != null) ? v : r.isRadiationSelected(); // ← fallback к сохранённому флагу радиации
-                if (chosen) {
-                    String n = safe(r.getName());
-                    if (!isExcludedRoom(n)) return true;
-                }
-
-            }
-        }
-        return false;
-    }
-
-
     private static String safe(String s) {
         return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
     }
-
 
     public void setRoomSelectionState(int roomId, boolean state) {
         globalRoomSelectionMap.put(roomId, state);
@@ -526,9 +520,10 @@ public class RadiationTab extends JPanel {
         return space.getType() == Space.SpaceType.APARTMENT;
     }
     public static boolean isExcludedRoom(String roomName) {
-        String lowerName = roomName.toLowerCase();
+        String lowerName = (roomName == null) ? "" : roomName.toLowerCase(Locale.ROOT);
         return EXCLUDED_ROOMS.stream().anyMatch(lowerName::contains);
     }
+
 
     private boolean containsAny(String source, List<String> targets) {
         for (String target : targets) {
@@ -914,6 +909,133 @@ public class RadiationTab extends JPanel {
     private void rad_refreshHighlights() {
         try { if (floorList != null) floorList.repaint(); } catch (Throwable ignore) {}
         try { if (spaceTable != null) spaceTable.repaint(); } catch (Throwable ignore) {}
+    }
+    /** Публично применяет правила для указанного этажа:
+     *  - Офисы: отметить все комнаты, кроме исключений.
+     *  - Жилые: РОВНО одна квартира на этаже → РОВНО две комнаты (кухня + ещё одна жилая).
+     */
+    public void applyDefaultsForFloor(Floor floor) {
+        if (floor == null) {
+            floor = (floorList != null) ? floorList.getSelectedValue() : null;
+        }
+        if (floor == null) return;
+
+        for (Space space : floor.getSpaces()) {
+            applyDefaultsForSpace(space); // для каждого помещения
+        }
+        roomsTableModel.fireTableDataChanged();
+        rad_refreshHighlights();
+    }
+    /** Применяет дефолтные правила радиации только к одному помещению.
+     *  - Офисы: все комнаты, кроме исключений.
+     *  - Квартиры: выбрать ровно 2 комнаты (кухня + ещё одна жилая; если кухни нет — любые две жилые).
+     *  - PUBLIC — не трогаем.
+     *  Метка processedSpaces ставится внутри вызываемых методов.
+     */
+    /** Применяет дефолтные правила радиации к ОДНОМУ помещению в обычном режиме
+     * (квартиры: только первая на этаже). Для “форс-режима” см. перегрузку ниже.
+     */
+    public void applyDefaultsForSpace(Space space) {
+        applyDefaultsForSpace(space, /*forceResidential=*/false);
+    }
+    /** Та же логика, но если forceResidential=true, то квартиры обрабатываются
+     * вне зависимости от того, проставлялись ли уже галочки в других квартирах на этаже.
+     * Используется кнопкой «Проставить чекбоксы на этаже».
+     */
+    private void applyDefaultsForSpace(Space space, boolean forceResidential) {
+        if (space == null) return;
+
+        // ОФИС: всегда ставим «все кроме исключений»
+        if (space.getType() == Space.SpaceType.OFFICE) {
+            // Повторный вызов безопасен: мы явно выставляем true/false для всех комнат.
+            selectAllOfficeRooms(space);
+            return;
+        }
+
+        // ЖИЛОЕ
+        if (space.getType() == Space.SpaceType.APARTMENT) {
+            Floor floor = findParentFloor(space);
+            if (floor == null) return;
+
+            // В обычном режиме — только одна квартира на этаже.
+            if (!forceResidential && rad_hasResidentialProcessedOnFloor(floor)) {
+                return;
+            }
+
+            // В форс-режиме игнорируем «уже обработано» для ЭТОЙ квартиры:
+            // снимаем метку processed, чтобы applyRoomSelectionRules* выполнилась заново.
+            if (forceResidential) {
+                processedSpaces.remove(space.getId());
+            }
+
+            if (hasEligibleResidentialRoom(space)) {
+                // Внутри метод сам сбрасывает галочки в помещении и выбирает нужные 2 комнаты.
+                applyRoomSelectionRulesForResidentialSpace(space);
+            }
+            return;
+        }
+
+        // PUBLIC — не трогаем
+    }
+
+    /** На этом этаже уже применялись дефолты к КАКОЙ-ЛИБО квартире? */
+    private boolean rad_hasResidentialProcessedOnFloor(Floor floor) {
+        if (floor == null) return false;
+        for (Space s : floor.getSpaces()) {
+            if (s != null && s.getType() == Space.SpaceType.APARTMENT && processedSpaces.contains(s.getId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    /** Применяет дефолты радиации ТОЛЬКО к первой «валидной» квартире на этаже.
+     *  - Офисы НЕ трогаем.
+     *  - Если на этаже уже есть «обработанная» квартира — выходим.
+     *  - «Валидная» = есть хотя бы одна не-санузел/не-мусорка комната.
+     */
+    public void applyDefaultsForFloorFirstResidentialOnly(Floor floor) {
+        if (floor == null) {
+            floor = (floorList != null) ? floorList.getSelectedValue() : null;
+        }
+        if (floor == null) return;
+
+        // Если уже что-то ставили на этом этаже — ничего не делаем
+        if (rad_hasResidentialProcessedOnFloor(floor)) return;
+
+        // Ищем первую подходящую квартиру
+        for (Space s : floor.getSpaces()) {
+            if (s == null) continue;
+            if (s.getType() != Space.SpaceType.APARTMENT) continue;
+            if (!hasEligibleResidentialRoom(s)) continue;
+            if (processedSpaces.contains(s.getId())) continue;
+
+            // Проставляем дефолты ТОЛЬКО для этой квартиры
+            applyRoomSelectionRulesForResidentialSpace(s); // внутри добавит в processedSpaces
+            roomsTableModel.fireTableDataChanged();
+            rad_refreshHighlights();
+            break; // ← строго одна квартира на этаже
+        }
+    }
+    /** Публичная проверка: есть ли на этом этаже хотя бы одно помещение с отмеченными комнатами (радиация)? */
+    public boolean hasAnySelectedOnFloor(Floor f) {
+        return rad_hasAnyOnFloor(f);
+    }
+
+    /** Снять все галочки радиации в одном помещении и пометить его как обработанное,
+     *  чтобы авто-правила больше не проставляли их заново при отображении.
+     */
+    public void clearSelectionsForSpace(Space space) {
+        if (space == null || space.getRooms() == null) return;
+        for (Room r : space.getRooms()) {
+            globalRoomSelectionMap.put(r.getId(), false);
+        }
+        // пометим помещение как «обработанное», чтобы логика авто-проставления (офисы/квартиры)
+        // не выставляла галочки снова при открытиях вкладки
+        processedSpaces.add(space.getId());
+
+        // обновим таблицу и подсветку
+        if (roomsTableModel != null) roomsTableModel.fireTableDataChanged();
+        rad_refreshHighlights();
     }
 
 }

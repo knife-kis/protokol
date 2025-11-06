@@ -890,13 +890,26 @@ public class BuildingTab extends JPanel {
     private void calculateMetrics(ActionEvent e) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
+            // 1) Пересчёт вентиляции
             updateVentilationTab(building);
-            updateRadiationTab(building, true);
-            ; // Добавлено обновление RadiationTab
+
+            // 2) Радиация: НЕ трогаем старые галочки
+            RadiationTab rt = getRadiationTab();
+            Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
+                    : java.util.Collections.emptyMap();
+
+            // Перерисовали без forceOfficeSelection и без авто-правил
+            updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+
+            // Вернули снимок
+            if (rt != null) rt.restoreSelections(snap);
+
+            // Переключаемся на вкладку вент.
             ((MainFrame) mainFrame).selectVentilationTab();
         }
         showMessage("Данные для вентиляции обновлены!", "Расчет завершен", JOptionPane.INFORMATION_MESSAGE);
     }
+
     private void showApartmentSummary(ActionEvent e) {
         // Безопасность: если вдруг building == null, создаём пустой
         if (this.building == null) this.building = new Building();
@@ -934,19 +947,24 @@ public class BuildingTab extends JPanel {
         updateSpaceList();
         spaceList.setSelectedValue(copiedSpace, true);
 
-        // Обновляем вкладки
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
-        // Восстанавливаем состояния ТОЛЬКО для исходных комнат
-        restoreRadiationSelections(savedSelections);
+        restoreRadiationSelections(savedSelections);  // вернули старые состояния
 
-        // Явно выделим новое помещение в RadiationTab
-        RadiationTab radiationTab = getRadiationTab();
-        if (radiationTab != null) {
+        RadiationTab rt = getRadiationTab();
+        if (rt != null) {
+            // Если на ЭТОМ этаже уже есть помещения с галочками — у КОПИИ все галочки СНИМАЕМ
+            if (rt.hasAnySelectedOnFloor(selectedFloor)) {
+                rt.clearSelectionsForSpace(copiedSpace);
+            } else {
+                // Этаж «чистый» — можно применить дефолты к новой копии
+                rt.applyDefaultsForSpace(copiedSpace);
+            }
+
             int newIndex = selectedFloor.getSpaces().indexOf(copiedSpace);
-            if (newIndex >= 0) radiationTab.selectSpaceByIndex(newIndex);
+            if (newIndex >= 0) rt.selectSpaceByIndex(newIndex);
         }
     }
 
@@ -1021,7 +1039,20 @@ public class BuildingTab extends JPanel {
             building.addFloor(floor);
 
             refreshFloorListForSelectedSection();
-            updateRadiationTab(building, true);
+
+            RadiationTab rt = getRadiationTab();
+            Map<String, Boolean> snap = (rt != null) ? rt.saveSelections() : java.util.Collections.emptyMap();
+
+// НИКАКОГО глобального автопроставления
+            updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+
+// Восстанавливаем старые галочки и применяем дефолты ТОЛЬКО на новый этаж
+            if (rt != null) {
+                rt.restoreSelections(snap);
+                rt.applyDefaultsForFloorFirstResidentialOnly(floor);
+            }
+
+// Остальные вкладки — без автопроставления микроклимата и с обычным КЕО
             updateLightingTab(building, /*autoApplyDefaults=*/true);
             updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
@@ -1092,30 +1123,18 @@ public class BuildingTab extends JPanel {
         updateLightingTab(building, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
-        // 5. Восстанавливаем ВСЕ состояния комнат
-        if (radiationTab != null) {
-            radiationTab.globalRoomSelectionMap.clear();
-            radiationTab.globalRoomSelectionMap.putAll(allRoomStates);
+        // 5. Восстанавливаем предыдущее состояние ДЛЯ СТАРЫХ комнат
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections() : java.util.Collections.emptyMap();
 
-            // 6. Устанавливаем состояния для новых комнат
-            for (int i = 0; i < selectedFloor.getSpaces().size(); i++) {
-                Space origSpace = selectedFloor.getSpaces().get(i);
-                Space copiedSpace = copiedFloor.getSpaces().get(i);
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
 
-                for (int j = 0; j < origSpace.getRooms().size(); j++) {
-                    Room origRoom = origSpace.getRooms().get(j);
-                    Room copiedRoom = copiedSpace.getRooms().get(j);
-
-                    Boolean state = allRoomStates.get(origRoom.getId());
-                    if (state != null) {
-                        radiationTab.setRoomSelectionState(copiedRoom.getId(), state);
-                    }
-                }
-            }
-
-            // 7. Обновляем UI RadiationTab
-            radiationTab.refreshFloors();
+        if (rt != null) {
+            rt.restoreSelections(snap); // вернули все старые галочки
+            rt.applyDefaultsForFloorFirstResidentialOnly(copiedFloor); // дефолты только на копии
+            rt.refreshFloors();
         }
+
     }
 
     private String extractDigits(String input) { return ops.extractDigits(input); }
@@ -1147,12 +1166,18 @@ public class BuildingTab extends JPanel {
             floor.setType(dialog.getFloorType());
             floorListModel.set(index, floor);
             updateSpaceList();
-
         }
-        updateRadiationTab(building, true);
+
+        // Радиация: сохраняем → перерисовываем без force → восстанавливаем.
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
+                : java.util.Collections.emptyMap();
+
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        if (rt != null) rt.restoreSelections(snap);
+
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
-
     }
 
     private Map<String, Boolean> saveRadiationSelections() {
@@ -1178,15 +1203,24 @@ public class BuildingTab extends JPanel {
 
     private void removeFloor(ActionEvent e) {
         int index = floorList.getSelectedIndex();
+        // Сначала сохраняем радиационные галочки
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
+                : java.util.Collections.emptyMap();
+
         if (index >= 0) {
             building.getFloors().remove(index);
             floorListModel.remove(index);
         }
-        updateRadiationTab(building, true);
+
+        // Перерисовываем без force и без авто-правил, затем возвращаем снимок
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        if (rt != null) rt.restoreSelections(snap);
+
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
-
     }
+
 
     // Операции с помещениями
     private void addSpace(ActionEvent e) {
@@ -1221,18 +1255,27 @@ public class BuildingTab extends JPanel {
             }
         }
 
-        // обновляем вкладки
-        updateRadiationTab(building, true);
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections() : java.util.Collections.emptyMap();
+
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
-        // фокус в RadiationTab на новое помещение
-        RadiationTab radiationTab = getRadiationTab();
-        if (radiationTab != null && space != null) {
+        if (rt != null) {
+            rt.restoreSelections(snap); // вернули все старые
+
+            // ВАЖНО: если на этом этаже уже есть помещения с галочками — НИЧЕГО не проставляем в новом
             Floor f = floorList.getSelectedValue();
+            if (f != null && !rt.hasAnySelectedOnFloor(f)) {
+                rt.applyDefaultsForSpace(space); // на этаже ещё пусто — можно поставить дефолты в новое помещение
+            }
+            // иначе — пропускаем автопроставление (оставляем пустым)
+
+            // Выделим новое помещение в таблице радиации
             if (f != null) {
                 int newIndex = f.getSpaces().indexOf(space);
-                if (newIndex >= 0) radiationTab.selectSpaceByIndex(newIndex);
+                if (newIndex >= 0) rt.selectSpaceByIndex(newIndex);
             }
         }
     }
@@ -1254,38 +1297,51 @@ public class BuildingTab extends JPanel {
         if (dialog.showDialog()) {
             space.setIdentifier(dialog.getSpaceIdentifier());
             space.setType(dialog.getSpaceType());
-            applyMicroDefaultsForOfficeSpace(space);
+            applyMicroDefaultsForOfficeSpace(space); // микроклимат как и было
             spaceListModel.set(index, space);
             updateRoomList();
         }
-        updateRadiationTab(building, true);
+
+        // Радиация — трогаем только UI, старые галочки сохраняем
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
+                : java.util.Collections.emptyMap();
+
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        if (rt != null) rt.restoreSelections(snap);
+
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
-
-
     }
 
     private void removeSpace(ActionEvent e) {
+        // Сохраняем радиационные галочки заранее
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
+                : java.util.Collections.emptyMap();
+
         Floor floor = floorList.getSelectedValue();
         int index = spaceList.getSelectedIndex();
         if (floor != null && index >= 0) {
             floor.getSpaces().remove(index);
             spaceListModel.remove(index);
         }
-        updateRadiationTab(building, true);
+
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        if (rt != null) rt.restoreSelections(snap);
+
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
-
     }
 
-
-    // «умное» добавление комнат — с подсказками, пакетным добавлением и автонумерацией
     private void addRoom(ActionEvent e) {
         Space selectedSpace = spaceList.getSelectedValue();
         if (selectedSpace == null) {
             showMessage("Выберите помещение!", "Ошибка", JOptionPane.WARNING_MESSAGE);
             return;
         }
+        int roomsBefore = selectedSpace.getRooms().size(); // было ли помещение пустым
+
         if (isApartmentSpace(selectedSpace)) {
             // квартиры — AddRoomDialog
             java.util.List<String> suggestions = collectPopularApartmentRoomNames(building, 30);
@@ -1320,7 +1376,6 @@ public class BuildingTab extends JPanel {
                     Room room = new Room();
                     room.setName(name.trim());
                     room.setSelected(false);
-                    // микроклимат в офисе — автоматом, кроме санузлов
                     room.setMicroclimateSelected(!looksLikeSanitary(room.getName()));
                     try {
                         int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
@@ -1331,7 +1386,7 @@ public class BuildingTab extends JPanel {
                 }
             }
         } else if (isPublicSpace(selectedSpace)) {
-            // ОБЩЕСТВЕННЫЕ — AddPublicRoomsDialog (никаких офис/жилых автопроставлений)
+            // ОБЩЕСТВЕННЫЕ — без МК автопроставления
             java.util.List<String> suggestions = collectPopularPublicRoomNames(building, 30);
             JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
             ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog dlg =
@@ -1343,7 +1398,6 @@ public class BuildingTab extends JPanel {
                     Room room = new Room();
                     room.setName(name.trim());
                     room.setSelected(false);
-                    // микроклимат — БЕЗ автопроставления (по твоему требованию)
                     try {
                         int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
                         room.setExternalWallsCount(walls);
@@ -1353,7 +1407,6 @@ public class BuildingTab extends JPanel {
                 }
             }
         } else {
-            // прочие типы — простое поле ввода
             String name = showInputDialog("Добавление комнаты", "Название комнаты:", "");
             if (name != null && !name.isBlank()) {
                 Room room = new Room();
@@ -1368,12 +1421,30 @@ public class BuildingTab extends JPanel {
             }
         }
 
-        updateRadiationTab(building, true);
+        // Радиация — безопасная перерисовка
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
+                : java.util.Collections.emptyMap();
+
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        if (rt != null) {
+            rt.restoreSelections(snap);
+            // Если помещение было пустым — дефолты радиации ТОЛЬКО для него
+            if (roomsBefore == 0) {
+                if (rt != null) {
+                    Floor f = floorList.getSelectedValue();
+                    if (f != null && !rt.hasAnySelectedOnFloor(f)) {
+                        rt.applyDefaultsForSpace(selectedSpace);
+                    }
+                    // иначе — этаж уже «занят» первой квартирой → ничего не проставляем
+                }
+            }
+
+        }
+
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
-
     }
-
 
     private void editRoom(ActionEvent e) {
         Space space = spaceList.getSelectedValue();
@@ -1396,9 +1467,6 @@ public class BuildingTab extends JPanel {
                 if (newName != null && !newName.isBlank()) {
                     room.setName(newName.trim());
                     roomListModel.set(index, room);
-                    updateRadiationTab(building, true);
-                    updateLightingTab(building, /*autoApplyDefaults=*/true);
-                    updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
                 }
             }
         } else if (isOfficeSpace(space)) {
@@ -1410,16 +1478,12 @@ public class BuildingTab extends JPanel {
                 String newName = dlg.getNameToAdd();
                 if (newName != null && !newName.isBlank()) {
                     room.setName(newName.trim());
-                    // офис: подсвежим дефолты
-                    room.setMicroclimateSelected(!looksLikeSanitary(room.getName()));
+                    room.setMicroclimateSelected(!looksLikeSanitary(room.getName())); // офис: освежаем МК-галочку
                     try {
                         int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
                         room.setExternalWallsCount(walls);
                     } catch (Throwable ignore) {}
                     roomListModel.set(index, room);
-                    updateRadiationTab(building, true);
-                    updateLightingTab(building, /*autoApplyDefaults=*/true);
-                    updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
                 }
             }
         } else if (isPublicSpace(space)) {
@@ -1431,15 +1495,11 @@ public class BuildingTab extends JPanel {
                 String newName = dlg.getNameToAdd();
                 if (newName != null && !newName.isBlank()) {
                     room.setName(newName.trim());
-                    // для общественных автопроставления МК по умолчанию не делаем
                     try {
                         int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
                         room.setExternalWallsCount(walls);
                     } catch (Throwable ignore) {}
                     roomListModel.set(index, room);
-                    updateRadiationTab(building, true);
-                    updateLightingTab(building, /*autoApplyDefaults=*/true);
-                    updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
                 }
             }
         } else {
@@ -1447,16 +1507,27 @@ public class BuildingTab extends JPanel {
             if (newName != null && !newName.isBlank()) {
                 room.setName(newName.trim());
                 roomListModel.set(index, room);
-                updateRadiationTab(building, true);
-                updateLightingTab(building, /*autoApplyDefaults=*/true);
-                updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
             }
         }
 
+        // Радиация — безопасная перерисовка
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
+                : java.util.Collections.emptyMap();
+
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        if (rt != null) rt.restoreSelections(snap);
+
+        updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
     }
 
-
     private void removeRoom(ActionEvent e) {
+        // Сохранить текущие галочки радиации
+        RadiationTab rt = getRadiationTab();
+        Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
+                : java.util.Collections.emptyMap();
+
         Space space = spaceList.getSelectedValue();
         int index = roomList.getSelectedIndex();
 
@@ -1464,10 +1535,12 @@ public class BuildingTab extends JPanel {
             space.getRooms().remove(index);
             roomListModel.remove(index);
         }
-        updateRadiationTab(building, true);
+
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        if (rt != null) rt.restoreSelections(snap);
+
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
-
     }
 
     private void updateSpaceList() {
