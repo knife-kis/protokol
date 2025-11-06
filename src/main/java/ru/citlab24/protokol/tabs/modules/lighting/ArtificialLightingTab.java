@@ -74,16 +74,21 @@ public final class ArtificialLightingTab extends JPanel {
         if (building == null) return;
         for (Floor f : building.getFloors()) {
             for (Space s : f.getSpaces()) {
-                // сохраняем только офисные/общественные — ровно то, что показывает эта вкладка
-                if (!(ops.isOfficeSpace(s) || ops.isPublicSpace(s))) continue;
-                for (Room r : s.getRooms()) {
-                    Boolean v = selectionMap.get(r.getId());
-                    if (v != null) r.setSelected(v);
+                if (ops.isOfficeSpace(s) || ops.isPublicSpace(s)) {
+                    // переносим состояния из вкладки
+                    for (Room r : s.getRooms()) {
+                        Boolean v = selectionMap.get(r.getId());
+                        if (v != null) r.setSelected(v);
+                    }
+                } else {
+                    // это жилищные/прочие – ВСЕГДА затираем в модели
+                    for (Room r : s.getRooms()) {
+                        r.setSelected(false);
+                    }
                 }
             }
         }
     }
-
 
     /** Выбор помещения по индексу (удобно вызывать снаружи). */
     public void selectSpaceByIndex(int index) {

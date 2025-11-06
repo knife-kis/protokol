@@ -27,7 +27,7 @@ public final class AllExcelExporter {
         }
 
         try (Workbook wb = new XSSFWorkbook()) {
-            // 1) Микроклимат (есть append)
+            // 1) Микроклимат
             MicroclimateExcelExporter.appendToWorkbook(building, -1, wb);
 
             // 2) Вентиляция (берём текущие записи из вкладки)
@@ -36,20 +36,28 @@ public final class AllExcelExporter {
                 ventRecords = frame.getVentilationTab().getRecordsForExport();
             }
             if (ventRecords != null && !ventRecords.isEmpty()) {
+                // сигнатура: (List<VentilationRecord>, Workbook)
                 VentilationExcelExporter.appendToWorkbook(ventRecords, wb);
             }
 
-            // 3) Освещение — пробуем вызвать LightingExcelExporter.appendToWorkbook(building, int, wb)
+            // 3) Естественное освещение (КЕО) — пробуем вызвать
+            //    ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter.appendToWorkbook(Building, int, Workbook)
             tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter",
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
-            // 4) Радиация — пробуем вызвать RadiationExcelExporter.appendToWorkbook(building, int, wb)
+            // 4) Искусственное освещение — пробуем вызвать
+            //    ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter.appendToWorkbook(Building, int, Workbook)
+            tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter",
+                    new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
+                    new Object[]{building, -1, wb});
+
+            // 5) Радиация — пробуем вызвать append в том же стиле
             tryInvokeAppend("ru.citlab24.protokol.tabs.modules.med.RadiationExcelExporter",
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
-            // 5) Один общий диалог сохранения
+            // 6) Один общий диалог сохранения
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Сохранить общий Excel");
             chooser.setSelectedFile(new File("Отчет_все_модули.xlsx"));
@@ -66,9 +74,7 @@ public final class AllExcelExporter {
                         "Экспорт завершён", JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(parent,
-                    "Ошибка объединённого экспорта: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(parent, "Ошибка экспорта: " + ex.getMessage(),
                     "Ошибка", JOptionPane.ERROR_MESSAGE);
         }
     }
