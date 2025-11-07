@@ -227,13 +227,21 @@ public class DatabaseManager {
         }
     }
 
-
     private static void saveSpace(int floorId, Space space) throws SQLException {
+        // Если этаж уличный — принудительно сохраняем помещения как OUTDOOR
+        Floor.FloorType parentType = getFloorType(floorId);
+        Space.SpaceType effectiveType = space.getType();
+        if (parentType == Floor.FloorType.STREET && effectiveType != Space.SpaceType.OUTDOOR) {
+            logger.warn("Этаж {} — STREET. Тип помещения '{}' переопределён на OUTDOOR.",
+                    floorId, effectiveType);
+            effectiveType = Space.SpaceType.OUTDOOR;
+        }
+
         String sql = "INSERT INTO space (floor_id, identifier, type, position) VALUES (?, ?, ?, ?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, floorId);
             stmt.setString(2, space.getIdentifier());
-            stmt.setString(3, space.getType().name());
+            stmt.setString(3, effectiveType.name());
             stmt.setInt(4, space.getPosition());
             stmt.executeUpdate();
 
@@ -248,6 +256,24 @@ public class DatabaseManager {
             }
         }
     }
+    private static Floor.FloorType getFloorType(int floorId) throws SQLException {
+        String sql = "SELECT type FROM floor WHERE id = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, floorId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String typeStr = rs.getString(1);
+                    try {
+                        return Floor.FloorType.valueOf(typeStr);
+                    } catch (IllegalArgumentException ignore) {
+                        logger.warn("Неизвестный тип этажа в БД: '{}', используем PUBLIC по умолчанию", typeStr);
+                    }
+                }
+            }
+        }
+        return Floor.FloorType.PUBLIC;
+    }
+
     private static void saveRoom(int spaceId, Room room) throws SQLException {
         logger.debug("Сохранение комнаты: {}", room.getName());
         String sql = "INSERT INTO room (" +
@@ -321,7 +347,6 @@ public class DatabaseManager {
         return building;
     }
 
-
     private static void loadFloors(Building building, int buildingId) throws SQLException {
         String sql = "SELECT * FROM floor WHERE building_id = " + buildingId +
                 " ORDER BY section_index, COALESCE(position,0), id";
@@ -334,9 +359,21 @@ public class DatabaseManager {
                 floor.setType(Floor.FloorType.valueOf(rs.getString("type")));
                 floor.setSectionIndex(Math.max(0, rs.getInt("section_index")));
                 floor.setPosition(rs.getInt("position"));
-                if (floor.getName() == null) {
-                    floor.setName(floor.getType().title + " " + floor.getNumber());
+
+                // Автоимя: для STREET — «Улица» (без номера, если он пуст),
+                // для остальных — "<название типа> <номер>" (номер добавляем только если он не пуст)
+                String num = floor.getNumber();
+                boolean hasNum = (num != null && !num.isBlank());
+                String autoName;
+                if (floor.getType() == Floor.FloorType.STREET) {
+                    autoName = hasNum ? ("Улица " + num) : "Улица";
+                } else {
+                    autoName = floor.getType().title + (hasNum ? (" " + num) : "");
                 }
+                if (floor.getName() == null || floor.getName().isBlank()) {
+                    floor.setName(autoName);
+                }
+
                 building.addFloor(floor);
                 loadSpaces(floor, floor.getId());
             }

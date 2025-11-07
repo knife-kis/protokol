@@ -21,7 +21,8 @@ public class Space {
     public enum SpaceType {
         APARTMENT("Квартира"),
         OFFICE("Офис"),
-        PUBLIC_SPACE("Общественный");
+        PUBLIC_SPACE("Общественный"),
+        OUTDOOR("Уличная зона"); // новый тип для этажей «УЛИЦА»
 
         private final String title;
 

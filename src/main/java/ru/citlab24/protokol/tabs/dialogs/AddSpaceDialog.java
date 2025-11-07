@@ -18,6 +18,7 @@ public class AddSpaceDialog extends JDialog {
         setSize(350, 200);
         setLocationRelativeTo(parent);
         initUI(floorType);
+        rebuildSpaceTypeModelByFloorType(floorType); // ← добавили
     }
 
     private void initUI(Floor.FloorType floorType) {
@@ -72,22 +73,52 @@ public class AddSpaceDialog extends JDialog {
         });
     }
 
+    // стало
     private Space.SpaceType[] getAllowedSpaceTypes(Floor.FloorType floorType) {
-        if (floorType == null) return Space.SpaceType.values();
+        if (floorType == null) {
+            // по умолчанию без улицы
+            return new Space.SpaceType[] {
+                    Space.SpaceType.APARTMENT,
+                    Space.SpaceType.OFFICE,
+                    Space.SpaceType.PUBLIC_SPACE
+            };
+        }
         switch (floorType) {
             case RESIDENTIAL:
                 return new Space.SpaceType[] { Space.SpaceType.APARTMENT };
             case OFFICE:
                 return new Space.SpaceType[] { Space.SpaceType.OFFICE };
             case PUBLIC:
-                // ВАЖНО: только общественные помещения
                 return new Space.SpaceType[] { Space.SpaceType.PUBLIC_SPACE };
+            case STREET:
+                return new Space.SpaceType[] { Space.SpaceType.OUTDOOR };
             case MIXED:
-                // Смешанный этаж — оставляем все варианты, как и раньше
-                return Space.SpaceType.values();
+                // смешанный — только внутр. типы, без улицы
+                return new Space.SpaceType[] {
+                        Space.SpaceType.APARTMENT,
+                        Space.SpaceType.OFFICE,
+                        Space.SpaceType.PUBLIC_SPACE
+                };
             default:
-                return Space.SpaceType.values();
+                return new Space.SpaceType[] {
+                        Space.SpaceType.APARTMENT,
+                        Space.SpaceType.OFFICE,
+                        Space.SpaceType.PUBLIC_SPACE
+                };
         }
+    }
+
+    // стало
+    private void rebuildSpaceTypeModelByFloorType(Floor.FloorType floorType) {
+        DefaultComboBoxModel<Space.SpaceType> m =
+                new DefaultComboBoxModel<>(getAllowedSpaceTypes(floorType));
+
+        spaceTypeCombo.setModel(m);
+        if (m.getSize() > 0) {
+            spaceTypeCombo.setSelectedIndex(0);
+        }
+        // если выбор единственный — фиксируем комбо
+        spaceTypeCombo.setEnabled(m.getSize() > 1);
     }
 
     public boolean showDialog() {

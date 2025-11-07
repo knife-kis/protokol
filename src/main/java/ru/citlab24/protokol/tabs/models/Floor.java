@@ -20,7 +20,8 @@ public class Floor {
         RESIDENTIAL("жилой"),
         OFFICE("офисный"),
         PUBLIC("общественный"),
-        MIXED("смешанный");
+        MIXED("смешанный"),
+        STREET("улица"); // новый тип этажа «УЛИЦА»
 
         public final String title;
         FloorType(String title) { this.title = title; }
