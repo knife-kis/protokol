@@ -728,49 +728,57 @@ public class BuildingTab extends JPanel {
             radiationTab.updateRoomSelectionStates();
         }
 
-// 1.1) КЕО (как и было)
+        // 1.1) КЕО: фиксируем в модель
         LightingTab lightingTab = getLightingTab();
         if (lightingTab != null) {
             lightingTab.updateRoomSelectionStates();
         }
 
-// чтобы именно эта вкладка окончательно зафиксировала is_selected
+        // >>> НОВОЕ: СНИМОК СОСТОЯНИЙ КЕО ДО СОХРАНЕНИЯ
+        Map<String, Boolean> snapKeo = saveKeoSelections();
+
+        // 1.2) Искусственное освещение
         ArtificialLightingTab artificialTab = getArtificialLightingTab();
         if (artificialTab != null) {
             artificialTab.updateRoomSelectionStates();
         }
 
-// 1.3) Микроклимат (как и было)
+        // 1.3) Микроклимат
         MicroclimateTab microTab = getMicroclimateTab();
         if (microTab != null) {
             microTab.updateRoomSelectionStates();
         }
 
-
-        // 2) Генерация имени проекта
+        // 2) Генерация имени проекта (как было)
         String baseName = projectNameField.getText().trim();
         if (baseName.isEmpty()) {
             showMessage("Введите название проекта!", "Ошибка", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        // 3) Создаем копию проекта с сохранением состояний
+        // 3) Создаем копию проекта
         Building newProject = createBuildingCopy();
         newProject.setName(generateProjectVersionName(baseName));
+
+        // >>> НОВОЕ: ПРИМЕНЯЕМ СНИМОК КЕО К НОВОМУ ПРОЕКТУ ДО сохранения в БД
+        restoreKeoSelections(newProject, snapKeo);
 
         // 4) Сохраняем в БД
         try {
             DatabaseManager.saveBuilding(newProject);
             this.building = newProject;
-            this.ops.setBuilding(this.building); // ← добавили
+            this.ops.setBuilding(this.building);
             projectNameField.setText(extractBaseName(newProject.getName()));
         } catch (SQLException ex) {
             handleError("Ошибка сохранения: " + ex.getMessage(), "Ошибка");
             return;
         }
+
+        // Обновляем списки (как было)
         refreshAllLists();
 
-        // 5) Переинициализируем вкладки без авто-проставления
+        // 5) Переинициализируем вкладки БЕЗ авто-проставления
+        //   ВКЛАДКА КЕО ПРОЧИТАЕТ isSelected() И НИЧЕГО НЕ СБРОСИТ
         updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(newProject, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(newProject, /*autoApplyDefaults=*/false);
@@ -1787,6 +1795,41 @@ public class BuildingTab extends JPanel {
     private Map<String, Boolean> saveMicroclimateSelections() { return ops.saveMicroclimateSelections(); }
 
     private void restoreMicroclimateSelections(Map<String, Boolean> saved) { ops.restoreMicroclimateSelections(saved); }
+
+    /** ===== КЕО (естественное освещение): снимок и восстановление по ключу "этаж|помещение|комната" ===== */
+
+    /** КЕО: сделать снимок состояний чекбоксов (Room.isSelected) по всему зданию. */
+    private Map<String, Boolean> saveKeoSelections() {
+        Map<String, Boolean> res = new HashMap<>();
+        if (building == null) return res;
+
+        for (Floor f : building.getFloors()) {
+            for (Space s : f.getSpaces()) {
+                for (Room r : s.getRooms()) {
+                    String key = f.getNumber() + "|" + s.getIdentifier() + "|" + r.getName();
+                    res.put(key, r.isSelected());
+                }
+            }
+        }
+        return res;
+    }
+
+    /** КЕО: восстановить состояния чекбоксов в ПЕРЕДАННОМ building по снимку. */
+    private static void restoreKeoSelections(Building target, Map<String, Boolean> saved) {
+        if (target == null || saved == null || saved.isEmpty()) return;
+
+        for (Floor f : target.getFloors()) {
+            for (Space s : f.getSpaces()) {
+                for (Room r : s.getRooms()) {
+                    String key = f.getNumber() + "|" + s.getIdentifier() + "|" + r.getName();
+                    Boolean v = saved.get(key);
+                    if (v != null) {
+                        r.setSelected(v);
+                    }
+                }
+            }
+        }
+    }
 
     /** Микроклимат: для офисов (по типу помещения ИЛИ по типу этажа) ставим всем, кроме санузлов */
     private void applyMicroDefaultsForOfficeSpace(Space s) { ops.applyMicroDefaultsForOfficeSpace(s); }

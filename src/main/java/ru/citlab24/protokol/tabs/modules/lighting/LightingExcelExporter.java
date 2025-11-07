@@ -452,7 +452,7 @@ public final class LightingExcelExporter {
         String floorNameRaw = (e.floor.getName() != null && !e.floor.getName().isBlank())
                 ? e.floor.getName()
                 : (e.floor.getNumber() != null ? e.floor.getNumber() : "Этаж");
-        String floorName = cleanedFloorName(floorNameRaw);
+        String floorName = ensureEtaz(cleanedFloorName(floorNameRaw));
 
         String roomName = (e.room.getName() != null) ? e.room.getName() : "Комната";
         boolean isOffice = isOffice(e.space);
@@ -491,6 +491,16 @@ public final class LightingExcelExporter {
         String s = raw.replaceFirst("(?iu)^(\\s*)(смешанн(?:ый|ая|ое|ые|ых|ом)?|офисн(?:ый|ая|ое|ые|ых|ом)?|жил(?:ой|ая|ое|ые|ых|ом)?)[\\s,]+", "");
         s = s.replaceAll(" +", " ").trim();
         return s.isEmpty() ? raw : s;
+    }
+    private static String ensureEtaz(String s) {
+        if (s == null) return "Этаж";
+        String t = s.trim();
+        if (t.isEmpty()) return "Этаж";
+        // если пользователь уже написал слово «этаж» — ничего не меняем
+        if (t.toLowerCase(java.util.Locale.ROOT).contains("этаж")) return t;
+        // если это просто число (возможно отрицательное) — добавим «этаж»
+        if (t.matches("-?\\d+")) return t + " этаж";
+        return t;
     }
 
     private static String spaceDisplayName(Space s) {

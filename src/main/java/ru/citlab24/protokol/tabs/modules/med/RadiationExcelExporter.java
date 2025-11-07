@@ -152,9 +152,10 @@ public final class RadiationExcelExporter {
                 // A — номер (сквозной)
                 Cell a = cell(rr, 0); a.setCellValue(seq++); a.setCellStyle(S.headerCenterBorder);
 
-                // B — название этажа
-                String floorLabel = notBlank(f.getNumber()) ? f.getNumber() : "Этаж";
-                Cell b = cell(rr, 1); b.setCellValue(floorLabel); b.setCellStyle(S.textLeftBorder);
+                // B — название этажа (ровно как в карточке «Номер этажа»)
+                String floorTitle = floorTitleForExcel(f);
+                if (floorTitle.isEmpty()) floorTitle = "Этаж";
+                Cell b = cell(rr, 1); b.setCellValue(floorTitle); b.setCellStyle(S.textLeftBorder);
 
                 // C:E — минимальное
                 double ceVal = pickDiscrete(LEFT_VALS, LEFT_PROB);
@@ -240,7 +241,6 @@ public final class RadiationExcelExporter {
 
         for (int si = secStart; si < secEnd; si++) {
             Section sec = sections.get(si);
-            String secName = (sec != null && notBlank(sec.getName())) ? sec.getName() : ("Секция " + (si + 1));
 
             List<Floor> floors = floorsOfSection(building, si);
             // оставляем только этажи, где есть хотя бы одну отмеченную комнату
@@ -250,8 +250,8 @@ public final class RadiationExcelExporter {
             for (Floor f : floors) {
                 // строка с «[Секция, ]Этаж» (секцию не пишем, если она единственная)
                 row++;
-                String floorTitle = notBlank(f.getNumber()) ? f.getNumber() : "Этаж";
-                String header = (sections.size() > 1 ? (secName + ", ") : "") + floorTitle;
+                String header = floorTitleForExcel(f);
+                if (header.isEmpty()) header = "Этаж";
                 styleMerge(sh, "A" + (row+1) + ":F" + (row+1), S.headerCenterBorder);
                 put(sh, row, 0, header, S.headerCenterBorder);
 
@@ -373,7 +373,6 @@ public final class RadiationExcelExporter {
 
         for (int si = secStart; si < secEnd; si++) {
             Section sec = sections.get(si);
-            String secName = (sec != null && notBlank(sec.getName())) ? sec.getName() : ("Секция " + (si + 1));
 
             List<Floor> floors = floorsOfSection(building, si);
             floors.removeIf(f -> !floorHasAnyChecked(f));
@@ -381,9 +380,10 @@ public final class RadiationExcelExporter {
 
             for (Floor f : floors) {
                 // строка "Секция, Этаж"
+                // заголовок этажа: только значение «Номер этажа»
                 row++;
-                String floorTitle = notBlank(f.getNumber()) ? f.getNumber() : "Этаж";
-                String header = (sections.size() > 1 ? (secName + ", ") : "") + floorTitle;
+                String header = floorTitleForExcel(f);
+                if (header.isEmpty()) header = "Этаж";
                 styleMerge(sh, "A" + (row+1) + ":G" + (row+1), S.headerCenterBorder);
                 put(sh, row, 0, header, S.headerCenterBorder);
 
@@ -443,6 +443,15 @@ public final class RadiationExcelExporter {
         final Space space;
         final List<Room> rooms;
         RadonEntry(Space s, List<Room> r) { this.space = s; this.rooms = r; }
+    }
+    /** Заголовок этажа для Excel: печатаем РОВНО поле "Номер этажа" из карточки.
+     *  Без типа, без секции, без автодобавлений. */
+    private static String floorTitleForExcel(Floor f) {
+        if (f == null) return "";
+        String num = f.getNumber();
+        if (num != null && !num.isBlank()) return num.trim();   // «1 этаж», «подвал», «техэтаж», ...
+        String nm = f.getName();
+        return (nm != null) ? nm.trim() : "";
     }
 
     // Офисы/общественные — все отмеченные комнаты; квартиры — если отмечено >=1, берём случайно одну.
@@ -616,6 +625,12 @@ public final class RadiationExcelExporter {
 
     private static boolean notBlank(String s) { return s != null && !s.isBlank(); }
     private static String safeName(String s) { return s == null ? "" : s; }
+    private static String floorLabelExact(Floor f) {
+        if (f == null) return "";
+        if (f.getName() != null && !f.getName().isBlank()) return f.getName().trim();
+        if (f.getNumber() != null && !f.getNumber().isBlank()) return f.getNumber().trim();
+        return "";
+    }
 
     private static List<Floor> floorsOfSection(Building b, int secIdx) {
         List<Floor> out = new ArrayList<>();

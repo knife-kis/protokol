@@ -179,10 +179,9 @@ public final class MicroclimateExcelExporter {
 
             for (Floor f : floors) {
                 // заголовок (A:V объединено); если секция одна — не печатаем её имя
-                String secName = sectionOnlyName(building, secIdx);
-                String title = joinNotEmpty(secName, floorNameNoType(f)).trim();
+                String title = floorTitleForExcel(f); // ровно то, что пользователь ввёл (номер этажа)
                 mergeWithBorder(sh, "A" + (row + 1) + ":V" + (row + 1));
-                put(sh, row, 0, title, S.sectionHeader); // по центру
+                put(sh, row, 0, title, S.sectionHeader);
                 row++;
 
                 // сгруппировать по помещению
@@ -356,6 +355,13 @@ public final class MicroclimateExcelExporter {
 
         return start + 3;
     }
+    private static String floorTitleForExcel(Floor f) {
+        if (f == null) return "";
+        String num = f.getNumber();
+        if (num != null && !num.isBlank()) return num.trim();   // «1 этаж», «подвал», «техэтаж» и т. п.
+        String nm = f.getName();
+        return (nm != null) ? nm.trim() : "";
+    }
 
     // ===== генераторы значений =====
     private static double[] genFTriplet(Random rng, boolean office) {
@@ -396,16 +402,7 @@ public final class MicroclimateExcelExporter {
             return s != null && s.getName() != null ? s.getName().trim() : "";
         } catch (Exception e) { return ""; }
     }
-    private static String floorNameNoType(Floor f) {
-        if (f == null) return "";
-        String nm = (f.getName() != null && !f.getName().isBlank()) ? f.getName().trim() : (f.getNumber() == null ? "" : f.getNumber().trim());
-        if (f.getType() != null && f.getType().title != null) {
-            String prefix = f.getType().title + " ";
-            if (nm.startsWith(prefix)) nm = nm.substring(prefix.length()).trim();
-        }
-        nm = nm.replaceFirst("(?i)^(жилая|смешанная|офисная)\\s+", "").trim();
-        return nm;
-    }
+
     private static String spaceDisplayName(Space s) {
         String id = (s.getIdentifier() != null) ? s.getIdentifier().trim() : "";
         return id.isBlank() ? "Помещение" : id;

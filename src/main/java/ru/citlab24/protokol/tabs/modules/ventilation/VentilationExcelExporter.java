@@ -639,6 +639,27 @@ public class VentilationExcelExporter {
         }
     }
 
+    // === НОРМАЛИЗАЦИЯ НАЗВАНИЯ ЭТАЖА ДЛЯ ОТЧЁТА ===
+    private static String normalizeFloorLabel(String floorRaw) {
+        if (floorRaw == null) return "Этаж";
+        String s = stripTypePrefix(floorRaw.trim());
+        if (s.isEmpty()) return "Этаж";
+
+        // если уже есть слово «этаж» — оставляем как ввёл пользователь
+        if (s.toLowerCase(java.util.Locale.ROOT).contains("этаж")) return s;
+
+        // если это просто число (возможно отрицательное) — добавим «этаж»
+        if (s.matches("-?\\d+")) return s + " этаж";
+
+        return s;
+    }
+
+    /** Срезает тип этажа в начале строки: «Жилая», «Офисная», «Смешанная» (+ падежи/роды), если вдруг попало в floor */
+    private static String stripTypePrefix(String s) {
+        if (s == null) return "";
+        // начало строки: любые пробелы → слово из набора (разные формы) → пробел/запятая → дальше текст
+        return s.replaceFirst("(?iu)^\\s*(жила(?:я|ой|ом|ую|ые|ых)?|офисн(?:ая|ый|ое|ые|ых|ом)?|смешанн(?:ая|ый|ое|ые|ых|ом)?)(?:\\s+|,\\s*)", "").trim();
+    }
 
     private static void saveWorkbook(Workbook workbook, java.awt.Component parent) {
         JFileChooser fileChooser = new JFileChooser();
