@@ -348,8 +348,14 @@ public class BuildingTab extends JPanel {
                     if (rt != null) rt.updateRoomSelectionStates();
                     LightingTab lt = getLightingTab();
                     if (lt != null) lt.updateRoomSelectionStates();
+
+// НОВОЕ: синхронизация галочек вкладки «Искусственное освещение»
+                    ArtificialLightingTab alt = getArtificialLightingTab();
+                    if (alt != null) alt.updateRoomSelectionStates();
+
                     MicroclimateTab mt = getMicroclimateTab();
                     if (mt != null) mt.updateRoomSelectionStates();
+
 
                     Window w = SwingUtilities.getWindowAncestor(this);
                     MainFrame frame = (w instanceof MainFrame) ? (MainFrame) w : null;
@@ -698,90 +704,123 @@ public class BuildingTab extends JPanel {
     private void loadSelectedProject(Building selectedProject) throws SQLException {
         Building loadedBuilding = DatabaseManager.loadBuilding(selectedProject.getId());
         this.building = loadedBuilding;
-        this.ops.setBuilding(this.building); // ← добавили
+        this.ops.setBuilding(this.building);
         projectNameField.setText(loadedBuilding.getName());
+
+        // Обновляем списки/вкладки
         refreshAllLists();
         updateVentilationTab(loadedBuilding);
         updateRadiationTab(loadedBuilding, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(loadedBuilding, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(loadedBuilding, /*autoApplyDefaults=*/false);
-        showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен", "Загрузка", JOptionPane.INFORMATION_MESSAGE);
+
+        // НОВОЕ: подтягиваем галочки искусственного освещения из БД по ключу и применяем к вкладке
+        ArtificialLightingTab alt = getArtificialLightingTab();
+        if (alt != null) {
+            try {
+                Map<String, Boolean> fromDb =
+                        DatabaseManager.loadArtificialSelectionsByKey(loadedBuilding.getId());
+                alt.applySelectionsByKey(loadedBuilding, fromDb);
+                alt.refreshData();
+            } catch (SQLException ex) {
+                handleError("Не удалось загрузить галочки искусственного освещения: " + ex.getMessage(), "Ошибка");
+            }
+        }
+
+        showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен",
+                "Загрузка", JOptionPane.INFORMATION_MESSAGE);
     }
+
 
     private void saveProject(ActionEvent e) {
         logger.info("BuildingTab.saveProject() - Начало сохранения проекта");
 
-        // 0) Финализируем активное редактирование таблиц (чтобы текущее значение попало в модель)
+        // 0) Финализируем активное редактирование таблиц
         try {
-            java.awt.KeyboardFocusManager kfm = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager();
-            java.awt.Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
+            KeyboardFocusManager kfm = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+            Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
             JTable editingTable = (fo == null) ? null
-                    : (JTable) javax.swing.SwingUtilities.getAncestorOfClass(JTable.class, fo);
+                    : (JTable) SwingUtilities.getAncestorOfClass(JTable.class, fo);
             if (editingTable != null && editingTable.isEditing()) {
                 try { editingTable.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
             }
         } catch (Exception ignore) {}
 
-        // 1) Синхронизируем UI → модель (радиация)
+        // 1) Синхронизируем вкладки → модель
         RadiationTab radiationTab = getRadiationTab();
         if (radiationTab != null) {
             radiationTab.updateRoomSelectionStates();
         }
 
-        // 1.1) КЕО: фиксируем в модель
         LightingTab lightingTab = getLightingTab();
         if (lightingTab != null) {
             lightingTab.updateRoomSelectionStates();
         }
 
-        // >>> НОВОЕ: СНИМОК СОСТОЯНИЙ КЕО ДО СОХРАНЕНИЯ
+        // КЕО: снимок до сохранения
         Map<String, Boolean> snapKeo = saveKeoSelections();
 
-        // 1.2) Искусственное освещение
+        // Искусственное освещение: снимок по ключу (НЕ в Room)
         ArtificialLightingTab artificialTab = getArtificialLightingTab();
+        Map<String, Boolean> snapArtificial = java.util.Collections.emptyMap();
         if (artificialTab != null) {
-            artificialTab.updateRoomSelectionStates();
+            artificialTab.updateRoomSelectionStates();              // фиксируем карту во вкладке
+            snapArtificial = artificialTab.saveSelectionsByKey();   // снимаем карту по ключу
         }
 
-        // 1.3) Микроклимат
+        // Микроклимат
         MicroclimateTab microTab = getMicroclimateTab();
         if (microTab != null) {
             microTab.updateRoomSelectionStates();
         }
 
-        // 2) Генерация имени проекта (как было)
+        // 2) Имя проекта
         String baseName = projectNameField.getText().trim();
         if (baseName.isEmpty()) {
             showMessage("Введите название проекта!", "Ошибка", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        // 3) Создаем копию проекта
+        // 3) Копия проекта
         Building newProject = createBuildingCopy();
         newProject.setName(generateProjectVersionName(baseName));
 
-        // >>> НОВОЕ: ПРИМЕНЯЕМ СНИМОК КЕО К НОВОМУ ПРОЕКТУ ДО сохранения в БД
+        // 3.1) Применяем снимок КЕО к копии до сохранения
         restoreKeoSelections(newProject, snapKeo);
 
-        // 4) Сохраняем в БД
+        // 4) Сохранение в БД
         try {
             DatabaseManager.saveBuilding(newProject);
-            this.building = newProject;
-            this.ops.setBuilding(this.building);
-            projectNameField.setText(extractBaseName(newProject.getName()));
         } catch (SQLException ex) {
             handleError("Ошибка сохранения: " + ex.getMessage(), "Ошибка");
             return;
         }
 
-        // Обновляем списки (как было)
-        refreshAllLists();
+        // 4.1) НОВОЕ: пост-обновлением проставляем artificial_selected в БД для НОВЫХ room.id
+        try {
+            DatabaseManager.updateArtificialSelections(newProject, snapArtificial);
+        } catch (SQLException ex) {
+            handleError("Не удалось сохранить галочки искусственного освещения: " + ex.getMessage(), "Ошибка");
+            // продолжаем, чтобы проект всё равно остался сохранённым
+        }
 
-        // 5) Переинициализируем вкладки БЕЗ авто-проставления
-        //   ВКЛАДКА КЕО ПРОЧИТАЕТ isSelected() И НИЧЕГО НЕ СБРОСИТ
+        // 4.2) Синхронизация состояния UI
+        this.building = newProject;
+        this.ops.setBuilding(this.building);
+        projectNameField.setText(extractBaseName(newProject.getName()));
+
+        // 5) Обновляем списки и вкладки (без авто-дефолтов)
+        refreshAllLists();
         updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(newProject, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(newProject, /*autoApplyDefaults=*/false);
+
+        // 5.1) НОВОЕ: вернём галочки искусственного во вкладку согласно нашему снимку
+        ArtificialLightingTab alt = getArtificialLightingTab();
+        if (alt != null) {
+            alt.applySelectionsByKey(newProject, snapArtificial);
+            alt.refreshData();
+        }
 
         logger.info("Проект успешно сохранен");
     }
@@ -843,7 +882,6 @@ public class BuildingTab extends JPanel {
         }
         return copy;
     }
-
 
     @SuppressWarnings("serial")
     private abstract class ReorderHandler<T> extends TransferHandler {
@@ -1754,13 +1792,7 @@ public class BuildingTab extends JPanel {
     }
     private ArtificialLightingTab getArtificialLightingTab() {
         Window wnd = SwingUtilities.getWindowAncestor(this);
-        if (wnd instanceof MainFrame) {
-            JTabbedPane tabs = ((MainFrame) wnd).getTabbedPane();
-            for (Component c : tabs.getComponents()) {
-                if (c instanceof ArtificialLightingTab) return (ArtificialLightingTab) c;
-            }
-        }
-        return null;
+        return (wnd instanceof MainFrame) ? ((MainFrame) wnd).getArtificialLightingTab() : null;
     }
 
     private void updateMicroclimateTab(Building building, boolean autoApplyDefaults) {

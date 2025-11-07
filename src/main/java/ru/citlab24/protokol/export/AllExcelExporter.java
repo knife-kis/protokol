@@ -46,11 +46,32 @@ public final class AllExcelExporter {
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
-            // 4) Искусственное освещение — пробуем вызвать
-            //    ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter.appendToWorkbook(Building, int, Workbook)
-            tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter",
-                    new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
-                    new Object[]{building, -1, wb});
+            // 4) Искусственное освещение — берём карту выбранности из вкладки и зовём 4-арг. appendToWorkbook(...)
+            java.util.Map<Integer, Boolean> litMap = null;
+            try {
+                if (frame != null && frame.getArtificialLightingTab() != null) {
+                    // метод добавь в ArtificialLightingTab, см. ниже
+                    litMap = frame.getArtificialLightingTab().snapshotSelectionMap();
+                }
+            } catch (Throwable ignore) {}
+
+// сначала пытаемся вызвать новую сигнатуру (Building, int, Workbook, Map)
+            try {
+                Class<?> clazz = Class.forName("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter");
+                java.lang.reflect.Method m = clazz.getMethod(
+                        "appendToWorkbook",
+                        ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class, java.util.Map.class
+                );
+                m.invoke(null, building, -1, wb, litMap); // static
+            } catch (NoSuchMethodException e) {
+                // фолбэк на старую 3-арг. сигнатуру, если у тебя старый экспортёр
+                tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter",
+                        new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
+                        new Object[]{building, -1, wb});
+            } catch (Throwable t) {
+                t.printStackTrace(); // не валим общий экспорт
+            }
+
 
             // 5) Радиация — пробуем вызвать append в том же стиле
             tryInvokeAppend("ru.citlab24.protokol.tabs.modules.med.RadiationExcelExporter",

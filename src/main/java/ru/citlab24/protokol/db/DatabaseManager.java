@@ -68,10 +68,11 @@ public class DatabaseManager {
                     "volume DOUBLE," +
                     "ventilation_channels INT," +
                     "ventilation_section_area DOUBLE," +
-                    "is_selected BOOLEAN DEFAULT FALSE," +
+                    "is_selected BOOLEAN DEFAULT FALSE," +                 // КЕО
+                    "artificial_selected BOOLEAN DEFAULT FALSE," +         // НОВОЕ: Искусственное освещение
                     "external_walls_count INT," +
-                    "microclimate_selected BOOLEAN DEFAULT FALSE," +   // ← ДОБАВИЛИ
-                    "radiation_selected  BOOLEAN DEFAULT FALSE," +     // ← ДОБАВИЛИ
+                    "microclimate_selected BOOLEAN DEFAULT FALSE," +
+                    "radiation_selected  BOOLEAN DEFAULT FALSE," +
                     "position INT)");
 
             // миграции (безопасны, если столбцы уже есть)
@@ -84,8 +85,9 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "room",  "ventilation_section_area", "DOUBLE");
             addColumnIfMissing(stmt, "room",  "is_selected", "BOOLEAN DEFAULT FALSE");
             addColumnIfMissing(stmt, "room",  "external_walls_count", "INT");
-            addColumnIfMissing(stmt, "room",  "microclimate_selected", "BOOLEAN DEFAULT FALSE"); // ← ДОБАВЬ ЭТО
-            addColumnIfMissing(stmt, "room",  "radiation_selected",   "BOOLEAN DEFAULT FALSE");
+            addColumnIfMissing(stmt, "room",  "microclimate_selected",  "BOOLEAN DEFAULT FALSE");
+            addColumnIfMissing(stmt, "room",  "radiation_selected",     "BOOLEAN DEFAULT FALSE");
+            addColumnIfMissing(stmt, "room",  "artificial_selected",    "BOOLEAN DEFAULT FALSE");
 
         }
     }
@@ -250,8 +252,9 @@ public class DatabaseManager {
         logger.debug("Сохранение комнаты: {}", room.getName());
         String sql = "INSERT INTO room (" +
                 "space_id, name, volume, ventilation_channels, ventilation_section_area, " +
-                "is_selected, external_walls_count, microclimate_selected, radiation_selected, position" +
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "is_selected, artificial_selected, external_walls_count, " +        // + artificial_selected
+                "microclimate_selected, radiation_selected, position" +
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, spaceId);
             stmt.setString(2, room.getName());
@@ -265,19 +268,36 @@ public class DatabaseManager {
             stmt.setDouble(5, room.getVentilationSectionArea());
 
             // освещение (как было)
-            stmt.setBoolean(6, room.isSelected());
+            // КЕО (как было) + независимая галочка «Искусственное освещение»
+            stmt.setBoolean(6, room.isSelected());   // КЕО
 
-            // external_walls_count (nullable)
+            boolean artificial = false;
+            try {
+                // приоритет — современное имя геттера
+                Object v = room.getClass().getMethod("isArtificialSelected").invoke(room);
+                if (v instanceof Boolean) artificial = (Boolean) v;
+            } catch (Throwable ignore) {
+                try {
+                    // совместимость со старыми моделями
+                    Object v2 = room.getClass().getMethod("isArtificialLightingSelected").invoke(room);
+                    if (v2 instanceof Boolean) artificial = (Boolean) v2;
+                } catch (Throwable ignore2) {
+                    try {
+                        Object v3 = room.getClass().getMethod("getArtificialLightingSelected").invoke(room);
+                        if (v3 instanceof Boolean) artificial = (Boolean) v3;
+                    } catch (Throwable ignore3) {}
+                }
+            }
+            stmt.setBoolean(7, artificial);
+
+
+            // external_walls_count сдвинулся на +1
             Integer walls = room.getExternalWallsCount();
-            if (walls == null) stmt.setNull(7, Types.INTEGER);
-            else stmt.setInt(7, walls);
+            if (walls == null) stmt.setNull(8, Types.INTEGER); else stmt.setInt(8, walls);
 
-            // микроклимат / радиация — НОВЫЕ ФЛАГИ
-            stmt.setBoolean(8, room.isMicroclimateSelected());
-            stmt.setBoolean(9, room.isRadiationSelected());
-
-            // position
-            stmt.setInt(10, room.getPosition());
+            stmt.setBoolean(9,  room.isMicroclimateSelected());
+            stmt.setBoolean(10, room.isRadiationSelected());
+            stmt.setInt(11,     room.getPosition());
 
             stmt.executeUpdate();
             try (ResultSet rs = stmt.getGeneratedKeys()) {
@@ -359,8 +379,22 @@ public class DatabaseManager {
                     room.setVentilationChannels(rs.getInt("ventilation_channels"));
                     room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
 
-                    // Освещение ( как было )
-                    room.setSelected(rs.getBoolean("is_selected"));
+// КЕО (общий флаг — вернём чтение, чтобы не потерять состояния естественного освещения)
+                    try { room.setSelected(rs.getBoolean("is_selected")); } catch (SQLException ignore) {}
+
+// Искусственное освещение — отдельный флаг (если в модели есть сеттер)
+                    try {
+                        boolean art = rs.getBoolean("artificial_selected");
+                        try {
+                            var m = room.getClass().getMethod("setArtificialSelected", boolean.class);
+                            m.invoke(room, art);
+                        } catch (ReflectiveOperationException ignore) {
+                            // мягкая деградация для старых моделей — пропускаем,
+                            // вкладка подтянет галочки через applySelectionsByKey(...)
+                        }
+                    } catch (SQLException ignore) { /* колонка могла отсутствовать в старой схеме */ }
+
+
 
                     // Наружные стены (nullable)
                     Object wallsObj = rs.getObject("external_walls_count");
@@ -425,8 +459,18 @@ public class DatabaseManager {
                     room.setVentilationChannels(rs.getInt("ventilation_channels"));
                     room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
 
-                    // Освещение
+// КЕО (общий флаг)
                     try { room.setSelected(rs.getBoolean("is_selected")); } catch (SQLException ignore) {}
+
+// Искусственное освещение
+                    try {
+                        boolean art = rs.getBoolean("artificial_selected");
+                        try {
+                            var m = room.getClass().getMethod("setArtificialSelected", boolean.class);
+                            m.invoke(room, art);
+                        } catch (ReflectiveOperationException ignore) { /* совместимость со старой моделью */ }
+                    } catch (SQLException ignore) {}
+
 
                     // Наружные стены (nullable)
                     try {
@@ -449,5 +493,54 @@ public class DatabaseManager {
         }
         return rooms;
     }
+    public static void updateArtificialSelections(Building b, Map<String, Boolean> byKey) throws SQLException {
+        if (b == null || byKey == null || byKey.isEmpty()) return;
+        String sql = "UPDATE room SET artificial_selected=? WHERE id=?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (Floor f : b.getFloors()) {
+                for (Space s : f.getSpaces()) {
+                    for (Room r : s.getRooms()) {
+                        String key = makeKey(f, s, r);
+                        Boolean v = byKey.get(key);
+                        if (v == null) continue;
+                        ps.setBoolean(1, v);
+                        ps.setInt(2, r.getId());
+                        ps.addBatch();
+                    }
+                }
+            }
+            ps.executeBatch();
+        }
+    }
+
+    public static Map<String, Boolean> loadArtificialSelectionsByKey(int buildingId) throws SQLException {
+        Map<String, Boolean> res = new HashMap<>();
+        String sql =
+                "SELECT f.section_index, f.number, s.identifier, r.name, r.artificial_selected " +
+                        "FROM room r " +
+                        "JOIN space s ON r.space_id = s.id " +
+                        "JOIN floor f ON s.floor_id = f.id " +
+                        "WHERE f.building_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, buildingId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String key = rs.getInt(1) + "|" +
+                            ns(rs.getString(2)) + "|" +
+                            ns(rs.getString(3)) + "|" +
+                            ns(rs.getString(4));
+                    res.put(key, rs.getBoolean(5));
+                }
+            }
+        }
+        return res;
+    }
+
+    private static String makeKey(Floor f, Space s, Room r) {
+        return f.getSectionIndex() + "|" + ns(f.getNumber()) + "|" + ns(s.getIdentifier()) + "|" + ns(r.getName());
+    }
+    private static String ns(String s) { return (s == null) ? "" : s.trim(); }
 
 }

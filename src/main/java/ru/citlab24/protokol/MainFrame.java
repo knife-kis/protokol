@@ -24,6 +24,7 @@ public class MainFrame extends JFrame {
     private final Building building = new Building();
     private final JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
 
+
     public MainFrame() {
         super("Протокол испытаний");
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);

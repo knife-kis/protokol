@@ -71,24 +71,10 @@ public final class ArtificialLightingTab extends JPanel {
 
     /** Зафиксировать текущее состояние чекбоксов Освещения в доменной модели. */
     public void updateRoomSelectionStates() {
-        if (building == null) return;
-        for (Floor f : building.getFloors()) {
-            for (Space s : f.getSpaces()) {
-                if (ops.isOfficeSpace(s) || ops.isPublicSpace(s)) {
-                    // переносим состояния из вкладки
-                    for (Room r : s.getRooms()) {
-                        Boolean v = selectionMap.get(r.getId());
-                        if (v != null) r.setSelected(v);
-                    }
-                } else {
-                    // это жилищные/прочие – ВСЕГДА затираем в модели
-                    for (Room r : s.getRooms()) {
-                        r.setSelected(false);
-                    }
-                }
-            }
-        }
+        // Ничего не пишем в Room — искусственное освещение живёт только в selectionMap.
+        lit_refreshHighlights();
     }
+
 
     /** Выбор помещения по индексу (удобно вызывать снаружи). */
     public void selectSpaceByIndex(int index) {
@@ -140,6 +126,11 @@ public final class ArtificialLightingTab extends JPanel {
         );
         split.setResizeWeight(0.45);
         return split;
+    }
+    // === Перерисовка подсветки этажей/помещений (как в КЕО) ===
+    private void lit_refreshHighlights() {
+        try { if (floorList != null) floorList.repaint(); } catch (Throwable ignore) {}
+        try { if (spaceList != null) spaceList.repaint(); } catch (Throwable ignore) {}
     }
 
     private JComponent buildLeftPane() {
@@ -240,13 +231,13 @@ public final class ArtificialLightingTab extends JPanel {
                 if (r != null) {
                     Object v = roomsModel.getValueAt(row, 0);
                     boolean selected = (v instanceof Boolean) ? (Boolean) v : false;
-                    r.setSelected(selected);
+                    selectionMap.put(r.getId(), selected);   // ← только локально
                 }
-                // обновим подсветку этажей/помещений
                 if (floorList != null) floorList.repaint();
                 if (spaceList != null) spaceList.repaint();
             }
         });
+
         JPanel p = new JPanel(new BorderLayout());
         p.setBorder(titled("Комнаты (измерения)"));
         p.add(new JScrollPane(roomsTable), BorderLayout.CENTER);
@@ -325,44 +316,96 @@ public final class ArtificialLightingTab extends JPanel {
     }
 
     // ========================= SELECTION MAP =========================
+    /** Снимок выбранных комнат (roomId → selected) для общего экспортёра. */
+    public java.util.Map<Integer, Boolean> snapshotSelectionMap() {
+        return new java.util.HashMap<>(selectionMap);
+    }
 
-    /**
-     * Перестраиваем локальную карту.
-     * Сохраняем уже выставленные значения, для новых комнат:
-     *  - если помещение офис/общественное → true,
-     *  - иначе (квартиры/прочее) — просто не добавляем в карту.
-     */
-    private void rebuildSelectionMap(boolean autoApplyDefaults) {
-        if (!autoApplyDefaults) {
-            // ПОЛНОСТЬЮ перечитать карту из доменной модели (сохранённые значения)
-            selectionMap.clear();
-            for (Floor f : building.getFloors()) {
-                for (Space s : f.getSpaces()) {
-                    if (!(ops.isOfficeSpace(s) || ops.isPublicSpace(s))) continue;
-                    for (Room r : s.getRooms()) {
-                        selectionMap.put(r.getId(), r.isSelected());
-                    }
-                }
-            }
-            return;
-        }
+/** ===== Искусственное освещение: сохранение/восстановление по ключу
+ *  формат ключа совпадает с DatabaseManager.loadArtificialSelectionsByKey():
+ *  sectionIndex|floor.number|space.identifier|room.name
+ *  ================================================================ */
 
-        // autoApplyDefaults = true → не трогаем существующие ключи; для НОВЫХ комнат включаем по умолчанию
-        Map<Integer, Boolean> merged = new HashMap<>(selectionMap);
+    /** Построить ключ по объектам доменной модели. */
+    private static String makeKey(Floor f, Space s, Room r) {
+        return f.getSectionIndex() + "|" + ns(f.getNumber()) + "|" + ns(s.getIdentifier()) + "|" + ns(r.getName());
+    }
+    private static String ns(String s) { return (s == null) ? "" : s.trim(); }
+
+    /** Сохранить текущие галочки вкладки в карту по ключу.
+     *  Берём только офисные и общественные помещения. */
+    public java.util.Map<String, Boolean> saveSelectionsByKey() {
+        java.util.Map<String, Boolean> res = new java.util.HashMap<>();
+        if (building == null) return res;
+
         for (Floor f : building.getFloors()) {
             for (Space s : f.getSpaces()) {
                 if (!(ops.isOfficeSpace(s) || ops.isPublicSpace(s))) continue;
                 for (Room r : s.getRooms()) {
-                    if (!merged.containsKey(r.getId())) {
-                        // если это новая комната — ставим ON по умолчанию
-                        merged.put(r.getId(), true);
-                    }
+                    boolean sel = selectionMap.getOrDefault(r.getId(), false);
+                    res.put(makeKey(f, s, r), sel);
                 }
             }
         }
-        selectionMap.clear();
-        selectionMap.putAll(merged);
+        return res;
     }
+
+    /** Применить карту галочек по ключу к ТЕКУЩЕЙ вкладке.
+     *  Ничего не пишет в Room — заполняет только selectionMap. */
+    public void applySelectionsByKey(Building b, java.util.Map<String, Boolean> byKey) {
+        if (b == null || byKey == null) return;
+
+        // обновляем ссылку на здание и ops
+        this.building = b;
+        this.ops.setBuilding(this.building);
+
+        // перестраиваем selectionMap под актуальные roomId, без авто-дефолтов
+        rebuildSelectionMap(/*autoApplyDefaults=*/false);
+
+        for (Floor f : building.getFloors()) {
+            for (Space s : f.getSpaces()) {
+                if (!(ops.isOfficeSpace(s) || ops.isPublicSpace(s))) continue;
+                for (Room r : s.getRooms()) {
+                    String key = makeKey(f, s, r);
+                    Boolean v = byKey.get(key);
+                    if (v != null) selectionMap.put(r.getId(), v);
+                }
+            }
+        }
+        // Подсветим списки (UI перерисуешь снаружи через refreshData())
+        lit_refreshHighlights();
+    }
+
+    private void rebuildSelectionMap(boolean autoApplyDefaults) {
+        if (building == null) {
+            selectionMap.clear();
+            return;
+        }
+
+        // 1) Какие roomId сейчас «валидны» (только офис/общественные)
+        Set<Integer> validIds = new HashSet<>();
+        for (Floor f : building.getFloors()) {
+            for (Space s : f.getSpaces()) {
+                if (!(ops.isOfficeSpace(s) || ops.isPublicSpace(s))) continue;
+                for (Room r : s.getRooms()) validIds.add(r.getId());
+            }
+        }
+
+        // 2) Сохраняем старые значения
+        Map<Integer, Boolean> prev = new HashMap<>(selectionMap);
+        selectionMap.clear();
+
+        // 3) Переносим, что знаем; для новых — по умолчанию true (если autoApplyDefaults)
+        for (Integer id : validIds) {
+            if (prev.containsKey(id)) {
+                selectionMap.put(id, prev.get(id));
+            } else if (autoApplyDefaults) {
+                selectionMap.put(id, true);
+            }
+            // иначе — не добавляем (false по умолчанию)
+        }
+    }
+
 
     /** Есть ли в помещении хотя бы одна комната, отмеченная для освещения? */
     private boolean hasAnyInSpace(Space s) {
@@ -408,7 +451,7 @@ public final class ArtificialLightingTab extends JPanel {
         } catch (Exception ignore) {}
 
         // 2) Синхронизируем чекбоксы вкладки в модель комнат (если у вас есть такой метод)
-        try { this.updateRoomSelectionStates(); } catch (Throwable ignore) {}
+        Map<Integer, Boolean> snap = new HashMap<>(selectionMap);
 
         // 3) Экспорт одного листа «Иск освещение» по всем секциям (sectionIndex = -1)
         if (this.building == null) {
@@ -416,7 +459,7 @@ public final class ArtificialLightingTab extends JPanel {
                     "Экспорт", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        ArtificialLightingExcelExporter.export(this.building, -1, this);
+        ArtificialLightingExcelExporter.export(this.building, -1, this, snap);
     }
 
 }

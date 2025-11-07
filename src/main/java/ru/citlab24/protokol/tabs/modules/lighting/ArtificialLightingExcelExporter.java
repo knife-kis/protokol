@@ -19,6 +19,37 @@ public final class ArtificialLightingExcelExporter {
     private ArtificialLightingExcelExporter() {}
 
     /* =================== Публичные API =================== */
+    public static void export(Building building,
+                              int sectionIndex,
+                              Component parent,
+                              Map<Integer, Boolean> selectionMap) {
+        if (building == null) {
+            JOptionPane.showMessageDialog(parent, "Сначала загрузите проект (здание).",
+                    "Экспорт", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (selectionMap == null) selectionMap = Collections.emptyMap();
+
+        try (Workbook wb = new XSSFWorkbook()) {
+            appendToWorkbook(building, sectionIndex, wb, selectionMap);
+
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("Сохранить Excel");
+            chooser.setSelectedFile(new File("Освещение_искусственное.xlsx"));
+            if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
+                File file = chooser.getSelectedFile();
+                try (FileOutputStream out = new FileOutputStream(file)) {
+                    wb.write(out);
+                }
+                JOptionPane.showMessageDialog(parent,
+                        "Файл сохранён:\n" + file.getAbsolutePath(),
+                        "Экспорт завершён", JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(parent, "Ошибка экспорта: " + ex.getMessage(),
+                    "Экспорт", JOptionPane.ERROR_MESSAGE);
+        }
+    }
 
     public static void export(Building building, int sectionIndex, Component parent) {
         if (building == null) {
@@ -27,7 +58,7 @@ public final class ArtificialLightingExcelExporter {
             return;
         }
         try (Workbook wb = new XSSFWorkbook()) {
-            appendToWorkbook(building, sectionIndex, wb);
+            appendToWorkbook(building, sectionIndex, wb, null); // fallback на Room.isSelected()
 
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Сохранить Excel");
@@ -47,14 +78,21 @@ public final class ArtificialLightingExcelExporter {
         }
     }
 
-    public static void appendToWorkbook(Building building, int sectionIndex, Workbook wb) {
+    public static void appendToWorkbook(Building building,
+                                        int sectionIndex,
+                                        Workbook wb,
+                                        Map<Integer, Boolean> selectionMap) {
         if (building == null || wb == null) return;
-        buildSheet(building, sectionIndex, wb);
+        buildSheet(building, sectionIndex, wb, selectionMap);
     }
+
 
     /* =================== Построение листа =================== */
 
-    private static void buildSheet(Building building, int sectionIndex, Workbook wb) {
+    private static void buildSheet(Building building,
+                                   int sectionIndex,
+                                   Workbook wb,
+                                   Map<Integer, Boolean> selectionMap) {
         Styles S = new Styles(wb);
 
         Sheet sh = wb.createSheet("Иск освещение");
@@ -139,7 +177,8 @@ public final class ArtificialLightingExcelExporter {
         put(sh, r7, 15, 12,S.centerBorder);  // P
 
         // ===== ДАННЫЕ (с 8-й строки) =====
-        List<Entry> rows = collectSelectedEntries(building, sectionIndex);
+        List<Entry> rows = collectSelectedEntries(building, sectionIndex, selectionMap);
+        System.out.println("[ArtificialLighting] rooms to export = " + rows.size());
         int start = 7; // 0-based (row 8)
         int seq = 1;
 
@@ -196,10 +235,14 @@ public final class ArtificialLightingExcelExporter {
             // ---------- K / L ----------
             set(rr, 10, "-", S.centerBorder);  // K
 
-            // L: НОРМАТИВНАЯ осветлённость
-            Integer lValue = isOffice ? 300 : lNormByName; // офисам 300, иначе 20/30/-
-            if (lValue != null) set(rr, 11, lValue, S.centerBorder);
-            else                set(rr, 11, "-",    S.centerBorder);
+// L: НОРМАТИВНАЯ освещённость (без авто-распаковки)
+            if (isOffice) {
+                set(rr, 11, 300, S.centerBorder);                           // офисам всегда 300
+            } else if (lNormByName != null) {
+                set(rr, 11, lNormByName.intValue(), S.centerBorder);        // 20 или 30
+            } else {
+                set(rr, 11, "-", S.centerBorder);                           // не распознали — «-»
+            }
 
             // ---------- M / N / O (коэфф. пульсации) ----------
             if (isOffice) {
@@ -239,28 +282,55 @@ public final class ArtificialLightingExcelExporter {
 
     /* =================== Сбор данных =================== */
 
-    private static List<Entry> collectSelectedEntries(Building b, int sectionIndex) {
+    private static List<Entry> collectSelectedEntries(Building b, int sectionIndex, Map<Integer, Boolean> selectionMap) {
         List<Entry> res = new ArrayList<>();
         if (b == null) return res;
+
+        boolean useMap = (selectionMap != null && !selectionMap.isEmpty());
+
         for (Floor f : b.getFloors()) {
             if (f == null) continue;
             if (sectionIndex >= 0 && f.getSectionIndex() != sectionIndex) continue;
+
             for (Space s : f.getSpaces()) {
                 if (s == null) continue;
-                // ВАЖНО: экспортируем только офисные/общественные помещения
+                // Экспортируем только офисные/общественные
                 if (!(isOfficeSpace(s) || isPublicSpace(s))) continue;
+
                 for (Room r : s.getRooms()) {
-                    if (r != null && r.isSelected()) {
-                        res.add(new Entry(f, s, r));
-                    }
+                    if (r == null) continue;
+                    boolean selected = isRoomSelectedForArtificial(r, useMap ? selectionMap : null);
+                    if (selected) res.add(new Entry(f, s, r));
                 }
             }
         }
+
         res.sort(Comparator.comparingInt((Entry e) -> e.floor.getPosition())
                 .thenComparingInt(e -> e.space.getPosition())
                 .thenComparingInt(e -> e.room.getPosition()));
         return res;
     }
+
+    private static Map<Integer, Boolean> buildDefaultSelectionMap(Building building, int sectionIndex) {
+        Map<Integer, Boolean> map = new HashMap<>();
+        if (building == null) return map;
+
+        for (Floor f : building.getFloors()) {
+            if (sectionIndex >= 0 && f.getSectionIndex() != sectionIndex) continue;
+
+            for (Space s : f.getSpaces()) {
+                Space.SpaceType t = s.getType();
+                boolean isOfficeOrPublic = (t == Space.SpaceType.OFFICE) || (t == Space.SpaceType.PUBLIC_SPACE);
+                if (!isOfficeOrPublic) continue;
+
+                for (Room r : s.getRooms()) {
+                    map.put(r.getId(), true);
+                }
+            }
+        }
+        return map;
+    }
+
     private static Integer normativeL(String roomName) {
         if (roomName == null) return null;
         String s = roomName.toLowerCase(Locale.ROOT);
@@ -310,6 +380,39 @@ public final class ArtificialLightingExcelExporter {
                 .replaceAll(" +", " ")
                 .trim();
     }
+    /** Определяем, отмечена ли комната на вкладке «Искусственное освещение».
+     * Приоритет: карта selectionMap -> спец-флаг в Room (isArtificialLightingSelected / getArtificialLightingSelected / isArtificialSelected)
+     * -> общий Room.isSelected() как последний фолбэк.
+     */
+    private static boolean isRoomSelectedForArtificial(Room r, Map<Integer, Boolean> selectionMap) {
+        if (r == null) return false;
+
+        // 1) Карта из вкладки (если передана и id валиден)
+        if (selectionMap != null && !selectionMap.isEmpty()) {
+            try {
+                Boolean v = selectionMap.get(r.getId());
+                if (v != null) return v;
+            } catch (Throwable ignore) {}
+        }
+
+        // 2) Только специальные флаги «искусственного» в модели Room
+        try {
+            Object v = r.getClass().getMethod("isArtificialSelected").invoke(r);
+            if (v instanceof Boolean) return (Boolean) v;
+        } catch (Throwable ignore) {}
+        try {
+            Object v = r.getClass().getMethod("isArtificialLightingSelected").invoke(r);
+            if (v instanceof Boolean) return (Boolean) v;
+        } catch (Throwable ignore) {}
+        try {
+            Object v = r.getClass().getMethod("getArtificialLightingSelected").invoke(r);
+            if (v instanceof Boolean) return (Boolean) v;
+        } catch (Throwable ignore) {}
+
+        // ВАЖНО: больше НЕ падаем на Room.isSelected() (КЕО) — это другой модуль
+        return false;
+    }
+
 
     private static String spaceName(Space s) {
         if (s == null) return "Помещение";
