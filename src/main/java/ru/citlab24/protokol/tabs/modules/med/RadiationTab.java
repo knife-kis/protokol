@@ -613,7 +613,10 @@ public class RadiationTab extends JPanel {
             }
             java.util.List<Floor> list = new java.util.ArrayList<>();
             for (Floor f : currentBuilding.getFloors()) {
-                if (f.getSectionIndex() == secIdx) list.add(f);
+                if (f.getSectionIndex() == secIdx
+                        && f.getType() != Floor.FloorType.STREET) { // скрыть «Улица»
+                    list.add(f);
+                }
             }
             list.sort(java.util.Comparator.comparingInt(Floor::getPosition));
             list.forEach(floorListModel::addElement);

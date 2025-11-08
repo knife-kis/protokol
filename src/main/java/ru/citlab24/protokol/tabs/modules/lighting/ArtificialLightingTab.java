@@ -273,8 +273,9 @@ public final class ArtificialLightingTab extends JPanel {
         List<Floor> floors = new ArrayList<>();
         for (Floor f : building.getFloors()) {
             if (f.getSectionIndex() != secIdx) continue;
-            // Скрываем ЖИЛЫЕ этажи в освещении
-            if (f.getType() == Floor.FloorType.RESIDENTIAL) continue;
+            // Скрываем ЖИЛЫЕ и УЛИЦА в освещении (искусственном)
+            if (f.getType() == Floor.FloorType.RESIDENTIAL
+                    || f.getType() == Floor.FloorType.STREET) continue;
             floors.add(f);
         }
         floors.sort(Comparator.comparingInt(Floor::getPosition));

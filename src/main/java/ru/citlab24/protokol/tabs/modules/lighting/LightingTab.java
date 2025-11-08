@@ -4,7 +4,6 @@ import ru.citlab24.protokol.tabs.models.*;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
-import javax.swing.event.TableModelEvent;
 import java.awt.*;
 import java.util.List;
 import java.util.*;
@@ -287,6 +286,8 @@ public final class LightingTab extends JPanel {
 
         List<Floor> list = currentBuilding.getFloors().stream()
                 .filter(f -> f.getSectionIndex() == secIdx)
+                .filter(f -> f.getType() != Floor.FloorType.PUBLIC
+                        && f.getType() != Floor.FloorType.STREET) // скрыть общественные и улицу
                 .sorted(Comparator.comparingInt(Floor::getPosition))
                 .collect(Collectors.toList());
 
@@ -296,6 +297,7 @@ public final class LightingTab extends JPanel {
         }
         updateSpaceList(); // принудительно, если выбор не изменился
     }
+
 
     private int computeRawSectionIndex() {
         if (currentBuilding == null) return 0;
@@ -467,16 +469,6 @@ public final class LightingTab extends JPanel {
             }
         }
         if (roomTable != null) roomTable.repaint();
-    }
-
-    /** Универсальная проверка типа этажа: жилой или совмещённый (без жёсткой привязки к enum). */
-    private boolean isResidentialOrCombined(Floor f) {
-        if (f == null || f.getType() == null) return false;
-        String n = f.getType().name().toUpperCase(Locale.ROOT);
-        // Поддержим разные варианты названий в enum:
-        // RESIDENTIAL, LIVING, APARTMENT, MIXED, COMBINED, COMBO и т.п.
-        return n.contains("RESID") || n.contains("LIV") || n.contains("APART")
-                || n.contains("MIX") || n.contains("COMBIN");
     }
     /** Экспорт Excel: сначала фиксируем чекбоксы в модель, затем экспорт. */
     private void exportToExcel() {

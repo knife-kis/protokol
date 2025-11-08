@@ -11,6 +11,7 @@ import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.dialogs.*;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
+import ru.citlab24.protokol.tabs.modules.lighting.StreetLightingTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
@@ -373,13 +374,6 @@ public class BuildingTab extends JPanel {
         });
 
         return wrap;
-    }
-    private boolean isOutdoorSpace(Space s) {
-        try {
-            return s != null && s.getType() == Space.SpaceType.OUTDOOR;
-        } catch (Throwable ignore) {
-            return false;
-        }
     }
 
     private void copySection(ActionEvent e) {
@@ -1131,11 +1125,6 @@ public class BuildingTab extends JPanel {
         }
     }
 
-    private void updateRadiationTab(Building building, boolean forceOfficeSelection) {
-        // ВАЖНО: по умолчанию авто-правила выключены, чтобы не сбивать ручные галочки
-        updateRadiationTab(building, /*forceOfficeSelection=*/forceOfficeSelection, /*autoApplyRules=*/false);
-    }
-
     private void updateRadiationTab(Building building, boolean forceOfficeSelection, boolean autoApplyRules) {
         Window mainFrame = SwingUtilities.getWindowAncestor(this);
         if (mainFrame instanceof MainFrame) {
@@ -1549,7 +1538,6 @@ public class BuildingTab extends JPanel {
                     // иначе — этаж уже «занят» первой квартирой → ничего не проставляем
                 }
             }
-
         }
 
         updateLightingTab(building, /*autoApplyDefaults=*/true);
@@ -1692,6 +1680,12 @@ public class BuildingTab extends JPanel {
             alt.setBuilding(building, autoApplyDefaults); // при true – авто-галочки для офис/общественных
             alt.refreshData();
         }
+        // Осв улица — ПОДТЯГИВАЕМ АКТУАЛЬНЫЙ BUILDING
+        ru.citlab24.protokol.tabs.modules.lighting.StreetLightingTab street = getStreetLightingTab();
+        if (street != null) {
+            street.setBuilding(building);  // без авто-дефолтов, просто перечитать названия
+            street.refreshData();
+        }
     }
 
     private void updateVentilationTab(Building building) {
@@ -1812,10 +1806,6 @@ public class BuildingTab extends JPanel {
         return ops.collectPopularPublicRoomNames(limit);
     }
 
-    private static String normalizeOfficeBaseName(String name) {
-        return BuildingModelOps.normalizeOfficeBaseName(name);
-    }
-
     // Сбор топа офисных названий по зданию (по "базе", без номеров)
     private java.util.List<String> collectPopularOfficeRoomNames(Building b, int limit) {
         return ops.collectPopularOfficeRoomNames(limit);
@@ -1841,6 +1831,15 @@ public class BuildingTab extends JPanel {
         Window wnd = SwingUtilities.getWindowAncestor(this);
         return (wnd instanceof MainFrame) ? ((MainFrame) wnd).getArtificialLightingTab() : null;
     }
+
+    private StreetLightingTab getStreetLightingTab() {
+        java.awt.Window wnd = javax.swing.SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof ru.citlab24.protokol.MainFrame) {
+            return ((ru.citlab24.protokol.MainFrame) wnd).getStreetLightingTab();
+        }
+        return null;
+    }
+
 
     private void updateMicroclimateTab(Building building, boolean autoApplyDefaults) {
         Window wnd = SwingUtilities.getWindowAncestor(this);
@@ -1935,7 +1934,6 @@ public class BuildingTab extends JPanel {
 
         return false;
     }
-
     // На «улице» показываем только OUTDOOR и только если включён тумблер «Улица»
     private boolean isSpaceVisibleByFilterOnFloor(Space s, Floor f) {
         if (f != null && f.getType() == Floor.FloorType.STREET) {
@@ -1944,12 +1942,4 @@ public class BuildingTab extends JPanel {
         }
         return isSpaceVisibleByFilter(s);
     }
-
-
-    /** Раньше авто-меняла тумблеры при выборе «улицы». Теперь — НИЧЕГО не делаем: фильтры только вручную. */
-    private void syncFilterControlsWithFloor(Floor floor) {
-        // no-op
-    }
-
-
 }

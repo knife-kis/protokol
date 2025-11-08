@@ -223,17 +223,27 @@ public class MicroclimateTab extends JPanel {
         if (selected == null) return;
         int secIdx = sectionList.getSelectedIndex();
 
+        // показываем только Жилые, Офисные и Смешанные; скрываем Общественные и Улица
         List<Floor> floors = currentBuilding.getFloors().stream()
                 .filter(f -> f.getSectionIndex() == secIdx)
+                .filter(f -> {
+                    Floor.FloorType t = f.getType();
+                    return t == Floor.FloorType.RESIDENTIAL
+                            || t == Floor.FloorType.OFFICE
+                            || t == Floor.FloorType.MIXED;
+                })
                 .sorted(FLOOR_ORDER)
                 .collect(Collectors.toList());
 
         floors.forEach(floorListModel::addElement);
-        if (!floorListModel.isEmpty()) floorList.setSelectedIndex(0);
+        if (!floorListModel.isEmpty()) {
+            floorList.setSelectedIndex(0);
+        }
 
         updateSpaceList();
         updateRoomList();
     }
+
 
     private void updateSpaceList() {
         spaceTableModel.clear();

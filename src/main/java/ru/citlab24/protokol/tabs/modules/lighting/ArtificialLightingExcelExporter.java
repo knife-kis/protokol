@@ -311,26 +311,6 @@ public final class ArtificialLightingExcelExporter {
         return res;
     }
 
-    private static Map<Integer, Boolean> buildDefaultSelectionMap(Building building, int sectionIndex) {
-        Map<Integer, Boolean> map = new HashMap<>();
-        if (building == null) return map;
-
-        for (Floor f : building.getFloors()) {
-            if (sectionIndex >= 0 && f.getSectionIndex() != sectionIndex) continue;
-
-            for (Space s : f.getSpaces()) {
-                Space.SpaceType t = s.getType();
-                boolean isOfficeOrPublic = (t == Space.SpaceType.OFFICE) || (t == Space.SpaceType.PUBLIC_SPACE);
-                if (!isOfficeOrPublic) continue;
-
-                for (Room r : s.getRooms()) {
-                    map.put(r.getId(), true);
-                }
-            }
-        }
-        return map;
-    }
-
     private static Integer normativeL(String roomName) {
         if (roomName == null) return null;
         String s = roomName.toLowerCase(Locale.ROOT);
@@ -414,21 +394,6 @@ public final class ArtificialLightingExcelExporter {
     }
 
 
-    private static String spaceName(Space s) {
-        if (s == null) return "Помещение";
-        String id = s.getIdentifier();
-        if (id != null && !id.isBlank()) return id;
-        try {
-            var m = s.getClass().getMethod("getName");
-            Object v = m.invoke(s);
-            if (v != null) {
-                String nm = String.valueOf(v);
-                if (!nm.isBlank()) return nm;
-            }
-        } catch (Exception ignore) {}
-        return "Помещение";
-    }
-
     /* =================== Табличные утилиты =================== */
 
     private static Row ensureRow(Sheet sh, int r0) {
@@ -454,14 +419,6 @@ public final class ArtificialLightingExcelExporter {
         c.setCellValue(val);
         if (style != null) c.setCellStyle(style);
     }
-    private static void put(Sheet sh, int r0, int c0, double val, CellStyle style) {
-        Row r = ensureRow(sh, r0);
-        Cell c = cell(r, c0);
-        c.setCellValue(val);
-        if (style != null) c.setCellStyle(style);
-    }
-
-
 
     private static void set(Row r, int c0, String val, CellStyle style) {
         Cell c = cell(r, c0);

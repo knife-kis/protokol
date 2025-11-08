@@ -5,6 +5,7 @@ import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
+import ru.citlab24.protokol.tabs.modules.lighting.StreetLightingTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
@@ -125,6 +126,7 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Ионизирующее излучение",new RadiationTab());
         tabbedPane.addTab("КЕО",                   new LightingTab(building));
         tabbedPane.addTab("Освещение",             new ArtificialLightingTab(building));
+        tabbedPane.addTab("Осв улица",             new StreetLightingTab(building));
     }
 
     // ===== Утилиты доступа к вкладкам =====
@@ -157,6 +159,15 @@ public class MainFrame extends JFrame {
             }
         }
     }
+    public StreetLightingTab getStreetLightingTab() {
+        for (java.awt.Component c : getTabbedPane().getComponents()) {
+            if (c instanceof StreetLightingTab) {
+                return (StreetLightingTab) c;
+            }
+        }
+        return null;
+    }
+
 
     public JTabbedPane getTabbedPane() {
         return tabbedPane;
