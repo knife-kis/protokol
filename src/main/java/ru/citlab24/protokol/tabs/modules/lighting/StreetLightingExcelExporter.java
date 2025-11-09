@@ -135,6 +135,12 @@ public final class StreetLightingExcelExporter {
         vert90Center.cloneStyleFrom(cellCenter);
         vert90Center.setRotation((short)90);
 
+        // Стиль для J, когда название не распознано (красная заливка)
+        CellStyle cellCenterRed = wb.createCellStyle();
+        cellCenterRed.cloneStyleFrom(cellCenter);
+        cellCenterRed.setFillForegroundColor(IndexedColors.RED.getIndex());
+        cellCenterRed.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
         // Ширины (C = 10 см); K..AD = 0,85 см
         double[] cm = {1.30, 1.03, 10.00, 2.35, 1.61, 1.16, 1.69, 0.70, 1.48, 2.51};
         for (int c = 0; c < cm.length; c++) sh.setColumnWidth(c, cmToColumnWidthUnits(cm[c]));
@@ -219,7 +225,7 @@ public final class StreetLightingExcelExporter {
             // F
             write(sh, rr, 5, "0", cellCenter);
 
-            // G (среднее) — EN: ROUND(SUM(K:AD)/20,1), без правой грани
+            // G (среднее) — ROUND(SUM(K:AD)/20,1), без правой грани
             Cell cg = getOrCreateCell(rr, 6);
             cg.setCellStyle(gStyle);
             cg.setCellFormula(String.format("ROUND(SUM(K%d:AD%d)/20,1)", excelRow, excelRow));
@@ -227,26 +233,26 @@ public final class StreetLightingExcelExporter {
             // H — «±», без левой/правой
             write(sh, rr, 7, "±", hStyle);
 
-            // I — EN формула 2*SQRT( ( Σ POWER(col*0.08/3,2) ) / 20 ), без левой грани
+            // I — 2*SQRT( ( Σ POWER(col*0.08/3,2) ) / 20 ), без левой грани
             Cell ci = getOrCreateCell(rr, 8);
             ci.setCellStyle(iStyle);
             ci.setCellFormula(buildIFormula(excelRow));
 
-            // J — пусто
-            write(sh, rr, 9, "", cellCenter);
+            // === J — по названию из C, иначе 0 + красная заливка ===
+            int jVal = determineJValue(rd.name);
+            Cell cj = getOrCreateCell(rr, 9);
+            cj.setCellStyle(jVal == 0 ? cellCenterRed : cellCenter);
+            cj.setCellValue(jVal);
 
-            // --- Инициализация K..AD нулями, чтобы формулы всегда считались ---
-            for (int c = 10; c <= 29; c++) {
-                Cell m = getOrCreateCell(rr, c);
+            // === K..AD: генерируем 20 значений по правилам экстраполяции + шум ±10% ===
+            long seed = (rd.name == null ? 0L : rd.name.hashCode());
+            double[] kad = buildSeries20(rd.leftMax, rd.centerMin, rd.rightMax, rd.bottomMin, seed);
+
+            for (int c = 0; c < 20; c++) {
+                Cell m = getOrCreateCell(rr, 10 + c);
                 m.setCellStyle(cellCenter);
-                m.setCellValue(0.0); // числовой ноль
+                m.setCellValue(prettyRound(kad[c])); // округление
             }
-
-            // Размещение 4-х значений
-            if (rd.leftMax   != null) getOrCreateCell(rr, 10).setCellValue(rd.leftMax.doubleValue());   // K
-            if (rd.centerMin != null) getOrCreateCell(rr, 14).setCellValue(rd.centerMin.doubleValue()); // O
-            if (rd.rightMax  != null) getOrCreateCell(rr, 19).setCellValue(rd.rightMax.doubleValue());  // T
-            if (rd.bottomMin != null) getOrCreateCell(rr, 29).setCellValue(rd.bottomMin.doubleValue()); // AD
         }
 
         // E: объединённая вертикальная подпись на все строки данных
@@ -263,7 +269,6 @@ public final class StreetLightingExcelExporter {
         int lastUsedRow = Math.max(sh.getLastRowNum(), rowIndex - 1);
         wb.setPrintArea(wb.getSheetIndex(sh), 0, 9, 0, lastUsedRow);
     }
-
 
     /* ===== хелперы записи ===== */
     private static Row getOrCreateRow(Sheet sh, int idx) {
@@ -350,6 +355,108 @@ public final class StreetLightingExcelExporter {
         }
         // округление до 1 знака
         return "ROUND(2*SQRT((" + sum + ")/20),1)";
+    }
+    /* ===== Генерация 20-ти значений K..AD по 4 входам с шумом ±10% ===== */
+    private static double[] buildSeries20(Double v1D, Double v5D, Double v10D, Double v20D, long seed) {
+        double v1  = (v1D  == null ? 0.0 : v1D);
+        double v5  = (v5D  == null ? 0.0 : v5D);
+        double v10 = (v10D == null ? 0.0 : v10D);
+        double v20 = (v20D == null ? 0.0 : v20D);
+
+        java.util.Random rnd = new java.util.Random(seed);
+        double[] a = new double[20];
+
+        // Якоря
+        a[0]  = v1;          // 1
+        a[4]  = v5;          // 5
+        a[9]  = v10;         // 10
+        a[19] = v20;         // 20
+
+        // 2..4 между 1 и 5
+        for (int i = 1; i <= 3; i++) {
+            double t = i / 4.0;                                   // 0.25, 0.5, 0.75
+            double base = v1 + (v5 - v1) * t;
+            a[i] = base * (1.0 + (rnd.nextDouble() * 0.2 - 0.1)); // ±10%
+        }
+
+        // 6 = 5 ±10%
+        a[5] = v5 * (1.0 + (rnd.nextDouble() * 0.2 - 0.1));
+
+        // 7..9 между 6 и 10
+        for (int idx = 6; idx <= 8; idx++) {
+            double t = (idx - 5) / 4.0;                           // 0.25, 0.5, 0.75
+            double base = a[5] + (v10 - a[5]) * t;
+            a[idx] = base * (1.0 + (rnd.nextDouble() * 0.2 - 0.1));
+        }
+
+        // 11..19 между 10 и 20
+        for (int idx = 10; idx <= 18; idx++) {
+            double t = (idx - 9) / 10.0;                          // 0.1..0.9
+            double base = v10 + (v20 - v10) * t;
+            a[idx] = base * (1.0 + (rnd.nextDouble() * 0.2 - 0.1));
+        }
+
+        return a;
+    }
+    /** Округление значений для K..AD:
+     *  [0 .. 9.99] → 2 знака, [10 .. 99.9] → 1 знак, иначе → 0 знаков. */
+    private static double prettyRound(double v) {
+        double a = Math.abs(v);
+        if (a < 10.0)   return Math.round(v * 100.0) / 100.0;
+        if (a < 100.0)  return Math.round(v * 10.0) / 10.0;
+        return Math.round(v);
+    }
+    /** По названию (столбец C) возвращает нормируемое значение для J.
+     *  Если ничего не найдено — 0.
+     *
+     *  Карта соответствий:
+     *   дорога — 4
+     *   пешеходная дорожка у входа в здание — 4
+     *   аллея — 4
+     *   пожарные проезды — 2
+     *   тротуары-подъезды — 2  (поддерживаю и «тратуары-» с опечаткой)
+     *   автостоянка — 2
+     *   хозяйственная площадка — 2
+     *   площадка при мусоросборниках — 2
+     *   прогулочная дорожка — 1
+     *   физкультурные площадки — 10
+     *   площадки для игр — 10
+     *   основной вход в здание — 6
+     *   запасной/технический вход в здание — 4
+     */
+    private static int determineJValue(String raw) {
+        if (raw == null) return 0;
+        String s = raw.toLowerCase(java.util.Locale.ROOT)
+                .replace('ё','е')
+                .trim();
+
+        // 4
+        if (s.contains("дорога") && !s.contains("дорожк")) return 4;
+        if (s.contains("пешеход") && s.contains("дорож") && s.contains("вход") && (s.contains("здани") || s.contains("задни"))) return 4;
+        if (s.contains("аллея")) return 4;
+
+        // 2
+        if (s.contains("пожар") && s.contains("проезд")) return 2;
+        if ((s.contains("тротуар") || s.contains("тратуар")) && s.contains("подъезд")) return 2;
+        if (s.contains("автостоян")) return 2;
+        if (s.contains("хозяйствен") && s.contains("площад")) return 2;
+        if (s.contains("площад") && s.contains("мусоросбор")) return 2;
+
+        // 1
+        if (s.contains("прогулоч") && s.contains("дорож")) return 1;
+
+        // 10
+        if (s.contains("физкультур") && s.contains("площад")) return 10;
+        if (s.contains("площад") && s.contains("игр")) return 10;
+
+        // 6
+        if (s.contains("основн") && s.contains("вход") && (s.contains("здани") || s.contains("задни"))) return 6;
+
+        // 4 (входы)
+        if ((s.contains("запасн") || s.contains("резервн")) && s.contains("вход") && (s.contains("здани") || s.contains("задни"))) return 4;
+        if (s.contains("техническ") && s.contains("вход") && (s.contains("здани") || s.contains("задни"))) return 4;
+
+        return 0;
     }
 
 }

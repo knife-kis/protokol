@@ -19,6 +19,8 @@ import java.util.List;
  * Экспорт пока заглушка (кнопка есть, повесим реальный экспорт позже).
  */
 public final class StreetLightingTab extends JPanel {
+    /** Текущие строки (нужны для снапшота/восстановления значений). */
+    private java.util.List<Row> currentRows = new java.util.ArrayList<>();
 
     private Building building;
 
@@ -141,16 +143,12 @@ public final class StreetLightingTab extends JPanel {
     private void rebuildFromBuilding() {
         List<Row> rows = new ArrayList<>();
         if (building != null) {
-            // Сначала собираем все этажи типа STREET, в порядке position
             List<Floor> streetFloors = new ArrayList<>();
             for (Floor f : building.getFloors()) {
-                if (f != null && f.getType() == Floor.FloorType.STREET) {
-                    streetFloors.add(f);
-                }
+                if (f != null && f.getType() == Floor.FloorType.STREET) streetFloors.add(f);
             }
             streetFloors.sort(Comparator.comparingInt(Floor::getPosition));
 
-            // Проходим по помещениям и комнатам
             for (Floor f : streetFloors) {
                 List<Space> spaces = new ArrayList<>(f.getSpaces());
                 spaces.sort(Comparator.comparingInt(Space::getPosition));
@@ -159,19 +157,17 @@ public final class StreetLightingTab extends JPanel {
                     rooms.sort(Comparator.comparingInt(Room::getPosition));
                     for (Room r : rooms) {
                         Row row = new Row();
-                        // Отображаемое имя: Этаж | Помещение | Комната
                         String floorPart = safe(f.getNumber());
                         String spacePart = safe(s.getIdentifier());
                         String roomPart  = safe(r.getName());
-
-                        // Если хочется короче — можно оставить только roomPart.
-                        row.displayName = buildDisplayName(floorPart, spacePart, roomPart);
+                        row.displayName  = buildDisplayName(floorPart, spacePart, roomPart); // сейчас это просто roomPart
                         row.key = f.getSectionIndex() + "|" + floorPart + "|" + spacePart + "|" + roomPart;
                         rows.add(row);
                     }
                 }
             }
         }
+        this.currentRows = rows;     // ← сохраняем ссылку
         model.setRows(rows);
     }
 
@@ -256,6 +252,29 @@ public final class StreetLightingTab extends JPanel {
             out.add(new StreetLightingExcelExporter.RowData(name, v1, v2, v3, v4));
         }
         return out;
+    }
+    /** Снимок значений по ключу "секция|этаж|помещение|комната". */
+    public java.util.Map<String, Double[]> snapshotValuesByKey() {
+        java.util.Map<String, Double[]> out = new java.util.HashMap<>();
+        for (Row r : currentRows) {
+            out.put(r.key, new Double[]{ r.v1, r.v2, r.v3, r.v4 });
+        }
+        return out;
+    }
+
+    /** Применить значения по ключу. Если ключ не найден — строка остаётся пустой. */
+    public void applyValuesByKey(java.util.Map<String, Double[]> byKey) {
+        if (byKey == null || byKey.isEmpty()) return;
+        for (Row r : currentRows) {
+            Double[] v = byKey.get(r.key);
+            if (v != null) {
+                r.v1 = (v.length > 0) ? v[0] : null;
+                r.v2 = (v.length > 1) ? v[1] : null;
+                r.v3 = (v.length > 2) ? v[2] : null;
+                r.v4 = (v.length > 3) ? v[3] : null;
+            }
+        }
+        model.fireTableDataChanged();
     }
 
     /** Безопасно приводим Object к Double (без авто-разупаковки null). */

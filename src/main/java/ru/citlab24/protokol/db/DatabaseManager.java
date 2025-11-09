@@ -68,14 +68,19 @@ public class DatabaseManager {
                     "volume DOUBLE," +
                     "ventilation_channels INT," +
                     "ventilation_section_area DOUBLE," +
-                    "is_selected BOOLEAN DEFAULT FALSE," +                 // КЕО
-                    "artificial_selected BOOLEAN DEFAULT FALSE," +         // НОВОЕ: Искусственное освещение
+                    "is_selected BOOLEAN DEFAULT FALSE," +
+                    "artificial_selected BOOLEAN DEFAULT FALSE," +
                     "external_walls_count INT," +
                     "microclimate_selected BOOLEAN DEFAULT FALSE," +
                     "radiation_selected  BOOLEAN DEFAULT FALSE," +
+                    // НОВОЕ: значения «Осв улица»
+                    "street_left_max   DOUBLE," +
+                    "street_center_min DOUBLE," +
+                    "street_right_max  DOUBLE," +
+                    "street_bottom_min DOUBLE," +
                     "position INT)");
 
-            // миграции (безопасны, если столбцы уже есть)
+            // миграции
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
             addColumnIfMissing(stmt, "floor", "position", "INT");
             addColumnIfMissing(stmt, "space", "position", "INT");
@@ -89,9 +94,13 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "room",  "radiation_selected",     "BOOLEAN DEFAULT FALSE");
             addColumnIfMissing(stmt, "room",  "artificial_selected",    "BOOLEAN DEFAULT FALSE");
 
+            // НОВОЕ: колонки «Осв улица»
+            addColumnIfMissing(stmt, "room", "street_left_max",   "DOUBLE");
+            addColumnIfMissing(stmt, "room", "street_center_min", "DOUBLE");
+            addColumnIfMissing(stmt, "room", "street_right_max",  "DOUBLE");
+            addColumnIfMissing(stmt, "room", "street_bottom_min", "DOUBLE");
         }
     }
-
 
     private static void addColumnIfMissing(Statement stmt, String table, String column, String type)
             throws SQLException {
@@ -579,5 +588,53 @@ public class DatabaseManager {
         return f.getSectionIndex() + "|" + ns(f.getNumber()) + "|" + ns(s.getIdentifier()) + "|" + ns(r.getName());
     }
     private static String ns(String s) { return (s == null) ? "" : s.trim(); }
+    public static void updateStreetLightingValues(Building b, java.util.Map<String, Double[]> byKey) throws SQLException {
+        if (b == null || byKey == null || byKey.isEmpty()) return;
+        String sql = "UPDATE room SET street_left_max=?, street_center_min=?, street_right_max=?, street_bottom_min=? WHERE id=?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (Floor f : b.getFloors()) {
+                for (Space s : f.getSpaces()) {
+                    for (Room r : s.getRooms()) {
+                        String key = makeKey(f, s, r);
+                        Double[] v = byKey.get(key);
+                        if (v == null) continue;
+
+                        if (v.length > 0 && v[0] != null) ps.setDouble(1, v[0]); else ps.setNull(1, Types.DOUBLE);
+                        if (v.length > 1 && v[1] != null) ps.setDouble(2, v[1]); else ps.setNull(2, Types.DOUBLE);
+                        if (v.length > 2 && v[2] != null) ps.setDouble(3, v[2]); else ps.setNull(3, Types.DOUBLE);
+                        if (v.length > 3 && v[3] != null) ps.setDouble(4, v[3]); else ps.setNull(4, Types.DOUBLE);
+
+                        ps.setInt(5, r.getId());
+                        ps.addBatch();
+                    }
+                }
+            }
+            ps.executeBatch();
+        }
+    }
+    public static java.util.Map<String, Double[]> loadStreetLightingValuesByKey(int buildingId) throws SQLException {
+        java.util.Map<String, Double[]> res = new java.util.HashMap<>();
+        String sql =
+                "SELECT f.section_index, f.number, s.identifier, r.name, " +
+                        "       r.street_left_max, r.street_center_min, r.street_right_max, r.street_bottom_min " +
+                        "FROM room r " +
+                        "JOIN space s ON r.space_id = s.id " +
+                        "JOIN floor f ON s.floor_id = f.id " +
+                        "WHERE f.building_id = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, buildingId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String key = rs.getInt(1) + "|" + ns(rs.getString(2)) + "|" + ns(rs.getString(3)) + "|" + ns(rs.getString(4));
+                    Double v1 = rs.getObject(5) == null ? null : ((Number) rs.getObject(5)).doubleValue();
+                    Double v2 = rs.getObject(6) == null ? null : ((Number) rs.getObject(6)).doubleValue();
+                    Double v3 = rs.getObject(7) == null ? null : ((Number) rs.getObject(7)).doubleValue();
+                    Double v4 = rs.getObject(8) == null ? null : ((Number) rs.getObject(8)).doubleValue();
+                    res.put(key, new Double[]{v1, v2, v3, v4});
+                }
+            }
+        }
+        return res;
+    }
 
 }

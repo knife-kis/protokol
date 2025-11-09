@@ -734,7 +734,7 @@ public class BuildingTab extends JPanel {
         updateLightingTab(loadedBuilding, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(loadedBuilding, /*autoApplyDefaults=*/false);
 
-        // НОВОЕ: подтягиваем галочки искусственного освещения из БД по ключу и применяем к вкладке
+        // Искусственное освещение — галочки из БД
         ArtificialLightingTab alt = getArtificialLightingTab();
         if (alt != null) {
             try {
@@ -747,10 +747,23 @@ public class BuildingTab extends JPanel {
             }
         }
 
+        // НОВОЕ: Осв улица — подтянуть сохранённые значения из БД и применить
+        try {
+            java.util.Map<String, Double[]> streetVals =
+                    DatabaseManager.loadStreetLightingValuesByKey(loadedBuilding.getId());
+            StreetLightingTab street = getStreetLightingTab();
+            if (street != null) {
+                street.setBuilding(loadedBuilding);
+                street.refreshData();
+                street.applyValuesByKey(streetVals);
+            }
+        } catch (SQLException ex) {
+            handleError("Не удалось загрузить значения 'Осв улица': " + ex.getMessage(), "Ошибка");
+        }
+
         showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен",
                 "Загрузка", JOptionPane.INFORMATION_MESSAGE);
     }
-
 
     private void saveProject(ActionEvent e) {
         logger.info("BuildingTab.saveProject() - Начало сохранения проекта");
@@ -777,22 +790,27 @@ public class BuildingTab extends JPanel {
             lightingTab.updateRoomSelectionStates();
         }
 
-        // КЕО: снимок до сохранения
+        // КЕО: снимок
         Map<String, Boolean> snapKeo = saveKeoSelections();
 
-        // Искусственное освещение: снимок по ключу (НЕ в Room)
+        // Искусственное: снимок
         ArtificialLightingTab artificialTab = getArtificialLightingTab();
         Map<String, Boolean> snapArtificial = java.util.Collections.emptyMap();
         if (artificialTab != null) {
-            artificialTab.updateRoomSelectionStates();              // фиксируем карту во вкладке
-            snapArtificial = artificialTab.saveSelectionsByKey();   // снимаем карту по ключу
+            artificialTab.updateRoomSelectionStates();
+            snapArtificial = artificialTab.saveSelectionsByKey();
+        }
+
+        // НОВОЕ: Осв улица — снимаем значения до сохранения
+        StreetLightingTab street = getStreetLightingTab();
+        java.util.Map<String, Double[]> snapStreet = java.util.Collections.emptyMap();
+        if (street != null) {
+            snapStreet = street.snapshotValuesByKey();
         }
 
         // Микроклимат
         MicroclimateTab microTab = getMicroclimateTab();
-        if (microTab != null) {
-            microTab.updateRoomSelectionStates();
-        }
+        if (microTab != null) microTab.updateRoomSelectionStates();
 
         // 2) Имя проекта
         String baseName = projectNameField.getText().trim();
@@ -816,30 +834,44 @@ public class BuildingTab extends JPanel {
             return;
         }
 
-        // 4.1) НОВОЕ: пост-обновлением проставляем artificial_selected в БД для НОВЫХ room.id
+        // 4.1) Искусственное — записать галочки в новые room.id
         try {
             DatabaseManager.updateArtificialSelections(newProject, snapArtificial);
         } catch (SQLException ex) {
             handleError("Не удалось сохранить галочки искусственного освещения: " + ex.getMessage(), "Ошибка");
-            // продолжаем, чтобы проект всё равно остался сохранённым
         }
 
-        // 4.2) Синхронизация состояния UI
+        // 4.2) НОВОЕ: Осв улица — записать 4 значения в новые room.id
+        try {
+            DatabaseManager.updateStreetLightingValues(newProject, snapStreet);
+        } catch (SQLException ex) {
+            handleError("Не удалось сохранить значения 'Осв улица': " + ex.getMessage(), "Ошибка");
+        }
+
+        // 4.3) Синхронизация состояния UI
         this.building = newProject;
         this.ops.setBuilding(this.building);
         projectNameField.setText(extractBaseName(newProject.getName()));
 
-        // 5) Обновляем списки и вкладки (без авто-дефолтов)
+        // 5) Обновляем вкладки (без автодефолтов)
         refreshAllLists();
         updateRadiationTab(newProject, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(newProject, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(newProject, /*autoApplyDefaults=*/false);
 
-        // 5.1) НОВОЕ: вернём галочки искусственного во вкладку согласно нашему снимку
+        // 5.1) Вернуть галочки искусственного во вкладку
         ArtificialLightingTab alt = getArtificialLightingTab();
         if (alt != null) {
             alt.applySelectionsByKey(newProject, snapArtificial);
             alt.refreshData();
+        }
+
+        // 5.2) НОВОЕ: Вернуть значения "Осв улица" во вкладку
+        StreetLightingTab st = getStreetLightingTab();
+        if (st != null) {
+            st.setBuilding(newProject);
+            st.refreshData();
+            st.applyValuesByKey(snapStreet);
         }
 
         logger.info("Проект успешно сохранен");
