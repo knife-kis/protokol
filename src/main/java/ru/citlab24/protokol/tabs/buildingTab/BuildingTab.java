@@ -1473,6 +1473,10 @@ public class BuildingTab extends JPanel {
         }
         int roomsBefore = selectedSpace.getRooms().size(); // было ли помещение пустым
 
+        // текущий этаж (нужен, чтобы понять «улица»)
+        Floor currentFloor = (floorList != null) ? floorList.getSelectedValue() : null;
+        boolean isStreetFloor = (currentFloor != null && currentFloor.getType() == Floor.FloorType.STREET);
+
         if (isApartmentSpace(selectedSpace)) {
             // квартиры — AddRoomDialog
             java.util.List<String> suggestions = collectPopularApartmentRoomNames(building, 30);
@@ -1517,18 +1521,40 @@ public class BuildingTab extends JPanel {
                 }
             }
         } else if (isPublicSpace(selectedSpace)) {
-            // ОБЩЕСТВЕННЫЕ — без МК автопроставления
-            java.util.List<String> suggestions = collectPopularPublicRoomNames(building, 30);
+            // общественные — AddPublicRoomsDialog
+            List<String> suggestions = collectPopularPublicRoomNames(building, 30);
             JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
             ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog dlg =
                     new ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog(parent, suggestions, "", false);
             if (dlg.showDialog()) {
-                java.util.List<String> names = dlg.getNamesToAddList();
+                List<String> names = dlg.getNamesToAddList();
                 for (String name : names) {
                     if (name == null || name.isBlank()) continue;
                     Room room = new Room();
                     room.setName(name.trim());
                     room.setSelected(false);
+                    try {
+                        int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
+                        room.setExternalWallsCount(walls);
+                    } catch (Throwable ignore) {}
+                    selectedSpace.addRoom(room);
+                    roomListModel.addElement(room);
+                }
+            }
+        } else if (isStreetFloor || isStreetSpace(selectedSpace)) {
+            // УЛИЦА — даем готовые подсказки (без цифр)
+            List<String> suggestions = collectStreetRoomSuggestions();
+            JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+            ru.citlab24.protokol.tabs.dialogs.AddRoomDialog dlg =
+                    new ru.citlab24.protokol.tabs.dialogs.AddRoomDialog(parent, suggestions, "", false);
+            if (dlg.showDialog()) {
+                List<String> names = dlg.getNamesToAddList();
+                for (String name : names) {
+                    if (name == null || name.isBlank()) continue;
+                    Room room = new Room();
+                    room.setName(name.trim());
+                    room.setSelected(false);
+                    // для улицы — логика стен оставляем как общую (0 для санузлов, 1 иначе)
                     try {
                         int walls = looksLikeSanitary(room.getName()) ? 0 : 1;
                         room.setExternalWallsCount(walls);
@@ -1562,12 +1588,9 @@ public class BuildingTab extends JPanel {
             rt.restoreSelections(snap);
             // Если помещение было пустым — дефолты радиации ТОЛЬКО для него
             if (roomsBefore == 0) {
-                if (rt != null) {
-                    Floor f = floorList.getSelectedValue();
-                    if (f != null && !rt.hasAnySelectedOnFloor(f)) {
-                        rt.applyDefaultsForSpace(selectedSpace);
-                    }
-                    // иначе — этаж уже «занят» первой квартирой → ничего не проставляем
+                Floor f = (floorList != null) ? floorList.getSelectedValue() : null;
+                if (f != null && !rt.hasAnySelectedOnFloor(f)) {
+                    rt.applyDefaultsForSpace(selectedSpace);
                 }
             }
         }
@@ -1588,7 +1611,7 @@ public class BuildingTab extends JPanel {
         Room room = roomListModel.get(index);
 
         if (isApartmentSpace(space)) {
-            java.util.List<String> suggestions = collectPopularApartmentRoomNames(building, 30);
+            List<String> suggestions = collectPopularApartmentRoomNames(building, 30);
             JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
             ru.citlab24.protokol.tabs.dialogs.AddRoomDialog dlg =
                     new ru.citlab24.protokol.tabs.dialogs.AddRoomDialog(parent, suggestions, room.getName(), true);
@@ -1600,7 +1623,7 @@ public class BuildingTab extends JPanel {
                 }
             }
         } else if (isOfficeSpace(space)) {
-            java.util.List<String> suggestions = collectPopularOfficeRoomNames(building, 30);
+            List<String> suggestions = collectPopularOfficeRoomNames(building, 30);
             JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
             ru.citlab24.protokol.tabs.dialogs.AddOfficeRoomsDialog dlg =
                     new ru.citlab24.protokol.tabs.dialogs.AddOfficeRoomsDialog(parent, suggestions, room.getName(), true);
@@ -1617,7 +1640,7 @@ public class BuildingTab extends JPanel {
                 }
             }
         } else if (isPublicSpace(space)) {
-            java.util.List<String> suggestions = collectPopularPublicRoomNames(building, 30);
+            List<String> suggestions = collectPopularPublicRoomNames(building, 30);
             JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
             ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog dlg =
                     new ru.citlab24.protokol.tabs.dialogs.AddPublicRoomsDialog(parent, suggestions, room.getName(), true);
@@ -1974,4 +1997,29 @@ public class BuildingTab extends JPanel {
         }
         return isSpaceVisibleByFilter(s);
     }
+    /** Подсказки для «улицы» (без чисел). */
+    private java.util.List<String> collectStreetRoomSuggestions() {
+        return java.util.List.of(
+                "дорога",
+                "пешеходная дорожка у входа в здание",
+                "аллея",
+                "пожарные проезды",
+                "тротуары-подъезды",
+                "автостоянка",
+                "хозяйственная площадка",
+                "площадка при мусоросборниках",
+                "прогулочная дорожка",
+                "физкультурные площадки",
+                "площадки для игр",
+                "основной вход в здание",
+                "запасной вход в здание",
+                "технический вход в здание"
+        );
+    }
+
+    /** true, если помещение уличное (OUTDOOR). */
+    private boolean isStreetSpace(Space s) {
+        return s != null && s.getType() == Space.SpaceType.OUTDOOR;
+    }
+
 }
