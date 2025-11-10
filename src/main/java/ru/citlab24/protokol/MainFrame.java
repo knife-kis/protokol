@@ -7,6 +7,7 @@ import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.StreetLightingTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
+import ru.citlab24.protokol.tabs.modules.noise.NoiseTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 
@@ -127,6 +128,7 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("КЕО",                   new LightingTab(building));
         tabbedPane.addTab("Освещение",             new ArtificialLightingTab(building));
         tabbedPane.addTab("Осв улица",             new StreetLightingTab(building));
+        tabbedPane.addTab("Шумы",                  new NoiseTab(building));
     }
 
     // ===== Утилиты доступа к вкладкам =====
@@ -168,6 +170,14 @@ public class MainFrame extends JFrame {
         return null;
     }
 
+    public NoiseTab getNoiseTab() {
+        for (Component comp : tabbedPane.getComponents()) {
+            if (comp instanceof NoiseTab) {
+                return (NoiseTab) comp;
+            }
+        }
+        return null;
+    }
 
     public JTabbedPane getTabbedPane() {
         return tabbedPane;

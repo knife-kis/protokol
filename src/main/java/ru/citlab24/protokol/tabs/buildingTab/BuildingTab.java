@@ -15,6 +15,7 @@ import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.StreetLightingTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
+import ru.citlab24.protokol.tabs.modules.noise.NoiseTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
@@ -748,7 +749,7 @@ public class BuildingTab extends JPanel {
             }
         }
 
-        // НОВОЕ: Осв улица — подтянуть сохранённые значения из БД и применить
+        // Осв улица — значения из БД
         try {
             java.util.Map<String, Double[]> streetVals =
                     DatabaseManager.loadStreetLightingValuesByKey(loadedBuilding.getId());
@@ -760,6 +761,20 @@ public class BuildingTab extends JPanel {
             }
         } catch (SQLException ex) {
             handleError("Не удалось загрузить значения 'Осв улица': " + ex.getMessage(), "Ошибка");
+        }
+
+        // НОВОЕ: «Шумы» — применить сохранённые настройки
+        try {
+            ru.citlab24.protokol.tabs.modules.noise.NoiseTab noise = getNoiseTab();
+            if (noise != null) {
+                java.util.Map<String, DatabaseManager.NoiseValue> nv =
+                        DatabaseManager.loadNoiseSelectionsByKey(loadedBuilding.getId());
+                noise.setBuilding(loadedBuilding);
+                noise.applySelectionsByKey(nv);
+                noise.refreshData();
+            }
+        } catch (SQLException ex) {
+            handleError("Не удалось загрузить настройки 'Шумы': " + ex.getMessage(), "Ошибка");
         }
 
         showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен",
@@ -802,11 +817,19 @@ public class BuildingTab extends JPanel {
             snapArtificial = artificialTab.saveSelectionsByKey();
         }
 
-        // НОВОЕ: Осв улица — снимаем значения до сохранения
+        // Осв улица — снимок
         StreetLightingTab street = getStreetLightingTab();
         java.util.Map<String, Double[]> snapStreet = java.util.Collections.emptyMap();
         if (street != null) {
             snapStreet = street.snapshotValuesByKey();
+        }
+
+        // НОВОЕ: Шумы — снимок по ключу
+        ru.citlab24.protokol.tabs.modules.noise.NoiseTab noise = getNoiseTab();
+        java.util.Map<String, ru.citlab24.protokol.db.DatabaseManager.NoiseValue> snapNoise = java.util.Collections.emptyMap();
+        if (noise != null) {
+            noise.updateRoomSelectionStates();
+            snapNoise = noise.saveSelectionsByKey();
         }
 
         // Микроклимат
@@ -842,14 +865,21 @@ public class BuildingTab extends JPanel {
             handleError("Не удалось сохранить галочки искусственного освещения: " + ex.getMessage(), "Ошибка");
         }
 
-        // 4.2) НОВОЕ: Осв улица — записать 4 значения в новые room.id
+        // 4.2) Осв улица — записать 4 значения
         try {
             DatabaseManager.updateStreetLightingValues(newProject, snapStreet);
         } catch (SQLException ex) {
             handleError("Не удалось сохранить значения 'Осв улица': " + ex.getMessage(), "Ошибка");
         }
 
-        // 4.3) Синхронизация состояния UI
+        // 4.3) НОВОЕ: Шумы — записать состояния/источники
+        try {
+            DatabaseManager.updateNoiseSelections(newProject, snapNoise);
+        } catch (SQLException ex) {
+            handleError("Не удалось сохранить настройки 'Шумы': " + ex.getMessage(), "Ошибка");
+        }
+
+        // 4.4) Синхронизация состояния UI
         this.building = newProject;
         this.ops.setBuilding(this.building);
         projectNameField.setText(extractBaseName(newProject.getName()));
@@ -867,12 +897,19 @@ public class BuildingTab extends JPanel {
             alt.refreshData();
         }
 
-        // 5.2) НОВОЕ: Вернуть значения "Осв улица" во вкладку
+        // 5.2) Осв улица — вернуть значения
         StreetLightingTab st = getStreetLightingTab();
         if (st != null) {
             st.setBuilding(newProject);
             st.refreshData();
             st.applyValuesByKey(snapStreet);
+        }
+
+        // 5.3) НОВОЕ: Шумы — вернуть состояния
+        if (noise != null) {
+            noise.setBuilding(newProject);
+            noise.applySelectionsByKey(snapNoise);
+            noise.refreshData();
         }
 
         logger.info("Проект успешно сохранен");
@@ -2046,6 +2083,18 @@ public class BuildingTab extends JPanel {
     /** true, если помещение уличное (OUTDOOR). */
     private boolean isStreetSpace(Space s) {
         return s != null && s.getType() == Space.SpaceType.OUTDOOR;
+    }
+    private NoiseTab getNoiseTab() {
+        java.awt.Window wnd = javax.swing.SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof ru.citlab24.protokol.MainFrame) {
+            javax.swing.JTabbedPane tabs = ((ru.citlab24.protokol.MainFrame) wnd).getTabbedPane();
+            for (java.awt.Component c : tabs.getComponents()) {
+                if (c instanceof NoiseTab) {
+                    return (NoiseTab) c;
+                }
+            }
+        }
+        return null;
     }
 
 }

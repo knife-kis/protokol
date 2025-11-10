@@ -73,12 +73,24 @@ public class DatabaseManager {
                     "external_walls_count INT," +
                     "microclimate_selected BOOLEAN DEFAULT FALSE," +
                     "radiation_selected  BOOLEAN DEFAULT FALSE," +
-                    // НОВОЕ: значения «Осв улица»
                     "street_left_max   DOUBLE," +
                     "street_center_min DOUBLE," +
                     "street_right_max  DOUBLE," +
                     "street_bottom_min DOUBLE," +
                     "position INT)");
+
+            // НОВОЕ: отдельная таблица «Шумы» (без изменений моделей)
+            stmt.execute("CREATE TABLE IF NOT EXISTS noise_settings (" +
+                    "room_id INT PRIMARY KEY," +
+                    "measure BOOLEAN," +
+                    "lift BOOLEAN," +
+                    "vent BOOLEAN," +
+                    "heat_curtain BOOLEAN," +
+                    "itp BOOLEAN," +
+                    "pns BOOLEAN," +
+                    "electrical BOOLEAN," +
+                    "auto_src BOOLEAN," +
+                    "zum BOOLEAN)");
 
             // миграции
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
@@ -93,8 +105,6 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "room",  "microclimate_selected",  "BOOLEAN DEFAULT FALSE");
             addColumnIfMissing(stmt, "room",  "radiation_selected",     "BOOLEAN DEFAULT FALSE");
             addColumnIfMissing(stmt, "room",  "artificial_selected",    "BOOLEAN DEFAULT FALSE");
-
-            // НОВОЕ: колонки «Осв улица»
             addColumnIfMissing(stmt, "room", "street_left_max",   "DOUBLE");
             addColumnIfMissing(stmt, "room", "street_center_min", "DOUBLE");
             addColumnIfMissing(stmt, "room", "street_right_max",  "DOUBLE");
@@ -636,5 +646,85 @@ public class DatabaseManager {
         }
         return res;
     }
+
+    // ==== «Шумы»: DTO для обмена с вкладкой ====
+    public static class NoiseValue {
+        public boolean measure;
+        public boolean lift;
+        public boolean vent;
+        public boolean heatCurtain;
+        public boolean itp;
+        public boolean pns;
+        public boolean electrical;
+        public boolean autoSrc;
+        public boolean zum;
+    }
+
+    // Обновить noise_settings по ключам (section|floor|space|room) → room.id нового проекта
+    public static void updateNoiseSelections(Building b, Map<String, NoiseValue> byKey) throws SQLException {
+        if (b == null || byKey == null || byKey.isEmpty()) return;
+
+        String mergeSql = "MERGE INTO noise_settings (room_id, measure, lift, vent, heat_curtain, itp, pns, electrical, auto_src, zum) " +
+                "KEY(room_id) VALUES (?,?,?,?,?,?,?,?,?,?)";
+
+        try (PreparedStatement ps = connection.prepareStatement(mergeSql)) {
+            for (Floor f : b.getFloors()) {
+                for (Space s : f.getSpaces()) {
+                    for (Room r : s.getRooms()) {
+                        String key = f.getSectionIndex() + "|" + ns(f.getNumber()) + "|" + ns(s.getIdentifier()) + "|" + ns(r.getName());
+                        NoiseValue v = byKey.get(key);
+                        if (v == null) continue;
+
+                        ps.setInt(1, r.getId());
+                        ps.setBoolean(2, v.measure);
+                        ps.setBoolean(3, v.lift);
+                        ps.setBoolean(4, v.vent);
+                        ps.setBoolean(5, v.heatCurtain);
+                        ps.setBoolean(6, v.itp);
+                        ps.setBoolean(7, v.pns);
+                        ps.setBoolean(8, v.electrical);
+                        ps.setBoolean(9, v.autoSrc);
+                        ps.setBoolean(10, v.zum);
+                        ps.addBatch();
+                    }
+                }
+            }
+            ps.executeBatch();
+        }
+    }
+
+    // Прочитать noise_settings в карту по ключу (section|floor|space|room) для buildingId
+    public static Map<String, NoiseValue> loadNoiseSelectionsByKey(int buildingId) throws SQLException {
+        Map<String, NoiseValue> res = new HashMap<>();
+        String sql = "SELECT f.section_index, f.number, s.identifier, r.name, " +
+                " n.measure, n.lift, n.vent, n.heat_curtain, n.itp, n.pns, n.electrical, n.auto_src, n.zum " +
+                "FROM room r " +
+                "JOIN space s ON r.space_id = s.id " +
+                "JOIN floor f ON s.floor_id = f.id " +
+                "LEFT JOIN noise_settings n ON n.room_id = r.id " +
+                "WHERE f.building_id = ?";
+
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, buildingId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String key = rs.getInt(1) + "|" + ns(rs.getString(2)) + "|" + ns(rs.getString(3)) + "|" + ns(rs.getString(4));
+                    NoiseValue nv = new NoiseValue();
+                    nv.measure     = rs.getBoolean(5);
+                    nv.lift        = rs.getBoolean(6);
+                    nv.vent        = rs.getBoolean(7);
+                    nv.heatCurtain = rs.getBoolean(8);
+                    nv.itp         = rs.getBoolean(9);
+                    nv.pns         = rs.getBoolean(10);
+                    nv.electrical  = rs.getBoolean(11);
+                    nv.autoSrc     = rs.getBoolean(12);
+                    nv.zum         = rs.getBoolean(13);
+                    res.put(key, nv);
+                }
+            }
+        }
+        return res;
+    }
+
 
 }
