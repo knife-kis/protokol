@@ -40,22 +40,23 @@ public final class AllExcelExporter {
                 VentilationExcelExporter.appendToWorkbook(ventRecords, wb);
             }
 
-            // 3) Естественное освещение (КЕО) — пробуем вызвать
-            //    ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter.appendToWorkbook(Building, int, Workbook)
+            // 3) НОВОЕ: «Осв улица» — лист ДОЛЖЕН идти ПЕРЕД КЕО
+            appendStreetLightingSheet(wb, building);
+
+            // 4) Естественное освещение (КЕО)
             tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter",
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
-            // 4) Искусственное освещение — берём карту выбранности из вкладки и зовём 4-арг. appendToWorkbook(...)
+            // 5) Искусственное освещение — берём карту выбранности из вкладки и зовём 4-арг. appendToWorkbook(...)
             java.util.Map<Integer, Boolean> litMap = null;
             try {
                 if (frame != null && frame.getArtificialLightingTab() != null) {
-                    // метод добавь в ArtificialLightingTab, см. ниже
                     litMap = frame.getArtificialLightingTab().snapshotSelectionMap();
                 }
             } catch (Throwable ignore) {}
 
-// сначала пытаемся вызвать новую сигнатуру (Building, int, Workbook, Map)
+            // сначала пытаемся вызвать новую сигнатуру (Building, int, Workbook, Map)
             try {
                 Class<?> clazz = Class.forName("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter");
                 java.lang.reflect.Method m = clazz.getMethod(
@@ -72,13 +73,12 @@ public final class AllExcelExporter {
                 t.printStackTrace(); // не валим общий экспорт
             }
 
-
-            // 5) Радиация — пробуем вызвать append в том же стиле
+            // 6) Радиация
             tryInvokeAppend("ru.citlab24.protokol.tabs.modules.med.RadiationExcelExporter",
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
-            // 6) Один общий диалог сохранения
+            // 7) Один общий диалог сохранения
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Сохранить общий Excel");
             chooser.setSelectedFile(new File("Отчет_все_модули.xlsx"));
@@ -114,4 +114,86 @@ public final class AllExcelExporter {
             t.printStackTrace();
         }
     }
+    // === НОВОЕ: «Осв улица» — собираем строки и добавляем лист в текущую книгу ===
+    private static void appendStreetLightingSheet(Workbook wb, Building building) {
+        try {
+            // 1) Подтянуть сохранённые 4 значения по ключам (если есть)
+            java.util.Map<String, Double[]> byKey = java.util.Collections.emptyMap();
+            try {
+                byKey = ru.citlab24.protokol.db.DatabaseManager
+                        .loadStreetLightingValuesByKey(building.getId());
+            } catch (java.sql.SQLException ex) {
+                System.err.println("[AllExcelExporter] WARN: не удалось прочитать 'Осв улица' из БД: " + ex.getMessage());
+            }
+
+            // 2) Собрать все комнаты на этажах STREET → помещения только OUTDOOR
+            java.util.List<ru.citlab24.protokol.tabs.modules.lighting.StreetLightingExcelExporter.RowData> rows =
+                    new java.util.ArrayList<>();
+
+            java.util.List<ru.citlab24.protokol.tabs.models.Floor> floors =
+                    new java.util.ArrayList<>(building.getFloors());
+            floors.sort(java.util.Comparator.comparingInt(
+                    ru.citlab24.protokol.tabs.models.Floor::getPosition));
+
+            for (ru.citlab24.protokol.tabs.models.Floor f : floors) {
+                if (f == null || f.getType() != ru.citlab24.protokol.tabs.models.Floor.FloorType.STREET) continue;
+
+                java.util.List<ru.citlab24.protokol.tabs.models.Space> spaces =
+                        new java.util.ArrayList<>(f.getSpaces());
+                spaces.sort(java.util.Comparator.comparingInt(
+                        ru.citlab24.protokol.tabs.models.Space::getPosition));
+
+                for (ru.citlab24.protokol.tabs.models.Space s : spaces) {
+                    if (s == null || s.getType() != ru.citlab24.protokol.tabs.models.Space.SpaceType.OUTDOOR) continue;
+
+                    java.util.List<ru.citlab24.protokol.tabs.models.Room> rooms =
+                            new java.util.ArrayList<>(s.getRooms());
+                    rooms.sort(java.util.Comparator.comparingInt(
+                            ru.citlab24.protokol.tabs.models.Room::getPosition));
+
+                    for (ru.citlab24.protokol.tabs.models.Room r : rooms) {
+                        if (r == null) continue;
+
+                        String floorPart = (f.getNumber() == null) ? "" : f.getNumber().trim();
+                        String spacePart = (s.getIdentifier() == null) ? "" : s.getIdentifier().trim();
+                        String roomPart  = (r.getName() == null) ? "" : r.getName().trim();
+
+                        // Ключ как во вкладке StreetLightingTab:
+                        // sectionIndex|этаж|помещение|комната
+                        String key = f.getSectionIndex() + "|" + floorPart + "|" + spacePart + "|" + roomPart;
+
+                        Double leftMax = null, centerMin = null, rightMax = null, bottomMin = null;
+                        Double[] vals = (byKey != null) ? byKey.get(key) : null;
+                        if (vals != null) {
+                            if (vals.length > 0) leftMax   = vals[0];
+                            if (vals.length > 1) centerMin = vals[1];
+                            if (vals.length > 2) rightMax  = vals[2];
+                            if (vals.length > 3) bottomMin = vals[3];
+                        }
+
+                        rows.add(new ru.citlab24.protokol.tabs.modules.lighting.StreetLightingExcelExporter.RowData(
+                                roomPart, leftMax, centerMin, rightMax, bottomMin
+                        ));
+                    }
+                }
+            }
+
+            // 3) Вставить лист «Осв улица» в текущую книгу
+            ru.citlab24.protokol.tabs.modules.lighting.StreetLightingExcelExporter.appendToWorkbook(rows, wb);
+
+            // 4) Попробовать зафиксировать порядок: «Осв улица» перед «Естественное освещение»
+            try {
+                int streetIdx = wb.getSheetIndex("Осв улица");
+                int keoIdx    = wb.getSheetIndex("Естественное освещение");
+                if (streetIdx >= 0 && keoIdx >= 0 && streetIdx > keoIdx) {
+                    wb.setSheetOrder("Осв улица", keoIdx);
+                }
+            } catch (Throwable ignore) {
+                // на случай, если лист КЕО назван иначе — порядок уже обеспечен самим вызовом до КЕО
+            }
+        } catch (Throwable t) {
+            System.err.println("[AllExcelExporter] Ошибка добавления 'Осв улица': " + t.getMessage());
+        }
+    }
+
 }

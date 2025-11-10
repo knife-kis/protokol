@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.db.DatabaseManager;
+import ru.citlab24.protokol.export.AllExcelExporter;
 import ru.citlab24.protokol.tabs.dialogs.*;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
@@ -368,7 +369,7 @@ public class BuildingTab extends JPanel {
 
                     Window w = SwingUtilities.getWindowAncestor(this);
                     MainFrame frame = (w instanceof MainFrame) ? (MainFrame) w : null;
-                    ru.citlab24.protokol.export.AllExcelExporter.exportAll(frame, building, this);
+                    AllExcelExporter.exportAll(frame, building, this);
                 });
             });
         });
@@ -1473,6 +1474,17 @@ public class BuildingTab extends JPanel {
         }
         int roomsBefore = selectedSpace.getRooms().size(); // было ли помещение пустым
 
+        // ===== Снимок значений вкладки «Осв улица», чтобы их не потерять после refresh =====
+        StreetLightingTab streetBefore = getStreetLightingTab();
+        java.util.Map<String, Double[]> streetSnapshot = java.util.Collections.emptyMap();
+        if (streetBefore != null) {
+            try {
+                streetSnapshot = streetBefore.snapshotValuesByKey();
+            } catch (Throwable ignore) {
+                // если что-то пойдёт не так — просто не восстановим значения
+            }
+        }
+
         // текущий этаж (нужен, чтобы понять «улица»)
         Floor currentFloor = (floorList != null) ? floorList.getSelectedValue() : null;
         boolean isStreetFloor = (currentFloor != null && currentFloor.getType() == Floor.FloorType.STREET);
@@ -1595,9 +1607,23 @@ public class BuildingTab extends JPanel {
             }
         }
 
+        // Эти вызовы перерисуют и вкладку «Осв улица»
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
+        // ===== Вернём значения «Осв улица» после refresh =====
+        if (streetSnapshot != null && !streetSnapshot.isEmpty()) {
+            StreetLightingTab streetAfter = getStreetLightingTab();
+            if (streetAfter != null) {
+                try {
+                    streetAfter.applyValuesByKey(streetSnapshot);
+                } catch (Throwable ignore) {
+                    // тихо игнорируем сбой восстановления
+                }
+            }
+        }
     }
+
 
     private void editRoom(ActionEvent e) {
         Space space = spaceList.getSelectedValue();
