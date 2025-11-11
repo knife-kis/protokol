@@ -285,18 +285,28 @@ public class NoiseTab extends JPanel {
             updateRoomSelectionStates();
             Map<String, DatabaseManager.NoiseValue> snapshot = saveSelectionsByKey();
 
-            // Формируем строку для A7–Y7 (лист «шум лифт день») из выбранного периода
-            NoisePeriod p = periods.get(NoiseTestKind.LIFT_DAY);
-            String dateLine = (p != null) ? p.toExcelLine()
-                    : "Дата, время проведения измерений __.__.____ c __:__ до __:__";
+            // Готовим строки «Дата, время ...» по всем видам
+            java.util.EnumMap<NoiseTestKind, String> dls = new java.util.EnumMap<>(NoiseTestKind.class);
+            dls.put(NoiseTestKind.LIFT_DAY,   excelDateLine(NoiseTestKind.LIFT_DAY));    // лифт день
+            dls.put(NoiseTestKind.LIFT_NIGHT, excelDateLine(NoiseTestKind.LIFT_NIGHT));  // лифт ночь
 
-            NoiseExcelExporter.exportLift(building, snapshot, this, dateLine);
+            // ИТО: день/ночь — используем отдельные ключи из диалога (по твоей схеме ITO_NONRES / ITO_RES)
+            dls.put(NoiseTestKind.ITO_NONRES, excelDateLine(NoiseTestKind.ITO_NONRES));  // «шим неж ИТО»
+            dls.put(NoiseTestKind.ITO_RES,    excelDateLine(NoiseTestKind.ITO_RES));     // «шум жил ИТО»
+
+            // Авто
+            dls.put(NoiseTestKind.AUTO_DAY,   excelDateLine(NoiseTestKind.AUTO_DAY));
+            dls.put(NoiseTestKind.AUTO_NIGHT, excelDateLine(NoiseTestKind.AUTO_NIGHT));
+
+            // Площадка пока пропускаем, но можно заполнить при желании:
+            // dls.put(NoiseTestKind.SITE, excelDateLine(NoiseTestKind.SITE));
+
+            NoiseExcelExporter.exportLift(building, snapshot, this, dls);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Ошибка экспорта: " + ex.getMessage(),
                     "Экспорт", JOptionPane.ERROR_MESSAGE);
         }
     }
-
 
     /** Построить текст "Дата, время проведения измерений ..." для нужного вида испытаний. */
     private String excelDateLine(NoiseTestKind kind) {
@@ -311,6 +321,29 @@ public class NoiseTab extends JPanel {
         }
         return s;
     }
+    public void onBuildingChanged(ru.citlab24.protokol.tabs.models.Building building) {
+        this.building = (building != null) ? building : new Building();
+        applyGlobalFilter();
+    }
+
+
+    /** Применяет изменение к byKey и сразу сохраняет его в БД. */
+    private void applyAndPersist(String key, java.util.function.Consumer<DatabaseManager.NoiseValue> change) {
+        // 1) Сохраняем в оперативную карту вкладки (это и даёт нужную «память» при переключении квартир/этажей)
+        DatabaseManager.NoiseValue nv = byKey.computeIfAbsent(key, k -> new DatabaseManager.NoiseValue());
+        change.accept(nv);
+
+        // 2) Без синглтона: сразу апсертим одну запись в БД через уже существующий API
+        //    (updateNoiseSelections(Building, Map<String, NoiseValue>)).
+        try {
+            java.util.Map<String, DatabaseManager.NoiseValue> one = new java.util.LinkedHashMap<>();
+            one.put(key, nv);
+            DatabaseManager.updateNoiseSelections(building, one);
+        } catch (Exception ignore) {
+            // мягкая деградация: в памяти вкладки состояние всё равно уже сохранено
+        }
+    }
+
 
     /* ================== ВНУТРЕННЕЕ: наполнение списков ================== */
 
@@ -335,6 +368,9 @@ public class NoiseTab extends JPanel {
     }
 
     private void refreshFloors() {
+        // ВАЖНО: сперва коммитим активный редактор, чтобы JTable успел записать значение в модель
+        commitEditors();
+
         floorModel.clear();
         int secIdx = getSelectedSectionIndex();
         List<Floor> floors = (filter == null)
@@ -348,7 +384,11 @@ public class NoiseTab extends JPanel {
         if (!floorModel.isEmpty()) floorList.setSelectedIndex(0);
         else spaceModel.clear();
     }
+
     private void refreshSpaces() {
+        // ВАЖНО: сперва коммитим активный редактор
+        commitEditors();
+
         spaceModel.clear();
         Floor f = floorList.getSelectedValue();
         if (f == null) return;
@@ -383,13 +423,33 @@ public class NoiseTab extends JPanel {
     /* ================== Табличная модель ================== */
 
     private final class NoiseRoomsTableModel extends AbstractTableModel {
+        // Стабильный ключ на каждую строку (привязан к объекту Room текущего набора)
+        private final IdentityHashMap<Room, String> stableKeyByRoom = new IdentityHashMap<>();
         private final String[] COLS = {"Комната", "Источник"};
         private List<Room> rows = new ArrayList<>();
 
         void setRooms(List<Room> rooms) {
             this.rows = (rooms != null) ? rooms : new ArrayList<>();
+            // Перестраиваем стабильные ключи для текущего набора строк
+            stableKeyByRoom.clear();
+
+            // Фиксируем контекст прямо сейчас (он больше не будет зависеть от последующих переключений списков)
+            Floor f = floorList.getSelectedValue();
+            Space s = spaceList.getSelectedValue();
+            int secIdx = getSelectedSectionIndex();
+
+            String floorNum = (f == null || f.getNumber() == null) ? "" : f.getNumber().trim();
+            String spaceId  = (s == null || s.getIdentifier() == null) ? "" : s.getIdentifier().trim();
+
+            for (Room r : this.rows) {
+                String roomName = (r == null || r.getName() == null) ? "" : r.getName().trim();
+                String key = secIdx + "|" + floorNum + "|" + spaceId + "|" + roomName;
+                stableKeyByRoom.put(r, key);
+            }
+
             fireTableDataChanged();
         }
+
 
         @Override public int getRowCount() { return rows.size(); }
         @Override public int getColumnCount() { return COLS.length; }
@@ -401,20 +461,18 @@ public class NoiseTab extends JPanel {
 
         @Override public Object getValueAt(int row, int col) {
             Room r = rows.get(row);
-            String key = keyFor(r);
+            String key = keyFor(r); // теперь ключ стабильный, берём из кэша
             DatabaseManager.NoiseValue nv = byKey.get(key);
             Set<String> sources = (nv != null) ? getNvSources(nv) : Collections.emptySet();
 
             if (col == 0) return r.getName();
-            // col == 1
-            return sources; // набор активных тумблеров
+            return sources;
         }
-
         @Override public void setValueAt(Object aValue, int row, int col) {
             if (col != 1) return;
 
             Room r = rows.get(row);
-            String key = keyFor(r);
+            String key = keyFor(r); // стабильный ключ из кэша
             DatabaseManager.NoiseValue nv = byKey.get(key);
             if (nv == null) {
                 nv = newNoiseValue(false, new LinkedHashSet<>());
@@ -424,16 +482,15 @@ public class NoiseTab extends JPanel {
             if (aValue instanceof Set) {
                 @SuppressWarnings("unchecked")
                 Set<String> s = new LinkedHashSet<>((Set<String>) aValue);
-                setNvSources(nv, s);
-                // «Измерение» = выбран хотя бы один источник
-                setNvSelected(nv, !s.isEmpty());
 
-                // ВАЖНО: не вызываем refreshRooms() немедленно (это ведёт к ре-энтерации через stopCellEditing).
-                // Делаем отложенное обновление после завершения редактирования.
+                applyAndPersist(key, v -> {
+                    setNvSources(v, s);
+                    setNvSelected(v, !s.isEmpty());
+                });
+
                 if (!getActiveFilterSources().isEmpty()) {
                     SwingUtilities.invokeLater(() -> {
                         if (roomsTable != null && !roomsTable.isEditing()) {
-                            // Перерисуем только таблицу комнат — без коммита редактора
                             refreshRooms();
                         }
                     });
@@ -442,9 +499,14 @@ public class NoiseTab extends JPanel {
         }
 
         private String keyFor(Room r) {
+            // Сначала пытаемся взять стабильный ключ, зафиксированный при setRooms()
+            String k = stableKeyByRoom.get(r);
+            if (k != null) return k;
+
+            // Фолбэк на случай внештатных вызовов: вычисляем по текущему выбору (как было раньше)
             Floor f = floorList.getSelectedValue();
             Space s = spaceList.getSelectedValue();
-            int secIdx = getSelectedSectionIndex(); // корректный индекс секции в модели Building
+            int secIdx = getSelectedSectionIndex();
 
             String floorNum = (f == null || f.getNumber() == null) ? "" : f.getNumber().trim();
             String spaceId  = (s == null || s.getIdentifier() == null) ? "" : s.getIdentifier().trim();
@@ -452,9 +514,7 @@ public class NoiseTab extends JPanel {
 
             return secIdx + "|" + floorNum + "|" + spaceId + "|" + roomName;
         }
-
     }
-
 
     /* ================== Ячейка с набором тумблеров источников ================== */
 

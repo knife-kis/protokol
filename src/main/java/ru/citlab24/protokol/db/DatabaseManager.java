@@ -725,6 +725,70 @@ public class DatabaseManager {
         }
         return res;
     }
+    /** Обновить/вставить настройки шума по ключу "sectionIndex|floorNumber|spaceIdentifier|roomName" в рамках здания. */
+    public static void updateNoiseValueByKey(Building building, String key, NoiseValue v) {
+        if (key == null || v == null) return;
+        int buildingId = (building != null) ? building.getId() : 0;
 
+        // Парсим ключ безопасно
+        String[] parts = (key == null) ? new String[0] : key.split("\\|", -1);
+        String sIdxStr   = (parts.length > 0) ? parts[0].trim() : "0";
+        String floorNum  = (parts.length > 1) ? ns(parts[1])    : "";
+        String spaceId   = (parts.length > 2) ? ns(parts[2])    : "";
+        String roomName  = (parts.length > 3) ? ns(parts[3])    : "";
+        int sectionIndex = 0;
+        try { sectionIndex = Integer.parseInt(sIdxStr); } catch (NumberFormatException ignore) { sectionIndex = 0; }
 
+        try {
+            // Находим room.id по ключу (с фильтром по building_id, если он известен)
+            String sql = "SELECT r.id " +
+                    "FROM room r " +
+                    "JOIN space s ON r.space_id = s.id " +
+                    "JOIN floor f ON s.floor_id = f.id " +
+                    (buildingId > 0 ? "WHERE f.building_id = ? AND " : "WHERE ") +
+                    "f.section_index = ? AND COALESCE(f.number,'') = ? AND " +
+                    "COALESCE(s.identifier,'') = ? AND COALESCE(r.name,'') = ? " +
+                    "LIMIT 1";
+
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                int idx = 1;
+                if (buildingId > 0) ps.setInt(idx++, buildingId);
+                ps.setInt(idx++, sectionIndex);
+                ps.setString(idx++, floorNum);
+                ps.setString(idx++, spaceId);
+                ps.setString(idx++, roomName);
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        logger.warn("updateNoiseValueByKey: не найден room по ключу '{}'", key);
+                        return;
+                    }
+                    int roomId = rs.getInt(1);
+
+                    String merge = "MERGE INTO noise_settings " +
+                            "(room_id, measure, lift, vent, heat_curtain, itp, pns, electrical, auto_src, zum) " +
+                            "KEY(room_id) VALUES (?,?,?,?,?,?,?,?,?,?)";
+
+                    try (PreparedStatement pm = connection.prepareStatement(merge)) {
+                        pm.setInt(1, roomId);
+                        pm.setBoolean(2, v.measure);
+                        pm.setBoolean(3, v.lift);
+                        pm.setBoolean(4, v.vent);
+                        pm.setBoolean(5, v.heatCurtain);
+                        pm.setBoolean(6, v.itp);
+                        pm.setBoolean(7, v.pns);
+                        pm.setBoolean(8, v.electrical);
+                        pm.setBoolean(9, v.autoSrc);
+                        pm.setBoolean(10, v.zum);
+                        pm.executeUpdate();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null,
+                    "Ошибка обновления шумов: " + e.getMessage(),
+                    "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
 }

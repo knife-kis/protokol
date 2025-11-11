@@ -24,29 +24,39 @@ public final class NoiseExcelExporter {
     public static void exportLift(Building building,
                                   Map<String, DatabaseManager.NoiseValue> byKey,
                                   Component parent,
-                                  String dateLine) {
+                                  java.util.Map<NoiseTestKind, String> dateLines) {
         try (Workbook wb = new XSSFWorkbook()) {
             Sheet day        = wb.createSheet("шум лифт день");
-            Sheet night      = wb.createSheet("шум лифт ночь");   // пока пустой
+            Sheet night      = wb.createSheet("шум лифт ночь");
             Sheet nonResIto  = wb.createSheet("шим неж ИТО");
             Sheet resIto     = wb.createSheet("шум жил ИТО");
             Sheet autoDay    = wb.createSheet("шум авто день");
             Sheet autoNight  = wb.createSheet("шум авто ночь");
             Sheet site       = wb.createSheet("шум площадка");
 
-            setupPage(day);       setupColumns(day);
-            setupPage(night);     setupColumns(night);
-            setupPage(nonResIto); setupColumns(nonResIto);
-            setupPage(resIto);    setupColumns(resIto);
-            setupPage(autoDay);   setupColumns(autoDay);
-            setupPage(autoNight); setupColumns(autoNight);
-            setupPage(site);      setupColumns(site);
+            // Единые ширины + печать в 1 страницу по ширине
+            setupPage(day);       setupColumns(day);       shrinkColumnsToOnePrintedPage(day);
+            setupPage(night);     setupColumns(night);     shrinkColumnsToOnePrintedPage(night);
+            setupPage(nonResIto); setupColumns(nonResIto); shrinkColumnsToOnePrintedPage(nonResIto);
+            setupPage(resIto);    setupColumns(resIto);    shrinkColumnsToOnePrintedPage(resIto);
+            setupPage(autoDay);   setupColumns(autoDay);   shrinkColumnsToOnePrintedPage(autoDay);
+            setupPage(autoNight); setupColumns(autoNight); shrinkColumnsToOnePrintedPage(autoNight);
+            setupPage(site);      setupColumns(site);      shrinkColumnsToOnePrintedPage(site);
 
-            // Шапка «дня» + строка 7
-            writeLiftHeader(wb, day, dateLine);
+            // «Лифт день»: полная шапка + блоки т1/т2/т3 как раньше
+            writeLiftHeader(wb, day, safeDateLine(dateLines, NoiseTestKind.LIFT_DAY));
+            appendLiftRoomBlocks(wb, day, building, byKey); // внутри начинает с 7-й строки
 
-            // Данные: блоки по комнатам, где включён «Лифт»
-            appendLiftRoomBlocks(wb, day, building, byKey);
+            // «Лифт ночь»: упрощённая 2-строчная шапка + ТЕ ЖЕ блоки т1/т2/т3, старт с 3-й строки
+            writeSimpleHeader(wb, night, safeDateLine(dateLines, NoiseTestKind.LIFT_NIGHT));
+            appendLiftRoomBlocksFromRow(wb, night, building, byKey, 2);
+
+            // Остальные листы — пока только две верхние строки (нумерация + своё время)
+            writeSimpleHeader(wb, nonResIto, safeDateLine(dateLines, NoiseTestKind.ITO_NONRES));
+            writeSimpleHeader(wb, resIto,    safeDateLine(dateLines, NoiseTestKind.ITO_RES));
+            writeSimpleHeader(wb, autoDay,   safeDateLine(dateLines, NoiseTestKind.AUTO_DAY));
+            writeSimpleHeader(wb, autoNight, safeDateLine(dateLines, NoiseTestKind.AUTO_NIGHT));
+            // site — оставляем пустым
 
             JFileChooser fc = new JFileChooser();
             fc.setDialogTitle("Сохранить Excel (шумы)");
@@ -251,11 +261,25 @@ public final class NoiseExcelExporter {
 
     private static void setupPage(Sheet sh) {
         PrintSetup ps = sh.getPrintSetup();
+
+        // Бумага и ориентация
+        ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
         ps.setLandscape(true);
-        // поля указываются в дюймах
+
+        // Поля указываются в дюймах (оставляем твои значения)
         sh.setMargin(Sheet.LeftMargin, 1.80 / 2.54);
         sh.setMargin(Sheet.RightMargin, 1.48 / 2.54);
+
+        // Печать: умещать по ШИРИНЕ в одну страницу, высота — сколько потребуется
+        sh.setAutobreaks(true);
+        sh.setFitToPage(true);
+        ps.setFitWidth((short) 1);
+        ps.setFitHeight((short) 0); // 0 = сколько нужно по высоте
+
+        // По желанию можно центрировать по горизонтали (не обязательно)
+        // sh.setHorizontallyCenter(true);
     }
+
 
     private static void setupColumns(Sheet sh) {
         // Помощник: приблизительно переводим см -> ширина колонки (в "символах" * 256)
@@ -466,10 +490,70 @@ public final class NoiseExcelExporter {
             org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, rng, sh);
         }
     }
+    /**
+     * Упрощённая шапка для листов: 1-я строка — как «строка 6» на дневном листе (нумерация),
+     * 2-я строка — как A7–Y7 (дата/время) по центру в рамке.
+     * Никакого bold, шрифт 8 пт, тонкие рамки как в основном листе.
+     */
+    private static void writeSimpleHeader(Workbook wb, Sheet sh, String dateLine) {
+        // Шрифты/стили
+        Font f8  = wb.createFont();  f8.setFontName("Arial");  f8.setFontHeightInPoints((short)8);
+
+        CellStyle centerBorder = wb.createCellStyle();
+        centerBorder.setAlignment(HorizontalAlignment.CENTER);
+        centerBorder.setVerticalAlignment(VerticalAlignment.CENTER);
+        centerBorder.setWrapText(false);
+        centerBorder.setFont(f8);
+        setThinBorder(centerBorder);
+
+        // 1) Строка 1 — нумерация как на «шум лифт день», строка 6 (индекс 5).
+        setRowHeightCm(sh, 0, 0.53);
+        Row r1 = getOrCreateRow(sh, 0);
+        for (int c = 0; c <= 18; c++) {
+            setText(r1, c, String.valueOf(c + 1), centerBorder);
+        }
+        // T(19)..V(21) = "20" (merge)
+        CellRangeAddress t20 = merge(sh, 0, 0, 19, 21);
+        setCenter(sh, 0, 19, "20", centerBorder);
+        // W(22)..Y(24) = "21" (merge)
+        CellRangeAddress w21 = merge(sh, 0, 0, 22, 24);
+        setCenter(sh, 0, 22, "21", centerBorder);
+        // рамки
+        org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, t20, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, t20, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderLeft(BorderStyle.THIN, t20, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, t20, sh);
+
+        org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, w21, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, w21, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderLeft(BorderStyle.THIN, w21, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, w21, sh);
+
+        // 2) Строка 2 — A..Y объединено, текст dateLine по центру + рамка
+        setRowHeightCm(sh, 1, 0.53);
+        CellRangeAddress a2y2 = merge(sh, 1, 1, 0, 24);
+        Row r2 = getOrCreateRow(sh, 1);
+        Cell a = getOrCreateCell(r2, 0);
+        a.setCellValue(dateLine);
+        a.setCellStyle(centerBorder);
+
+        org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, a2y2, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, a2y2, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderLeft(BorderStyle.THIN, a2y2, sh);
+        org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, a2y2, sh);
+    }
+
     /** Добавляет по всем комнатам блоки «3 строки × 3 замера (т1/т2/т3)» для лифтов. */
     private static void appendLiftRoomBlocks(Workbook wb, Sheet sh,
                                              Building building,
                                              Map<String, DatabaseManager.NoiseValue> byKey) {
+        appendLiftRoomBlocksFromRow(wb, sh, building, byKey, 7);
+    }
+    /** То же, что appendLiftRoomBlocks, но с явной стартовой строкой (для листов без «A7–Y7» сверху). */
+    private static void appendLiftRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                    Building building,
+                                                    Map<String, DatabaseManager.NoiseValue> byKey,
+                                                    int startRow) {
         if (building == null) return;
 
         // ===== шрифты/стили 8 пт =====
@@ -493,17 +577,10 @@ public final class NoiseExcelExporter {
         leftNoWrapBorder.setAlignment(HorizontalAlignment.LEFT);
         leftNoWrapBorder.setWrapText(false);
 
-        CellStyle leftWrapBorder = wb.createCellStyle();
-        leftWrapBorder.cloneStyleFrom(centerBorder);
-        leftWrapBorder.setAlignment(HorizontalAlignment.LEFT);
-        leftWrapBorder.setWrapText(true);
-
         // Плюсы/минусы для 1-й строки блока: для E..S (E=4..S=18)
-        final String[] PLUS_MINUS = {
-                "+","-","-","+","-","-","-","-","-","-","-","-","-","-","-"
-        };
+        final String[] PLUS_MINUS = { "+","-","-","+","-","-","-","-","-","-","-","-","-","-","-" };
 
-        int row = 7;  // после A7–Y7
+        int row = Math.max(0, startRow);
         int no  = 1;  // № п/п
 
         java.util.List<ru.citlab24.protokol.tabs.models.Section> sections = building.getSections();
@@ -541,6 +618,7 @@ public final class NoiseExcelExporter {
 
                     String place = formatPlace(building, sec, fl, sp, rm);
 
+                    // т1/т2/т3 — ТРИ ОТДЕЛЬНЫХ БЛОКА, как на «дне»
                     for (int t = 1; t <= 3; t++) {
                         int r1 = row;
                         int r2 = row + 1;
@@ -563,18 +641,18 @@ public final class NoiseExcelExporter {
                         CellRangeAddress aMerge = merge(sh, r1, r3, 0, 0);
                         setCenter(sh, r1, 0, String.valueOf(no++), centerBorder);
 
-                        // B: т1/т2/т3 (merge 3 строки)
+                        // B: «т1/т2/т3» (merge 3 строки)
                         CellRangeAddress bMerge = merge(sh, r1, r3, 1, 1);
                         setCenter(sh, r1, 1, "т" + t, centerBorder);
 
-                        // C (первая строка)
+                        // C (первая строка) — место
                         setCell(sh, r1, 2, place, leftNoWrapBorder);
 
-                        // D (первая строка) — ЦЕНТР + перенос строки (только это и меняем)
+                        // D (первая строка) — ЦЕНТР + перенос
                         setCell(sh, r1, 3, "Суммарные источники шума\n(работает лифтовое оборудование)", centerWrapBorder);
 
-                        // E..S: +/-
-                        for (int i = 0; i <= (18 - 4); i++) { // E..S
+                        // E..S: +/- (первая строка)
+                        for (int i = 0; i <= (18 - 4); i++) {
                             setCell(sh, r1, 4 + i, PLUS_MINUS[i], centerBorder);
                         }
 
@@ -584,9 +662,9 @@ public final class NoiseExcelExporter {
                         CellRangeAddress wy1 = merge(sh, r1, r1, 22, 24);
                         setCenter(sh, r1, 22, "-", centerBorder);
 
-                        // Вторая строка: C–I объединить + текст
+                        // Вторая строка: C–I «Поправка ...»
                         CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);
-                        setCell(sh, r2, 2, "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)", leftNoWrapBorder);
+                        setCell(sh, r2, 2, "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)", centerBorder); // рамка + без переноса
 
                         // J..S = "-"
                         for (int c = 9; c <= 18; c++) setCell(sh, r2, c, "-", centerBorder);
@@ -597,9 +675,9 @@ public final class NoiseExcelExporter {
                         CellRangeAddress wy2 = merge(sh, r2, r2, 22, 24);
                         setCenter(sh, r2, 22, "2", centerBorder);
 
-                        // Третья строка: C–I объединить + текст
+                        // Третья строка: C–I «Уровни звука ...»
                         CellRangeAddress ci3 = merge(sh, r3, r3, 2, 8);
-                        setCell(sh, r3, 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", leftNoWrapBorder);
+                        setCell(sh, r3, 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", centerBorder);
 
                         // J..S = "-"
                         for (int c = 9; c <= 18; c++) setCell(sh, r3, c, "-", centerBorder);
@@ -676,4 +754,59 @@ public final class NoiseExcelExporter {
     private static float cmToPt(double cm) {
         return (float) (cm * 72.0 / 2.54);
     }
+    /**
+     * Пропорционально уменьшает ширины столбцов так, чтобы сумма ширин (A..Y)
+     * укладывалась в печатную область одной страницы по ширине (A4 landscape, текущие поля).
+     * Работает в "колоночных единицах" Excel (256 = 1 символ).
+     */
+    private static void shrinkColumnsToOnePrintedPage(Sheet sh) {
+        final int FIRST_COL = 0;   // A
+        final int LAST_COL  = 24;  // Y
+
+        // 1) Текущая суммарная ширина в единицах Excel (char*256)
+        long sum = 0;
+        for (int c = FIRST_COL; c <= LAST_COL; c++) {
+            sum += sh.getColumnWidth(c);
+        }
+        if (sum <= 0) return;
+
+        // 2) Целевая печатная ширина в символах (грубая, но стабильная оценка):
+        //    ширина страницы (см) минус поля → перевод в "символы" (~5.4 символа на 1 см),
+        //    затем в единицы Excel (×256).
+        PrintSetup ps = sh.getPrintSetup();
+        boolean landscape = ps.getLandscape();
+        // A4: 21.0 × 29.7 см
+        double pageWidthCm = landscape ? 29.7 : 21.0;
+
+        // Поля заданы в дюймах → переводим в см
+        double leftCm  = sh.getMargin(Sheet.LeftMargin)  * 2.54;
+        double rightCm = sh.getMargin(Sheet.RightMargin) * 2.54;
+
+        double printableCm = Math.max(0.1, pageWidthCm - (leftCm + rightCm)); // страховка от отрицательных
+        double charsPerCm  = 5.4; // как ты уже использовал в setupColumns
+        double targetChars = printableCm * charsPerCm;
+
+        long targetUnits = (long) Math.floor(targetChars * 256.0);
+
+        // 3) Если уже помещается — ничего не делаем
+        if (sum <= targetUnits) return;
+
+        // 4) Иначе считаем коэффициент и масштабирум каждую колонку
+        double k = (double) targetUnits / (double) sum;
+
+        // Ограничения, чтобы совсем узкие колонки не ушли в ноль
+        final int MIN_UNITS = 1 * 256; // минимум 1 символ
+        for (int c = FIRST_COL; c <= LAST_COL; c++) {
+            int w = sh.getColumnWidth(c);
+            int nw = (int) Math.max(MIN_UNITS, Math.round(w * k));
+            sh.setColumnWidth(c, nw);
+        }
+    }
+    private static String safeDateLine(java.util.Map<NoiseTestKind, String> map, NoiseTestKind k) {
+        String s = (map != null) ? map.get(k) : null;
+        return (s != null && !s.isBlank())
+                ? s
+                : "Дата, время проведения измерений __.__.____ c __:__ до __:__";
+    }
+
 }

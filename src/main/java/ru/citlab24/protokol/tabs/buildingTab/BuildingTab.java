@@ -675,6 +675,7 @@ public class BuildingTab extends JPanel {
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
+        updateNoiseTabNow();
     }
 
     /** Возвращает true, если этаж виден при текущих тумблерах. */
@@ -1150,8 +1151,6 @@ public class BuildingTab extends JPanel {
         }
         return maxNumber;
     }
-
-    // Операции с этажами
     private void addFloor(ActionEvent e) {
         AddFloorDialog dialog = new AddFloorDialog((JFrame) SwingUtilities.getWindowAncestor(this));
         if (dialog.showDialog()) {
@@ -1165,7 +1164,6 @@ public class BuildingTab extends JPanel {
             String floorName = floor.getType().title + " " + floor.getNumber();
             floor.setName(floorName);
 
-// <<< НОВОЕ: ставим позицию в КОНЕЦ секции >>>
             int maxPos = building.getFloors().stream()
                     .filter(f -> f.getSectionIndex() == secIdx)
                     .mapToInt(Floor::getPosition)
@@ -1179,19 +1177,18 @@ public class BuildingTab extends JPanel {
             RadiationTab rt = getRadiationTab();
             Map<String, Boolean> snap = (rt != null) ? rt.saveSelections() : java.util.Collections.emptyMap();
 
-// НИКАКОГО глобального автопроставления
             updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
 
-// Восстанавливаем старые галочки и применяем дефолты ТОЛЬКО на новый этаж
             if (rt != null) {
                 rt.restoreSelections(snap);
                 rt.applyDefaultsForFloorFirstResidentialOnly(floor);
             }
 
-// Остальные вкладки — без автопроставления микроклимата и с обычным КЕО
             updateLightingTab(building, /*autoApplyDefaults=*/true);
             updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
+            // НОВОЕ
+            updateNoiseTabNow();
         }
     }
 
@@ -1217,7 +1214,6 @@ public class BuildingTab extends JPanel {
         Floor selectedFloor = floorList.getSelectedValue();
         if (selectedFloor == null) return;
 
-        // 1. Сохраняем ВСЕ текущие состояния комнат
         RadiationTab radiationTab = getRadiationTab();
         Map<Integer, Boolean> allRoomStates = new HashMap<>();
         if (radiationTab != null) {
@@ -1228,13 +1224,11 @@ public class BuildingTab extends JPanel {
             lightingTab.updateRoomSelectionStates();
         }
 
-        // 2. Создаем копию этажа
         Floor copiedFloor = createFloorCopy(selectedFloor);
         String newFloorNumber = generateNextFloorNumber(selectedFloor.getNumber(), selectedFloor.getSectionIndex());
         copiedFloor.setNumber(newFloorNumber);
         copiedFloor.setSectionIndex(selectedFloor.getSectionIndex());
 
-// ВАЖНО: позицию ставим в КОНЕЦ секции → копия не первый этаж
         int secIdx = selectedFloor.getSectionIndex();
         int maxPos = building.getFloors().stream()
                 .filter(f -> f.getSectionIndex() == secIdx)
@@ -1244,28 +1238,24 @@ public class BuildingTab extends JPanel {
 
         updateSpaceIdentifiers(copiedFloor, extractDigits(newFloorNumber));
 
-        // 3. Добавляем новый этаж в модель
         building.addFloor(copiedFloor);
         floorListModel.addElement(copiedFloor);
 
-        // 4. Обновляем ТОЛЬКО список этажей в UI
         floorList.setSelectedValue(copiedFloor, true);
-// Освещение: при копировании этажа авто-правила НЕ применяем — галочки должны быть пустыми
         updateLightingTab(building, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
 
-        // 5. Восстанавливаем предыдущее состояние ДЛЯ СТАРЫХ комнат
         RadiationTab rt = getRadiationTab();
         Map<String, Boolean> snap = (rt != null) ? rt.saveSelections() : java.util.Collections.emptyMap();
 
         updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
 
         if (rt != null) {
-            rt.restoreSelections(snap); // вернули все старые галочки
-            rt.applyDefaultsForFloorFirstResidentialOnly(copiedFloor); // дефолты только на копии
+            rt.restoreSelections(snap);
+            rt.applyDefaultsForFloorFirstResidentialOnly(copiedFloor);
             rt.refreshFloors();
         }
-
+        updateNoiseTabNow();
     }
 
     private String extractDigits(String input) { return ops.extractDigits(input); }
@@ -1321,7 +1311,6 @@ public class BuildingTab extends JPanel {
             updateSpaceList();
         }
 
-        // Радиация: сохраняем → перерисовываем без force → восстанавливаем.
         RadiationTab rt = getRadiationTab();
         Map<String, Boolean> snap = (rt != null) ? rt.saveSelections()
                 : java.util.Collections.emptyMap();
@@ -1331,6 +1320,8 @@ public class BuildingTab extends JPanel {
 
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
+        updateNoiseTabNow();
     }
 
     private Map<String, Boolean> saveRadiationSelections() {
@@ -1372,6 +1363,7 @@ public class BuildingTab extends JPanel {
 
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+        updateNoiseTabNow();
     }
     private void addSpace(ActionEvent e) {
         Floor selectedFloor = floorList.getSelectedValue();
@@ -1437,6 +1429,7 @@ public class BuildingTab extends JPanel {
                 if (newIndex >= 0) rt.selectSpaceByIndex(newIndex);
             }
         }
+        updateNoiseTabNow();
     }
 
     private void editSpace(ActionEvent e) {
@@ -1481,6 +1474,7 @@ public class BuildingTab extends JPanel {
 
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+        updateNoiseTabNow();
     }
 
     private void removeSpace(ActionEvent e) {
@@ -1501,6 +1495,8 @@ public class BuildingTab extends JPanel {
 
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
+        updateNoiseTabNow();
     }
 
     private void addRoom(ActionEvent e) {
@@ -1659,6 +1655,7 @@ public class BuildingTab extends JPanel {
                 }
             }
         }
+        updateNoiseTabNow();
     }
 
 
@@ -1736,6 +1733,7 @@ public class BuildingTab extends JPanel {
 
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+        updateNoiseTabNow();
     }
 
     private void removeRoom(ActionEvent e) {
@@ -1757,6 +1755,8 @@ public class BuildingTab extends JPanel {
 
         updateLightingTab(building, /*autoApplyDefaults=*/true);
         updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+
+        updateNoiseTabNow();
     }
 
     private void updateRoomList() {
@@ -1779,6 +1779,7 @@ public class BuildingTab extends JPanel {
 
         // Этажи выбранной секции
         refreshFloorListForSelectedSection();
+        updateNoiseTabNow();
 
         // Помещения/комнаты для актуального выбора
         updateSpaceList();
@@ -2096,5 +2097,24 @@ public class BuildingTab extends JPanel {
         }
         return null;
     }
+
+    /** НОВОЕ: мгновенно обновляет вкладку «Шумы» от текущей модели building, без сохранения в БД. */
+    private void updateNoiseTabNow() {
+        try {
+            NoiseTab noise = getNoiseTab();
+            if (noise == null) return;
+
+            // Сохраним текущие галочки/источники и восстановим их после перестройки
+            noise.updateRoomSelectionStates();
+            java.util.Map<String, ru.citlab24.protokol.db.DatabaseManager.NoiseValue> snap = noise.saveSelectionsByKey();
+
+            noise.setBuilding(building);      // подсовываем актуальную модель из памяти
+            noise.applySelectionsByKey(snap); // вернули галочки по ключу
+            noise.refreshData();              // перерисовали UI
+        } catch (Throwable ignore) {
+            // тихо игнорируем, чтобы ни одна операция добавления/копирования не падала
+        }
+    }
+
 
 }
