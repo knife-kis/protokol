@@ -1,5 +1,8 @@
 package ru.citlab24.protokol.tabs.modules.noise;
 
+import com.formdev.flatlaf.FlatClientProperties;
+import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
+import org.kordamp.ikonli.swing.FontIcon;
 import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
@@ -15,6 +18,10 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind;
+import ru.citlab24.protokol.tabs.modules.noise.NoisePeriod;
+import ru.citlab24.protokol.tabs.modules.noise.NoisePeriodsDialog;
 
 /**
  * Вкладка «Шумы».
@@ -47,6 +54,9 @@ public class NoiseTab extends JPanel {
     // Снимок состояний по ключу (совместим с DatabaseManager)
     // Ключ: sectionIndex|этаж|помещение|комната
     private final Map<String, DatabaseManager.NoiseValue> byKey = new LinkedHashMap<>();
+
+    // Периоды измерений для шума (лифт день/ночь)
+    private final java.util.Map<NoiseTestKind, NoisePeriod> periods = new java.util.EnumMap<>(NoiseTestKind.class);
 
     // Короткие подписи для источников (влезают в ячейку)
     private static final String[] SRC_SHORT = {"Лифт","Вент","Завеса","ИТП","ПНС","Э/Щ","Авто","Зум"};
@@ -204,25 +214,83 @@ public class NoiseTab extends JPanel {
     }
     private JPanel buildFilterPanel() {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+
         p.add(new JLabel("Фильтр по источникам:"));
+
         filterBtns = new JToggleButton[SRC_SHORT.length];
         for (int i = 0; i < SRC_SHORT.length; i++) {
             JToggleButton b = new JToggleButton(SRC_SHORT[i]);
             b.setFocusable(false);
-            b.setMargin(new Insets(2,6,2,6));
-            b.addItemListener(e -> applyGlobalFilter()); // глобальная фильтрация
+            b.setMargin(new Insets(2, 6, 2, 6));
+            b.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                    "buttonType: toolBarButton; arc: 8; focusWidth: 1");
+            b.addItemListener(e -> applyGlobalFilter());
             filterBtns[i] = b;
             p.add(b);
         }
+
         JButton clear = new JButton("Сброс");
         clear.setFocusable(false);
+        clear.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "buttonType: toolBarButton; arc: 8; focusWidth: 1");
         clear.addActionListener(e -> {
             for (JToggleButton b : filterBtns) b.setSelected(false);
             applyGlobalFilter();
         });
         p.add(clear);
+
+        // Разделитель фильтров и командных кнопок
+        JSeparator sep = new JSeparator(SwingConstants.VERTICAL);
+        sep.setPreferredSize(new Dimension(10, 24));
+        p.add(Box.createHorizontalStrut(4));
+        p.add(sep);
+        p.add(Box.createHorizontalStrut(4));
+
+        // Кнопка «Периоды…» — ввод дат/времени
+        JButton periodsBtn = new JButton("Периоды…");
+        periodsBtn.setFocusable(false);
+        periodsBtn.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "buttonType: roundRect; arc: 999; minimumWidth: 110");
+        periodsBtn.setToolTipText("Указать дату и время: лифт (день/ночь), ИТО (неж/жил), авто (день/ночь), площадка");
+        periodsBtn.addActionListener(e -> {
+            Window w = SwingUtilities.getWindowAncestor(this);
+            NoisePeriodsDialog dlg = new NoisePeriodsDialog(w, periods);
+            dlg.setVisible(true);
+            java.util.Map<NoiseTestKind, NoisePeriod> res = dlg.getResult();
+            if (res != null && !res.isEmpty()) {
+                periods.clear();
+                periods.putAll(res);
+            }
+        });
+        p.add(periodsBtn);
+
+        // Кнопка «Экспорт в Excel»
+        JButton exportBtn = new JButton("Экспорт в Excel");
+        exportBtn.setFocusable(false);
+        exportBtn.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_EXCEL, 16));
+        exportBtn.setIconTextGap(8);
+        exportBtn.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "buttonType: roundRect; background: #E6F4EA; borderColor: #34A853; arc: 999; focusWidth: 1; innerFocusWidth: 0; minimumWidth: 150");
+        exportBtn.setToolTipText("Сформировать Excel (шум лифт: день/ночь)");
+
+        exportBtn.addActionListener(e -> onExportExcel());
+
+        p.add(exportBtn);
         return p;
     }
+
+    /** Экспорт «Шумы / Лифт»: создаёт все нужные листы. */
+    private void onExportExcel() {
+        try {
+            updateRoomSelectionStates();
+            Map<String, DatabaseManager.NoiseValue> snapshot = saveSelectionsByKey();
+            NoiseExcelExporter.exportLift(building, snapshot, this);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Ошибка экспорта: " + ex.getMessage(),
+                    "Экспорт", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
 
     private Set<String> getActiveFilterSources() {
         Set<String> s = new LinkedHashSet<>();
@@ -241,11 +309,15 @@ public class NoiseTab extends JPanel {
 
         int secIdx = getSelectedSectionIndex();
         Floor f = floorList.getSelectedValue();
-        List<Room> rooms = (filter == null)
-                ? s.getRooms().stream()
-                .sorted(Comparator.comparingInt(Room::getPosition))
-                .collect(Collectors.toList())
+
+        List<Room> base = (filter == null)
+                ? s.getRooms()
                 : filter.filterRooms(secIdx, f, s);
+
+        List<Room> rooms = base.stream()
+                .filter(r -> !isIgnoredNoiseRoomName(r.getName()))
+                .sorted(Comparator.comparingInt(Room::getPosition))
+                .collect(Collectors.toList());
 
         tableModel.setRooms(rooms);
     }
@@ -489,6 +561,23 @@ public class NoiseTab extends JPanel {
         List<Section> all = building.getSections();
         int idx = all.indexOf(sel);
         return (idx < 0) ? 0 : idx;
+    }
+    /** Игнорируем в «Шумах» служебные помещения. */
+    private static boolean isIgnoredNoiseRoomName(String name) {
+        if (name == null) return false;
+        String n = name.toLowerCase(java.util.Locale.ROOT).trim();
+
+        // базовые варианты и «как слышится»
+        String[] bad = {
+                "санузел", "сан узел", "сан.узел", "с/у", "с.у.", "санитарный узел",
+                "совмещенный санузел", "совмещённый санузел",
+                "ванная комната", "ванная",
+                "коридор", "кладовая", "гардероб", "уборная"
+        };
+        for (String k : bad) {
+            if (n.contains(k)) return true;
+        }
+        return false;
     }
 
 }
