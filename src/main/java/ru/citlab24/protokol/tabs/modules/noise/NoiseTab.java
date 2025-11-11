@@ -33,7 +33,7 @@ public class NoiseTab extends JPanel {
     private final DefaultListModel<Section> sectionModel = new DefaultListModel<>();
     private final DefaultListModel<Floor>   floorModel   = new DefaultListModel<>();
     private final DefaultListModel<Space>   spaceModel   = new DefaultListModel<>();
-
+    private NoiseFilter filter;
     // Компоненты
     private JList<Section> sectionList;
     private JList<Floor>   floorList;
@@ -69,32 +69,68 @@ public class NoiseTab extends JPanel {
 
     /** Обновить все списки по текущему building. */
     public void refreshData() {
-        // Секции
-        sectionModel.clear();
-        for (Section s : building.getSections()) sectionModel.addElement(s);
-        if (!sectionModel.isEmpty()) sectionList.setSelectedIndex(0);
-        refreshFloors();
-        refreshSpaces();
-        refreshRooms();
+        applyGlobalFilter(); // учитывает текущее состояние кнопок фильтра
     }
 
-    /** Применить сохранённые состояния (например, после загрузки из БД). */
-    public void applySelectionsByKey(Map<String, DatabaseManager.NoiseValue> map) {
-        byKey.clear();
-        if (map != null) byKey.putAll(map);
+
+    /** Применить сохранённые настройки к текущему зданию (в память вкладки). */
+    public void applySelectionsByKey(java.util.Map<String, DatabaseManager.NoiseValue> from) {
+        if (from == null) return;
+        byKey.clear(); // byKey final — только очищаем и заполняем заново
+
+        for (Map.Entry<String, DatabaseManager.NoiseValue> e : from.entrySet()) {
+            DatabaseManager.NoiseValue v = (e.getValue() != null) ? e.getValue() : new DatabaseManager.NoiseValue();
+            // правило: «Измерение» активно, если включён хотя бы один источник
+            v.measure = v.lift || v.vent || v.heatCurtain || v.itp || v.pns || v.electrical || v.autoSrc || v.zum;
+            byKey.put(e.getKey(), v);
+        }
     }
 
     /** Сохранить внутренние состояния в БД: собрать актуальные значения из таблицы. */
-    public Map<String, DatabaseManager.NoiseValue> saveSelectionsByKey() {
-        commitEditors();
-        // Возвращаем КОПИЮ карты — чтобы снаружи не трогали наши ссылки
-        return new LinkedHashMap<>(byKey);
+    /** Снимок состояний по ключу "sectionIndex|floorNumber|spaceId|roomName". */
+    public java.util.Map<String, DatabaseManager.NoiseValue> saveSelectionsByKey() {
+        // на всякий — зафиксируем активный редактор
+        updateRoomSelectionStates();
+
+        java.util.Map<String, DatabaseManager.NoiseValue> snap = new java.util.LinkedHashMap<>();
+        if (building == null) return snap;
+
+        for (Floor f : building.getFloors()) {
+            String floorNum = (f.getNumber() == null) ? "" : f.getNumber().trim();
+            int sec = Math.max(0, f.getSectionIndex());
+            for (Space s : f.getSpaces()) {
+                String spaceId = (s.getIdentifier() == null) ? "" : s.getIdentifier().trim();
+                for (Room r : s.getRooms()) {
+                    String roomName = (r.getName() == null) ? "" : r.getName().trim();
+                    String key = sec + "|" + floorNum + "|" + spaceId + "|" + roomName;
+
+                    ru.citlab24.protokol.db.DatabaseManager.NoiseValue nv = byKey.get(key);
+                    if (nv == null) {
+                        nv = new ru.citlab24.protokol.db.DatabaseManager.NoiseValue();
+                    }
+
+                    // правило: measure = выбран хотя бы один источник
+                    boolean any = nv.lift || nv.vent || nv.heatCurtain || nv.itp || nv.pns || nv.electrical || nv.autoSrc || nv.zum;
+                    nv.measure = any;
+
+                    snap.put(key, nv);
+                }
+            }
+        }
+        return snap;
     }
 
-    /** Зафиксировать редактирование таблицы (чтобы не потерять изменения перед сохранением/экспортом). */
+    /** Зафиксировать текущее редактирование и протолкнуть значения из редактора в модель. */
     public void updateRoomSelectionStates() {
-        commitEditors();
+        try {
+            if (roomsTable != null && roomsTable.isEditing()) {
+                try { roomsTable.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
+            }
+        } catch (Throwable ignore) {
+            // ничего не ломаем, просто не мешаем сохранению проекта
+        }
     }
+
 
     /* ================== ВНУТРЕННЕЕ: UI ================== */
 
@@ -174,7 +210,7 @@ public class NoiseTab extends JPanel {
             JToggleButton b = new JToggleButton(SRC_SHORT[i]);
             b.setFocusable(false);
             b.setMargin(new Insets(2,6,2,6));
-            b.addItemListener(e -> refreshRooms()); // любое изменение — обновляем список
+            b.addItemListener(e -> applyGlobalFilter()); // глобальная фильтрация
             filterBtns[i] = b;
             p.add(b);
         }
@@ -182,7 +218,7 @@ public class NoiseTab extends JPanel {
         clear.setFocusable(false);
         clear.addActionListener(e -> {
             for (JToggleButton b : filterBtns) b.setSelected(false);
-            refreshRooms();
+            applyGlobalFilter();
         });
         p.add(clear);
         return p;
@@ -198,62 +234,60 @@ public class NoiseTab extends JPanel {
 
     /* ================== ВНУТРЕННЕЕ: наполнение списков ================== */
 
+    private void refreshRooms() {
+        commitEditors();
+        Space s = spaceList.getSelectedValue();
+        if (s == null) { tableModel.setRooms(Collections.emptyList()); return; }
+
+        int secIdx = getSelectedSectionIndex();
+        Floor f = floorList.getSelectedValue();
+        List<Room> rooms = (filter == null)
+                ? s.getRooms().stream()
+                .sorted(Comparator.comparingInt(Room::getPosition))
+                .collect(Collectors.toList())
+                : filter.filterRooms(secIdx, f, s);
+
+        tableModel.setRooms(rooms);
+    }
+
     private void refreshFloors() {
         floorModel.clear();
-        int secIdx = Math.max(0, sectionList.getSelectedIndex());
-
-        // Берём этажи выбранной секции, сортируем по position
-        List<Floor> floors = building.getFloors().stream()
+        int secIdx = getSelectedSectionIndex();
+        List<Floor> floors = (filter == null)
+                ? building.getFloors().stream()
                 .filter(f -> f.getSectionIndex() == secIdx)
                 .sorted(Comparator.comparingInt(Floor::getPosition))
-                .collect(Collectors.toList());
+                .collect(Collectors.toList())
+                : filter.filterFloors(secIdx);
 
         floors.forEach(floorModel::addElement);
         if (!floorModel.isEmpty()) floorList.setSelectedIndex(0);
+        else spaceModel.clear();
     }
-
     private void refreshSpaces() {
         spaceModel.clear();
         Floor f = floorList.getSelectedValue();
         if (f == null) return;
 
-        List<Space> spaces = new ArrayList<>(f.getSpaces());
-        spaces.sort(Comparator.comparingInt(Space::getPosition));
+        int secIdx = getSelectedSectionIndex();
+        List<Space> spaces = (filter == null)
+                ? f.getSpaces().stream()
+                .sorted(Comparator.comparingInt(Space::getPosition))
+                .collect(Collectors.toList())
+                : filter.filterSpaces(secIdx, f);
+
         spaces.forEach(spaceModel::addElement);
-
         if (!spaceModel.isEmpty()) spaceList.setSelectedIndex(0);
+        else tableModel.setRooms(Collections.emptyList());
     }
 
-    private void refreshRooms() {
-        commitEditors();
-        Space s = spaceList.getSelectedValue();
-        if (s == null) {
-            tableModel.setRooms(Collections.emptyList());
-            return;
-        }
-        List<Room> rooms = new ArrayList<>(s.getRooms());
-        rooms.sort(Comparator.comparingInt(Room::getPosition));
-
-        // Фильтр: показывать только комнаты, где есть пересечение с выбранными источниками
-        Set<String> active = getActiveFilterSources();
-        if (!active.isEmpty()) {
-            int secIdx = Math.max(0, sectionList.getSelectedIndex());
-            Floor f = floorList.getSelectedValue();
-            String floorNum = (f == null || f.getNumber() == null) ? "" : f.getNumber().trim();
-            String spaceId  = (s.getIdentifier() == null) ? "" : s.getIdentifier().trim();
-
-            rooms = rooms.stream().filter(r -> {
-                String roomName = (r.getName() == null) ? "" : r.getName().trim();
-                String key = secIdx + "|" + floorNum + "|" + spaceId + "|" + roomName;
-                DatabaseManager.NoiseValue nv = byKey.get(key);
-                Set<String> sources = (nv == null) ? Collections.emptySet() : getNvSources(nv);
-                // видим, если есть хоть один активный источник
-                return sources.stream().anyMatch(active::contains);
-            }).collect(java.util.stream.Collectors.toList());
-        }
-
-        tableModel.setRooms(rooms);
+    private void refreshSections() {
+        sectionModel.clear();
+        List<Section> show = (filter == null) ? building.getSections() : filter.filterSections();
+        for (Section s : show) sectionModel.addElement(s);
+        if (!sectionModel.isEmpty()) sectionList.setSelectedIndex(0);
     }
+
 
     private void commitEditors() {
         if (roomsTable == null) return;
@@ -294,6 +328,7 @@ public class NoiseTab extends JPanel {
 
         @Override public void setValueAt(Object aValue, int row, int col) {
             if (col != 1) return;
+
             Room r = rows.get(row);
             String key = keyFor(r);
             DatabaseManager.NoiseValue nv = byKey.get(key);
@@ -301,22 +336,31 @@ public class NoiseTab extends JPanel {
                 nv = newNoiseValue(false, new LinkedHashSet<>());
                 byKey.put(key, nv);
             }
+
             if (aValue instanceof Set) {
                 @SuppressWarnings("unchecked")
                 Set<String> s = new LinkedHashSet<>((Set<String>) aValue);
                 setNvSources(nv, s);
                 // «Измерение» = выбран хотя бы один источник
                 setNvSelected(nv, !s.isEmpty());
-                // Если включен фильтр, сразу обновим список
-                java.util.Set<String> active = getActiveFilterSources();
-                if (!active.isEmpty()) refreshRooms();
+
+                // ВАЖНО: не вызываем refreshRooms() немедленно (это ведёт к ре-энтерации через stopCellEditing).
+                // Делаем отложенное обновление после завершения редактирования.
+                if (!getActiveFilterSources().isEmpty()) {
+                    SwingUtilities.invokeLater(() -> {
+                        if (roomsTable != null && !roomsTable.isEditing()) {
+                            // Перерисуем только таблицу комнат — без коммита редактора
+                            refreshRooms();
+                        }
+                    });
+                }
             }
         }
 
         private String keyFor(Room r) {
             Floor f = floorList.getSelectedValue();
             Space s = spaceList.getSelectedValue();
-            int secIdx = Math.max(0, sectionList.getSelectedIndex());
+            int secIdx = getSelectedSectionIndex(); // корректный индекс секции в модели Building
 
             String floorNum = (f == null || f.getNumber() == null) ? "" : f.getNumber().trim();
             String spaceId  = (s == null || s.getIdentifier() == null) ? "" : s.getIdentifier().trim();
@@ -324,6 +368,7 @@ public class NoiseTab extends JPanel {
 
             return secIdx + "|" + floorNum + "|" + spaceId + "|" + roomName;
         }
+
     }
 
 
@@ -391,76 +436,59 @@ public class NoiseTab extends JPanel {
     /* ================== Рефлексивная обёртка над DatabaseManager.NoiseValue ================== */
 
     private static DatabaseManager.NoiseValue newNoiseValue(boolean selected, Set<String> sources) {
-        // 1) Пытаемся найти конструктор (boolean, Set)
-        try {
-            Constructor<?> c = DatabaseManager.NoiseValue.class.getDeclaredConstructor(boolean.class, Set.class);
-            c.setAccessible(true);
-            return (DatabaseManager.NoiseValue) c.newInstance(selected, sources);
-        } catch (Throwable ignore) { }
-
-        // 2) Пытаемся безаргументный + сеттеры
-        try {
-            DatabaseManager.NoiseValue nv = DatabaseManager.NoiseValue.class.getDeclaredConstructor().newInstance();
-            setNvSelected(nv, selected);
-            setNvSources(nv, sources);
-            return nv;
-        } catch (Throwable ignore) { }
-
-        // 3) Последняя попытка: (boolean, Collection)
-        try {
-            Constructor<?> c = DatabaseManager.NoiseValue.class.getDeclaredConstructor(boolean.class, Collection.class);
-            c.setAccessible(true);
-            return (DatabaseManager.NoiseValue) c.newInstance(selected, sources);
-        } catch (Throwable ignore) { }
-
-        throw new IllegalStateException("Не удалось создать DatabaseManager.NoiseValue через рефлексию");
-    }
-
-    private static boolean getNvSelected(DatabaseManager.NoiseValue nv) {
-        try {
-            Method m = DatabaseManager.NoiseValue.class.getMethod("isSelected");
-            return (boolean) m.invoke(nv);
-        } catch (Throwable ignore) { }
-        try {
-            Method m = DatabaseManager.NoiseValue.class.getMethod("getSelected");
-            Object v = m.invoke(nv);
-            return (v instanceof Boolean) && (Boolean) v;
-        } catch (Throwable ignore) { }
-        return false;
+        DatabaseManager.NoiseValue nv = new DatabaseManager.NoiseValue();
+        nv.measure = selected;
+        setNvSources(nv, sources);
+        return nv;
     }
 
     @SuppressWarnings("unchecked")
     private static Set<String> getNvSources(DatabaseManager.NoiseValue nv) {
-        try {
-            Method m = DatabaseManager.NoiseValue.class.getMethod("getSources");
-            Object v = m.invoke(nv);
-            if (v instanceof Set) return (Set<String>) v;
-            if (v instanceof Collection) return new LinkedHashSet<>((Collection<String>) v);
-        } catch (Throwable ignore) { }
-        return Collections.emptySet();
+        Set<String> s = new LinkedHashSet<>();
+        if (nv.lift)        s.add("Лифт");
+        if (nv.vent)        s.add("Вент");
+        if (nv.heatCurtain) s.add("Завеса");
+        if (nv.itp)         s.add("ИТП");
+        if (nv.pns)         s.add("ПНС");
+        if (nv.electrical)  s.add("Э/Щ");
+        if (nv.autoSrc)     s.add("Авто");
+        if (nv.zum)         s.add("Зум");
+        return s;
     }
 
+
     private static void setNvSelected(DatabaseManager.NoiseValue nv, boolean val) {
-        try {
-            Method m = DatabaseManager.NoiseValue.class.getMethod("setSelected", boolean.class);
-            m.invoke(nv, val);
-            return;
-        } catch (Throwable ignore) { }
-        try {
-            Method m = DatabaseManager.NoiseValue.class.getMethod("setSelected", Boolean.class);
-            m.invoke(nv, val);
-        } catch (Throwable ignore) { }
+        nv.measure = val;
     }
 
     private static void setNvSources(DatabaseManager.NoiseValue nv, Set<String> sources) {
-        try {
-            Method m = DatabaseManager.NoiseValue.class.getMethod("setSources", Set.class);
-            m.invoke(nv, sources);
-            return;
-        } catch (Throwable ignore) { }
-        try {
-            Method m = DatabaseManager.NoiseValue.class.getMethod("setSources", Collection.class);
-            m.invoke(nv, sources);
-        } catch (Throwable ignore) { }
+        sources = (sources == null) ? Collections.emptySet() : sources;
+
+        nv.lift        = sources.contains("Лифт");
+        nv.vent        = sources.contains("Вент");
+        nv.heatCurtain = sources.contains("Завеса");
+        nv.itp         = sources.contains("ИТП");
+        nv.pns         = sources.contains("ПНС");
+        nv.electrical  = sources.contains("Э/Щ");
+        nv.autoSrc     = sources.contains("Авто");
+        nv.zum         = sources.contains("Зум");
     }
+    /** Применить текущий глобальный фильтр: секции → этажи → помещения → комнаты. */
+    private void applyGlobalFilter() {
+        commitEditors();
+        // пересоздаём фильтр под текущее состояние и карту byKey
+        filter = new NoiseFilter(building, byKey, getActiveFilterSources());
+        refreshSections();
+        refreshFloors();
+        refreshSpaces();
+        refreshRooms();
+    }
+    private int getSelectedSectionIndex() {
+        Section sel = sectionList.getSelectedValue();
+        if (sel == null) return 0;
+        List<Section> all = building.getSections();
+        int idx = all.indexOf(sel);
+        return (idx < 0) ? 0 : idx;
+    }
+
 }
