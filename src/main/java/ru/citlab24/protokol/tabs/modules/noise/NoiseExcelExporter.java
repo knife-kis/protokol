@@ -5,7 +5,7 @@ import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import ru.citlab24.protokol.db.DatabaseManager;
-import ru.citlab24.protokol.tabs.models.Building;
+import ru.citlab24.protokol.tabs.models.*;
 
 import javax.swing.*;
 import java.awt.*;
@@ -18,22 +18,22 @@ public final class NoiseExcelExporter {
     private NoiseExcelExporter() {}
 
     /** Экспорт «Шумы/Лифт»: создаёт листы «шум лифт день» и «шум лифт ночь». */
+    /** Экспорт «Шумы/Лифт».
+     *  @param dateLine строка «Дата, время проведения измерений …» для A7–Y7 на листе «шум лифт день»
+     */
     public static void exportLift(Building building,
                                   Map<String, DatabaseManager.NoiseValue> byKey,
-                                  Component parent) {
+                                  Component parent,
+                                  String dateLine) {
         try (Workbook wb = new XSSFWorkbook()) {
-            // Основные листы
             Sheet day        = wb.createSheet("шум лифт день");
-            Sheet night      = wb.createSheet("шум лифт ночь");   // пустой (по ТЗ пока не заполняем)
-
-            // Дополнительные листы
-            Sheet nonResIto  = wb.createSheet("шим неж ИТО");     // имя — как в ТЗ
+            Sheet night      = wb.createSheet("шум лифт ночь");   // пока пустой
+            Sheet nonResIto  = wb.createSheet("шим неж ИТО");
             Sheet resIto     = wb.createSheet("шум жил ИТО");
             Sheet autoDay    = wb.createSheet("шум авто день");
             Sheet autoNight  = wb.createSheet("шум авто ночь");
             Sheet site       = wb.createSheet("шум площадка");
 
-            // Параметры страницы/поля и ширины колонок — одинаковые везде
             setupPage(day);       setupColumns(day);
             setupPage(night);     setupColumns(night);
             setupPage(nonResIto); setupColumns(nonResIto);
@@ -42,12 +42,12 @@ public final class NoiseExcelExporter {
             setupPage(autoNight); setupColumns(autoNight);
             setupPage(site);      setupColumns(site);
 
-            // Шапку отрисовываем ТОЛЬКО для «шум лифт день» (всё как вы задавали ранее)
-            writeLiftHeader(wb, day, null);
+            // Шапка «дня» + строка 7
+            writeLiftHeader(wb, day, dateLine);
 
-            // Остальные листы — пока без наполнения (по вашему ТЗ на этом этапе)
+            // Данные: блоки по комнатам, где включён «Лифт»
+            appendLiftRoomBlocks(wb, day, building, byKey);
 
-            // Диалог сохранения — имя подставляем сразу
             JFileChooser fc = new JFileChooser();
             fc.setDialogTitle("Сохранить Excel (шумы)");
             fc.setSelectedFile(new File("шумы.xlsx"));
@@ -63,6 +63,180 @@ public final class NoiseExcelExporter {
             JOptionPane.showMessageDialog(parent, "Ошибка экспорта: " + ex.getMessage(),
                     "Экспорт", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    /** Заполняет блоки данных (по 3 строки) для всех комнат, где выбран источник «Лифт».
+     *  Возвращает индекс следующей свободной строки.
+     */
+    private static int writeLiftData(Workbook wb, Sheet sh, int startRow,
+                                     Building building,
+                                     Map<String, DatabaseManager.NoiseValue> byKey) {
+
+        // ===== шрифты/стили 8 пт =====
+        org.apache.poi.ss.usermodel.Font f8 = wb.createFont();
+        f8.setFontName("Arial");
+        f8.setFontHeightInPoints((short)8);
+
+        CellStyle center = wb.createCellStyle();
+        center.setAlignment(HorizontalAlignment.CENTER);
+        center.setVerticalAlignment(VerticalAlignment.CENTER);
+        center.setWrapText(false);
+        center.setFont(f8);
+
+        CellStyle centerBorder = wb.createCellStyle();
+        centerBorder.cloneStyleFrom(center);
+        setThinBorder(centerBorder);
+
+        CellStyle leftNoWrap = wb.createCellStyle();
+        leftNoWrap.cloneStyleFrom(center);
+        leftNoWrap.setAlignment(HorizontalAlignment.LEFT);
+
+        CellStyle leftNoWrapBorder = wb.createCellStyle();
+        leftNoWrapBorder.cloneStyleFrom(leftNoWrap);
+        setThinBorder(leftNoWrapBorder);
+
+        CellStyle centerWrapBorder = wb.createCellStyle();
+        centerWrapBorder.cloneStyleFrom(centerBorder);
+        centerWrapBorder.setWrapText(true);
+
+        // Плюсы/минусы для 1-й строки блока: E..Y (21 колонка, E=4..Y=24)
+        final String[] PLUS_MINUS = {
+                "+","-","-","+","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-"
+        };
+
+        int row = startRow;
+        int pointIdx = 1; // № п/п (колонка A)
+
+        // Быстрая навигация по секциям
+        java.util.List<Section> sections = building.getSections();
+        // Отсортируем этажи/помещения/комнаты по position (как в UI)
+        java.util.List<Floor> floors = new java.util.ArrayList<>(building.getFloors());
+        floors.sort(java.util.Comparator.comparingInt(Floor::getPosition));
+
+        for (Floor f : floors) {
+            int secIdx = Math.max(0, f.getSectionIndex());
+            Section sec = (secIdx >= 0 && secIdx < sections.size()) ? sections.get(secIdx) : null;
+
+            java.util.List<Space> spaces = new java.util.ArrayList<>(f.getSpaces());
+            spaces.sort(java.util.Comparator.comparingInt(Space::getPosition));
+
+            for (Space s : spaces) {
+                java.util.List<Room> rooms = new java.util.ArrayList<>(s.getRooms());
+                rooms.sort(java.util.Comparator.comparingInt(Room::getPosition));
+
+                for (Room r : rooms) {
+                    // Ключ, как в NoiseTab/saveSelectionsByKey()
+                    String floorNum = (f.getNumber() == null) ? "" : f.getNumber().trim();
+                    String spaceId  = (s.getIdentifier() == null) ? "" : s.getIdentifier().trim();
+                    String roomName = (r.getName() == null) ? "" : r.getName().trim();
+                    String key = secIdx + "|" + floorNum + "|" + spaceId + "|" + roomName;
+
+                    DatabaseManager.NoiseValue nv = byKey.get(key);
+                    if (nv == null || !nv.lift) continue; // только если включён «Лифт»
+
+                    // -------- три строки: 1.59см, 0.53см, 0.53см --------
+                    int r1 = row, r2 = row + 1, r3 = row + 2;
+
+                    setRowHeightCm(sh, r1, 1.59);
+                    setRowHeightCm(sh, r2, 0.53);
+                    setRowHeightCm(sh, r3, 0.53);
+
+                    Row R1 = getOrCreateRow(sh, r1);
+                    Row R2 = getOrCreateRow(sh, r2);
+                    Row R3 = getOrCreateRow(sh, r3);
+
+                    // Границы в каждой ячейке блока A..Y (чтобы сетка была везде)
+                    for (int rr = r1; rr <= r3; rr++) {
+                        Row cur = getOrCreateRow(sh, rr);
+                        for (int c = 0; c <= 24; c++) {
+                            Cell cell = getOrCreateCell(cur, c);
+                            if (cell.getCellStyle() == null || cell.getCellStyle() == center)
+                                cell.setCellStyle(centerBorder);
+                        }
+                    }
+
+                    // A: объединяем на 3 строки, пишем № п/п
+                    CellRangeAddress aMerge = merge(sh, r1, r3, 0, 0);
+                    setText(R1, 0, String.valueOf(pointIdx++), centerBorder);
+                    // рамка по периметру объединения
+                    org.apache.poi.ss.util.RegionUtil.setBorderTop   (BorderStyle.THIN, aMerge, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, aMerge, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderLeft  (BorderStyle.THIN, aMerge, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderRight (BorderStyle.THIN, aMerge, sh);
+
+                    // B: т1, т2, т3 (НЕ объединяем — по строке)
+                    setText(R1, 1, "т1", centerBorder);
+                    setText(R2, 1, "т2", centerBorder);
+                    setText(R3, 1, "т3", centerBorder);
+
+                    // C (1-я строка): место измерений — секция (если >1), этаж/помещение/комната
+                    String place = formatPlace(building, sec, f, s, r);
+                    setText(R1, 2, place, leftNoWrapBorder);
+
+                    // D (1-я строка): «Суммарные источники шума (работает лифтовое оборудование)»
+                    setText(R1, 3, "Суммарные источники шума (работает лифтовое оборудование)", leftNoWrapBorder);
+
+                    // E..Y (1-я строка): последовательность + - - + - - ...
+                    for (int i = 0; i < PLUS_MINUS.length; i++) {
+                        setText(R1, 4 + i, PLUS_MINUS[i], centerBorder);
+                    }
+
+                    // 2-я строка: объединяем C–I, текст «Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)»
+                    CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);
+                    setText(R2, 2, "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)", leftNoWrapBorder);
+                    org.apache.poi.ss.util.RegionUtil.setBorderTop   (BorderStyle.THIN, ci2, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, ci2, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderLeft  (BorderStyle.THIN, ci2, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderRight (BorderStyle.THIN, ci2, sh);
+
+                    // J..S = "-" ; T="2"; U="" ; V="2"; W..Y=""
+                    for (int c = 9; c <= 18; c++) setText(R2, c, "-", centerBorder); // J..S
+                    setText(R2, 19, "2", centerBorder); // T
+                    setText(R2, 20, "", centerBorder);  // U (узкая)
+                    setText(R2, 21, "2", centerBorder); // V
+                    // W..Y пустые (рамки уже заданы выше)
+
+                    // 3-я строка: объединяем C–I, текст «Уровни звука ... с учетом поправок, дБА (дБ)»
+                    CellRangeAddress ci3 = merge(sh, r3, r3, 2, 8);
+                    setText(R3, 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", leftNoWrapBorder);
+                    org.apache.poi.ss.util.RegionUtil.setBorderTop   (BorderStyle.THIN, ci3, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, ci3, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderLeft  (BorderStyle.THIN, ci3, sh);
+                    org.apache.poi.ss.util.RegionUtil.setBorderRight (BorderStyle.THIN, ci3, sh);
+
+                    // J..S = "-"; T..Y пусто
+                    for (int c = 9; c <= 18; c++) setText(R3, c, "-", centerBorder);
+
+                    // К следующему блоку
+                    row += 3;
+                }
+            }
+        }
+        return row;
+    }
+
+    /** Формирование подписи «место измерений» для колонки C (1-я строка блока). */
+    /** Колонка C (1-я строка блока): "<идентификатор помещения>, <комната>[, <название секции>]".
+     *  Без указания этажа.
+     */
+    private static String formatPlace(Building b, Section sec, Floor f, Space s, Room r) {
+        StringBuilder sb = new StringBuilder();
+
+        String spaceId  = (s != null && s.getIdentifier() != null) ? s.getIdentifier().trim() : "";
+        String roomName = (r != null && r.getName() != null)       ? r.getName().trim()       : "";
+
+        if (!spaceId.isEmpty()) {
+            sb.append(spaceId);
+            if (!roomName.isEmpty()) sb.append(", ");
+        }
+        sb.append(roomName);
+
+        boolean multiSections = b != null && b.getSections() != null && b.getSections().size() > 1;
+        String secName = (sec != null && sec.getName() != null) ? sec.getName().trim() : "";
+        if (multiSections && !secName.isEmpty()) {
+            sb.append(", ").append(secName); // просто название секции, без слова "секция" и без скобок
+        }
+        return sb.toString();
     }
 
     /* ===================== ВНУТРЕННЕЕ ===================== */
@@ -204,7 +378,7 @@ public final class NoiseExcelExporter {
 
         // B3–B5
         merges.add(merge(sh, 2, 4, 1, 1));
-        setCenter(sh, 2, 1, "№ точки измерения", verticalBorder);
+        setCenter(sh, 2, 1, "№ точки измерения", verticalBorderF10);
 
         // C3–C5
         merges.add(merge(sh, 2, 4, 2, 2));
@@ -228,19 +402,19 @@ public final class NoiseExcelExporter {
 
         // Ряд 5: E..I (вертикально)
         Row r5 = getOrCreateRow(sh, 4);
-        setText(r5, 4, "широкополосный", verticalBorder);
-        setText(r5, 5, "тональный",       verticalBorder);
-        setText(r5, 6, "постоянный",      verticalBorder);
-        setText(r5, 7, "непостоянный",    verticalBorder);
-        setText(r5, 8, "импульсный",      verticalBorder);
+        setText(r5, 4, "широкополосный", verticalBorderF10);
+        setText(r5, 5, "тональный",       verticalBorderF10);
+        setText(r5, 6, "постоянный",      verticalBorderF10);
+        setText(r5, 7, "непостоянный",    verticalBorderF10);
+        setText(r5, 8, "импульсный",      verticalBorderF10);
 
-        // J3–R4
+        // J3–R4 заголовок
         merges.add(merge(sh, 2, 3, 9, 17));
         setCenter(sh, 2, 9,
                 "Уровни звукового давления (дБ) ± U (дБ) в октавных полосах частот со среднегеометрическими частотами (Гц)",
                 centerWrapBorder);
 
-        // J5..R5
+        // J5..R5 частоты (10 пт)
         String[] freqs = {"31,5","63","125","250","500","1000","2000","4000","8000"};
         for (int i = 0; i < freqs.length; i++) setText(r5, 9 + i, freqs[i], centerBorderF10);
 
@@ -270,19 +444,194 @@ public final class NoiseExcelExporter {
             org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, rgn, sh);
         }
 
-        // ===== A7–Y7: строка с датой/временем, выравнивание влево, без жирного =====
+        // ===== A7–Y7: по ЦЕНТРУ + рамка (ваше требование) =====
         if (dateLine != null && !dateLine.isBlank()) {
-            setRowHeightCm(sh, 6, 0.53); // строка 7
-            merge(sh, 6, 6, 0, 24);
+            setRowHeightCm(sh, 6, 0.53);                 // строка 7
+            CellRangeAddress rng = merge(sh, 6, 6, 0, 24); // A7..Y7
             Row r7 = getOrCreateRow(sh, 6);
             Cell a7 = getOrCreateCell(r7, 0);
             a7.setCellValue(dateLine);
 
-            CellStyle left8 = wb.createCellStyle();
-            left8.cloneStyleFrom(leftNoWrap);
-            left8.setFont(f8); // по умолчанию 8 пт
-            a7.setCellStyle(left8);
+            CellStyle centerBorder8 = wb.createCellStyle();
+            centerBorder8.cloneStyleFrom(centerBorder);
+            centerBorder8.setFont(f8);
+            centerBorder8.setAlignment(HorizontalAlignment.CENTER);
+            centerBorder8.setVerticalAlignment(VerticalAlignment.CENTER);
+            a7.setCellStyle(centerBorder8);
+
+            // рамку по периметру слияния тоже ставим
+            org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, rng, sh);
+            org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, rng, sh);
+            org.apache.poi.ss.util.RegionUtil.setBorderLeft(BorderStyle.THIN, rng, sh);
+            org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, rng, sh);
         }
+    }
+    /** Добавляет по всем комнатам блоки «3 строки × 3 замера (т1/т2/т3)» для лифтов. */
+    private static void appendLiftRoomBlocks(Workbook wb, Sheet sh,
+                                             Building building,
+                                             Map<String, DatabaseManager.NoiseValue> byKey) {
+        if (building == null) return;
+
+        // ===== шрифты/стили 8 пт =====
+        org.apache.poi.ss.usermodel.Font f8 = wb.createFont();
+        f8.setFontName("Arial");
+        f8.setFontHeightInPoints((short)8);
+
+        CellStyle centerBorder = wb.createCellStyle();
+        centerBorder.setAlignment(HorizontalAlignment.CENTER);
+        centerBorder.setVerticalAlignment(VerticalAlignment.CENTER);
+        centerBorder.setWrapText(false);
+        centerBorder.setFont(f8);
+        setThinBorder(centerBorder);
+
+        CellStyle centerWrapBorder = wb.createCellStyle();
+        centerWrapBorder.cloneStyleFrom(centerBorder);
+        centerWrapBorder.setWrapText(true); // центр + перенос строки
+
+        CellStyle leftNoWrapBorder = wb.createCellStyle();
+        leftNoWrapBorder.cloneStyleFrom(centerBorder);
+        leftNoWrapBorder.setAlignment(HorizontalAlignment.LEFT);
+        leftNoWrapBorder.setWrapText(false);
+
+        CellStyle leftWrapBorder = wb.createCellStyle();
+        leftWrapBorder.cloneStyleFrom(centerBorder);
+        leftWrapBorder.setAlignment(HorizontalAlignment.LEFT);
+        leftWrapBorder.setWrapText(true);
+
+        // Плюсы/минусы для 1-й строки блока: для E..S (E=4..S=18)
+        final String[] PLUS_MINUS = {
+                "+","-","-","+","-","-","-","-","-","-","-","-","-","-","-"
+        };
+
+        int row = 7;  // после A7–Y7
+        int no  = 1;  // № п/п
+
+        java.util.List<ru.citlab24.protokol.tabs.models.Section> sections = building.getSections();
+        boolean multiSections = sections != null && sections.size() > 1;
+
+        java.util.List<ru.citlab24.protokol.tabs.models.Floor> floors =
+                new java.util.ArrayList<>(building.getFloors());
+        floors.sort(java.util.Comparator.comparingInt(ru.citlab24.protokol.tabs.models.Floor::getPosition));
+
+        for (ru.citlab24.protokol.tabs.models.Floor fl : floors) {
+            String floorNum = (fl.getNumber() == null) ? "" : fl.getNumber().trim();
+
+            java.util.List<ru.citlab24.protokol.tabs.models.Space> spaces =
+                    new java.util.ArrayList<>(fl.getSpaces());
+            spaces.sort(java.util.Comparator.comparingInt(ru.citlab24.protokol.tabs.models.Space::getPosition));
+
+            for (ru.citlab24.protokol.tabs.models.Space sp : spaces) {
+                String spaceId = (sp.getIdentifier() == null) ? "" : sp.getIdentifier().trim();
+
+                java.util.List<ru.citlab24.protokol.tabs.models.Room> rooms =
+                        new java.util.ArrayList<>(sp.getRooms());
+                rooms.sort(java.util.Comparator.comparingInt(ru.citlab24.protokol.tabs.models.Room::getPosition));
+
+                for (ru.citlab24.protokol.tabs.models.Room rm : rooms) {
+                    String roomName = (rm.getName() == null) ? "" : rm.getName().trim();
+                    String key = Math.max(0, fl.getSectionIndex()) + "|" + floorNum + "|" + spaceId + "|" + roomName;
+
+                    DatabaseManager.NoiseValue nv = byKey.get(key);
+                    if (nv == null || !nv.lift) continue;
+
+                    ru.citlab24.protokol.tabs.models.Section sec = null;
+                    if (multiSections && fl.getSectionIndex() >= 0 && fl.getSectionIndex() < sections.size()) {
+                        sec = sections.get(fl.getSectionIndex());
+                    }
+
+                    String place = formatPlace(building, sec, fl, sp, rm);
+
+                    for (int t = 1; t <= 3; t++) {
+                        int r1 = row;
+                        int r2 = row + 1;
+                        int r3 = row + 2;
+
+                        setRowHeightCm(sh, r1, 1.59);
+                        setRowHeightCm(sh, r2, 0.53);
+                        setRowHeightCm(sh, r3, 0.53);
+
+                        // базовая сетка
+                        for (int rr = r1; rr <= r3; rr++) {
+                            Row cur = getOrCreateRow(sh, rr);
+                            for (int c = 0; c <= 24; c++) {
+                                Cell cell = getOrCreateCell(cur, c);
+                                cell.setCellStyle(centerBorder);
+                            }
+                        }
+
+                        // A: № п/п (merge 3 строки)
+                        CellRangeAddress aMerge = merge(sh, r1, r3, 0, 0);
+                        setCenter(sh, r1, 0, String.valueOf(no++), centerBorder);
+
+                        // B: т1/т2/т3 (merge 3 строки)
+                        CellRangeAddress bMerge = merge(sh, r1, r3, 1, 1);
+                        setCenter(sh, r1, 1, "т" + t, centerBorder);
+
+                        // C (первая строка)
+                        setCell(sh, r1, 2, place, leftNoWrapBorder);
+
+                        // D (первая строка) — ЦЕНТР + перенос строки (только это и меняем)
+                        setCell(sh, r1, 3, "Суммарные источники шума\n(работает лифтовое оборудование)", centerWrapBorder);
+
+                        // E..S: +/-
+                        for (int i = 0; i <= (18 - 4); i++) { // E..S
+                            setCell(sh, r1, 4 + i, PLUS_MINUS[i], centerBorder);
+                        }
+
+                        // T–V и W–Y (первая строка) — "-"
+                        CellRangeAddress tv1 = merge(sh, r1, r1, 19, 21);
+                        setCenter(sh, r1, 19, "-", centerBorder);
+                        CellRangeAddress wy1 = merge(sh, r1, r1, 22, 24);
+                        setCenter(sh, r1, 22, "-", centerBorder);
+
+                        // Вторая строка: C–I объединить + текст
+                        CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);
+                        setCell(sh, r2, 2, "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)", leftNoWrapBorder);
+
+                        // J..S = "-"
+                        for (int c = 9; c <= 18; c++) setCell(sh, r2, c, "-", centerBorder);
+
+                        // T–V и W–Y (вторая строка) — "2"
+                        CellRangeAddress tv2 = merge(sh, r2, r2, 19, 21);
+                        setCenter(sh, r2, 19, "2", centerBorder);
+                        CellRangeAddress wy2 = merge(sh, r2, r2, 22, 24);
+                        setCenter(sh, r2, 22, "2", centerBorder);
+
+                        // Третья строка: C–I объединить + текст
+                        CellRangeAddress ci3 = merge(sh, r3, r3, 2, 8);
+                        setCell(sh, r3, 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", leftNoWrapBorder);
+
+                        // J..S = "-"
+                        for (int c = 9; c <= 18; c++) setCell(sh, r3, c, "-", centerBorder);
+
+                        // рамки для всех объединений
+                        for (CellRangeAddress rg : new CellRangeAddress[]{aMerge, bMerge, tv1, wy1, ci2, tv2, wy2, ci3}) {
+                            org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, rg, sh);
+                            org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, rg, sh);
+                            org.apache.poi.ss.util.RegionUtil.setBorderLeft(BorderStyle.THIN, rg, sh);
+                            org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, rg, sh);
+                        }
+
+                        row += 3;
+                    }
+                }
+            }
+        }
+    }
+
+    /** Очищает тип этажа в названии: убирает «(жилой)», «(офисный)» и т.п. */
+    private static String cleanFloorName(String s) {
+        if (s == null) return "";
+        // убираем любую скобочную приписку
+        return s.replaceAll("\\s*\\(.*?\\)", "").trim();
+    }
+
+    // небольшие вспомогатели
+    private static void setCell(Sheet sh, int r, int c, String text, CellStyle st) {
+        Row row = getOrCreateRow(sh, r);
+        Cell cell = getOrCreateCell(row, c);
+        cell.setCellValue(text);
+        cell.setCellStyle(st);
     }
 
     /* ===== helpers ===== */

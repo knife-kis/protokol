@@ -284,13 +284,25 @@ public class NoiseTab extends JPanel {
         try {
             updateRoomSelectionStates();
             Map<String, DatabaseManager.NoiseValue> snapshot = saveSelectionsByKey();
-            NoiseExcelExporter.exportLift(building, snapshot, this);
+
+            // Формируем строку для A7–Y7 (лист «шум лифт день») из выбранного периода
+            NoisePeriod p = periods.get(NoiseTestKind.LIFT_DAY);
+            String dateLine = (p != null) ? p.toExcelLine()
+                    : "Дата, время проведения измерений __.__.____ c __:__ до __:__";
+
+            NoiseExcelExporter.exportLift(building, snapshot, this, dateLine);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Ошибка экспорта: " + ex.getMessage(),
                     "Экспорт", JOptionPane.ERROR_MESSAGE);
         }
     }
 
+
+    /** Построить текст "Дата, время проведения измерений ..." для нужного вида испытаний. */
+    private String excelDateLine(NoiseTestKind kind) {
+        NoisePeriod p = periods.get(kind);
+        return (p != null) ? p.toExcelLine() : new NoisePeriod().toExcelLine();
+    }
 
     private Set<String> getActiveFilterSources() {
         Set<String> s = new LinkedHashSet<>();
