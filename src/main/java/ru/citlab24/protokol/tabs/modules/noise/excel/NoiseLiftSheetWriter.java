@@ -6,6 +6,8 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.models.*;
 
+import java.util.Map;
+
 import static ru.citlab24.protokol.tabs.modules.noise.excel.NoiseSheetCommon.*;
 
 public class NoiseLiftSheetWriter {
@@ -176,16 +178,21 @@ public class NoiseLiftSheetWriter {
     /** Добавляет блоки «т1/т2/т3» начиная со строки 7 (дневной) / с указанной строки (ночной). */
     public static void appendLiftRoomBlocks(Workbook wb, Sheet sh,
                                             Building building,
-                                            java.util.Map<String, DatabaseManager.NoiseValue> byKey,
-                                            boolean skipOfficeAtNight) {
-        appendLiftRoomBlocksFromRow(wb, sh, building, byKey, 7, skipOfficeAtNight);
+                                            Map<String, DatabaseManager.NoiseValue> byKey,
+                                            boolean isOffice,
+                                            Map<String, double[]> thresholds,
+                                            ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+        // дневной лист начинается с 7-й строки; isNight = false
+        appendLiftRoomBlocksFromRow(wb, sh, building, byKey, 7, false, thresholds, sheetKind);
     }
+
 
     public static void appendLiftRoomBlocksFromRow(Workbook wb, Sheet sh,
                                                    Building building,
-                                                   java.util.Map<String, DatabaseManager.NoiseValue> byKey,
-                                                   int startRow,
-                                                   boolean skipOfficeAtNight) {
+                                                   Map<String, DatabaseManager.NoiseValue> byKey,
+                                                   int startRow, boolean isNight,
+                                                   Map<String, double[]> thresholds,
+                                                   ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
         if (building == null) return;
 
         org.apache.poi.ss.usermodel.Font f8 = wb.createFont();
@@ -232,7 +239,8 @@ public class NoiseLiftSheetWriter {
             spaces.sort(java.util.Comparator.comparingInt(Space::getPosition));
 
             for (Space sp : spaces) {
-                if (skipOfficeAtNight && sp != null && sp.getType() == Space.SpaceType.OFFICE) continue;
+                // на ночном листе лифта — игнорируем офисы
+                if (isNight && sp != null && sp.getType() == Space.SpaceType.OFFICE) continue;
 
                 String spaceId = (sp.getIdentifier() == null) ? "" : sp.getIdentifier().trim();
 
@@ -289,6 +297,10 @@ public class NoiseLiftSheetWriter {
                         setCenter(sh, r1, 19, "-", centerBorder);
                         CellRangeAddress wy1 = merge(sh, r1, r1, 22, 24);
                         setCenter(sh, r1, 22, "-", centerBorder);
+
+                        // <<< ВСТАВКА ГЕНЕРАЦИИ ПО ПОРОГАМ >>>
+                        ru.citlab24.protokol.tabs.modules.noise.NoiseExcelExporter
+                                .fillEqMaxFirstRow(sh, r1, sheetKind, thresholds);
 
                         // Вторая строка
                         CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);

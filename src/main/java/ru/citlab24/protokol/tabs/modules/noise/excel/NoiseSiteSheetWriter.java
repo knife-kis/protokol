@@ -25,7 +25,9 @@ public final class NoiseSiteSheetWriter {
     public static void appendSiteRoomRowsFromRow(Workbook wb, Sheet sh,
                                                  Building building,
                                                  java.util.Map<String, DatabaseManager.NoiseValue> byKey,
-                                                 int startRow) {
+                                                 int startRow,
+                                                 java.util.Map<String, double[]> thresholds,
+                                                 ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
         if (building == null) return;
 
         Font f8 = wb.createFont();
@@ -53,7 +55,6 @@ public final class NoiseSiteSheetWriter {
         int row = Math.max(0, startRow);
         int no  = 1;
 
-        // Секции не нужны — C только комната
         java.util.List<Floor> floors = new java.util.ArrayList<>(building.getFloors());
         floors.sort(java.util.Comparator.comparingInt(Floor::getPosition));
 
@@ -91,7 +92,7 @@ public final class NoiseSiteSheetWriter {
                         for (int c = 0; c <= 24; c++) {
                             Cell cell = getOrCreateCell(rr, c);
                             cell.setCellStyle(centerBorder);
-                            if (c >= 19) cell.setBlank(); // T..Y пустые
+                            if (c >= 19) cell.setBlank(); // T..Y пустые по умолчанию
                         }
 
                         // A — № п/п
@@ -107,6 +108,10 @@ public final class NoiseSiteSheetWriter {
                         for (int i = 0; i <= (18 - 4); i++) {
                             setText(rr, 4 + i, PLUS_MINUS[i], centerBorder);
                         }
+
+                        // <<< ВСТАВКА ГЕНЕРАЦИИ ПО ПОРОГАМ ДЛЯ ЭТОЙ СТРОКИ >>>
+                        ru.citlab24.protokol.tabs.modules.noise.NoiseExcelExporter
+                                .fillEqMaxFirstRow(sh, r, sheetKind, thresholds);
 
                         // высота строки по C и D
                         adjustRowHeightForWrapped(sh, r, 0.53, new int[]{2,3}, new String[]{roomName, dText});

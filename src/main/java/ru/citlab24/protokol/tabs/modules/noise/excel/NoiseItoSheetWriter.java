@@ -22,8 +22,10 @@ public final class NoiseItoSheetWriter {
     public static void appendItoNonResRoomBlocksFromRow(Workbook wb, Sheet sh,
                                                         Building building,
                                                         java.util.Map<String, DatabaseManager.NoiseValue> byKey,
-                                                        int startRow) {
-        appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow,
+                                                        int startRow,
+                                                        java.util.Map<String, double[]> thresholds,
+                                                        ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+        appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow, thresholds, sheetKind,
                 sp -> sp != null && (sp.getType() == Space.SpaceType.OFFICE || sp.getType() == Space.SpaceType.PUBLIC_SPACE));
     }
 
@@ -31,8 +33,10 @@ public final class NoiseItoSheetWriter {
     public static void appendItoResRoomBlocksFromRow(Workbook wb, Sheet sh,
                                                      Building building,
                                                      java.util.Map<String, DatabaseManager.NoiseValue> byKey,
-                                                     int startRow) {
-        appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow,
+                                                     int startRow,
+                                                     java.util.Map<String, double[]> thresholds,
+                                                     ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+        appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow, thresholds, sheetKind,
                 sp -> sp != null && sp.getType() == Space.SpaceType.APARTMENT);
     }
 
@@ -41,6 +45,8 @@ public final class NoiseItoSheetWriter {
                                                    Building building,
                                                    java.util.Map<String, DatabaseManager.NoiseValue> byKey,
                                                    int startRow,
+                                                   java.util.Map<String, double[]> thresholds,
+                                                   ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind,
                                                    java.util.function.Predicate<Space> spacePredicate) {
         if (building == null) return;
 
@@ -107,7 +113,7 @@ public final class NoiseItoSheetWriter {
                     }
 
                     String place = formatPlace(building, sec, fl, sp, rm);
-                    String dText = itoDText(nv); // «Суммарные источники шума (работает оборудование …)»
+                    String dText = itoDText(nv);
 
                     for (int t = 1; t <= 3; t++) {
                         int r1 = row, r2 = row + 1, r3 = row + 2;
@@ -141,6 +147,10 @@ public final class NoiseItoSheetWriter {
                         setCenter(sh, r1, 19, "-", centerBorder);
                         CellRangeAddress wy1 = merge(sh, r1, r1, 22, 24);
                         setCenter(sh, r1, 22, "-", centerBorder);
+
+                        // <<< ВСТАВКА ГЕНЕРАЦИИ ПО ПОРОГАМ ДЛЯ t1 >>>
+                        ru.citlab24.protokol.tabs.modules.noise.NoiseExcelExporter
+                                .fillEqMaxFirstRow(sh, r1, sheetKind, thresholds);
 
                         // Вторая строка
                         CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);

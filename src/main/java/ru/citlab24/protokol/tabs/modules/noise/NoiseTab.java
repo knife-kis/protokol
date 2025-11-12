@@ -320,24 +320,23 @@ public class NoiseTab extends JPanel {
             updateRoomSelectionStates();
             Map<String, DatabaseManager.NoiseValue> snapshot = saveSelectionsByKey();
 
-            // Готовим строки «Дата, время ...» по всем видам
+            // «Дата, время проведения измерений ...»
             java.util.EnumMap<NoiseTestKind, String> dls = new java.util.EnumMap<>(NoiseTestKind.class);
-            dls.put(NoiseTestKind.LIFT_DAY,   excelDateLine(NoiseTestKind.LIFT_DAY));    // лифт день
-            dls.put(NoiseTestKind.LIFT_NIGHT, excelDateLine(NoiseTestKind.LIFT_NIGHT));  // лифт ночь
+            dls.put(NoiseTestKind.LIFT_DAY,   excelDateLine(NoiseTestKind.LIFT_DAY));
+            dls.put(NoiseTestKind.LIFT_NIGHT, excelDateLine(NoiseTestKind.LIFT_NIGHT));
 
-            // ИТО: теперь отдельно «жилые день» и «жилые ночь»
-            dls.put(NoiseTestKind.ITO_NONRES,    excelDateLine(NoiseTestKind.ITO_NONRES));    // «шум неж ИТО»
-            dls.put(NoiseTestKind.ITO_RES_DAY,   excelDateLine(NoiseTestKind.ITO_RES_DAY));   // «шум жил ИТО день»
-            dls.put(NoiseTestKind.ITO_RES_NIGHT, excelDateLine(NoiseTestKind.ITO_RES_NIGHT)); // «шум жил ИТО ночь»
+            dls.put(NoiseTestKind.ITO_NONRES,    excelDateLine(NoiseTestKind.ITO_NONRES));
+            dls.put(NoiseTestKind.ITO_RES_DAY,   excelDateLine(NoiseTestKind.ITO_RES_DAY));
+            dls.put(NoiseTestKind.ITO_RES_NIGHT, excelDateLine(NoiseTestKind.ITO_RES_NIGHT));
 
-            // Авто
             dls.put(NoiseTestKind.AUTO_DAY,   excelDateLine(NoiseTestKind.AUTO_DAY));
             dls.put(NoiseTestKind.AUTO_NIGHT, excelDateLine(NoiseTestKind.AUTO_NIGHT));
 
-            // Площадка пока пропускаем, но можно заполнить при желании:
-            // dls.put(NoiseTestKind.SITE, excelDateLine(NoiseTestKind.SITE));
+            // Конвертируем внутренние Threshold -> простой Map<String,double[4]>: {EqMin,EqMax,MaxMin,MaxMax}
+            Map<String, double[]> thSimple = buildThresholdsForExport();
 
-            NoiseExcelExporter.export(building, snapshot, this, dls);
+            // Новый оверлоад экспортёра — с порогами
+            NoiseExcelExporter.export(building, snapshot, this, dls, thSimple);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Ошибка экспорта: " + ex.getMessage(),
                     "Экспорт", JOptionPane.ERROR_MESSAGE);
@@ -348,6 +347,19 @@ public class NoiseTab extends JPanel {
     private String excelDateLine(NoiseTestKind kind) {
         NoisePeriod p = periods.get(kind);
         return (p != null) ? p.toExcelLine() : new NoisePeriod().toExcelLine();
+    }
+    /** Упаковка порогов в простой вид для экспортёра: key -> {EqMin, EqMax, MaxMin, MaxMax}. */
+    private Map<String, double[]> buildThresholdsForExport() {
+        Map<String, double[]> out = new LinkedHashMap<>();
+        for (Map.Entry<String, Threshold> e : thresholds.entrySet()) {
+            Threshold t = e.getValue();
+            double ekMin = (t != null && t.ekMin != null) ? t.ekMin : Double.NaN;
+            double ekMax = (t != null && t.ekMax != null) ? t.ekMax : Double.NaN;
+            double mMin  = (t != null && t.mMin  != null) ? t.mMin  : Double.NaN;
+            double mMax  = (t != null && t.mMax  != null) ? t.mMax  : Double.NaN;
+            out.put(e.getKey(), new double[]{ ekMin, ekMax, mMin, mMax });
+        }
+        return out;
     }
 
     private Set<String> getActiveFilterSources() {

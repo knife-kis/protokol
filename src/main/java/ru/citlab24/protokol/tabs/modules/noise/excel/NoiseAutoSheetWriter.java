@@ -18,12 +18,25 @@ public final class NoiseAutoSheetWriter {
                                             Map<String, DatabaseManager.NoiseValue> byKey) {
         appendAutoRoomBlocksFromRow(wb, sh, building, byKey, 2);
     }
+    // СТАРАЯ СИГНАТУРА — для совместимости со старым вызовом обёртки
+    public static void appendAutoRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                   Building building,
+                                                   java.util.Map<String, DatabaseManager.NoiseValue> byKey,
+                                                   int startRow) {
+        appendAutoRoomBlocksFromRow(
+                wb, sh, building, byKey, startRow,
+                java.util.Collections.emptyMap(),
+                ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind.AUTO_DAY
+        );
+    }
 
     /** Наполняет лист «Авто» блоками т1/т2/т3. Только квартиры (APARTMENT), только где включён «Авто». */
     public static void appendAutoRoomBlocksFromRow(Workbook wb, Sheet sh,
                                                    Building building,
                                                    Map<String, DatabaseManager.NoiseValue> byKey,
-                                                   int startRow) {
+                                                   int startRow,
+                                                   Map<String, double[]> thresholds,
+                                                   ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
         if (building == null) return;
 
         Font f8 = wb.createFont();
@@ -126,6 +139,10 @@ public final class NoiseAutoSheetWriter {
                         CellRangeAddress wy1 = merge(sh, r1, r1, 22, 24);
                         setCenter(sh, r1, 22, "-", centerBorder);
 
+                        // <<< ВСТАВКА ГЕНЕРАЦИИ ПО ПОРОГАМ ДЛЯ t1 >>>
+                        ru.citlab24.protokol.tabs.modules.noise.NoiseExcelExporter
+                                .fillEqMaxFirstRow(sh, r1, sheetKind, thresholds);
+
                         // 2-я строка блока
                         CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);
                         setText(getOrCreateRow(sh, r2), 2, "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)", leftNoWrapBorder);
@@ -150,7 +167,7 @@ public final class NoiseAutoSheetWriter {
 
                         // авто-подгонка высоты первой строки блока по C и D
                         adjustRowHeightForWrapped(sh, r1, 0.53, new int[]{2, 3}, new String[]{place, dText});
-                        // фикс-высоты 2 и 3 строки
+                        // фикс-высоты 2 и 3 строк
                         setRowHeightCm(sh, r2, 0.53);
                         setRowHeightCm(sh, r3, 0.53);
 
