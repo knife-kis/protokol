@@ -1,8 +1,5 @@
 package ru.citlab24.protokol.tabs.modules.noise;
 
-import com.formdev.flatlaf.FlatClientProperties;
-import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
-import org.kordamp.ikonli.swing.FontIcon;
 import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
@@ -13,15 +10,13 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import java.awt.*;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind;
-import ru.citlab24.protokol.tabs.modules.noise.NoisePeriod;
-import ru.citlab24.protokol.tabs.modules.noise.NoisePeriodsDialog;
 
 /**
  * Вкладка «Шумы».
@@ -57,6 +52,11 @@ public class NoiseTab extends JPanel {
 
     // Периоды измерений для шума (лифт день/ночь)
     private final java.util.Map<NoiseTestKind, NoisePeriod> periods = new java.util.EnumMap<>(NoiseTestKind.class);
+
+    // четыре значения на запись: Ек мин/макс и М мин/макс
+    private final Map<String, Threshold> thresholds = new LinkedHashMap<>();
+
+
 
     // Короткие подписи для источников (влезают в ячейку)
     private static final String[] SRC_SHORT = {"Лифт","Вент","Завеса","ИТП","ПНС","Э/Щ","Авто","Зум"};
@@ -154,10 +154,18 @@ public class NoiseTab extends JPanel {
         // ==== Списки слева: секции и этажи ====
         sectionList = new JList<>(sectionModel);
         sectionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        // коммитим редактирование до смены выбора
+        sectionList.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) { commitEditors(); }
+        });
 
         floorList = new JList<>(floorModel);
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorList.setCellRenderer(new FloorListRenderer());
+        // коммитим редактирование до смены выбора
+        floorList.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) { commitEditors(); }
+        });
 
         sectionList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -168,6 +176,8 @@ public class NoiseTab extends JPanel {
         });
         floorList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
+                // ВАЖНО: при смене этажа подстраиваем набор тумблеров под «улицу»
+                updateSourcesCellForCurrentFloor();
                 refreshSpaces();
                 refreshRooms();
             }
@@ -177,6 +187,10 @@ public class NoiseTab extends JPanel {
         spaceList = new JList<>(spaceModel);
         spaceList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         spaceList.setCellRenderer(new SpaceListRenderer());
+        // коммитим редактирование до смены выбора
+        spaceList.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) { commitEditors(); }
+        });
         spaceList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) refreshRooms();
         });
@@ -188,10 +202,15 @@ public class NoiseTab extends JPanel {
         roomsTable.getColumnModel().getColumn(0).setPreferredWidth(220); // Комната
         roomsTable.getColumnModel().getColumn(1).setPreferredWidth(650); // Источник(тумблеры)
 
-        // Рендер/редактор для колонки источников
-        NoiseSourcesCell cell = new NoiseSourcesCell(SRC_SHORT);
+        // Рендер/редактор для колонки источников — с учётом «улицы»
+        NoiseSourcesCell cell = new NoiseSourcesCell(getCurrentSourceLabels());
         roomsTable.getColumnModel().getColumn(1).setCellRenderer(cell);
         roomsTable.getColumnModel().getColumn(1).setCellEditor(cell);
+
+        // На всякий: при потере фокуса таблицей — коммитим
+        roomsTable.addFocusListener(new FocusAdapter() {
+            @Override public void focusLost(FocusEvent e) { commitEditors(); }
+        });
 
         // ==== Макет с долями ширины ====
         JSplitPane left = new JSplitPane(
@@ -212,9 +231,11 @@ public class NoiseTab extends JPanel {
 
         add(main, BorderLayout.CENTER);
     }
+
     private JPanel buildFilterPanel() {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
 
+        // ==== Фильтр по источникам ====
         p.add(new JLabel("Фильтр по источникам:"));
 
         filterBtns = new JToggleButton[SRC_SHORT.length];
@@ -239,14 +260,14 @@ public class NoiseTab extends JPanel {
         });
         p.add(clear);
 
-        // Разделитель фильтров и командных кнопок
+        // Разделитель
         JSeparator sep = new JSeparator(SwingConstants.VERTICAL);
         sep.setPreferredSize(new Dimension(10, 24));
         p.add(Box.createHorizontalStrut(4));
         p.add(sep);
         p.add(Box.createHorizontalStrut(4));
 
-        // Кнопка «Периоды…» — ввод дат/времени
+        // ==== Периоды + Экспорт ====
         JButton periodsBtn = new JButton("Периоды…");
         periodsBtn.setFocusable(false);
         periodsBtn.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
@@ -264,18 +285,32 @@ public class NoiseTab extends JPanel {
         });
         p.add(periodsBtn);
 
-        // Кнопка «Экспорт в Excel»
         JButton exportBtn = new JButton("Экспорт в Excel");
         exportBtn.setFocusable(false);
         exportBtn.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_EXCEL, 16));
         exportBtn.setIconTextGap(8);
         exportBtn.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
                 "buttonType: roundRect; background: #E6F4EA; borderColor: #34A853; arc: 999; focusWidth: 1; innerFocusWidth: 0; minimumWidth: 150");
-        exportBtn.setToolTipText("Сформировать Excel (шум лифт: день/ночь)");
-
+        exportBtn.setToolTipText("Сформировать Excel по активным листам");
         exportBtn.addActionListener(e -> onExportExcel());
-
         p.add(exportBtn);
+
+        // Разделитель
+        JSeparator sep2 = new JSeparator(SwingConstants.VERTICAL);
+        sep2.setPreferredSize(new Dimension(10, 24));
+        p.add(Box.createHorizontalStrut(4));
+        p.add(sep2);
+        p.add(Box.createHorizontalStrut(4));
+
+        // ==== Пороговые значения (урезанные) ====
+        p.add(new JLabel("Пороговые:"));
+
+        String[] srcForThresholds = {"Лифт","ИТО","Авто","Улица"};
+        for (String src : srcForThresholds) {
+            JButton b = createThresholdButton(src);
+            p.add(b);
+        }
+
         return p;
     }
 
@@ -302,7 +337,7 @@ public class NoiseTab extends JPanel {
             // Площадка пока пропускаем, но можно заполнить при желании:
             // dls.put(NoiseTestKind.SITE, excelDateLine(NoiseTestKind.SITE));
 
-            NoiseExcelExporter.exportLift(building, snapshot, this, dls);
+            NoiseExcelExporter.export(building, snapshot, this, dls);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Ошибка экспорта: " + ex.getMessage(),
                     "Экспорт", JOptionPane.ERROR_MESSAGE);
@@ -329,36 +364,37 @@ public class NoiseTab extends JPanel {
 
 
     /** Применяет изменение к byKey и сразу сохраняет его в БД. */
+    /** Применяет изменение к byKey и сразу сохраняет его в БД. */
     private void applyAndPersist(String key, java.util.function.Consumer<DatabaseManager.NoiseValue> change) {
-        // 1) Сохраняем в оперативную карту вкладки (это и даёт нужную «память» при переключении квартир/этажей)
+        // 1) Сохраняем в оперативную карту вкладки
         DatabaseManager.NoiseValue nv = byKey.computeIfAbsent(key, k -> new DatabaseManager.NoiseValue());
         change.accept(nv);
 
-        // 2) Без синглтона: сразу апсертим одну запись в БД через уже существующий API
-        //    (updateNoiseSelections(Building, Map<String, NoiseValue>)).
+        // 2) Точечный апсерт одной записи (устойчиво к быстрым переключениям)
         try {
-            java.util.Map<String, DatabaseManager.NoiseValue> one = new java.util.LinkedHashMap<>();
-            one.put(key, nv);
-            DatabaseManager.updateNoiseSelections(building, one);
+            DatabaseManager.updateNoiseValueByKey(building, key, nv);
         } catch (Exception ignore) {
             // мягкая деградация: в памяти вкладки состояние всё равно уже сохранено
         }
     }
 
 
+
     /* ================== ВНУТРЕННЕЕ: наполнение списков ================== */
 
     private void refreshRooms() {
         commitEditors();
+
+        // при каждом обновлении — убедимся, что редактор/рендер соответствуют типу этажа
+        updateSourcesCellForCurrentFloor();
+
         Space s = spaceList.getSelectedValue();
         if (s == null) { tableModel.setRooms(Collections.emptyList()); return; }
 
         int secIdx = getSelectedSectionIndex();
-        Floor f = floorList.getSelectedValue();
-
         List<Room> base = (filter == null)
                 ? s.getRooms()
-                : filter.filterRooms(secIdx, f, s);
+                : filter.filterRooms(secIdx, floorList.getSelectedValue(), s);
 
         List<Room> rooms = base.stream()
                 .filter(r -> !isIgnoredNoiseRoomName(r.getName()))
@@ -477,18 +513,27 @@ public class NoiseTab extends JPanel {
 
         @Override public Object getValueAt(int row, int col) {
             Room r = rows.get(row);
-            String key = keyFor(r); // теперь ключ стабильный, берём из кэша
+            String key = keyFor(r);
             DatabaseManager.NoiseValue nv = byKey.get(key);
             Set<String> sources = (nv != null) ? getNvSources(nv) : Collections.emptySet();
 
             if (col == 0) return r.getName();
+
+            // Для «улицы» показываем только Авто и Поезд (Поезд ←→ nv.zum)
+            if (isStreetSelected()) {
+                Set<String> s2 = new LinkedHashSet<>();
+                if (sources.contains("Авто")) s2.add("Авто");
+                if (sources.contains("Зум"))  s2.add("Поезд");
+                return s2;
+            }
             return sources;
         }
+
         @Override public void setValueAt(Object aValue, int row, int col) {
             if (col != 1) return;
 
             Room r = rows.get(row);
-            String key = keyFor(r); // стабильный ключ из кэша
+            String key = keyFor(r);
             DatabaseManager.NoiseValue nv = byKey.get(key);
             if (nv == null) {
                 nv = newNoiseValue(false, new LinkedHashSet<>());
@@ -497,7 +542,16 @@ public class NoiseTab extends JPanel {
 
             if (aValue instanceof Set) {
                 @SuppressWarnings("unchecked")
-                Set<String> s = new LinkedHashSet<>((Set<String>) aValue);
+                Set<String> incoming = new LinkedHashSet<>((Set<String>) aValue);
+
+                // На «улице» преобразуем «Поезд» -> «Зум», остальные отбрасываем
+                Set<String> s = new LinkedHashSet<>();
+                if (isStreetSelected()) {
+                    if (incoming.contains("Авто"))  s.add("Авто");
+                    if (incoming.contains("Поезд")) s.add("Зум"); // временно храним поезд в nv.zum
+                } else {
+                    s.addAll(incoming);
+                }
 
                 applyAndPersist(key, v -> {
                     setNvSources(v, s);
@@ -534,11 +588,13 @@ public class NoiseTab extends JPanel {
 
     /* ================== Ячейка с набором тумблеров источников ================== */
 
+    /* ================== Ячейка с набором тумблеров источников ================== */
     private static final class NoiseSourcesCell extends AbstractCellEditor
             implements TableCellRenderer, TableCellEditor {
 
         private final String[] labels;
         private JPanel panel;
+        private JTable tableRef; // чтобы можно было коммитить сразу по клику
 
         NoiseSourcesCell(String[] labels) {
             this.labels = labels.clone();
@@ -551,7 +607,14 @@ public class NoiseTab extends JPanel {
                 b.setMargin(new Insets(2,6,2,6));
                 b.setFocusable(false);
                 b.setSelected(active != null && active.contains(lbl));
-                b.addActionListener(e -> b.setSelected(b.isSelected()));
+                // мгновенный коммит значения при каждом клике
+                b.addActionListener(e -> {
+                    b.setSelected(b.isSelected());
+                    if (tableRef != null && tableRef.getCellEditor() != null) {
+                        // зафиксировать текущее множество тумблеров
+                        tableRef.getCellEditor().stopCellEditing();
+                    }
+                });
                 p.add(b);
             }
             return p;
@@ -581,6 +644,7 @@ public class NoiseTab extends JPanel {
         @Override
         public Component getTableCellEditorComponent(JTable table, Object value,
                                                      boolean isSelected, int row, int column) {
+            this.tableRef = table; // сохраним ссылку для commit по клику
             @SuppressWarnings("unchecked")
             Set<String> active = (value instanceof Set) ? (Set<String>) value : Collections.emptySet();
             panel = buildPanel(active);
@@ -592,6 +656,7 @@ public class NoiseTab extends JPanel {
             return (panel == null) ? Collections.emptySet() : collect(panel);
         }
     }
+
 
     /* ================== Рефлексивная обёртка над DatabaseManager.NoiseValue ================== */
 
@@ -666,6 +731,210 @@ public class NoiseTab extends JPanel {
             if (n.contains(k)) return true;
         }
         return false;
+    }
+    /** Текущий выбранный этаж — «улица»? */
+    private boolean isStreetSelected() {
+        Floor f = (floorList != null) ? floorList.getSelectedValue() : null;
+        return f != null && f.getType() == Floor.FloorType.STREET;
+    }
+
+    /** Набор ярлыков источников для текущего этажа (обычный или «улица»). */
+    private String[] getCurrentSourceLabels() {
+        return isStreetSelected()
+                ? new String[] { "Авто", "Поезд" }
+                : SRC_SHORT;
+    }
+
+    /** Переставить редактор/рендер колонки «Источник» под текущий тип этажа. */
+    private void updateSourcesCellForCurrentFloor() {
+        if (roomsTable == null) return;
+        NoiseSourcesCell cell = new NoiseSourcesCell(getCurrentSourceLabels());
+        roomsTable.getColumnModel().getColumn(1).setCellRenderer(cell);
+        roomsTable.getColumnModel().getColumn(1).setCellEditor(cell);
+    }
+    /** Пара «мин/макс» для одного варианта источника. */
+    /** Пороговые значения: Еквивалентный и Максимальный (мин/макс). */
+    private static final class Threshold {
+        final Double ekMin;  // Ек мин
+        final Double ekMax;  // Ек макс
+        final Double mMin;   // М мин
+        final Double mMax;   // М макс
+
+        Threshold() { this(null, null, null, null); }
+
+        Threshold(Double ekMin, Double ekMax, Double mMin, Double mMax) {
+            this.ekMin = ekMin;
+            this.ekMax = ekMax;
+            this.mMin  = mMin;
+            this.mMax  = mMax;
+        }
+
+        Threshold withEkMin(Double v) { return new Threshold(v, ekMax, mMin, mMax); }
+        Threshold withEkMax(Double v) { return new Threshold(ekMin, v, mMin, mMax); }
+        Threshold withMMin (Double v) { return new Threshold(ekMin, ekMax, v,    mMax); }
+        Threshold withMMax (Double v) { return new Threshold(ekMin, ekMax, mMin, v   ); }
+    }
+
+    /** Варианты порогов для конкретного источника. */
+    private static List<String> variantsForSource(String src) {
+        if ("Лифт".equals(src) || "ИТО".equals(src)) {
+            return java.util.Arrays.asList("день","ночь","офис");
+        }
+        if ("Авто".equals(src)) {
+            return java.util.Arrays.asList("день","ночь");
+        }
+        if ("Улица".equals(src)) {
+            return java.util.Arrays.asList("диапазон"); // одна строка
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    private JButton createThresholdButton(String srcLabel) {
+        JButton b = new JButton(srcLabel);
+        b.setFocusable(false);
+        b.setMargin(new Insets(2, 6, 2, 6));
+        b.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "buttonType: toolBarButton; arc: 8; focusWidth: 1");
+
+        java.util.List<String> vars = variantsForSource(srcLabel);
+        String hint = vars.isEmpty() ? "" : " (" + String.join("/", vars) + ")";
+        b.setToolTipText("Пороговые значения: " + srcLabel + hint);
+
+        b.addActionListener(e -> showThresholdPopup(b, srcLabel));
+        return b;
+    }
+
+
+    /** Выпадающее меню с тремя строками: <источник> день/ночь/офис, поля «мин/макс». */
+    /** Всплывающий редактор порогов в виде таблицы: Ек мин/Ек макс/М мин/М макс. */
+    private void showThresholdPopup(JButton owner, String srcLabel) {
+        JPopupMenu pm = new JPopupMenu();
+
+        JPanel content = new JPanel(new GridBagLayout());
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.insets = new Insets(4, 6, 4, 6);
+        gc.anchor = GridBagConstraints.WEST;
+
+        int row = 0;
+
+        // ---- Заголовок таблицы ----
+        gc.gridy = row++;
+        gc.gridx = 0; gc.weightx = 1; gc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel title = new JLabel(srcLabel);
+        title.setFont(title.getFont().deriveFont(Font.BOLD));
+        content.add(title, gc);
+
+        // строка заголовков колонок
+        gc.gridy = row; gc.weightx = 0; gc.fill = GridBagConstraints.NONE;
+
+        JLabel hVar = new JLabel("Вариант");
+        gc.gridx = 0; content.add(hVar, gc);
+
+        JLabel hEkMin = new JLabel("Eq мин");
+        gc.gridx = 1; content.add(hEkMin, gc);
+
+        JLabel hEkMax = new JLabel("Eq макс");
+        gc.gridx = 2; content.add(hEkMax, gc);
+
+        JLabel hMMin = new JLabel("MAX мин");
+        gc.gridx = 3; content.add(hMMin, gc);
+
+        JLabel hMMax = new JLabel("MAX макс");
+        gc.gridx = 4; content.add(hMMax, gc);
+
+        row++;
+
+        // ---- Строки вариантов ----
+        java.util.List<String> variants = variantsForSource(srcLabel);
+        javax.swing.text.NumberFormatter fmt = new javax.swing.text.NumberFormatter(java.text.NumberFormat.getNumberInstance());
+        fmt.setValueClass(Double.class);
+        fmt.setAllowsInvalid(true);
+
+        for (String variant : variants) {
+            String key = thKey(srcLabel, variant);
+            Threshold t = thresholds.getOrDefault(key, new Threshold());
+
+            gc.gridy = row; gc.weightx = 0; gc.fill = GridBagConstraints.NONE;
+
+            // Колонка 0 — подпись варианта
+            JLabel lbl = new JLabel(("диапазон".equals(variant) ? "Улица" : (srcLabel + " " + variant)));
+            gc.gridx = 0; content.add(lbl, gc);
+
+            // Колонка 1 — Ек мин
+            javax.swing.JFormattedTextField fEkMin = new javax.swing.JFormattedTextField(fmt);
+            fEkMin.setColumns(6);
+            if (t.ekMin != null) fEkMin.setValue(t.ekMin);
+            gc.gridx = 1; content.add(fEkMin, gc);
+
+            // Колонка 2 — Ек макс
+            javax.swing.JFormattedTextField fEkMax = new javax.swing.JFormattedTextField(fmt);
+            fEkMax.setColumns(6);
+            if (t.ekMax != null) fEkMax.setValue(t.ekMax);
+            gc.gridx = 2; content.add(fEkMax, gc);
+
+            // Колонка 3 — М мин
+            javax.swing.JFormattedTextField fMMin = new javax.swing.JFormattedTextField(fmt);
+            fMMin.setColumns(6);
+            if (t.mMin != null) fMMin.setValue(t.mMin);
+            gc.gridx = 3; content.add(fMMin, gc);
+
+            // Колонка 4 — М макс
+            javax.swing.JFormattedTextField fMMax = new javax.swing.JFormattedTextField(fmt);
+            fMMax.setColumns(6);
+            if (t.mMax != null) fMMax.setValue(t.mMax);
+            gc.gridx = 4; content.add(fMMax, gc);
+
+            // сохраняем ссылки, чтобы собрать позже
+            lbl.putClientProperty("key", key);
+            lbl.putClientProperty("fEkMin", fEkMin);
+            lbl.putClientProperty("fEkMax", fEkMax);
+            lbl.putClientProperty("fMMin",  fMMin);
+            lbl.putClientProperty("fMMax",  fMMax);
+
+            row++;
+        }
+
+        // ---- Кнопки ----
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 4));
+        JButton save = new JButton("Сохранить");
+        JButton cancel = new JButton("Отмена");
+        actions.add(save);
+        actions.add(cancel);
+
+        gc.gridy = row; gc.gridx = 0; gc.gridwidth = 5;
+        gc.fill = GridBagConstraints.HORIZONTAL; gc.weightx = 1.0;
+        content.add(actions, gc);
+
+        pm.add(content);
+
+        // Логика кнопок
+        save.addActionListener(e -> {
+            for (Component c : content.getComponents()) {
+                if (c instanceof JLabel lbl && lbl.getClientProperty("key") != null) {
+                    String key = String.valueOf(lbl.getClientProperty("key"));
+                    javax.swing.JFormattedTextField fEkMin = (javax.swing.JFormattedTextField) lbl.getClientProperty("fEkMin");
+                    javax.swing.JFormattedTextField fEkMax = (javax.swing.JFormattedTextField) lbl.getClientProperty("fEkMax");
+                    javax.swing.JFormattedTextField fMMin  = (javax.swing.JFormattedTextField) lbl.getClientProperty("fMMin");
+                    javax.swing.JFormattedTextField fMMax  = (javax.swing.JFormattedTextField) lbl.getClientProperty("fMMax");
+
+                    Double ekMin = (fEkMin != null && fEkMin.getValue() instanceof Number n1) ? n1.doubleValue() : null;
+                    Double ekMax = (fEkMax != null && fEkMax.getValue() instanceof Number n2) ? n2.doubleValue() : null;
+                    Double mMin  = (fMMin  != null && fMMin .getValue() instanceof Number n3) ? n3.doubleValue() : null;
+                    Double mMax  = (fMMax  != null && fMMax .getValue() instanceof Number n4) ? n4.doubleValue() : null;
+
+                    thresholds.put(key, new Threshold(ekMin, ekMax, mMin, mMax));
+                }
+            }
+            pm.setVisible(false);
+        });
+        cancel.addActionListener(e -> pm.setVisible(false));
+
+        pm.show(owner, 0, owner.getHeight());
+
+    }
+    /** Ключ порога: "<источник>|<вариант>", например "Лифт|день" или "Улица|диапазон". */
+    private static String thKey(String srcLabel, String variant) {
+        return srcLabel + "|" + (variant == null ? "" : variant);
     }
 
 }

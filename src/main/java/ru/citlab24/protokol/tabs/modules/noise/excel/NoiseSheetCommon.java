@@ -186,4 +186,30 @@ public class NoiseSheetCommon {
         }
         return sb.toString();
     }
+    /** Оценка числа строк при переносе: суммируем по сегментам, разделённым \n. */
+    public static int estimateWrappedLines(String text, double colChars) {
+        if (text == null || text.isBlank()) return 1;
+        colChars = Math.max(1.0, colChars);
+        int lines = 0;
+        String[] segs = text.split("\\r?\\n");
+        for (String seg : segs) {
+            int len = Math.max(1, seg.trim().length());
+            lines += (int) Math.ceil(len / colChars);
+        }
+        return Math.max(1, lines);
+    }
+
+    /** Подгоняет высоту строки по содержимому указанных столбцов (wrapText=true ОБЯЗАТЕЛЕН в стилях ячеек). */
+    public static void adjustRowHeightForWrapped(Sheet sh, int rowIndex, double lineCm, int[] cols, String[] texts) {
+        if (cols == null || texts == null || cols.length == 0) return;
+        int maxLines = 1;
+        for (int i = 0; i < cols.length && i < texts.length; i++) {
+            int col = cols[i];
+            double colChars = Math.max(1.0, sh.getColumnWidth(col) / 256.0); // «символов» в колонке
+            int lines = estimateWrappedLines(texts[i], colChars);
+            if (lines > maxLines) maxLines = lines;
+        }
+        setRowHeightCm(sh, rowIndex, maxLines * lineCm); // 0.53 см на строку, как по ТЗ
+    }
+
 }

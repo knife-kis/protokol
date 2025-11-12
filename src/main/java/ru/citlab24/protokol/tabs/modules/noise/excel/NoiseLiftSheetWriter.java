@@ -201,14 +201,14 @@ public class NoiseLiftSheetWriter {
 
         CellStyle centerWrapBorder = wb.createCellStyle();
         centerWrapBorder.cloneStyleFrom(centerBorder);
-        centerWrapBorder.setWrapText(true); // для D: перенос строк
+        centerWrapBorder.setWrapText(true); // D с переносом
 
         CellStyle leftNoWrapBorder = wb.createCellStyle();
         leftNoWrapBorder.cloneStyleFrom(centerBorder);
         leftNoWrapBorder.setAlignment(HorizontalAlignment.LEFT);
         leftNoWrapBorder.setWrapText(false);
 
-        // НОВОЕ: стиль с переносом для C (место измерений)
+        // C: место измерений — с переносом
         CellStyle leftWrapBorder = wb.createCellStyle();
         leftWrapBorder.cloneStyleFrom(centerBorder);
         leftWrapBorder.setAlignment(HorizontalAlignment.LEFT);
@@ -252,17 +252,11 @@ public class NoiseLiftSheetWriter {
                     }
 
                     String place = formatPlace(building, sec, fl, sp, rm);
+                    // Текст в D — с \n как было для лифта
+                    String dText = "Суммарные источники шума\n(работает лифтовое оборудование)";
 
                     for (int t = 1; t <= 3; t++) {
                         int r1 = row, r2 = row + 1, r3 = row + 2;
-
-                        // НОВОЕ: первая строка — авто-высота (Excel сам подберёт по переносам)
-                        Row R1 = getOrCreateRow(sh, r1);
-                        R1.setHeight((short)-1); // авто
-
-                        // как и было: фиксированные высоты для 2-й и 3-й строк
-                        setRowHeightCm(sh, r2, 0.53);
-                        setRowHeightCm(sh, r3, 0.53);
 
                         // базовая сетка A..Y
                         for (int rr = r1; rr <= r3; rr++) {
@@ -273,21 +267,17 @@ public class NoiseLiftSheetWriter {
                             }
                         }
 
-                        // A: № п/п (merge 3 строки)
+                        // A (№ п/п) и B (т1/т2/т3)
                         CellRangeAddress aMerge = merge(sh, r1, r3, 0, 0);
                         setCenter(sh, r1, 0, String.valueOf(no++), centerBorder);
-
-                        // B: т1/т2/т3 (merge 3 строки)
                         CellRangeAddress bMerge = merge(sh, r1, r3, 1, 1);
                         setCenter(sh, r1, 1, "т" + t, centerBorder);
 
-                        // C: место — ТЕПЕРЬ с переносом строк
+                        // C — место (wrap)
                         setText(getOrCreateRow(sh, r1), 2, place, leftWrapBorder);
 
-                        // D: текст — уже со стилем с переносом
-                        setText(getOrCreateRow(sh, r1), 3,
-                                "Суммарные источники шума\n(работает лифтовое оборудование)",
-                                centerWrapBorder);
+                        // D — текст источника (wrap)
+                        setText(getOrCreateRow(sh, r1), 3, dText, centerWrapBorder);
 
                         // E..S: +/- (первая строка)
                         for (int i = 0; i <= (18 - 4); i++) {
@@ -300,28 +290,34 @@ public class NoiseLiftSheetWriter {
                         CellRangeAddress wy1 = merge(sh, r1, r1, 22, 24);
                         setCenter(sh, r1, 22, "-", centerBorder);
 
-                        // Вторая строка: C–I «Поправка ...»
+                        // Вторая строка
                         CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);
                         setText(getOrCreateRow(sh, r2), 2, "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)", leftNoWrapBorder);
                         for (int c = 9; c <= 18; c++) setText(getOrCreateRow(sh, r2), c, "-", centerBorder);
-
-                        // T–V и W–Y (вторая строка)
                         CellRangeAddress tv2 = merge(sh, r2, r2, 19, 21);
                         setCenter(sh, r2, 19, "2", centerBorder);
                         CellRangeAddress wy2 = merge(sh, r2, r2, 22, 24);
                         setCenter(sh, r2, 22, "2", centerBorder);
 
-                        // Третья строка: C–I «Уровни звука ...»
+                        // Третья строка
                         CellRangeAddress ci3 = merge(sh, r3, r3, 2, 8);
                         setText(getOrCreateRow(sh, r3), 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", leftNoWrapBorder);
                         for (int c = 9; c <= 18; c++) setText(getOrCreateRow(sh, r3), c, "-", centerBorder);
 
+                        // Рамки объединений
                         for (CellRangeAddress rg : new CellRangeAddress[]{aMerge, bMerge, tv1, wy1, ci2, tv2, wy2, ci3}) {
                             org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, rg, sh);
                             org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, rg, sh);
                             org.apache.poi.ss.util.RegionUtil.setBorderLeft(BorderStyle.THIN, rg, sh);
                             org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, rg, sh);
                         }
+
+                        // ВАЖНО: явная подгонка высоты первой строки (из-за merge в той же строке)
+                        adjustRowHeightForWrapped(sh, r1, 0.53, new int[]{2, 3}, new String[]{place, dText});
+
+                        // фикс-высоты для 2 и 3 строк (как было)
+                        setRowHeightCm(sh, r2, 0.53);
+                        setRowHeightCm(sh, r3, 0.53);
 
                         row += 3;
                     }
