@@ -93,6 +93,7 @@ public class DatabaseManager {
                     "zum BOOLEAN)");
 
             // миграции
+
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
             addColumnIfMissing(stmt, "floor", "position", "INT");
             addColumnIfMissing(stmt, "space", "position", "INT");
@@ -109,6 +110,8 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "room", "street_center_min", "DOUBLE");
             addColumnIfMissing(stmt, "room", "street_right_max",  "DOUBLE");
             addColumnIfMissing(stmt, "room", "street_bottom_min", "DOUBLE");
+            addColumnIfMissing(stmt, "room",  "ventilation_duct_shape", "VARCHAR(16)");
+            addColumnIfMissing(stmt, "room",  "ventilation_width",      "DOUBLE");
         }
     }
 
@@ -293,13 +296,16 @@ public class DatabaseManager {
         return Floor.FloorType.PUBLIC;
     }
 
+    // Стало
     private static void saveRoom(int spaceId, Room room) throws SQLException {
         logger.debug("Сохранение комнаты: {}", room.getName());
         String sql = "INSERT INTO room (" +
-                "space_id, name, volume, ventilation_channels, ventilation_section_area, " +
-                "is_selected, artificial_selected, external_walls_count, " +        // + artificial_selected
+                "space_id, name, volume, " +
+                "ventilation_channels, ventilation_section_area, ventilation_duct_shape, ventilation_width, " +
+                "is_selected, artificial_selected, external_walls_count, " +
                 "microclimate_selected, radiation_selected, position" +
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, spaceId);
             stmt.setString(2, room.getName());
@@ -308,22 +314,39 @@ public class DatabaseManager {
             if (room.getVolume() == null) stmt.setNull(3, Types.DOUBLE);
             else stmt.setDouble(3, room.getVolume());
 
-            // вентиляция
+            // вентиляция (каналы, сечение одного канала — как было)
             stmt.setInt(4, room.getVentilationChannels());
             stmt.setDouble(5, room.getVentilationSectionArea());
 
-            // освещение (как было)
-            // КЕО (как было) + независимая галочка «Искусственное освещение»
-            stmt.setBoolean(6, room.isSelected());   // КЕО
+            // НОВОЕ: форма и ширина (через рефлексию — совместимо со старыми Room)
+            String ductShape = null;
+            Double ductWidth = null;
+            try {
+                Object v = room.getClass().getMethod("getVentilationDuctShape").invoke(room);
+                if (v != null) ductShape = String.valueOf(v);
+            } catch (Throwable ignore) {}
+            try {
+                Object v = room.getClass().getMethod("getVentilationWidth").invoke(room);
+                if (v instanceof Number n) ductWidth = n.doubleValue();
+                else if (v != null) ductWidth = Double.valueOf(v.toString());
+            } catch (Throwable ignore) {}
 
+            if (ductShape == null || ductShape.isBlank()) stmt.setNull(6, Types.VARCHAR);
+            else stmt.setString(6, ductShape);
+
+            if (ductWidth == null) stmt.setNull(7, Types.DOUBLE);
+            else stmt.setDouble(7, ductWidth);
+
+            // КЕО
+            stmt.setBoolean(8, room.isSelected());
+
+            // Искусственное освещение (рефлексия как было)
             boolean artificial = false;
             try {
-                // приоритет — современное имя геттера
                 Object v = room.getClass().getMethod("isArtificialSelected").invoke(room);
                 if (v instanceof Boolean) artificial = (Boolean) v;
             } catch (Throwable ignore) {
                 try {
-                    // совместимость со старыми моделями
                     Object v2 = room.getClass().getMethod("isArtificialLightingSelected").invoke(room);
                     if (v2 instanceof Boolean) artificial = (Boolean) v2;
                 } catch (Throwable ignore2) {
@@ -333,16 +356,18 @@ public class DatabaseManager {
                     } catch (Throwable ignore3) {}
                 }
             }
-            stmt.setBoolean(7, artificial);
+            stmt.setBoolean(9, artificial);
 
-
-            // external_walls_count сдвинулся на +1
+            // наружные стены (nullable)
             Integer walls = room.getExternalWallsCount();
-            if (walls == null) stmt.setNull(8, Types.INTEGER); else stmt.setInt(8, walls);
+            if (walls == null) stmt.setNull(10, Types.INTEGER); else stmt.setInt(10, walls);
 
-            stmt.setBoolean(9,  room.isMicroclimateSelected());
-            stmt.setBoolean(10, room.isRadiationSelected());
-            stmt.setInt(11,     room.getPosition());
+            // микроклимат / радиация
+            stmt.setBoolean(11, room.isMicroclimateSelected());
+            stmt.setBoolean(12, room.isRadiationSelected());
+
+            // порядок
+            stmt.setInt(13, room.getPosition());
 
             stmt.executeUpdate();
             try (ResultSet rs = stmt.getGeneratedKeys()) {
@@ -415,7 +440,7 @@ public class DatabaseManager {
         }
     }
 
-
+    // Стало
     private static void loadRooms(Space space, int spaceId) throws SQLException {
         logger.debug("Загрузка комнат для помещения ID: {}", spaceId);
         String sql = "SELECT * FROM room WHERE space_id = ? ORDER BY COALESCE(position,0), id";
@@ -431,40 +456,50 @@ public class DatabaseManager {
                     double volume = rs.getDouble("volume");
                     room.setVolume(rs.wasNull() ? null : volume);
 
-                    // Вентиляция
+                    // Вентиляция — каналы и сечение (как было)
                     room.setVentilationChannels(rs.getInt("ventilation_channels"));
                     room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
 
-// КЕО (общий флаг — вернём чтение, чтобы не потерять состояния естественного освещения)
+                    // НОВОЕ: форма и ширина (через сеттеры, если есть; иначе тихо пропускаем)
+                    try {
+                        String shape = null;
+                        try { shape = rs.getString("ventilation_duct_shape"); } catch (SQLException ignore) {}
+                        if (shape != null) {
+                            try { room.getClass().getMethod("setVentilationDuctShape", String.class).invoke(room, shape); }
+                            catch (Throwable ignore) {}
+                        }
+                        Double width = null;
+                        try {
+                            Object w = rs.getObject("ventilation_width");
+                            if (w instanceof Number n) width = n.doubleValue();
+                        } catch (SQLException ignore) {}
+                        if (width != null) {
+                            // сначала Double-версией, затем double-версией
+                            try { room.getClass().getMethod("setVentilationWidth", Double.class).invoke(room, width); }
+                            catch (NoSuchMethodException ex) {
+                                try { room.getClass().getMethod("setVentilationWidth", double.class).invoke(room, width.doubleValue()); }
+                                catch (Throwable ignore) {}
+                            } catch (Throwable ignore) {}
+                        }
+                    } catch (Throwable ignore) {}
+
+                    // КЕО
                     try { room.setSelected(rs.getBoolean("is_selected")); } catch (SQLException ignore) {}
 
-// Искусственное освещение — отдельный флаг (если в модели есть сеттер)
+                    // Искусственное
                     try {
                         boolean art = rs.getBoolean("artificial_selected");
-                        try {
-                            var m = room.getClass().getMethod("setArtificialSelected", boolean.class);
-                            m.invoke(room, art);
-                        } catch (ReflectiveOperationException ignore) {
-                            // мягкая деградация для старых моделей — пропускаем,
-                            // вкладка подтянет галочки через applySelectionsByKey(...)
-                        }
-                    } catch (SQLException ignore) { /* колонка могла отсутствовать в старой схеме */ }
+                        try { room.getClass().getMethod("setArtificialSelected", boolean.class).invoke(room, art); }
+                        catch (ReflectiveOperationException ignore) {}
+                    } catch (SQLException ignore) {}
 
-
-
-                    // Наружные стены (nullable)
+                    // Наружные стены
                     Object wallsObj = rs.getObject("external_walls_count");
                     room.setExternalWallsCount(wallsObj == null ? null : ((Number) wallsObj).intValue());
 
-                    // МИКРОКЛИМАТ — независимая галочка
-                    try {
-                        room.setMicroclimateSelected(rs.getBoolean("microclimate_selected"));
-                    } catch (SQLException ignore) { /* колонка может отсутствовать на старой схеме */ }
-
-                    // РАДИАЦИЯ — независимая галочка
-                    try {
-                        room.setRadiationSelected(rs.getBoolean("radiation_selected"));
-                    } catch (SQLException ignore) { /* колонка может отсутствовать на старой схеме */ }
+                    // МК / Радиация
+                    try { room.setMicroclimateSelected(rs.getBoolean("microclimate_selected")); } catch (SQLException ignore) {}
+                    try { room.setRadiationSelected(rs.getBoolean("radiation_selected")); } catch (SQLException ignore) {}
 
                     // Порядок
                     room.setPosition(rs.getInt("position"));
@@ -474,7 +509,6 @@ public class DatabaseManager {
             }
         }
     }
-
 
     private static void loadSections(Building building, int buildingId) throws SQLException {
         String sql = "SELECT * FROM section WHERE building_id = " + buildingId + " ORDER BY position";
@@ -493,6 +527,7 @@ public class DatabaseManager {
         }
     }
 
+    // Стало
     public static List<Room> getRooms(int floorId) {
         List<Room> rooms = new ArrayList<>();
         String sql = "SELECT r.* FROM room r " +
@@ -507,7 +542,7 @@ public class DatabaseManager {
                     room.setId(rs.getInt("id"));
                     room.setName(rs.getString("name"));
 
-                    // Объём (nullable)
+                    // Объём
                     double volume = rs.getDouble("volume");
                     room.setVolume(rs.wasNull() ? null : volume);
 
@@ -515,26 +550,45 @@ public class DatabaseManager {
                     room.setVentilationChannels(rs.getInt("ventilation_channels"));
                     room.setVentilationSectionArea(rs.getDouble("ventilation_section_area"));
 
-// КЕО (общий флаг)
+                    // НОВОЕ: форма/ширина
+                    try {
+                        String shape = null;
+                        try { shape = rs.getString("ventilation_duct_shape"); } catch (SQLException ignore) {}
+                        if (shape != null) {
+                            try { room.getClass().getMethod("setVentilationDuctShape", String.class).invoke(room, shape); }
+                            catch (Throwable ignore) {}
+                        }
+                        Double width = null;
+                        try {
+                            Object w = rs.getObject("ventilation_width");
+                            if (w instanceof Number n) width = n.doubleValue();
+                        } catch (SQLException ignore) {}
+                        if (width != null) {
+                            try { room.getClass().getMethod("setVentilationWidth", Double.class).invoke(room, width); }
+                            catch (NoSuchMethodException ex) {
+                                try { room.getClass().getMethod("setVentilationWidth", double.class).invoke(room, width.doubleValue()); }
+                                catch (Throwable ignore) {}
+                            } catch (Throwable ignore) {}
+                        }
+                    } catch (Throwable ignore) {}
+
+                    // КЕО
                     try { room.setSelected(rs.getBoolean("is_selected")); } catch (SQLException ignore) {}
 
-// Искусственное освещение
+                    // Искусственное
                     try {
                         boolean art = rs.getBoolean("artificial_selected");
-                        try {
-                            var m = room.getClass().getMethod("setArtificialSelected", boolean.class);
-                            m.invoke(room, art);
-                        } catch (ReflectiveOperationException ignore) { /* совместимость со старой моделью */ }
+                        try { room.getClass().getMethod("setArtificialSelected", boolean.class).invoke(room, art); }
+                        catch (ReflectiveOperationException ignore) {}
                     } catch (SQLException ignore) {}
 
-
-                    // Наружные стены (nullable)
+                    // Наружные стены
                     try {
                         Object wallsObj = rs.getObject("external_walls_count");
                         room.setExternalWallsCount(wallsObj == null ? null : ((Number) wallsObj).intValue());
                     } catch (SQLException ignore) {}
 
-                    // Микроклимат / Радиация
+                    // МК / Радиация
                     try { room.setMicroclimateSelected(rs.getBoolean("microclimate_selected")); } catch (SQLException ignore) {}
                     try { room.setRadiationSelected(rs.getBoolean("radiation_selected")); } catch (SQLException ignore) {}
 
@@ -549,6 +603,7 @@ public class DatabaseManager {
         }
         return rooms;
     }
+
     public static void updateArtificialSelections(Building b, Map<String, Boolean> byKey) throws SQLException {
         if (b == null || byKey == null || byKey.isEmpty()) return;
         String sql = "UPDATE room SET artificial_selected=? WHERE id=?";

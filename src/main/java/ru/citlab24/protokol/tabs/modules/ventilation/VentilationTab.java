@@ -39,7 +39,7 @@ public class VentilationTab extends JPanel {
     private javax.swing.table.TableCellRenderer baseEnumRenderer;
 
     private static final List<String> TARGET_ROOMS = RoomUtils.RESIDENTIAL_ROOM_KEYWORDS;
-    private static final List<String> TARGET_FLOORS = List.of("жилой", "смешанный", "офисный");
+    private static final List<String> TARGET_FLOORS = List.of("жилой", "смешанный", "офисный", "общественный");
 
     public VentilationTab(Building building) {
         initUI();
@@ -132,6 +132,7 @@ public class VentilationTab extends JPanel {
         add(createButtonPanel(), BorderLayout.SOUTH);
     }
 
+    // Стало
     private void configureEditorsAndWidths() {
         boolean withSection = tableModel.isShowSectionColumn();
 
@@ -145,11 +146,9 @@ public class VentilationTab extends JPanel {
         ventilationTable.getColumnModel().getColumn(channelsCol)
                 .setCellEditor(new NumberTextEditor());
 
-        // Форма — комбобокс
-        JComboBox<VentilationRecord.DuctShape> shapeCombo =
-                new JComboBox<>(VentilationRecord.DuctShape.values());
+        // Форма — ОДИН КЛИК: кастомный редактор, который сразу переключает и коммитит
         ventilationTable.getColumnModel().getColumn(shapeCol)
-                .setCellEditor(new DefaultCellEditor(shapeCombo));
+                .setCellEditor(new OneClickShapeEditor());
 
         // Ширина — текстовый ввод
         ventilationTable.getColumnModel().getColumn(widthCol)
@@ -169,13 +168,37 @@ public class VentilationTab extends JPanel {
         }
     }
 
+    // Стало
     public void saveCalculationsToModel() {
-        commitActiveEditor(); // ← добавили
+        commitActiveEditor();
 
         for (VentilationRecord record : tableModel.getRecords()) {
-            record.roomRef().setVentilationChannels(record.channels());
-            record.roomRef().setVentilationSectionArea(record.sectionArea());
-            record.roomRef().setVolume(record.volume());
+            Room r = record.roomRef();
+            if (r == null) continue;
+
+            r.setVentilationChannels(record.channels());
+            r.setVentilationSectionArea(record.sectionArea());
+            r.setVolume(record.volume());
+
+            // НОВОЕ: сохраним форму и ширину в Room, если есть соответствующие сеттеры
+            try {
+                // setVentilationDuctShape(String)
+                try {
+                    r.getClass().getMethod("setVentilationDuctShape", String.class)
+                            .invoke(r, record.shape() == null ? null : record.shape().name());
+                } catch (Throwable ignore) {}
+
+                // setVentilationWidth(Double) или setVentilationWidth(double)
+                Double w = record.width();
+                try {
+                    r.getClass().getMethod("setVentilationWidth", Double.class).invoke(r, w);
+                } catch (NoSuchMethodException ex) {
+                    try {
+                        r.getClass().getMethod("setVentilationWidth", double.class)
+                                .invoke(r, w == null ? 0.0 : w.doubleValue());
+                    } catch (Throwable ignore) {}
+                } catch (Throwable ignore) {}
+            } catch (Throwable ignore) {}
         }
     }
 
@@ -229,43 +252,54 @@ public class VentilationTab extends JPanel {
         tableModel.clearData();
         if (building == null) { System.out.println("Здание не загружено!"); return; }
 
-        final List<String> RESIDENTIAL_SPACE_TYPES = List.of("квартира", "жилое помещение", "жилая ячейка");
-
-        System.out.println("Загрузка данных вентиляции для здания: " + building.getName());
-        System.out.println("Количество этажей: " + building.getFloors().size());
-
         for (Floor floor : building.getFloors()) {
-            String floorType = floor.getType().toString().toLowerCase(Locale.ROOT);
-            boolean floorMatches = containsAny(floorType, TARGET_FLOORS);
+            String floorTypeText = floor.getType().toString().toLowerCase(Locale.ROOT);
+            boolean floorMatches = containsAny(floorTypeText, TARGET_FLOORS); // теперь включает и «общественный»
 
-            System.out.println("Этаж " + floor.getNumber() + " (тип: " + floorType + ") - " +
+            System.out.println("Этаж " + floor.getNumber() + " (тип: " + floorTypeText + ") - " +
                     (floorMatches ? "соответствует" : "не соответствует"));
             if (!floorMatches) continue;
 
-            System.out.println("  Помещений на этаже: " + floor.getSpaces().size());
             for (Space space : floor.getSpaces()) {
-                String spaceType = space.getType().toString().toLowerCase(Locale.ROOT);
-                System.out.println("  Помещение: " + space.getIdentifier() + " (тип: " + spaceType + ")");
-                System.out.println("  Комнат в помещении: " + space.getRooms().size());
-
-                // режим фильтрации
-                boolean filterRooms;
-                if (floorType.contains("жилой")) {
-                    filterRooms = true;
-                } else if (floorType.contains("смешанный")) {
-                    filterRooms = containsAny(spaceType, RESIDENTIAL_SPACE_TYPES);
-                } else {
-                    filterRooms = false;
-                }
+                String spaceTypeText = space.getType().toString().toLowerCase(Locale.ROOT);
 
                 for (Room room : space.getRooms()) {
                     String roomName = room.getName();
-                    boolean roomMatches = filterRooms ? matchesRoomType(roomName) : true;
+                    String norm = RoomUtils.normalizeRoomName(roomName);
 
-                    System.out.println("    Комната: " + roomName + " - " + (roomMatches ? "соответствует" : "не соответствует"));
+                    boolean roomMatches;
+                    switch (floor.getType()) {
+                        case RESIDENTIAL:
+                            // квартиры: кухни/санузлы/ванны/туалет/уборная — уже в RoomUtils
+                            roomMatches = RoomUtils.isResidentialRoom(roomName);
+                            break;
+                        case OFFICE:
+                            // офис: берём санпомещения по тем же словам (туалет/уборная и т.п.)
+                            roomMatches = RoomUtils.isResidentialRoom(roomName);
+                            break;
+                        case PUBLIC:
+                            // общественный: берём мусорокамеры и т.п. (любой корень «мусор»)
+                            roomMatches = norm.contains("мусор");
+                            break;
+                        case MIXED:
+                            // смешанный: если помещение жилое — как жилые; если общественное — «мусор...»
+                            switch (space.getType()) {
+                                case APARTMENT:
+                                    roomMatches = RoomUtils.isResidentialRoom(roomName);
+                                    break;
+                                case PUBLIC_SPACE:
+                                    roomMatches = norm.contains("мусор");
+                                    break;
+                                default:
+                                    roomMatches = false; // офисные на смешанном — не тащим
+                            }
+                            break;
+                        default:
+                            roomMatches = false;
+                    }
+
                     if (!roomMatches) continue;
 
-                    System.out.println("      >>> ДОБАВЛЕНА В ТАБЛИЦУ");
                     tableModel.addRecord(new VentilationRecord(
                             floor.getNumber(),
                             space.getIdentifier(),
@@ -287,6 +321,7 @@ public class VentilationTab extends JPanel {
         ventilationTable.repaint();
     }
 
+
     private boolean containsAny(String source, List<String> targets) {
         String lower = source.toLowerCase(Locale.ROOT);
         for (String t : targets) if (lower.contains(t)) return true;
@@ -307,6 +342,45 @@ public class VentilationTab extends JPanel {
     }
     private String normalizeRoomName(String roomName) {
         return roomName.replaceAll("[\\s\\.-]+", " ").trim().toLowerCase(Locale.ROOT);
+    }
+    // НОВОЕ: редактор «форма воздуховода» в один клик (переключение круг ↔ квадрат)
+    private static final class OneClickShapeEditor extends javax.swing.AbstractCellEditor implements javax.swing.table.TableCellEditor {
+        private VentilationRecord.DuctShape value;
+        private final javax.swing.JLabel view = new javax.swing.JLabel();
+        private long lastToggleAt = 0L; // защита от двойного переключения при дабл-клике
+
+        OneClickShapeEditor() {
+            view.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        }
+
+        @Override
+        public Object getCellEditorValue() {
+            return value;
+        }
+
+        @Override
+        public java.awt.Component getTableCellEditorComponent(javax.swing.JTable table, Object v, boolean isSelected, int row, int column) {
+            VentilationRecord.DuctShape current = (v instanceof VentilationRecord.DuctShape ds)
+                    ? ds
+                    : VentilationRecord.DuctShape.valueOf(String.valueOf(v));
+
+            long now = System.currentTimeMillis();
+            if (now - lastToggleAt < 200) {
+                // если второй клик прилетел сразу — не переключаем ещё раз
+                value = current;
+            } else {
+                value = (current == VentilationRecord.DuctShape.CIRCLE)
+                        ? VentilationRecord.DuctShape.SQUARE
+                        : VentilationRecord.DuctShape.CIRCLE;
+                lastToggleAt = now;
+            }
+
+            view.setText(value.toString());
+
+            // моментально зафиксировать изменение, чтобы сработал TableModelListener (вопрос «Применить ко всем?»)
+            javax.swing.SwingUtilities.invokeLater(this::stopCellEditing);
+            return view;
+        }
     }
 
     public void setBuilding(Building building) {

@@ -19,6 +19,7 @@ import java.util.List;
 public final class AllExcelExporter {
     private AllExcelExporter() {}
 
+    // Стало
     public static void exportAll(MainFrame frame, Building building, Component parent) {
         if (building == null) {
             JOptionPane.showMessageDialog(parent, "Сначала загрузите проект (здание).",
@@ -36,11 +37,10 @@ public final class AllExcelExporter {
                 ventRecords = frame.getVentilationTab().getRecordsForExport();
             }
             if (ventRecords != null && !ventRecords.isEmpty()) {
-                // сигнатура: (List<VentilationRecord>, Workbook)
                 VentilationExcelExporter.appendToWorkbook(ventRecords, wb);
             }
 
-            // 3) НОВОЕ: «Осв улица» — лист ДОЛЖЕН идти ПЕРЕД КЕО
+            // 3) «Осв улица» — перед КЕО
             appendStreetLightingSheet(wb, building);
 
             // 4) Естественное освещение (КЕО)
@@ -48,29 +48,26 @@ public final class AllExcelExporter {
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
-            // 5) Искусственное освещение — берём карту выбранности из вкладки и зовём 4-арг. appendToWorkbook(...)
+            // 5) Искусственное освещение
             java.util.Map<Integer, Boolean> litMap = null;
             try {
                 if (frame != null && frame.getArtificialLightingTab() != null) {
                     litMap = frame.getArtificialLightingTab().snapshotSelectionMap();
                 }
             } catch (Throwable ignore) {}
-
-            // сначала пытаемся вызвать новую сигнатуру (Building, int, Workbook, Map)
             try {
                 Class<?> clazz = Class.forName("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter");
                 java.lang.reflect.Method m = clazz.getMethod(
                         "appendToWorkbook",
                         ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class, java.util.Map.class
                 );
-                m.invoke(null, building, -1, wb, litMap); // static
+                m.invoke(null, building, -1, wb, litMap);
             } catch (NoSuchMethodException e) {
-                // фолбэк на старую 3-арг. сигнатуру, если у тебя старый экспортёр
                 tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter",
                         new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                         new Object[]{building, -1, wb});
             } catch (Throwable t) {
-                t.printStackTrace(); // не валим общий экспорт
+                t.printStackTrace();
             }
 
             // 6) Радиация
@@ -78,7 +75,10 @@ public final class AllExcelExporter {
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
-            // 7) Один общий диалог сохранения
+            // >>> НОВОЕ: привести ВСЕ листы к печати "в 1 страницу по ширине"
+            applyFitToPageWidthForAllSheets(wb);
+
+            // 7) Диалог сохранения
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Сохранить общий Excel");
             chooser.setSelectedFile(new File("Отчет_все_модули.xlsx"));
@@ -193,6 +193,38 @@ public final class AllExcelExporter {
             }
         } catch (Throwable t) {
             System.err.println("[AllExcelExporter] Ошибка добавления 'Осв улица': " + t.getMessage());
+        }
+    }
+    /** Применяет настройку печати "уместить по ширине в 1 страницу" ко всем листам книги. */
+    private static void applyFitToPageWidthForAllSheets(Workbook wb) {
+        if (wb == null) return;
+        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+            org.apache.poi.ss.usermodel.Sheet sh = wb.getSheetAt(i);
+            if (sh != null) tuneSheetToOnePageWidth(sh);
+        }
+    }
+
+    /** Настроить один лист: 1 страница по ширине, произвольная по высоте. */
+    private static void tuneSheetToOnePageWidth(org.apache.poi.ss.usermodel.Sheet sh) {
+        try {
+            sh.setFitToPage(true);
+            sh.setAutobreaks(true);
+            sh.setHorizontallyCenter(true); // чтобы было по центру при печати
+
+            org.apache.poi.ss.usermodel.PrintSetup ps = sh.getPrintSetup();
+            ps.setPaperSize(org.apache.poi.ss.usermodel.PrintSetup.A4_PAPERSIZE);
+            ps.setLandscape(true);          // обычно удобнее для широких таблиц
+            ps.setFitWidth((short) 1);      // 1 страница по ширине
+            ps.setFitHeight((short) 0);     // по высоте — сколько понадобится
+
+            // Чуть ужмём поля, чтобы выиграть место по ширине
+            sh.setMargin(org.apache.poi.ss.usermodel.Sheet.LeftMargin, 0.25);
+            sh.setMargin(org.apache.poi.ss.usermodel.Sheet.RightMargin, 0.25);
+            // Top/Bottom оставлю дефолтными; при желании можно тоже уменьшить:
+            // sh.setMargin(Sheet.TopMargin, 0.5);
+            // sh.setMargin(Sheet.BottomMargin, 0.5);
+        } catch (Throwable ignore) {
+            // не мешаем экспорту даже если где-то не поддержано
         }
     }
 

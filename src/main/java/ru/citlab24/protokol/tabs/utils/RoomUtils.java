@@ -1,5 +1,6 @@
 package ru.citlab24.protokol.tabs.utils;
 
+import ru.citlab24.protokol.tabs.models.Floor;
 import ru.citlab24.protokol.tabs.models.Room;
 
 import java.util.List;
@@ -10,7 +11,7 @@ public class RoomUtils {
             "кухня", "кухня-ниша", "кухня-гостиная", "кухня гостиная", "кухня ниша",
             "санузел", "сан узел", "сан. узел",
             "ванная", "ванная комната",
-            "совмещенный", "совмещенный санузел", "туалет",
+            "совмещенный", "совмещенный санузел", "туалет", "уборная",
             "мусорокамера", "су", "с/у"
     );
 
@@ -25,7 +26,9 @@ public class RoomUtils {
 
         String normalized = normalizeRoomName(roomName);
 
-        if (normalized.contains("кухня") || normalized.contains("кухня-ниша") || normalized.contains("кухня ниша") || normalized.contains("кухня-гостиная") || normalized.contains("кухня гостиная")) {
+        if (normalized.contains("кухня") || normalized.contains("кухня-ниша") ||
+                normalized.contains("кухня ниша") || normalized.contains("кухня-гостиная") ||
+                normalized.contains("кухня гостиная")) {
             return 60.0;
         } else if (normalized.contains("ванная комната") ||
                 normalized.contains("совмещенный санузел") ||
@@ -34,7 +37,8 @@ public class RoomUtils {
         } else if (normalized.contains("санузел") ||
                 normalized.contains("сан узел") ||
                 normalized.contains("сан. узел") ||
-                normalized.contains("туалет")) {
+                normalized.contains("туалет") ||
+                normalized.contains("уборная")) {   // ← добавили «уборная»
             return 25.0;
         }
         return null;
@@ -45,6 +49,34 @@ public class RoomUtils {
                 .replaceAll("[\\s\\.-]+", " ")
                 .trim()
                 .toLowerCase(Locale.ROOT);
+    }
+    /** Комнаты «мусор…»: мусорокамера, мусорная камера, мусоросборная и т. п. */
+    public static boolean isPublicTrashRoom(String roomName) {
+        if (roomName == null) return false;
+        String normalized = normalizeRoomName(roomName);
+        return normalized.contains("мусор"); // покрывает мусорокамеру/мусорные/мусоросборную
+    }
+
+    /**
+     * Единый предикат для вкладки «Вентиляция»:
+     *  - Жилые/смешанные: берём стандартные жилые санпомещения (кухни, с/у, ванны, туалет/уборная и т. п.)
+     *  - Общественные: дополнительно берём все «мусор…» комнаты
+     *  - Офисные: поведение оставляем как для жилых санпомещений (если нужно — можно расширить позже)
+     */
+    public static boolean isVentilationRelevant(Floor.FloorType floorType, String roomName) {
+        if (roomName == null) return false;
+        if (floorType == null) return isResidentialRoom(roomName);
+
+        switch (floorType) {
+            case PUBLIC:
+                return isResidentialRoom(roomName) || isPublicTrashRoom(roomName);
+            case MIXED:
+                return isResidentialRoom(roomName) || isPublicTrashRoom(roomName);
+            case RESIDENTIAL:
+            case OFFICE:
+            default:
+                return isResidentialRoom(roomName);
+        }
     }
 
 }

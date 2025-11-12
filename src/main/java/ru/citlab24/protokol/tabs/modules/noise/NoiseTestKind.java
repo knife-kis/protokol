@@ -1,15 +1,14 @@
 package ru.citlab24.protokol.tabs.modules.noise;
 
-/** Типы испытаний для шумов (лифт/ИТО/авто/площадка). */
 public enum NoiseTestKind {
-    LIFT_DAY,     // Лифт — день
-    LIFT_NIGHT,   // Лифт — ночь
+    LIFT_DAY,
+    LIFT_NIGHT,
 
-    ITO_NONRES,   // «шим неж ИТО»
-    ITO_RES,      // «шум жил ИТО»
+    ITO_NONRES,
+    ITO_RES_DAY,     // было ITO_RES
+    ITO_RES_NIGHT,   // новое
 
-    AUTO_DAY,     // «шум авто день»
-    AUTO_NIGHT,   // «шум авто ночь»
-
-    SITE          // «шум площадка»
+    AUTO_DAY,
+    AUTO_NIGHT,
+    SITE
 }

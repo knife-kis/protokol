@@ -290,9 +290,10 @@ public class NoiseTab extends JPanel {
             dls.put(NoiseTestKind.LIFT_DAY,   excelDateLine(NoiseTestKind.LIFT_DAY));    // лифт день
             dls.put(NoiseTestKind.LIFT_NIGHT, excelDateLine(NoiseTestKind.LIFT_NIGHT));  // лифт ночь
 
-            // ИТО: день/ночь — используем отдельные ключи из диалога (по твоей схеме ITO_NONRES / ITO_RES)
-            dls.put(NoiseTestKind.ITO_NONRES, excelDateLine(NoiseTestKind.ITO_NONRES));  // «шим неж ИТО»
-            dls.put(NoiseTestKind.ITO_RES,    excelDateLine(NoiseTestKind.ITO_RES));     // «шум жил ИТО»
+            // ИТО: теперь отдельно «жилые день» и «жилые ночь»
+            dls.put(NoiseTestKind.ITO_NONRES,    excelDateLine(NoiseTestKind.ITO_NONRES));    // «шум неж ИТО»
+            dls.put(NoiseTestKind.ITO_RES_DAY,   excelDateLine(NoiseTestKind.ITO_RES_DAY));   // «шум жил ИТО день»
+            dls.put(NoiseTestKind.ITO_RES_NIGHT, excelDateLine(NoiseTestKind.ITO_RES_NIGHT)); // «шум жил ИТО ночь»
 
             // Авто
             dls.put(NoiseTestKind.AUTO_DAY,   excelDateLine(NoiseTestKind.AUTO_DAY));
@@ -373,16 +374,31 @@ public class NoiseTab extends JPanel {
 
         floorModel.clear();
         int secIdx = getSelectedSectionIndex();
-        List<Floor> floors = (filter == null)
-                ? building.getFloors().stream()
-                .filter(f -> f.getSectionIndex() == secIdx)
-                .sorted(Comparator.comparingInt(Floor::getPosition))
-                .collect(Collectors.toList())
-                : filter.filterFloors(secIdx);
+
+        // Скрываем этажи с типом PUBLIC («общественный») в любом случае —
+        // как при отсутствии, так и при наличии дополнительного фильтра NoiseFilter.
+        List<Floor> floors;
+        if (filter == null) {
+            floors = building.getFloors().stream()
+                    .filter(f -> f.getSectionIndex() == secIdx)
+                    .filter(f -> f.getType() != Floor.FloorType.PUBLIC) // <- скрываем «общественный»
+                    .sorted(Comparator.comparingInt(Floor::getPosition))
+                    .collect(Collectors.toList());
+        } else {
+            floors = filter.filterFloors(secIdx).stream()
+                    .filter(Objects::nonNull)
+                    .filter(f -> f.getType() != Floor.FloorType.PUBLIC) // <- скрываем «общественный»
+                    .sorted(Comparator.comparingInt(Floor::getPosition))
+                    .collect(Collectors.toList());
+        }
 
         floors.forEach(floorModel::addElement);
-        if (!floorModel.isEmpty()) floorList.setSelectedIndex(0);
-        else spaceModel.clear();
+        if (!floorModel.isEmpty()) {
+            floorList.setSelectedIndex(0);
+        } else {
+            spaceModel.clear();
+            tableModel.setRooms(Collections.emptyList());
+        }
     }
 
     private void refreshSpaces() {

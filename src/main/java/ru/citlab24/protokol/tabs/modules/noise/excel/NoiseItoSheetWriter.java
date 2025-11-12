@@ -1,0 +1,202 @@
+package ru.citlab24.protokol.tabs.modules.noise.excel;
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import ru.citlab24.protokol.db.DatabaseManager;
+import ru.citlab24.protokol.tabs.models.*;
+
+import static ru.citlab24.protokol.tabs.modules.noise.excel.NoiseSheetCommon.*;
+
+/**
+ * Наполнение листов ИТО:
+ * - «шум неж ИТО»    — помещения OFFICE и PUBLIC_SPACE, если выбран ≥1 ИТО-источник (Вент/Завеса/ИТП/ПНС/Э/Щ/Зум)
+ * - «шум жил ИТО день/ночь» — только APARTMENT, те же правила источников
+ *
+ * Сетка и стили как на «лифт ночь» (упрощённая шапка), колонка D — динамический текст по выбранным источникам.
+ */
+public final class NoiseItoSheetWriter {
+
+    private NoiseItoSheetWriter() {}
+
+    /** Нежилые ИТО: берём OFFICE и PUBLIC_SPACE. Стартовая строка передаётся явно (обычно 2). */
+    public static void appendItoNonResRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                        Building building,
+                                                        java.util.Map<String, DatabaseManager.NoiseValue> byKey,
+                                                        int startRow) {
+        appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow,
+                sp -> sp != null && (sp.getType() == Space.SpaceType.OFFICE || sp.getType() == Space.SpaceType.PUBLIC_SPACE));
+    }
+
+    /** Жилые ИТО (день/ночь): только APARTMENT. Стартовая строка передаётся явно (обычно 2). */
+    public static void appendItoResRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                     Building building,
+                                                     java.util.Map<String, DatabaseManager.NoiseValue> byKey,
+                                                     int startRow) {
+        appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow,
+                sp -> sp != null && sp.getType() == Space.SpaceType.APARTMENT);
+    }
+
+    /* ===== Общая реализация для ИТО ===== */
+    private static void appendItoRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                   Building building,
+                                                   java.util.Map<String, DatabaseManager.NoiseValue> byKey,
+                                                   int startRow,
+                                                   java.util.function.Predicate<Space> spacePredicate) {
+        if (building == null) return;
+
+        org.apache.poi.ss.usermodel.Font f8 = wb.createFont();
+        f8.setFontName("Arial");
+        f8.setFontHeightInPoints((short)8);
+
+        CellStyle centerBorder = wb.createCellStyle();
+        centerBorder.setAlignment(HorizontalAlignment.CENTER);
+        centerBorder.setVerticalAlignment(VerticalAlignment.CENTER);
+        centerBorder.setWrapText(false);
+        centerBorder.setFont(f8);
+        setThinBorder(centerBorder);
+
+        CellStyle centerWrapBorder = wb.createCellStyle();
+        centerWrapBorder.cloneStyleFrom(centerBorder);
+        centerWrapBorder.setWrapText(true); // для D: перенос строк
+
+        // C: теперь с переносом строк
+        CellStyle leftWrapBorder = wb.createCellStyle();
+        leftWrapBorder.cloneStyleFrom(centerBorder);
+        leftWrapBorder.setAlignment(HorizontalAlignment.LEFT);
+        leftWrapBorder.setWrapText(true);
+
+        CellStyle leftNoWrapBorder = wb.createCellStyle();
+        leftNoWrapBorder.cloneStyleFrom(centerBorder);
+        leftNoWrapBorder.setAlignment(HorizontalAlignment.LEFT);
+        leftNoWrapBorder.setWrapText(false);
+
+        final String[] PLUS_MINUS = { "+","-","-","+","-","-","-","-","-","-","-","-","-","-","-" };
+
+        int row = Math.max(0, startRow);
+        int no  = 1;
+
+        java.util.List<Section> sections = building.getSections();
+        boolean multiSections = sections != null && sections.size() > 1;
+
+        java.util.List<Floor> floors = new java.util.ArrayList<>(building.getFloors());
+        floors.sort(java.util.Comparator.comparingInt(Floor::getPosition));
+
+        for (Floor fl : floors) {
+            String floorNum = (fl.getNumber() == null) ? "" : fl.getNumber().trim();
+
+            java.util.List<Space> spaces = new java.util.ArrayList<>(fl.getSpaces());
+            spaces.sort(java.util.Comparator.comparingInt(Space::getPosition));
+
+            for (Space sp : spaces) {
+                if (!spacePredicate.test(sp)) continue;
+
+                String spaceId = (sp.getIdentifier() == null) ? "" : sp.getIdentifier().trim();
+
+                java.util.List<Room> rooms = new java.util.ArrayList<>(sp.getRooms());
+                rooms.sort(java.util.Comparator.comparingInt(Room::getPosition));
+
+                for (Room rm : rooms) {
+                    String roomName = (rm.getName() == null) ? "" : rm.getName().trim();
+                    String key = Math.max(0, fl.getSectionIndex()) + "|" + floorNum + "|" + spaceId + "|" + roomName;
+
+                    DatabaseManager.NoiseValue nv = byKey.get(key);
+                    if (!hasItoSources(nv)) continue;
+
+                    Section sec = null;
+                    if (multiSections && fl.getSectionIndex() >= 0 && fl.getSectionIndex() < sections.size()) {
+                        sec = sections.get(fl.getSectionIndex());
+                    }
+
+                    String place = formatPlace(building, sec, fl, sp, rm);
+                    String dText = itoDText(nv);
+
+                    for (int t = 1; t <= 3; t++) {
+                        int r1 = row, r2 = row + 1, r3 = row + 2;
+
+                        // НОВОЕ: первая строка — авто-высота
+                        Row R1 = getOrCreateRow(sh, r1);
+                        R1.setHeight((short)-1); // авто
+
+                        // как и было: фикс для 2-й и 3-й строк
+                        setRowHeightCm(sh, r2, 0.53);
+                        setRowHeightCm(sh, r3, 0.53);
+
+                        // базовая сетка A..Y
+                        for (int rr = r1; rr <= r3; rr++) {
+                            Row cur = getOrCreateRow(sh, rr);
+                            for (int c = 0; c <= 24; c++) {
+                                Cell cell = getOrCreateCell(cur, c);
+                                cell.setCellStyle(centerBorder);
+                            }
+                        }
+
+                        CellRangeAddress aMerge = merge(sh, r1, r3, 0, 0);
+                        setCenter(sh, r1, 0, String.valueOf(no++), centerBorder);
+
+                        CellRangeAddress bMerge = merge(sh, r1, r3, 1, 1);
+                        setCenter(sh, r1, 1, "т" + t, centerBorder);
+
+                        // C: место — теперь с переносом
+                        setText(getOrCreateRow(sh, r1), 2, place, leftWrapBorder);
+
+                        // D: динамический текст — перенос включён
+                        setText(getOrCreateRow(sh, r1), 3, dText, centerWrapBorder);
+
+                        // E..S: +/- (первая строка)
+                        for (int i = 0; i <= (18 - 4); i++) {
+                            setText(getOrCreateRow(sh, r1), 4 + i, PLUS_MINUS[i], centerBorder);
+                        }
+
+                        CellRangeAddress tv1 = merge(sh, r1, r1, 19, 21);
+                        setCenter(sh, r1, 19, "-", centerBorder);
+                        CellRangeAddress wy1 = merge(sh, r1, r1, 22, 24);
+                        setCenter(sh, r1, 22, "-", centerBorder);
+
+                        // Вторая строка
+                        CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);
+                        setText(getOrCreateRow(sh, r2), 2, "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)", leftNoWrapBorder);
+                        for (int c = 9; c <= 18; c++) setText(getOrCreateRow(sh, r2), c, "-", centerBorder);
+                        CellRangeAddress tv2 = merge(sh, r2, r2, 19, 21);
+                        setCenter(sh, r2, 19, "2", centerBorder);
+                        CellRangeAddress wy2 = merge(sh, r2, r2, 22, 24);
+                        setCenter(sh, r2, 22, "2", centerBorder);
+
+                        // Третья строка
+                        CellRangeAddress ci3 = merge(sh, r3, r3, 2, 8);
+                        setText(getOrCreateRow(sh, r3), 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", leftNoWrapBorder);
+                        for (int c = 9; c <= 18; c++) setText(getOrCreateRow(sh, r3), c, "-", centerBorder);
+
+                        for (CellRangeAddress rg : new CellRangeAddress[]{aMerge, bMerge, tv1, wy1, ci2, tv2, wy2, ci3}) {
+                            org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, rg, sh);
+                            org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, rg, sh);
+                            org.apache.poi.ss.util.RegionUtil.setBorderLeft(BorderStyle.THIN, rg, sh);
+                            org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, rg, sh);
+                        }
+
+                        row += 3;
+                    }
+                }
+            }
+        }
+    }
+
+    /* ===== Правила ИТО ===== */
+
+    /** Есть ли выбранные источники для ИТО (без «Лифт»). */
+    private static boolean hasItoSources(DatabaseManager.NoiseValue nv) {
+        return nv != null && (nv.vent || nv.heatCurtain || nv.itp || nv.pns || nv.electrical || nv.zum);
+    }
+
+    /** Текст для колонки D на листах ИТО. */
+    private static String itoDText(DatabaseManager.NoiseValue nv) {
+        java.util.List<String> parts = new java.util.ArrayList<>(6);
+        if (nv.vent)        parts.add("вентиляции");
+        if (nv.heatCurtain) parts.add("тепловой завесы");
+        if (nv.itp)         parts.add("ИТП");
+        if (nv.pns)         parts.add("ПНС");
+        if (nv.electrical)  parts.add("электрощитовой");
+        if (nv.zum)         parts.add("зачистного устройства мусоропровода");
+        String joined = String.join(", ", parts);
+        return "Суммарные источники шума (работает оборудование " + joined + ")";
+    }
+}

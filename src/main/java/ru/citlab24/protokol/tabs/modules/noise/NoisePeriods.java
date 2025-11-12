@@ -27,31 +27,30 @@ final class NoisePeriod {
     }
 }
 
-/** Диалог ввода периодов для всех нужных испытаний: лифт/ИТО/авто/площадка.
- *  Один столбец, повышенная высота, группы с заголовками. */
+/** Диалог ввода периодов для всех нужных испытаний: лифт/ИТО/авто/площадка. */
 final class NoisePeriodsDialog extends JDialog {
     private final Map<NoiseTestKind, NoisePeriod> result = new EnumMap<>(NoiseTestKind.class);
 
     // Лифт
-    private final PeriodPanel pLiftDay    = new PeriodPanel("Лифт — день",        LocalTime.of(8, 0),  LocalTime.of(21, 0));
-    private final PeriodPanel pLiftNight  = new PeriodPanel("Лифт — ночь",       LocalTime.of(22, 0), LocalTime.of(6,  0));
+    private final PeriodPanel pLiftDay      = new PeriodPanel("Лифт — день",         LocalTime.of(8, 0),  LocalTime.of(21, 0));
+    private final PeriodPanel pLiftNight    = new PeriodPanel("Лифт — ночь",         LocalTime.of(22, 0), LocalTime.of(6,  0));
 
     // ИТО
-    private final PeriodPanel pItoNonres  = new PeriodPanel("ИТО — нежилые",      LocalTime.of(8, 0),  LocalTime.of(21, 0));
-    private final PeriodPanel pItoRes     = new PeriodPanel("ИТО — жилые",        LocalTime.of(8, 0),  LocalTime.of(21, 0));
+    private final PeriodPanel pItoNonres    = new PeriodPanel("ИТО — нежилые",       LocalTime.of(8, 0),  LocalTime.of(21, 0));
+    private final PeriodPanel pItoResDay    = new PeriodPanel("ИТО — жилые день",    LocalTime.of(8, 0),  LocalTime.of(21, 0));  // новое имя
+    private final PeriodPanel pItoResNight  = new PeriodPanel("ИТО — жилые ночь",    LocalTime.of(22, 0), LocalTime.of(6,  0));  // новый пункт
 
     // Авто
-    private final PeriodPanel pAutoDay    = new PeriodPanel("Авто — день",        LocalTime.of(8, 0),  LocalTime.of(21, 0));
-    private final PeriodPanel pAutoNight  = new PeriodPanel("Авто — ночь",       LocalTime.of(22, 0), LocalTime.of(6,  0));
+    private final PeriodPanel pAutoDay      = new PeriodPanel("Авто — день",         LocalTime.of(8, 0),  LocalTime.of(21, 0));
+    private final PeriodPanel pAutoNight    = new PeriodPanel("Авто — ночь",         LocalTime.of(22, 0), LocalTime.of(6,  0));
 
     // Площадка (улица)
-    private final PeriodPanel pSite       = new PeriodPanel("Площадка (улица)",   LocalTime.of(8, 0),  LocalTime.of(21, 0));
+    private final PeriodPanel pSite         = new PeriodPanel("Площадка (улица)",    LocalTime.of(8, 0),  LocalTime.of(21, 0));
 
     NoisePeriodsDialog(Window owner, Map<NoiseTestKind, NoisePeriod> initial) {
         super(owner, "Периоды измерений (шумы)", ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
-        // ===== центральная панель: один столбец, группы с титульными границами =====
         JPanel center = new JPanel();
         center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
         center.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -59,7 +58,7 @@ final class NoisePeriodsDialog extends JDialog {
         center.add(makeGroup("Лифт", pLiftDay, pLiftNight));
         center.add(Box.createVerticalStrut(8));
 
-        center.add(makeGroup("ИТО", pItoNonres, pItoRes));
+        center.add(makeGroup("ИТО", pItoNonres, pItoResDay, pItoResNight)); // было pItoRes
         center.add(Box.createVerticalStrut(8));
 
         center.add(makeGroup("Авто", pAutoDay, pAutoNight));
@@ -67,7 +66,6 @@ final class NoisePeriodsDialog extends JDialog {
 
         center.add(makeGroup("Площадка (улица)", pSite));
 
-        // Низ диалога — кнопки
         JButton ok = new JButton("OK");
         JButton cancel = new JButton("Отмена");
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -76,16 +74,17 @@ final class NoisePeriodsDialog extends JDialog {
 
         ok.addActionListener(e -> {
             result.clear();
-            result.put(NoiseTestKind.LIFT_DAY,   pLiftDay.getPeriod());
-            result.put(NoiseTestKind.LIFT_NIGHT, pLiftNight.getPeriod());
+            result.put(NoiseTestKind.LIFT_DAY,      pLiftDay.getPeriod());
+            result.put(NoiseTestKind.LIFT_NIGHT,    pLiftNight.getPeriod());
 
-            result.put(NoiseTestKind.ITO_NONRES, pItoNonres.getPeriod());
-            result.put(NoiseTestKind.ITO_RES,    pItoRes.getPeriod());
+            result.put(NoiseTestKind.ITO_NONRES,    pItoNonres.getPeriod());
+            result.put(NoiseTestKind.ITO_RES_DAY,   pItoResDay.getPeriod());    // новое
+            result.put(NoiseTestKind.ITO_RES_NIGHT, pItoResNight.getPeriod());  // новое
 
-            result.put(NoiseTestKind.AUTO_DAY,   pAutoDay.getPeriod());
-            result.put(NoiseTestKind.AUTO_NIGHT, pAutoNight.getPeriod());
+            result.put(NoiseTestKind.AUTO_DAY,      pAutoDay.getPeriod());
+            result.put(NoiseTestKind.AUTO_NIGHT,    pAutoNight.getPeriod());
 
-            result.put(NoiseTestKind.SITE,       pSite.getPeriod());
+            result.put(NoiseTestKind.SITE,          pSite.getPeriod());
             dispose();
         });
         cancel.addActionListener(e -> {
@@ -95,21 +94,21 @@ final class NoisePeriodsDialog extends JDialog {
 
         // Проставим начальные значения, если были
         if (initial != null) {
-            setIfPresent(initial, NoiseTestKind.LIFT_DAY,   pLiftDay);
-            setIfPresent(initial, NoiseTestKind.LIFT_NIGHT, pLiftNight);
-            setIfPresent(initial, NoiseTestKind.ITO_NONRES, pItoNonres);
-            setIfPresent(initial, NoiseTestKind.ITO_RES,    pItoRes);
-            setIfPresent(initial, NoiseTestKind.AUTO_DAY,   pAutoDay);
-            setIfPresent(initial, NoiseTestKind.AUTO_NIGHT, pAutoNight);
-            setIfPresent(initial, NoiseTestKind.SITE,       pSite);
+            setIfPresent(initial, NoiseTestKind.LIFT_DAY,      pLiftDay);
+            setIfPresent(initial, NoiseTestKind.LIFT_NIGHT,    pLiftNight);
+            setIfPresent(initial, NoiseTestKind.ITO_NONRES,    pItoNonres);
+            setIfPresent(initial, NoiseTestKind.ITO_RES_DAY,   pItoResDay);     // новое
+            setIfPresent(initial, NoiseTestKind.ITO_RES_NIGHT, pItoResNight);   // новое
+            setIfPresent(initial, NoiseTestKind.AUTO_DAY,      pAutoDay);
+            setIfPresent(initial, NoiseTestKind.AUTO_NIGHT,    pAutoNight);
+            setIfPresent(initial, NoiseTestKind.SITE,          pSite);
         }
 
         getContentPane().setLayout(new BorderLayout(8, 8));
         getContentPane().add(center, BorderLayout.CENTER);
         getContentPane().add(south,  BorderLayout.SOUTH);
 
-        // Ширина комфортная для полей, высота увеличена — всё без скролла
-        setPreferredSize(new Dimension(560, 760));
+        setPreferredSize(new Dimension(560, 800));
         pack();
         setLocationRelativeTo(owner);
     }
@@ -144,7 +143,6 @@ final class NoisePeriodsDialog extends JDialog {
             super(new GridBagLayout());
             setBorder(BorderFactory.createTitledBorder(title));
 
-            // Редакторы дат/времени с фиксированной шириной — чтобы аккуратно влезало
             JSpinner.DateEditor edDate = new JSpinner.DateEditor(dDate, "dd.MM.yyyy");
             dDate.setEditor(edDate);
             edDate.getFormat().setLenient(false);
@@ -160,7 +158,6 @@ final class NoisePeriodsDialog extends JDialog {
             edTo.getFormat().setLenient(false);
             edTo.getTextField().setColumns(5);
 
-            // дефолты: сегодня + предложенные времена
             ZonedDateTime now = ZonedDateTime.now();
             dDate.setValue(java.util.Date.from(now.toInstant()));
             tFrom.setValue(java.util.Date.from(now.with(defFrom).toInstant()));

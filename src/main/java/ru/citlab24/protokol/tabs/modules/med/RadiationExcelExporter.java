@@ -142,19 +142,27 @@ public final class RadiationExcelExporter {
                 row++;
             }
 
-            // запомним диапазон строк этажей этой секции, чтобы затем объединить I
-            int dataStart = row;                // первая строка этажей
-            int dataEnd   = row - 1;            // будет обновлён в цикле
-
+            // ===== НОВОЕ: группируем этажи по одинаковому "названию этажа"
+            Map<String, List<Floor>> byTitle = new LinkedHashMap<>();
             for (Floor f : floors) {
+                String title = floorTitleForExcel(f);
+                if (title.isEmpty()) title = "Этаж";
+                byTitle.computeIfAbsent(title, k -> new ArrayList<>()).add(f);
+            }
+
+            // запомним диапазон строк этажей этой секции, чтобы затем объединить I
+            int dataStart = row;        // первая строка данных
+            int dataEnd   = row - 1;    // обновим по мере добавления
+
+            for (Map.Entry<String, List<Floor>> grp : byTitle.entrySet()) {
+                String floorTitle = grp.getKey();
+
                 Row rr = ensureRow(sh, row);
 
                 // A — номер (сквозной)
                 Cell a = cell(rr, 0); a.setCellValue(seq++); a.setCellStyle(S.headerCenterBorder);
 
-                // B — название этажа (ровно как в карточке «Номер этажа»)
-                String floorTitle = floorTitleForExcel(f);
-                if (floorTitle.isEmpty()) floorTitle = "Этаж";
+                // B — единая строка для одинаковых этажей
                 Cell b = cell(rr, 1); b.setCellValue(floorTitle); b.setCellStyle(S.textLeftBorder);
 
                 // C:E — минимальное
@@ -171,14 +179,14 @@ public final class RadiationExcelExporter {
                 styleMerge(sh, "F" + (row+1) + ":H" + (row+1), S.num2);
                 Cell fcell = cell(rr, 5); fcell.setCellValue(parse2(df2, fhVal)); fcell.setCellStyle(S.num2);
 
-                // I — пока только рамка (значение поставим после merge секции)
+                // I — рамка (значение поставим после merge секции)
                 Cell ic = cell(rr, 8); ic.setCellStyle(S.headerCenterBorder);
 
                 dataEnd = row;
                 row++;
             }
 
-            // объединяем I по всем строкам этажей этой секции и вписываем текст
+            // объединяем I по всем строкам данных этой секции и вписываем текст
             if (dataEnd >= dataStart) {
                 String rng = "I" + (dataStart+1) + ":I" + (dataEnd+1);
                 styleMerge(sh, rng, S.headerCenterBorder);
@@ -206,12 +214,10 @@ public final class RadiationExcelExporter {
         put(sh, 0, 0, "17.2. Мощность дозы гамма-излучений (2 этап):", S.textLeft);
 
         merge(sh, "A2:F2");
-        // те же значения, что на листе «МЭД»
         put(sh, 1, 0, "Мощность дозы гамма-излучения на открытой местности в пяти точках составила: "
                 + joinGamma(gamma5) + " (мкЗв/ч)", S.textLeft);
 
-        // заголовки таблицы на 3–5 строках
-        // A3:A4, B3:B4, C3:E4, F3:F4
+        // заголовки 3–5
         put(sh, 2, 0, "№ п/п", S.headerCenterBorder);
         put(sh, 2, 1, "Наименование места\nпроведения измерений", S.headerCenterBorder);
         put(sh, 2, 2, "Мощность дозы гамма-\nизлучения ± ΔН, мкЗв/ч", S.headerCenterBorder);
@@ -222,16 +228,15 @@ public final class RadiationExcelExporter {
         styleMerge(sh, "C3:E4", S.headerCenterBorder);
         styleMerge(sh, "F3:F4", S.headerCenterBorder);
 
-        // строка 5 — нумерация 1..4 как в примере (C..E объединены)
         styleMerge(sh, "C5:E5", S.headerCenterBorder);
         put(sh, 4, 0, 1, S.headerCenterBorder);
         put(sh, 4, 1, 2, S.headerCenterBorder);
         put(sh, 4, 2, 3, S.headerCenterBorder);
         put(sh, 4, 5, 4, S.headerCenterBorder);
 
-        // ===== данные с 6-й строки =====
-        int row = 4;     // 0-based → 6-я строка
-        int seq = 1;     // сквозная нумерация помещений
+        // ===== данные
+        int row = 4; // 6-я строка
+        int seq = 1;
 
         List<Section> sections = building.getSections() != null ? building.getSections() : Collections.emptyList();
         int secStart = 0, secEnd = sections.size();
@@ -240,62 +245,71 @@ public final class RadiationExcelExporter {
         DecimalFormat df2 = new DecimalFormat("0.00");
 
         for (int si = secStart; si < secEnd; si++) {
-            Section sec = sections.get(si);
-
             List<Floor> floors = floorsOfSection(building, si);
-            // оставляем только этажи, где есть хотя бы одну отмеченную комнату
             floors.removeIf(f -> !floorHasAnyChecked(f));
             if (floors.isEmpty()) continue;
 
+            // ГРУППИРОВКА по одинаковому названию этажа
+            Map<String, List<Floor>> byTitle = new LinkedHashMap<>();
             for (Floor f : floors) {
-                // строка с «[Секция, ]Этаж» (секцию не пишем, если она единственная)
+                String title = floorTitleForExcel(f);
+                if (title.isEmpty()) title = "Этаж";
+                byTitle.computeIfAbsent(title, k -> new ArrayList<>()).add(f);
+            }
+
+            for (Map.Entry<String, List<Floor>> grp : byTitle.entrySet()) {
+                String header = grp.getKey();
+                List<Floor> sameTitleFloors = grp.getValue();
+
+                // шапка блока этажа
                 row++;
-                String header = floorTitleForExcel(f);
-                if (header.isEmpty()) header = "Этаж";
                 styleMerge(sh, "A" + (row+1) + ":F" + (row+1), S.headerCenterBorder);
                 put(sh, row, 0, header, S.headerCenterBorder);
 
-                // комнаты этого этажа (только отмеченные)
-                List<RoomEntry> entries = checkedRoomEntriesOnFloor(f);
+                // собираем все элементы из всех этажей группы
+                List<RoomEntry> entries = new ArrayList<>();
+                for (Floor f : sameTitleFloors) {
+                    entries.addAll(checkedRoomEntriesOnFloor(f));
+                }
 
-                // --- границы блока по F: первая и последняя строка данных
-                int dataStart = row + 1;            // первая строка с комнатами (0-based)
-                int dataEnd   = row;                 // временно (если нет комнат)
+                int dataStart = row + 1;
+                int dataEnd   = row;
 
                 for (RoomEntry re : entries) {
                     row++;
                     Row rr = ensureRow(sh, row);
 
-                    // A — сквозная нумерация
                     Cell a = cell(rr, 0); a.setCellValue(seq++); a.setCellStyle(S.headerCenterBorder);
 
-                    // B — "<помещение>, <комната>"
                     String roomLabel = safeName(re.room.getName());
                     String bText = isPublicSpace(re.space) ? roomLabel : (spaceDisplayName(re.space) + ", " + roomLabel);
                     Cell b = cell(rr, 1); b.setCellValue(bText); b.setCellStyle(S.textLeftBorder);
 
-                    // C — значение (ср. ≈ 0.135)
                     double cVal = sampleMEDValue();
                     Cell c = cell(rr, 2); c.setCellValue(parse2(df2, cVal)); c.setCellStyle(S.num2NoRight);
 
-                    // D — "±" с бордерами только сверху/снизу
                     Cell d = cell(rr, 3); d.setCellValue("±"); d.setCellStyle(S.plusMinusTB);
 
-                    // E — ΔH
                     double delta = ((15.0 + (4.0 / cVal * 0.01)) * cVal / 100.0);
                     Cell e = cell(rr, 4); e.setCellValue(parse2(df2, delta)); e.setCellStyle(S.num2NoLeft);
 
-                    // F — пока просто стиль (значение поставим после merge)
                     Cell fcell = cell(rr, 5); fcell.setCellStyle(S.headerCenterBorder);
 
-                    dataEnd = row; // последняя строка данных
+                    dataEnd = row;
                 }
 
-                // объединяем F по всему блоку комнат и пишем текст
                 if (!entries.isEmpty()) {
+                    // Правый столбец F: объединяем на весь блок
                     String rng = "F" + (dataStart+1) + ":F" + (dataEnd+1);
                     styleMerge(sh, rng, S.headerCenterBorder);
                     put(sh, dataStart, 5, LIMIT_TEXT, S.headerCenterBorder);
+
+                    // НОВОЕ: если в блоке РОВНО две строки данных — высота по 25 px (~18.75 pt)
+                    if (entries.size() == 2) {
+                        float h = 18.75f; // 25 px
+                        ensureRow(sh, dataStart).setHeightInPoints(h);
+                        ensureRow(sh, dataStart + 1).setHeightInPoints(h);
+                    }
                 }
             }
         }
@@ -324,29 +338,24 @@ public final class RadiationExcelExporter {
             cell(r2, c).setCellStyle(S.bottomOnly);
         }
 
-        // 3-я строка — внешний уровень
+        // 3–5 — шапка таблицы
         styleMerge(sh, "A3:A4", S.headerCenterBorder);
         put(sh, 2, 0, "№ п/п", S.headerCenterBorder);
 
         styleMerge(sh, "B3:B4", S.headerCenterBorder);
         put(sh, 2, 1, "Наименование места\nпроведения измерений", S.headerCenterBorder);
 
-        // «Результаты измерений, Бк/м³» на C3:F3
         styleMerge(sh, "C3:F3", S.headerCenterBorder);
         put(sh, 2, 2, "Результаты измерений, Бк/м³", S.headerCenterBorder);
 
-        // Правый столбец
         styleMerge(sh, "G3:G4", S.headerCenterBorder);
         put(sh, 2, 6, "Допустимый уровень, Бк/м³", S.headerCenterBorder);
 
-        // 4-я строка — внутренние подписи блока результатов
         styleMerge(sh, "C4:D4", S.headerCenterBorder);
         put(sh, 3, 2, "Измеренное значение ЭРОА радона (ЭРОА торона)", S.headerCenterBorder);
-
         put(sh, 3, 4, "Среднегодовое значение ЭРОА\nизотопов радона, Бк/м³", S.headerCenterBorder);
         put(sh, 3, 5, "Суммарная\nнеопределённость", S.headerCenterBorder);
 
-        // 5-я строка — номера столбцов (как в образце) + объединение C5:D5
         put(sh, 4, 0, 1, S.headerCenterBorder);
         put(sh, 4, 1, 2, S.headerCenterBorder);
         styleMerge(sh, "C5:D5", S.headerCenterBorder);
@@ -372,27 +381,40 @@ public final class RadiationExcelExporter {
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
 
         for (int si = secStart; si < secEnd; si++) {
-            Section sec = sections.get(si);
-
+            // Все этажи секции, где есть хотя бы одна отмеченная комната
             List<Floor> floors = floorsOfSection(building, si);
             floors.removeIf(f -> !floorHasAnyChecked(f));
             if (floors.isEmpty()) continue;
 
+            // Группируем этажи по отображаемому заголовку («1 этаж», «подвал», и т.п.)
+            Map<String, List<Floor>> byTitle = new LinkedHashMap<>();
             for (Floor f : floors) {
-                // строка "Секция, Этаж"
-                // заголовок этажа: только значение «Номер этажа»
-                row++;
-                String header = floorTitleForExcel(f);
-                if (header.isEmpty()) header = "Этаж";
-                styleMerge(sh, "A" + (row+1) + ":G" + (row+1), S.headerCenterBorder);
-                put(sh, row, 0, header, S.headerCenterBorder);
+                String title = floorTitleForExcel(f);
+                if (title.isEmpty()) title = "Этаж";
+                byTitle.computeIfAbsent(title, k -> new ArrayList<>()).add(f);
+            }
 
-                // элементы (офисы/общественные — ВСЕ отмеченные; квартиры — по 1 комнате)
-                List<RadonEntry> entries = radonEntriesOnFloor(f);
+            // Печатаем блоки в порядке появления
+            for (Map.Entry<String, List<Floor>> grp : byTitle.entrySet()) {
+                String header = grp.getKey();
+                List<Floor> sameTitleFloors = grp.getValue();
+
+                // Собираем все строки данных из ВСЕХ этажей группы
+                List<RadonEntry> entries = new ArrayList<>();
+                for (Floor f : sameTitleFloors) {
+                    entries.addAll(radonEntriesOnFloor(f));
+                }
+                if (entries.isEmpty()) continue;
+
+                // Заголовок общего блока этажа
+                row++;
+                styleMerge(sh, "A" + (row + 1) + ":G" + (row + 1), S.headerCenterBorder);
+                put(sh, row, 0, header, S.headerCenterBorder);
 
                 int dataStart = row + 1;
                 int dataEnd   = row;
 
+                // Строки измерений
                 for (RadonEntry re : entries) {
                     row++;
                     Row rr = ensureRow(sh, row);
@@ -400,7 +422,7 @@ public final class RadiationExcelExporter {
                     // A — № п/п
                     Cell a = cell(rr, 0); a.setCellValue(seq++); a.setCellStyle(S.headerCenterBorder);
 
-                    // B — "<помещение>, комнаты через запятую"
+                    // B — "<помещение>, комната"
                     String roomName = re.rooms.isEmpty() ? "" : safeName(re.rooms.get(0).getName());
                     String bText = isPublicSpace(re.space)
                             ? roomName
@@ -418,23 +440,22 @@ public final class RadiationExcelExporter {
                     String baseE = String.format(java.util.Locale.US, "(C%d+4.6*D%d)*%s", row+1, row+1, seasonKStr);
                     Cell e = cell(rr, 4); e.setCellFormula("ROUND(" + baseE + ",0)"); e.setCellStyle(S.num0);
 
+                    // F — формула неопределённости
                     String baseF = String.format(java.util.Locale.US,
                             "SQRT(POWER(C%d*0.3*(2/POWER(3,0.5))*%s,2)+21.16*POWER(D%d*0.3*(2/POWER(3,0.5))*%s,2))",
                             row+1, seasonKStr, row+1, seasonKStr);
                     Cell fcell = cell(rr, 5); fcell.setCellFormula("ROUND(" + baseF + ",0)"); fcell.setCellStyle(S.num0);
 
-                    // G — значение заполним после merge
+                    // G — заполним после объединения
                     Cell g = cell(rr, 6); g.setCellStyle(S.headerCenterBorder);
 
                     dataEnd = row;
                 }
 
-                // G объединяем на блок комнат этажа и ставим "100"
-                if (!entries.isEmpty()) {
-                    String rng = "G" + (dataStart+1) + ":G" + (dataEnd+1);
-                    styleMerge(sh, rng, S.headerCenterBorder);
-                    put(sh, dataStart, 6, 100, S.headerCenterBorder);
-                }
+                // G объединяем на ВЕСЬ общий блок и ставим 100
+                String rng = "G" + (dataStart + 1) + ":G" + (dataEnd + 1);
+                styleMerge(sh, rng, S.headerCenterBorder);
+                put(sh, dataStart, 6, 100, S.headerCenterBorder);
             }
         }
     }
