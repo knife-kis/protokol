@@ -4,12 +4,13 @@ import ru.citlab24.protokol.tabs.buildingTab.BuildingTab;
 import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
-import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.StreetLightingTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.noise.NoiseTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
+import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
+
 
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatDarkLaf;
@@ -120,7 +121,7 @@ public class MainFrame extends JFrame {
     }
 
     private void initUI() {
-        // Вкладки (без сторонних иконок, чтобы исключить ошибки зависимостей)
+        tabbedPane.addTab("Титульная страница",    new TitlePageTab(building));
         tabbedPane.addTab("Характеристики здания", new BuildingTab(building));
         tabbedPane.addTab("Микроклимат",           new MicroclimateTab());
         tabbedPane.addTab("Вентиляция",            new VentilationTab(building));

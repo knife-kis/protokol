@@ -14,6 +14,7 @@ module ru.citlab24.protokol {
 //    requires org.apache.poi.poi;
     requires org.apache.poi.ooxml;
     requires org.slf4j;
+    requires com.github.lgooddatepicker;
 
     opens ru.citlab24.protokol to javafx.fxml;
     exports ru.citlab24.protokol;
