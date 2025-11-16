@@ -10,6 +10,7 @@ import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateExcelExport
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationExcelExporter;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationRecord;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
+import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 
 import javax.swing.*;
 import java.awt.*;
@@ -126,19 +127,22 @@ public final class AllExcelExporter {
         baseStyle.setVerticalAlignment(VerticalAlignment.TOP);
         baseStyle.setAlignment(HorizontalAlignment.LEFT);
 
-        CellStyle rightStyle = wb.createCellStyle();
-        rightStyle.cloneStyleFrom(baseStyle);
-        rightStyle.setAlignment(HorizontalAlignment.RIGHT);
+        CellStyle centerMiddleStyle = wb.createCellStyle();
+        centerMiddleStyle.cloneStyleFrom(baseStyle);
+        centerMiddleStyle.setAlignment(HorizontalAlignment.CENTER);
+        centerMiddleStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-        CellStyle centerStyle = wb.createCellStyle();
-        centerStyle.cloneStyleFrom(baseStyle);
-        centerStyle.setAlignment(HorizontalAlignment.CENTER);
-
-        // Высоты строк оставляем как раньше — тебе они подошли
-        for (int r = 0; r <= 10; r++) {
+        // Высоты строк: фиксированный список (значения заданы в пикселях).
+        float[] rowHeightsPx = new float[] {
+                20f, 21f, 10f, 20f, 16f, 20f, 20f, 47f, 20f, 20f,
+                19f, 20f, 20f, 20f, 20f, 20f, 20f, 9f, 20f, 9f,
+                20f, 9f, 40f, 9f, 20f, 9f, 20f, 9f, 20f, 9f,
+                87f, 9f, 20f, 20f, 20f, 10f, 49f
+        };
+        for (int r = 0; r < rowHeightsPx.length; r++) {
             Row row = sheet.getRow(r);
             if (row == null) row = sheet.createRow(r);
-            row.setHeightInPoints(16f);
+            row.setHeightInPoints(pixelsToPoints(rowHeightsPx[r]));
         }
 
         // Ширины столбцов — берём из эталонного файла (величины в "символах" Excel).
@@ -183,33 +187,33 @@ public final class AllExcelExporter {
         // 1) A1-I3
         String txtA1 = "Общество с ограниченной ответственностью «Центр исследовательских технологий»\n" +
                 "(ООО «ЦИТ»)";
-        setMergedText(sheet, baseStyle, 0, 2, 0, 8, txtA1);
+        setMergedText(sheet, centerMiddleStyle, 0, 2, 0, 8, txtA1);
 
         // 2) S1-Z3
         String txtS1 = "УТВЕРЖДАЮ\nЗаместитель заведующего лабораторией";
-        setMergedText(sheet, rightStyle, 0, 2, 18, 25, txtS1);
+        setMergedText(sheet, centerMiddleStyle, 0, 2, 18, 25, txtS1);
 
         // 3) A4-I5
         String txtA4 = "660064, Красноярский край, г.о. Красноярск,\n" +
                 "г. Красноярск, ул. Парусная, д. 8, кв. 99";
-        setMergedText(sheet, baseStyle, 3, 4, 0, 8, txtA4);
+        setMergedText(sheet, centerMiddleStyle, 3, 4, 0, 8, txtA4);
 
         // 4) A6-I8
         String txtA6 = "Испытательная лаборатория\n" +
                 "Общества с ограниченной ответственностью\n" +
                 "«Центр исследовательских технологий»\n" +
                 "Уникальный номер записи в Реестре аккредитованных лиц RA.RU.21ОХ37 от 07.04.2023";
-        setMergedText(sheet, baseStyle, 5, 7, 0, 8, txtA6);
+        setMergedText(sheet, centerMiddleStyle, 5, 7, 0, 8, txtA6);
 
         // 5) A9-I11
         String txtA9 = "660041, Красноярский край, г. Красноярск,\n" +
                 "пр. Свободный дом 75, пом. 9 кабинет 12\n" +
                 "+7 (391) 244-03-10, cit-krsk@yandex.ru";
-        setMergedText(sheet, baseStyle, 8, 10, 0, 8, txtA9);
+        setMergedText(sheet, centerMiddleStyle, 8, 10, 0, 8, txtA9);
 
         // S5-Z5: _______________/М.Е. Гаврилова/
         String txtS5 = "_______________/М.Е. Гаврилова/";
-        setMergedText(sheet, rightStyle, 4, 4, 18, 25, txtS5);
+        setMergedText(sheet, centerMiddleStyle, 4, 4, 18, 25, txtS5);
 
         // S7-Z7: дата из программы + " г."
         String protocolDate = resolveProtocolDateText(frame);
@@ -220,10 +224,46 @@ public final class AllExcelExporter {
             // запасной вариант, если датy из программы не нашли
             txtS7 = "____.__.____ г.";
         }
-        setMergedText(sheet, rightStyle, 6, 6, 18, 25, txtS7);
+        setMergedText(sheet, centerMiddleStyle, 6, 6, 18, 25, txtS7);
 
         // S9-Z9: МП
-        setMergedText(sheet, centerStyle, 8, 8, 18, 25, "МП");
+        setMergedText(sheet, centerMiddleStyle, 8, 8, 18, 25, "МП");
+
+        TitlePageValues titleValues = readTitlePageValues(frame);
+
+        // A13-Z13 — заголовок с номером заявки и суффиксом Ф/XX
+        String protocolTitle = buildProtocolTitle(titleValues.applicationNumber);
+        setMergedText(sheet, centerMiddleStyle, 12, 12, 0, 25, protocolTitle);
+
+        // A14-Z14 — Вид испытаний
+        setMergedText(sheet, centerMiddleStyle, 13, 13, 0, 25,
+                "Вид испытаний: измерения физических факторов");
+
+        // Табличные строки 1–6
+        setCellValue(sheet, centerMiddleStyle, 15, 0, "1.");
+        setCellValue(sheet, baseStyle, 15, 1,
+                "Наименование и контактные данные заявителя (заказчика): " +
+                        safe(titleValues.customerNameAndContacts));
+
+        setCellValue(sheet, centerMiddleStyle, 17, 0, "2.");
+        setCellValue(sheet, baseStyle, 17, 1,
+                "Юридический адрес заказчика: " + safe(titleValues.customerLegalAddress));
+
+        setCellValue(sheet, centerMiddleStyle, 19, 0, "3.");
+        setCellValue(sheet, baseStyle, 19, 1,
+                "Фактический адрес заказчика: " + safe(titleValues.customerActualAddress));
+
+        setCellValue(sheet, centerMiddleStyle, 21, 0, "4.");
+        setCellValue(sheet, baseStyle, 21, 1,
+                "Наименование предприятия, организации, объекта, где производились измерения: " +
+                        safe(titleValues.objectName));
+
+        setCellValue(sheet, centerMiddleStyle, 23, 0, "5.");
+        setCellValue(sheet, baseStyle, 23, 1,
+                "Адрес предприятия (объекта): " + safe(titleValues.objectAddress));
+
+        setCellValue(sheet, centerMiddleStyle, 25, 0, "6.");
+        setCellValue(sheet, baseStyle, 25, 1, buildBasisLine(titleValues));
     }
 
     private static void tryInvokeAppend(String fqcn, Class<?>[] sig, Object[] args) {
@@ -404,6 +444,56 @@ public final class AllExcelExporter {
         }
     }
 
+    private static TitlePageValues readTitlePageValues(MainFrame frame) {
+        TitlePageValues values = new TitlePageValues();
+        TitlePageTab tab = findTitlePageTab(frame);
+        if (tab != null) {
+            values.customerNameAndContacts = safe(tab.getCustomerNameAndContacts());
+            values.customerLegalAddress = safe(tab.getCustomerLegalAddress());
+            values.customerActualAddress = safe(tab.getCustomerActualAddress());
+            values.objectName = safe(tab.getObjectName());
+            values.objectAddress = safe(tab.getObjectAddress());
+            values.contractNumber = safe(tab.getContractNumber());
+            values.contractDate = safe(tab.getContractDate());
+            values.applicationNumber = safe(tab.getApplicationNumber());
+            values.applicationDate = safe(tab.getApplicationDate());
+        }
+        return values;
+    }
+
+    private static String buildProtocolTitle(String applicationNumber) {
+        String appNumber = safe(applicationNumber);
+        if (appNumber.isEmpty()) {
+            appNumber = "_____";
+        }
+        String suffix = lastDigitsOrPlaceholder(applicationNumber, 2, "__");
+        return "Протокол испытаний № " + appNumber + " - Ф/" + suffix;
+    }
+
+    private static String buildBasisLine(TitlePageValues values) {
+        String contractNum = valueOrPlaceholder(values.contractNumber);
+        String contractDate = valueOrPlaceholder(values.contractDate);
+        String applicationNum = valueOrPlaceholder(values.applicationNumber);
+        String applicationDate = valueOrPlaceholder(values.applicationDate);
+        return "Основание для измерений: договор №" + contractNum +
+                " от " + contractDate +
+                ", заявка №" + applicationNum +
+                " от " + applicationDate + ".";
+    }
+
+    private static void setCellValue(Sheet sheet, CellStyle style, int rowIdx, int colIdx, String text) {
+        Row row = sheet.getRow(rowIdx);
+        if (row == null) {
+            row = sheet.createRow(rowIdx);
+        }
+        Cell cell = row.getCell(colIdx);
+        if (cell == null) {
+            cell = row.createCell(colIdx);
+        }
+        cell.setCellStyle(style);
+        cell.setCellValue(text);
+    }
+
     /**
      * Пытаемся вытащить дату протокола из программы:
      * 1) метод на MainFrame: getProtocolDateForExcel() / getProtocolDateString() / getTitlePageProtocolDate()
@@ -431,6 +521,15 @@ public final class AllExcelExporter {
                 // метода нет — просто пробуем следующий
             } catch (Throwable ignored) {
                 // любые другие ошибки — тихо игнорируем
+            }
+        }
+
+        // 1.5) Прямой доступ к TitlePageTab, если он есть
+        TitlePageTab tab = findTitlePageTab(frame);
+        if (tab != null) {
+            String protocolDate = safe(tab.getProtocolDate());
+            if (!protocolDate.isEmpty()) {
+                return protocolDate;
             }
         }
 
@@ -464,6 +563,22 @@ public final class AllExcelExporter {
 
         return null;
     }
+
+    private static TitlePageTab findTitlePageTab(MainFrame frame) {
+        if (frame == null) return null;
+        try {
+            JTabbedPane tabs = frame.getTabbedPane();
+            if (tabs == null) return null;
+            for (int i = 0; i < tabs.getTabCount(); i++) {
+                Component c = tabs.getComponentAt(i);
+                if (c instanceof TitlePageTab) {
+                    return (TitlePageTab) c;
+                }
+            }
+        } catch (Throwable ignore) {
+        }
+        return null;
+    }
     /** Создаёт (при необходимости) строки/ячейки, объединяет диапазон и задаёт текст + стиль. */
     private static void setMergedText(Sheet sheet,
                                       CellStyle style,
@@ -489,6 +604,46 @@ public final class AllExcelExporter {
         }
     }
 
+    private static String safe(String value) {
+        return (value == null) ? "" : value.trim();
+    }
+
+    private static String valueOrPlaceholder(String value) {
+        String trimmed = safe(value);
+        return trimmed.isEmpty() ? "_____" : trimmed;
+    }
+
+    private static String lastDigitsOrPlaceholder(String text, int count, String placeholder) {
+        if (text == null) {
+            return placeholder;
+        }
+        StringBuilder digitsOnly = new StringBuilder();
+        for (char ch : text.toCharArray()) {
+            if (Character.isDigit(ch)) {
+                digitsOnly.append(ch);
+            }
+        }
+        if (digitsOnly.length() == 0) {
+            return placeholder;
+        }
+        if (digitsOnly.length() <= count) {
+            return digitsOnly.toString();
+        }
+        return digitsOnly.substring(digitsOnly.length() - count);
+    }
+
+    private static final class TitlePageValues {
+        String customerNameAndContacts = "";
+        String customerLegalAddress = "";
+        String customerActualAddress = "";
+        String objectName = "";
+        String objectAddress = "";
+        String contractNumber = "";
+        String contractDate = "";
+        String applicationNumber = "";
+        String applicationDate = "";
+    }
+
     /** Настроить один лист: 1 страница по ширине, произвольная по высоте. */
     private static void tuneSheetToOnePageWidth(org.apache.poi.ss.usermodel.Sheet sh) {
         try {
@@ -511,6 +666,10 @@ public final class AllExcelExporter {
         } catch (Throwable ignore) {
             // не мешаем экспорту даже если где-то не поддержано
         }
+    }
+
+    private static float pixelsToPoints(float pixels) {
+        return pixels * 72f / 96f;
     }
 
 }
