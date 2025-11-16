@@ -87,9 +87,14 @@ public class LoadProjectDialog extends JDialog {
         Building b = list.getSelectedValue();
         String name = (b.getName() != null ? b.getName() : ("ID " + b.getId()));
 
+        String confirmMessage = String.format(
+                "Вы точно хотите удалить проект:\n«%s»?\nЭто действие необратимо.",
+                name
+        );
+
         int ans = JOptionPane.showConfirmDialog(
                 this,
-                "Вы точно хотите удалить проект:\n«" + name + "»?\nЭто действие необратимо.",
+                confirmMessage,
                 "Подтвердите удаление",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE
