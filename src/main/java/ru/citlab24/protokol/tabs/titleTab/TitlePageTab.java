@@ -9,11 +9,26 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
+import org.kordamp.ikonli.swing.FontIcon;
+import ru.citlab24.protokol.MainFrame;
+import ru.citlab24.protokol.export.AllExcelExporter;
+import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
+import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
+import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
+import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
+
+import java.awt.KeyboardFocusManager;
+import java.awt.Window;
+import javax.swing.JTabbedPane;
+import javax.swing.JTable;
 
 /**
  * Вкладка «Титульная страница».
@@ -200,9 +215,11 @@ public class TitlePageTab extends JPanel {
 
         bottomPanel.add(topBottomPanel, BorderLayout.CENTER);
 
-        // Итог: верхняя и нижняя части на вкладке
+        // Итог: сверху — реквизиты, посередине — даты измерений,
+        // снизу — кнопка "Экспорт: все модули"
         add(formPanel, BorderLayout.NORTH);
         add(bottomPanel, BorderLayout.CENTER);
+        add(createExportPanel(), BorderLayout.SOUTH);
     }
 
     /* ================= Вспомогательные методы UI ================= */
@@ -232,6 +249,67 @@ public class TitlePageTab extends JPanel {
             picker.setDate(initialDate);
         }
         return picker;
+    }
+    /** Панель снизу с кнопкой "Экспорт: все модули (одной книгой)". */
+    private JPanel createExportPanel() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+
+        JButton btnExport = new JButton(
+                "Экспорт: все модули (одной книгой)",
+                FontIcon.of(FontAwesomeSolid.FILE_EXCEL, 16, Color.WHITE)
+        );
+        btnExport.setFocusPainted(false);
+        btnExport.setBackground(new Color(239, 108, 0));
+        btnExport.setForeground(Color.WHITE);
+        btnExport.setFont(UIManager.getFont("Button.font"));
+
+        btnExport.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                btnExport.setBackground(new Color(230, 92, 0));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                btnExport.setBackground(new Color(239, 108, 0));
+            }
+        });
+
+        btnExport.addActionListener(e -> {
+            // 1) Останавливаем редактирование в любых таблицах
+            KeyboardFocusManager kfm = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+            Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
+            JTable editingTable = (fo == null)
+                    ? null
+                    : (JTable) SwingUtilities.getAncestorOfClass(JTable.class, fo);
+            if (editingTable != null && editingTable.isEditing()) {
+                try {
+                    editingTable.getCellEditor().stopCellEditing();
+                } catch (Exception ignore) {
+                }
+            }
+
+            // 2) Синхронизация галочек во всех вкладках перед экспортом
+            RadiationTab rt = getRadiationTab();
+            if (rt != null) rt.updateRoomSelectionStates();
+
+            LightingTab lt = getLightingTab();
+            if (lt != null) lt.updateRoomSelectionStates();
+
+            ArtificialLightingTab alt = getArtificialLightingTab();
+            if (alt != null) alt.updateRoomSelectionStates();
+
+            MicroclimateTab mt = getMicroclimateTab();
+            if (mt != null) mt.updateRoomSelectionStates();
+
+            // 3) Экспорт
+            Window w = SwingUtilities.getWindowAncestor(this);
+            MainFrame frame = (w instanceof MainFrame) ? (MainFrame) w : null;
+            AllExcelExporter.exportAll(frame, building, this);
+        });
+
+        panel.add(btnExport);
+        return panel;
     }
 
     /**
@@ -299,6 +377,48 @@ public class TitlePageTab extends JPanel {
         measurementRowsPanel.remove(last.panel);
         measurementRowsPanel.revalidate();
         measurementRowsPanel.repaint();
+    }
+
+    private RadiationTab getRadiationTab() {
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            return ((MainFrame) wnd).getRadiationTab();
+        }
+        return null;
+    }
+
+    private LightingTab getLightingTab() {
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            JTabbedPane tabs = ((MainFrame) wnd).getTabbedPane();
+            for (Component c : tabs.getComponents()) {
+                if (c instanceof LightingTab) {
+                    return (LightingTab) c;
+                }
+            }
+        }
+        return null;
+    }
+
+    private ArtificialLightingTab getArtificialLightingTab() {
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            return ((MainFrame) wnd).getArtificialLightingTab();
+        }
+        return null;
+    }
+
+    private MicroclimateTab getMicroclimateTab() {
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            JTabbedPane tabs = ((MainFrame) wnd).getTabbedPane();
+            for (Component c : tabs.getComponents()) {
+                if (c instanceof MicroclimateTab) {
+                    return (MicroclimateTab) c;
+                }
+            }
+        }
+        return null;
     }
 
     /* ================= Геттеры для сохранения/экспорта ================= */

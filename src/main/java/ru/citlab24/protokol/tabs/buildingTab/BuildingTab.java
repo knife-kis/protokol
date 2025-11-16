@@ -269,28 +269,31 @@ public class BuildingTab extends JPanel {
             javafx.scene.control.Button btnSave    = new javafx.scene.control.Button("Сохранить проект");
             javafx.scene.control.Button btnCalc    = new javafx.scene.control.Button("Рассчитать показатели");
             javafx.scene.control.Button btnSummary = new javafx.scene.control.Button("Сводка квартир");
-            javafx.scene.control.Button btnExport  = new javafx.scene.control.Button("Экспорт: все модули (одной книгой)");
 
             // Иконки (Ikonli JavaFX)
             org.kordamp.ikonli.javafx.FontIcon icLoad    = new org.kordamp.ikonli.javafx.FontIcon("fas-folder-open");
             org.kordamp.ikonli.javafx.FontIcon icSave    = new org.kordamp.ikonli.javafx.FontIcon("fas-save");
             org.kordamp.ikonli.javafx.FontIcon icCalc    = new org.kordamp.ikonli.javafx.FontIcon("fas-calculator");
             org.kordamp.ikonli.javafx.FontIcon icSummary = new org.kordamp.ikonli.javafx.FontIcon("fas-table");
-            org.kordamp.ikonli.javafx.FontIcon icExport  = new org.kordamp.ikonli.javafx.FontIcon("fas-file-excel");
-            icLoad.setIconSize(16); icSave.setIconSize(16); icCalc.setIconSize(16); icSummary.setIconSize(16); icExport.setIconSize(16);
-            btnLoad.setGraphic(icLoad); btnSave.setGraphic(icSave); btnCalc.setGraphic(icCalc); btnSummary.setGraphic(icSummary); btnExport.setGraphic(icExport);
+            icLoad.setIconSize(16);
+            icSave.setIconSize(16);
+            icCalc.setIconSize(16);
+            icSummary.setIconSize(16);
+            btnLoad.setGraphic(icLoad);
+            btnSave.setGraphic(icSave);
+            btnCalc.setGraphic(icCalc);
+            btnSummary.setGraphic(icSummary);
 
             // CSS-классы для цветов/hover
             btnLoad.getStyleClass().addAll("button", "btn-load");
             btnSave.getStyleClass().addAll("button", "btn-save");
             btnCalc.getStyleClass().addAll("button", "btn-calc");
             btnSummary.getStyleClass().addAll("button", "btn-summary");
-            btnExport.getStyleClass().addAll("button", "btn-export");
 
             // Растягиваем равномерно
-            javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(10, btnLoad, btnSave, btnCalc, btnSummary, btnExport);
+            javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(10, btnLoad, btnSave, btnCalc, btnSummary);
             box.getStyleClass().addAll("controls-bar", "theme-light");
-            for (javafx.scene.control.Button b : java.util.List.of(btnLoad, btnSave, btnCalc, btnSummary, btnExport)) {
+            for (javafx.scene.control.Button b : java.util.List.of(btnLoad, btnSave, btnCalc, btnSummary)) {
                 b.setMaxWidth(Double.MAX_VALUE);
                 javafx.scene.layout.HBox.setHgrow(b, javafx.scene.layout.Priority.ALWAYS);
             }
@@ -306,8 +309,13 @@ public class BuildingTab extends JPanel {
             scene.setOnKeyPressed(ke -> {
                 if (ke.isControlDown() && ke.getCode() == javafx.scene.input.KeyCode.T) {
                     java.util.List<String> cls = box.getStyleClass();
-                    if (cls.contains("theme-light")) { cls.remove("theme-light"); cls.add("theme-dark"); }
-                    else { cls.remove("theme-dark"); cls.add("theme-light"); }
+                    if (cls.contains("theme-light")) {
+                        cls.remove("theme-light");
+                        cls.add("theme-dark");
+                    } else {
+                        cls.remove("theme-dark");
+                        cls.add("theme-light");
+                    }
                 }
             });
 
@@ -316,16 +324,16 @@ public class BuildingTab extends JPanel {
             final String COL_SAVE    = "#43a047";
             final String COL_CALC    = "#1e88e5";
             final String COL_SUMMARY = "#00897b";
-            final String COL_EXPORT  = "#ef6c00";
 
             final java.util.List<javafx.scene.control.Button> all =
-                    java.util.List.of(btnLoad, btnSave, btnCalc, btnSummary, btnExport);
+                    java.util.List.of(btnLoad, btnSave, btnCalc, btnSummary);
 
-            final java.util.function.BiConsumer<javafx.scene.control.Button, String> markActive = (btn, hex) -> {
-                all.forEach(ru.citlab24.protokol.ui.fx.ActiveGlow::clear);
-                // неон на ~50%
-                ru.citlab24.protokol.ui.fx.ActiveGlow.setActive(btn, hex, 0.5);
-            };
+            final java.util.function.BiConsumer<javafx.scene.control.Button, String> markActive =
+                    (btn, hex) -> {
+                        all.forEach(ru.citlab24.protokol.ui.fx.ActiveGlow::clear);
+                        // неон на ~50%
+                        ru.citlab24.protokol.ui.fx.ActiveGlow.setActive(btn, hex, 0.5);
+                    };
 
             // Обработчики: сначала отметить активной, потом вызвать Swing-логику
             btnLoad.setOnAction(ev -> {
@@ -343,35 +351,6 @@ public class BuildingTab extends JPanel {
             btnSummary.setOnAction(ev -> {
                 markActive.accept(btnSummary, COL_SUMMARY);
                 javax.swing.SwingUtilities.invokeLater(() -> showApartmentSummary(null));
-            });
-            btnExport.setOnAction(ev -> {
-                markActive.accept(btnExport, COL_EXPORT);
-                javax.swing.SwingUtilities.invokeLater(() -> {
-                    // фиксация редактирования и экспорт (твой код как был)
-                    KeyboardFocusManager kfm = KeyboardFocusManager.getCurrentKeyboardFocusManager();
-                    Component fo = (kfm != null) ? kfm.getFocusOwner() : null;
-                    JTable editingTable = (fo == null) ? null
-                            : (JTable) SwingUtilities.getAncestorOfClass(JTable.class, fo);
-                    if (editingTable != null && editingTable.isEditing()) {
-                        try { editingTable.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
-                    }
-                    RadiationTab rt = getRadiationTab();
-                    if (rt != null) rt.updateRoomSelectionStates();
-                    LightingTab lt = getLightingTab();
-                    if (lt != null) lt.updateRoomSelectionStates();
-
-// НОВОЕ: синхронизация галочек вкладки «Искусственное освещение»
-                    ArtificialLightingTab alt = getArtificialLightingTab();
-                    if (alt != null) alt.updateRoomSelectionStates();
-
-                    MicroclimateTab mt = getMicroclimateTab();
-                    if (mt != null) mt.updateRoomSelectionStates();
-
-
-                    Window w = SwingUtilities.getWindowAncestor(this);
-                    MainFrame frame = (w instanceof MainFrame) ? (MainFrame) w : null;
-                    AllExcelExporter.exportAll(frame, building, this);
-                });
             });
         });
 
