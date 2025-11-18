@@ -1971,6 +1971,10 @@ public class BuildingTab extends JPanel {
             }
         }
     }
+
+    public Building getCurrentBuilding() {
+        return building;
+    }
     private MicroclimateTab getMicroclimateTab() {
         java.awt.Window wnd = javax.swing.SwingUtilities.getWindowAncestor(this);
         if (wnd instanceof ru.citlab24.protokol.MainFrame) {

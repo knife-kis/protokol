@@ -140,6 +140,15 @@ public class MainFrame extends JFrame {
         return null;
     }
 
+    public BuildingTab getBuildingTab() {
+        for (Component comp : tabbedPane.getComponents()) {
+            if (comp instanceof BuildingTab) {
+                return (BuildingTab) comp;
+            }
+        }
+        return null;
+    }
+
     // NEW: нужен AllExcelExporter
     public VentilationTab getVentilationTab() {
         for (Component comp : tabbedPane.getComponents()) {
