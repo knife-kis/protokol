@@ -29,6 +29,7 @@ public class VentilationExcelExporter {
         while (wb.getSheet(sheetName) != null) sheetName = baseName + " (" + (i++) + ")";
 
         org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(sheetName);
+        sheet.setRepeatingRows(CellRangeAddress.valueOf("4:4"));
 
         // 2) Базовый шрифт
         org.apache.poi.ss.usermodel.Font baseFont = wb.createFont();
@@ -78,6 +79,7 @@ public class VentilationExcelExporter {
                 .collect(Collectors.toList());
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Вентиляция");
+        sheet.setRepeatingRows(CellRangeAddress.valueOf("4:4"));
 
         // Базовый шрифт Arial 10pt
         Font baseFont = workbook.createFont();

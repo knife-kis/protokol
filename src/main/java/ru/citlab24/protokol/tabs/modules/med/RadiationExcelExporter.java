@@ -321,6 +321,7 @@ public final class RadiationExcelExporter {
 
     private static void buildSheetRadon(Workbook wb, Building building, int sectionIndex, Styles S) {
         Sheet sh = wb.createSheet("ЭРОА радона");
+        sh.setRepeatingRows(CellRangeAddress.valueOf("5:5"));
 
         // ширины A..G
         setColWidths(sh, new double[]{4.71, 60.0, 9.5, 6.0, 11.5, 14.0, 18.0});
