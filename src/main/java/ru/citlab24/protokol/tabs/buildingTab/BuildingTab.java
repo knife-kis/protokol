@@ -133,6 +133,7 @@ public class BuildingTab extends JPanel {
         spaceList.setDragEnabled(true);
         spaceList.setDropMode(DropMode.INSERT);
         spaceList.setTransferHandler(spaceReorderHandler);
+        registerDeleteKeyAction(spaceList, () -> removeSpace(null));
 
         // ===== Фильтры =====
         JPanel filters = buildSpaceFilterPanel();
@@ -197,16 +198,19 @@ public class BuildingTab extends JPanel {
         // Сохраняем ссылки на списки + включаем DnD там, где нужно
         if ("Этажи здания".equals(title)) {
             floorList = (JList<Floor>) list;
+            registerDeleteKeyAction(floorList, () -> removeFloor(null));
         } else if ("Помещения на этаже".equals(title)) {
             spaceList = (JList<Space>) list;
             spaceList.setDragEnabled(true);
             spaceList.setDropMode(DropMode.INSERT);
             spaceList.setTransferHandler(spaceReorderHandler);
+            registerDeleteKeyAction(spaceList, () -> removeSpace(null));
         } else if ("Комнаты в помещении".equals(title)) {
             roomList = (JList<Room>) list;
             roomList.setDragEnabled(true);
             roomList.setDropMode(DropMode.INSERT);
             roomList.setTransferHandler(roomReorderHandler);
+            registerDeleteKeyAction(roomList, () -> removeRoom(null));
         }
 
         panel.add(new JScrollPane(list), BorderLayout.CENTER);
@@ -256,6 +260,21 @@ public class BuildingTab extends JPanel {
             panel.add(button);
         }
         return panel;
+    }
+
+    private void registerDeleteKeyAction(JList<?> list, Runnable deleteAction) {
+        if (list == null || deleteAction == null) return;
+
+        final Object actionKey = "deleteSelectedItem_" + System.identityHashCode(list);
+        InputMap inputMap = list.getInputMap(JComponent.WHEN_FOCUSED);
+        ActionMap actionMap = list.getActionMap();
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), actionKey);
+        actionMap.put(actionKey, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                deleteAction.run();
+            }
+        });
     }
 
     private JPanel createActionButtons() {
@@ -453,6 +472,7 @@ public class BuildingTab extends JPanel {
         floorList.setCellRenderer(new FloorListRenderer());
         floorList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorList.setFixedCellHeight(28);
+        registerDeleteKeyAction(floorList, () -> removeFloor(null));
 
         if (!sectionListModel.isEmpty()) sectionList.setSelectedIndex(0);
         refreshFloorListForSelectedSection();
