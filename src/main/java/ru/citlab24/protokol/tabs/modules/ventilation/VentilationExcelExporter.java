@@ -30,6 +30,7 @@ public class VentilationExcelExporter {
 
         org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(sheetName);
         sheet.setRepeatingRows(CellRangeAddress.valueOf("4:4"));
+        setupPage(sheet);
 
         // 2) Базовый шрифт
         org.apache.poi.ss.usermodel.Font baseFont = wb.createFont();
@@ -80,6 +81,7 @@ public class VentilationExcelExporter {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Вентиляция");
         sheet.setRepeatingRows(CellRangeAddress.valueOf("4:4"));
+        setupPage(sheet);
 
         // Базовый шрифт Arial 10pt
         Font baseFont = workbook.createFont();
@@ -195,6 +197,18 @@ public class VentilationExcelExporter {
             lines += (para.length() + colChars - 1) / colChars;
         }
         return Math.max(1, lines);
+    }
+
+    private static void setupPage(Sheet sheet) {
+        PrintSetup ps = sheet.getPrintSetup();
+        ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
+        ps.setLandscape(true);
+        sheet.setFitToPage(true);
+        sheet.setAutobreaks(true);
+        ps.setFitWidth((short) 1);
+        ps.setFitHeight((short) 0);
+        sheet.setMargin(Sheet.LeftMargin, 0.25);
+        sheet.setMargin(Sheet.RightMargin, 0.25);
     }
 
 
