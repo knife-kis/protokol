@@ -59,7 +59,7 @@ public final class StreetLightingExcelExporter {
     /** Заполнение книги согласно заданным габаритам/объединениям. */
     public static void appendToWorkbook(List<RowData> rows, Workbook wb) {
         Sheet sh = wb.createSheet("Осв улица");
-        sh.setRepeatingRows(CellRangeAddress.valueOf("6:6"));
+
 
         // Ориентация/поля/умещение по ширине
         sh.getPrintSetup().setLandscape(true);
@@ -71,7 +71,7 @@ public final class StreetLightingExcelExporter {
         sh.setMargin(Sheet.RightMargin, cmToInches(1.8));
         sh.setMargin(Sheet.TopMargin,   cmToInches(1.9));
         sh.setMargin(Sheet.BottomMargin,cmToInches(1.9));
-
+        sh.setRepeatingRows(CellRangeAddress.valueOf("6:6"));
         // Шрифты/стили
         Font baseFont = wb.createFont();
         baseFont.setFontName("Arial");

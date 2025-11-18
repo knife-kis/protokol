@@ -96,14 +96,13 @@ public final class ArtificialLightingExcelExporter {
         Styles S = new Styles(wb);
 
         Sheet sh = wb.createSheet("Иск освещение");
-        sh.setRepeatingRows(CellRangeAddress.valueOf("7:7"));
         PrintSetup ps = sh.getPrintSetup();
         ps.setLandscape(true);
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
         sh.setFitToPage(true);
         ps.setFitWidth((short) 1);
         ps.setFitHeight((short) 0);
-
+        sh.setRepeatingRows(CellRangeAddress.valueOf("7:7"));
         int[] px = {46, 34, 301, 33, 77, 33, 44, 48, 15, 43, 66, 66, 43, 29, 43, 58};
         for (int c = 0; c < px.length; c++) setColWidthPx(sh, c, px[c]);
 
