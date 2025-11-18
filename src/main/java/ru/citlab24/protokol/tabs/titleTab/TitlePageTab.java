@@ -3,6 +3,7 @@ package ru.citlab24.protokol.tabs.titleTab;
 import com.github.lgooddatepicker.components.DatePicker;
 import com.github.lgooddatepicker.components.DatePickerSettings;
 import ru.citlab24.protokol.tabs.models.Building;
+import ru.citlab24.protokol.tabs.buildingTab.BuildingTab;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -305,7 +306,8 @@ public class TitlePageTab extends JPanel {
             // 3) Экспорт
             Window w = SwingUtilities.getWindowAncestor(this);
             MainFrame frame = (w instanceof MainFrame) ? (MainFrame) w : null;
-            AllExcelExporter.exportAll(frame, building, this);
+            Building buildingForExport = resolveBuilding();
+            AllExcelExporter.exportAll(frame, buildingForExport, this);
         });
 
         panel.add(btnExport);
@@ -528,6 +530,18 @@ public class TitlePageTab extends JPanel {
     }
 
     public Building getBuilding() {
+        return resolveBuilding();
+    }
+
+    private Building resolveBuilding() {
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            MainFrame frame = (MainFrame) wnd;
+            BuildingTab buildingTab = frame.getBuildingTab();
+            if (buildingTab != null && buildingTab.getCurrentBuilding() != null) {
+                return buildingTab.getCurrentBuilding();
+            }
+        }
         return building;
     }
 }
