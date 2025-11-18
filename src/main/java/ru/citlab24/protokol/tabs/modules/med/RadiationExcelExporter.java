@@ -69,6 +69,7 @@ public final class RadiationExcelExporter {
 
     private static double[] buildSheetMED(Workbook wb, Building building, int sectionIndex, Styles S) {
         Sheet sh = wb.createSheet("МЭД");
+        wb.setRepeatingRowsAndColumns(wb.getSheetIndex(sh), -1, -1, 6, 6); // строка 7
 
         // ширины A..I
         setColWidths(sh, new double[]{4.71, 51.43, 9.14, 2.86, 9.0, 6.71, 2.86, 9.0, 22.29});
@@ -203,6 +204,7 @@ public final class RadiationExcelExporter {
         final String LIMIT_TEXT = "Превышение мощности дозы, измеренной на открытой местности, не более чем на 0,3 мкЗв/ч";
 
         Sheet sh = wb.createSheet("МЭД (2)");
+        wb.setRepeatingRowsAndColumns(wb.getSheetIndex(sh), -1, -1, 4, 4); // строка 5
 
         // ширины A..F
         setColWidths(sh, new double[]{4.71, 60.0, 9.14, 3.0, 9.14, 36.0});
@@ -319,6 +321,7 @@ public final class RadiationExcelExporter {
 
     private static void buildSheetRadon(Workbook wb, Building building, int sectionIndex, Styles S) {
         Sheet sh = wb.createSheet("ЭРОА радона");
+        wb.setRepeatingRowsAndColumns(wb.getSheetIndex(sh), -1, -1, 4, 4); // строка 5
 
         // ширины A..G
         setColWidths(sh, new double[]{4.71, 60.0, 9.5, 6.0, 11.5, 14.0, 18.0});
@@ -362,7 +365,7 @@ public final class RadiationExcelExporter {
         put(sh, 4, 2, 3, S.headerCenterBorder);
         put(sh, 4, 4, 4, S.headerCenterBorder);
         put(sh, 4, 5, 5, S.headerCenterBorder);
-        put(sh, 4, 6, 7, S.headerCenterBorder);
+        put(sh, 4, 6, 6, S.headerCenterBorder);
 
         // данные с 6-й строки
         int row = 4;     // 0-based → 6-я

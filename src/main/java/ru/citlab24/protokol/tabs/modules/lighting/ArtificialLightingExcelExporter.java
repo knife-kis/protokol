@@ -96,6 +96,7 @@ public final class ArtificialLightingExcelExporter {
         Styles S = new Styles(wb);
 
         Sheet sh = wb.createSheet("Иск освещение");
+        wb.setRepeatingRowsAndColumns(wb.getSheetIndex(sh), -1, -1, 6, 6); // строка 7
         PrintSetup ps = sh.getPrintSetup();
         ps.setLandscape(true);
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);

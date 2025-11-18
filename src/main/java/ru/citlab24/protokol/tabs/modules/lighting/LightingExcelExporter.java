@@ -58,6 +58,7 @@ public final class LightingExcelExporter {
     private static void buildLightingSheets(Building building, int sectionIndex, Workbook wb) {
         Styles S = new Styles(wb);
         Sheet sh = wb.createSheet("Естественное освещение");
+        wb.setRepeatingRowsAndColumns(wb.getSheetIndex(sh), -1, -1, 4, 4); // строка 5
 
         // ===== ширины столбцов =====
         int[] px = { 49, 250, 87, 47, 47, 47, 44, 18, 44, 44, 18, 44, 44, 18, 44, 42, 40, 20, 40 };
