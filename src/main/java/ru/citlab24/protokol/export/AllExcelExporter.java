@@ -46,13 +46,13 @@ public final class AllExcelExporter {
                 VentilationExcelExporter.appendToWorkbook(ventRecords, wb);
             }
 
-            // 3) «Осв улица» — перед КЕО
-            appendStreetLightingSheet(wb, building);
-
-            // 4) Естественное освещение (КЕО)
-            tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter",
+            // 3) Радиация
+            tryInvokeAppend("ru.citlab24.protokol.tabs.modules.med.RadiationExcelExporter",
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
+
+            // 4) «Осв улица» — ближе к концу
+            appendStreetLightingSheet(wb, building);
 
             // 5) Искусственное освещение
             java.util.Map<Integer, Boolean> litMap = null;
@@ -76,8 +76,8 @@ public final class AllExcelExporter {
                 t.printStackTrace();
             }
 
-            // 6) Радиация
-            tryInvokeAppend("ru.citlab24.protokol.tabs.modules.med.RadiationExcelExporter",
+            // 6) Естественное освещение (КЕО) — последним листом
+            tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter",
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
