@@ -62,6 +62,7 @@ public final class MicroclimateExcelExporter {
     private static void buildMicroclimateSheets(Workbook wb, Building building, int sectionIndex) {
         Styles S = new Styles(wb);
         Sheet sh = wb.createSheet(uniqueName(wb, "Микроклимат"));
+        sh.setRepeatingRows(new CellRangeAddress(4, 4, -1, -1)); // строка 5
 
         // Ориентация страницы: альбомная
         PrintSetup ps = sh.getPrintSetup();

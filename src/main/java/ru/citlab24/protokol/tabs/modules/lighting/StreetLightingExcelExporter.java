@@ -59,6 +59,7 @@ public final class StreetLightingExcelExporter {
     /** Заполнение книги согласно заданным габаритам/объединениям. */
     public static void appendToWorkbook(List<RowData> rows, Workbook wb) {
         Sheet sh = wb.createSheet("Осв улица");
+        sh.setRepeatingRows(new CellRangeAddress(5, 5, -1, -1)); // строка 6
 
         // Ориентация/поля/умещение по ширине
         sh.getPrintSetup().setLandscape(true);
