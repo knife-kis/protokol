@@ -69,6 +69,7 @@ public final class RadiationExcelExporter {
 
     private static double[] buildSheetMED(Workbook wb, Building building, int sectionIndex, Styles S) {
         Sheet sh = wb.createSheet("МЭД");
+        setupLandscapePage(sh);
         sh.setRepeatingRows(CellRangeAddress.valueOf("7:7"));
 
         // ширины A..I
@@ -204,6 +205,7 @@ public final class RadiationExcelExporter {
         final String LIMIT_TEXT = "Превышение мощности дозы, измеренной на открытой местности, не более чем на 0,3 мкЗв/ч";
 
         Sheet sh = wb.createSheet("МЭД (2)");
+        setupLandscapePage(sh);
         sh.setRepeatingRows(CellRangeAddress.valueOf("5:5"));
 
         // ширины A..F
@@ -321,6 +323,7 @@ public final class RadiationExcelExporter {
 
     private static void buildSheetRadon(Workbook wb, Building building, int sectionIndex, Styles S) {
         Sheet sh = wb.createSheet("ЭРОА радона");
+        setupLandscapePage(sh);
         sh.setRepeatingRows(CellRangeAddress.valueOf("5:5"));
 
         // ширины A..G
@@ -779,5 +782,18 @@ public final class RadiationExcelExporter {
         if (t == null) return false;
         String txt = (t.name() + " " + String.valueOf(t)).toLowerCase(java.util.Locale.ROOT);
         return txt.contains("public") || txt.contains("обще");
+    }
+
+    private static void setupLandscapePage(Sheet sheet) {
+        if (sheet == null) return;
+        PrintSetup ps = sheet.getPrintSetup();
+        ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
+        ps.setLandscape(true);
+        sheet.setFitToPage(true);
+        sheet.setAutobreaks(true);
+        ps.setFitWidth((short) 1);
+        ps.setFitHeight((short) 0);
+        sheet.setMargin(Sheet.LeftMargin, 0.25);
+        sheet.setMargin(Sheet.RightMargin, 0.25);
     }
 }
