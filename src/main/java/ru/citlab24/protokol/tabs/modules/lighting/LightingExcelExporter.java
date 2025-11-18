@@ -59,6 +59,7 @@ public final class LightingExcelExporter {
         Styles S = new Styles(wb);
         Sheet sh = wb.createSheet("Естественное освещение");
         sh.setRepeatingRows(CellRangeAddress.valueOf("5:5"));
+        setupPage(sh);
 
         // ===== ширины столбцов =====
         int[] px = { 49, 250, 87, 47, 47, 47, 44, 18, 44, 44, 18, 44, 44, 18, 44, 42, 40, 20, 40 };
@@ -690,6 +691,18 @@ public final class LightingExcelExporter {
             s.setBorderLeft(BorderStyle.THIN);
             s.setBorderRight(BorderStyle.THIN);
         }
+    }
+
+    private static void setupPage(Sheet sheet) {
+        PrintSetup ps = sheet.getPrintSetup();
+        ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
+        ps.setLandscape(true);
+        sheet.setFitToPage(true);
+        sheet.setAutobreaks(true);
+        ps.setFitWidth((short) 1);
+        ps.setFitHeight((short) 0);
+        sheet.setMargin(Sheet.LeftMargin, 0.25);
+        sheet.setMargin(Sheet.RightMargin, 0.25);
     }
 
     // ===== внутренние типы =====
