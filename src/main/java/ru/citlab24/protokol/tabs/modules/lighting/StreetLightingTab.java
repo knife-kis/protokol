@@ -161,7 +161,7 @@ public final class StreetLightingTab extends JPanel {
                         String spacePart = safe(s.getIdentifier());
                         String roomPart  = safe(r.getName());
                         row.displayName  = buildDisplayName(floorPart, spacePart, roomPart); // сейчас это просто roomPart
-                        row.key = f.getSectionIndex() + "|" + floorPart + "|" + spacePart + "|" + roomPart;
+                        row.key = buildRowKey(f, s, r, floorPart, spacePart, roomPart);
                         rows.add(row);
                     }
                 }
@@ -175,12 +175,28 @@ public final class StreetLightingTab extends JPanel {
         return room.isEmpty() ? "(без названия)" : room;
     }
 
+    private static String buildRowKey(Floor f, Space s, Room r,
+                                      String floorPart, String spacePart, String roomPart) {
+        Integer stableId = resolveStableRoomId(r);
+        if (stableId != null) return "ID|" + stableId;
+        int sectionIndex = (f != null) ? f.getSectionIndex() : 0;
+        return sectionIndex + "|" + floorPart + "|" + spacePart + "|" + roomPart;
+    }
+
+    private static Integer resolveStableRoomId(Room r) {
+        if (r == null) return null;
+        Integer original = r.getOriginalRoomId();
+        if (original != null && original > 0) return original;
+        int id = r.getId();
+        return (id > 0) ? id : null;
+    }
+
     private static String safe(String s) { return (s == null) ? "" : s.trim(); }
 
     // ============ МОДЕЛЬ ТАБЛИЦЫ ============
 
     private static final class Row {
-        String key;           // устойчивый ключ (секция|этаж|помещение|комната)
+        String key;           // устойчивый ключ ("ID|<roomId>" или секция|этаж|помещение|комната)
         String displayName;   // то, что показываем в первом столбце
         Double v1, v2, v3, v4; // 4 произвольных значения
     }

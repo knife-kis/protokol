@@ -450,6 +450,7 @@ public class DatabaseManager {
                 while (rs.next()) {
                     Room room = new Room();
                     room.setId(rs.getInt("id"));
+                    room.setOriginalRoomId(room.getId());
                     room.setName(rs.getString("name"));
 
                     // Объём (nullable)
@@ -540,6 +541,7 @@ public class DatabaseManager {
                 while (rs.next()) {
                     Room room = new Room();
                     room.setId(rs.getInt("id"));
+                    room.setOriginalRoomId(room.getId());
                     room.setName(rs.getString("name"));
 
                     // Объём
@@ -652,6 +654,19 @@ public class DatabaseManager {
     private static String makeKey(Floor f, Space s, Room r) {
         return f.getSectionIndex() + "|" + ns(f.getNumber()) + "|" + ns(s.getIdentifier()) + "|" + ns(r.getName());
     }
+    private static String makeStableRoomKey(Floor f, Space s, Room r) {
+        Integer stableId = resolveStableRoomId(r);
+        return (stableId != null)
+                ? ("ID|" + stableId)
+                : makeKey(f, s, r);
+    }
+    private static Integer resolveStableRoomId(Room r) {
+        if (r == null) return null;
+        Integer original = r.getOriginalRoomId();
+        if (original != null && original > 0) return original;
+        int id = r.getId();
+        return (id > 0) ? id : null;
+    }
     private static String ns(String s) { return (s == null) ? "" : s.trim(); }
     public static void updateStreetLightingValues(Building b, java.util.Map<String, Double[]> byKey) throws SQLException {
         if (b == null || byKey == null || byKey.isEmpty()) return;
@@ -660,7 +675,7 @@ public class DatabaseManager {
             for (Floor f : b.getFloors()) {
                 for (Space s : f.getSpaces()) {
                     for (Room r : s.getRooms()) {
-                        String key = makeKey(f, s, r);
+                        String key = makeStableRoomKey(f, s, r);
                         Double[] v = byKey.get(key);
                         if (v == null) continue;
 
@@ -680,7 +695,7 @@ public class DatabaseManager {
     public static java.util.Map<String, Double[]> loadStreetLightingValuesByKey(int buildingId) throws SQLException {
         java.util.Map<String, Double[]> res = new java.util.HashMap<>();
         String sql =
-                "SELECT f.section_index, f.number, s.identifier, r.name, " +
+                "SELECT r.id, f.section_index, f.number, s.identifier, r.name, " +
                         "       r.street_left_max, r.street_center_min, r.street_right_max, r.street_bottom_min " +
                         "FROM room r " +
                         "JOIN space s ON r.space_id = s.id " +
@@ -690,11 +705,11 @@ public class DatabaseManager {
             ps.setInt(1, buildingId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String key = rs.getInt(1) + "|" + ns(rs.getString(2)) + "|" + ns(rs.getString(3)) + "|" + ns(rs.getString(4));
-                    Double v1 = rs.getObject(5) == null ? null : ((Number) rs.getObject(5)).doubleValue();
-                    Double v2 = rs.getObject(6) == null ? null : ((Number) rs.getObject(6)).doubleValue();
-                    Double v3 = rs.getObject(7) == null ? null : ((Number) rs.getObject(7)).doubleValue();
-                    Double v4 = rs.getObject(8) == null ? null : ((Number) rs.getObject(8)).doubleValue();
+                    String key = "ID|" + rs.getInt(1);
+                    Double v1 = rs.getObject(6) == null ? null : ((Number) rs.getObject(6)).doubleValue();
+                    Double v2 = rs.getObject(7) == null ? null : ((Number) rs.getObject(7)).doubleValue();
+                    Double v3 = rs.getObject(8) == null ? null : ((Number) rs.getObject(8)).doubleValue();
+                    Double v4 = rs.getObject(9) == null ? null : ((Number) rs.getObject(9)).doubleValue();
                     res.put(key, new Double[]{v1, v2, v3, v4});
                 }
             }
