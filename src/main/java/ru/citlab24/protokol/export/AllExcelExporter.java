@@ -16,7 +16,11 @@ import java.awt.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.lang.reflect.Method;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Locale;
 
 
 public final class AllExcelExporter {
@@ -83,6 +87,9 @@ public final class AllExcelExporter {
 
             // Приводим ВСЕ листы к печати "в 1 страницу по ширине"
             applyFitToPageWidthForAllSheets(wb);
+
+            // Общий колонтитул для всех листов, кроме титульного
+            applyCommonHeaderToSheets(wb, frame);
 
             // 7) Диалог сохранения
             JFileChooser chooser = new JFileChooser();
@@ -386,12 +393,16 @@ public final class AllExcelExporter {
     }
 
     private static String buildProtocolTitle(String applicationNumber) {
+        return "Протокол испытаний № " + buildProtocolNumber(applicationNumber);
+    }
+
+    private static String buildProtocolNumber(String applicationNumber) {
         String appNumber = safe(applicationNumber);
         if (appNumber.isEmpty()) {
             appNumber = "_____";
         }
         String suffix = lastDigitsOrPlaceholder(applicationNumber, 2, "__");
-        return "Протокол испытаний № " + appNumber + "-1-Ф/" + suffix;
+        return appNumber + "-1-Ф/" + suffix;
     }
 
     private static String buildBasisLine(TitlePageValues values) {
@@ -527,6 +538,60 @@ public final class AllExcelExporter {
     }
     private static String safe(String value) {
         return (value == null) ? "" : value.trim();
+    }
+
+    private static void applyCommonHeaderToSheets(Workbook wb, MainFrame frame) {
+        if (wb == null || wb.getNumberOfSheets() <= 1) {
+            return;
+        }
+
+        String dateText = formatProtocolDateForHeader(resolveProtocolDateText(frame));
+        String protocolNumber = resolveProtocolNumber(frame);
+
+        String headerText = "&\"Arial\"&9" +
+                "Протокол от " + dateText +
+                " № " + protocolNumber +
+                "    Общее количество страниц &[Страниц] Страница &[Страница]";
+
+        for (int i = 1; i < wb.getNumberOfSheets(); i++) {
+            Sheet sheet = wb.getSheetAt(i);
+            if (sheet == null) continue;
+            Header header = sheet.getHeader();
+            if (header != null) {
+                header.setCenter(headerText);
+            }
+        }
+    }
+
+    private static String resolveProtocolNumber(MainFrame frame) {
+        TitlePageTab tab = findTitlePageTab(frame);
+        if (tab != null) {
+            String appNumber = safe(tab.getApplicationNumber());
+            if (!appNumber.isEmpty()) {
+                return buildProtocolNumber(appNumber);
+            }
+        }
+        return buildProtocolNumber("");
+    }
+
+    private static String formatProtocolDateForHeader(String rawDate) {
+        String trimmed = safe(rawDate);
+        if (trimmed.isEmpty()) {
+            return "___ __________ ____ г.";
+        }
+
+        DateTimeFormatter parser = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        DateTimeFormatter printer = DateTimeFormatter.ofPattern("d MMMM yyyy", new Locale("ru"));
+        try {
+            LocalDate date = LocalDate.parse(trimmed, parser);
+            return printer.format(date) + " г.";
+        } catch (DateTimeParseException ignore) {
+        }
+
+        if (trimmed.endsWith("г.") || trimmed.endsWith("г")) {
+            return trimmed;
+        }
+        return trimmed + " г.";
     }
 
     private static String valueOrPlaceholder(String value) {
