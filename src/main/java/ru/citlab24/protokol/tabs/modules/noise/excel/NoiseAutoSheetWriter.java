@@ -194,5 +194,34 @@ public final class NoiseAutoSheetWriter {
                 }
             }
         }
+
+        NormativeRow norm = normativeFor(sheetKind);
+        if (norm != null) {
+            NoiseSheetCommon.appendNormativeRow(wb, sh, row, norm.text, norm.eq, norm.max);
+        }
+    }
+
+    private static NormativeRow normativeFor(ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind kind) {
+        if (kind == null) return null;
+        switch (kind) {
+            case AUTO_DAY:
+                return new NormativeRow(NoiseSheetCommon.NORM_SANPIN_DAY, "40", "55");
+            case AUTO_NIGHT:
+                return new NormativeRow(NoiseSheetCommon.NORM_SANPIN_NIGHT, "30", "45");
+            default:
+                return null;
+        }
+    }
+
+    private static final class NormativeRow {
+        final String text;
+        final String eq;
+        final String max;
+
+        NormativeRow(String text, String eq, String max) {
+            this.text = text;
+            this.eq = eq;
+            this.max = max;
+        }
     }
 }
