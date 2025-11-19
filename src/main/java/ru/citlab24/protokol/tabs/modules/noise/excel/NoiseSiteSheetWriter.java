@@ -41,6 +41,11 @@ public final class NoiseSiteSheetWriter {
         centerBorder.setFont(f8);
         setThinBorder(centerBorder);
 
+        CellStyle plusMinusNoLR = wb.createCellStyle();
+        plusMinusNoLR.cloneStyleFrom(centerBorder);
+        plusMinusNoLR.setBorderLeft(BorderStyle.NONE);
+        plusMinusNoLR.setBorderRight(BorderStyle.NONE);
+
         CellStyle leftWrapBorder = wb.createCellStyle();
         leftWrapBorder.cloneStyleFrom(centerBorder);
         leftWrapBorder.setAlignment(HorizontalAlignment.LEFT);
@@ -112,6 +117,16 @@ public final class NoiseSiteSheetWriter {
                         // <<< ВСТАВКА ГЕНЕРАЦИИ ПО ПОРОГАМ ДЛЯ ЭТОЙ СТРОКИ >>>
                         ru.citlab24.protokol.tabs.modules.noise.NoiseExcelExporter
                                 .fillEqMaxFirstRow(sh, r, sheetKind, thresholds);
+
+                        Cell uCell = getOrCreateCell(rr, 20);
+                        uCell.setCellValue("±");
+                        uCell.setCellStyle(plusMinusNoLR);
+                        setText(rr, 21, "2,3", centerBorder);
+
+                        Cell xCell = getOrCreateCell(rr, 23);
+                        xCell.setCellValue("±");
+                        xCell.setCellStyle(plusMinusNoLR);
+                        setText(rr, 24, "2,3", centerBorder);
 
                         // высота строки по C и D
                         adjustRowHeightForWrapped(sh, r, 0.53, new int[]{2,3}, new String[]{roomName, dText});

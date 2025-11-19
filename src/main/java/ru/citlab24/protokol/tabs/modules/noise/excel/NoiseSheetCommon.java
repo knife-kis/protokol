@@ -2,6 +2,7 @@ package ru.citlab24.protokol.tabs.modules.noise.excel;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.CellReference;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind;
 
@@ -97,6 +98,61 @@ public class NoiseSheetCommon {
 
     public static void setText(Row row, int c, String text, CellStyle style) {
         Cell cell = getOrCreateCell(row, c);
+        cell.setCellValue(text);
+        cell.setCellStyle(style);
+    }
+
+    /** Заполнение третьей строки блока (T..Y):
+     *  - в T и W ставим формулу «1-я строка минус 2-я» с проверкой пустых значений;
+     *  - в U и X пишем символ «±» без левых/правых границ;
+     *  - в V и Y фиксированное значение «2,3».
+     */
+    public static void fillNoiseThirdRowDiffs(Sheet sh,
+                                              int rowFirst,
+                                              int rowSecond,
+                                              int rowThird,
+                                              CellStyle valueStyle,
+                                              CellStyle plusMinusStyle) {
+        fillDiffFormula(sh, rowFirst, rowSecond, rowThird, 19, valueStyle);
+        fillDiffFormula(sh, rowFirst, rowSecond, rowThird, 22, valueStyle);
+
+        setPlusMinus(sh, rowThird, 20, plusMinusStyle);
+        setPlusMinus(sh, rowThird, 23, plusMinusStyle);
+
+        setFixedText(sh, rowThird, 21, "2,3", valueStyle);
+        setFixedText(sh, rowThird, 24, "2,3", valueStyle);
+    }
+
+    private static void fillDiffFormula(Sheet sh,
+                                        int rowFirst,
+                                        int rowSecond,
+                                        int rowThird,
+                                        int column,
+                                        CellStyle style) {
+        Row r3 = getOrCreateRow(sh, rowThird);
+        Cell cell = getOrCreateCell(r3, column);
+        cell.setCellStyle(style);
+
+        String col = CellReference.convertNumToColString(column);
+        int excelRowFirst = rowFirst + 1;
+        int excelRowSecond = rowSecond + 1;
+        String refFirst = col + excelRowFirst;
+        String refSecond = col + excelRowSecond;
+        String formula = "IF(OR(" + refFirst + "=\"\"," + refSecond + "=\"\"),\"\"," +
+                refFirst + "-VALUE(" + refSecond + "))";
+        cell.setCellFormula(formula);
+    }
+
+    private static void setPlusMinus(Sheet sh, int row, int column, CellStyle style) {
+        Row r = getOrCreateRow(sh, row);
+        Cell cell = getOrCreateCell(r, column);
+        cell.setCellValue("±");
+        cell.setCellStyle(style);
+    }
+
+    private static void setFixedText(Sheet sh, int row, int column, String text, CellStyle style) {
+        Row r = getOrCreateRow(sh, row);
+        Cell cell = getOrCreateCell(r, column);
         cell.setCellValue(text);
         cell.setCellStyle(style);
     }
