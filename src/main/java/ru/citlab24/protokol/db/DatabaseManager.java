@@ -94,12 +94,12 @@ public class DatabaseManager {
 
             stmt.execute("CREATE TABLE IF NOT EXISTS noise_thresholds (" +
                     "building_id INT," +
-                    "key VARCHAR(64)," +
+                    "threshold_key VARCHAR(64)," +
                     "eq_min DOUBLE," +
                     "eq_max DOUBLE," +
                     "m_min DOUBLE," +
                     "m_max DOUBLE," +
-                    "PRIMARY KEY (building_id, key))");
+                    "PRIMARY KEY (building_id, threshold_key))");
 
             // миграции
 
@@ -813,7 +813,7 @@ public class DatabaseManager {
         Map<String, double[]> res = new LinkedHashMap<>();
         if (buildingId <= 0) return res;
 
-        String sql = "SELECT key, eq_min, eq_max, m_min, m_max FROM noise_thresholds WHERE building_id = ?";
+        String sql = "SELECT threshold_key, eq_min, eq_max, m_min, m_max FROM noise_thresholds WHERE building_id = ?";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setInt(1, buildingId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -909,8 +909,8 @@ public class DatabaseManager {
 
         if (thresholds == null || thresholds.isEmpty()) return;
 
-        String sql = "MERGE INTO noise_thresholds (building_id, key, eq_min, eq_max, m_min, m_max) " +
-                "KEY(building_id, key) VALUES (?,?,?,?,?,?)";
+        String sql = "MERGE INTO noise_thresholds (building_id, threshold_key, eq_min, eq_max, m_min, m_max) " +
+                "KEY(building_id, threshold_key) VALUES (?,?,?,?,?,?)";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             for (Map.Entry<String, double[]> e : thresholds.entrySet()) {
                 String key = e.getKey();
