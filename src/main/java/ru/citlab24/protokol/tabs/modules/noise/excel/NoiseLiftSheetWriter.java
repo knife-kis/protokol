@@ -211,6 +211,17 @@ public class NoiseLiftSheetWriter {
         plusMinusNoLR.setBorderLeft(BorderStyle.NONE);
         plusMinusNoLR.setBorderRight(BorderStyle.NONE);
 
+        short oneDecimalFormat = wb.createDataFormat().getFormat("0.0");
+
+        CellStyle thirdRowDiff = wb.createCellStyle();
+        thirdRowDiff.cloneStyleFrom(centerBorder);
+        thirdRowDiff.setBorderRight(BorderStyle.NONE);
+        thirdRowDiff.setDataFormat(oneDecimalFormat);
+
+        CellStyle thirdRowFixed = wb.createCellStyle();
+        thirdRowFixed.cloneStyleFrom(centerBorder);
+        thirdRowFixed.setBorderLeft(BorderStyle.NONE);
+
         CellStyle centerWrapBorder = wb.createCellStyle();
         centerWrapBorder.cloneStyleFrom(centerBorder);
         centerWrapBorder.setWrapText(true); // D с переносом
@@ -321,7 +332,7 @@ public class NoiseLiftSheetWriter {
                         setText(getOrCreateRow(sh, r3), 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", leftNoWrapBorder);
                         for (int c = 9; c <= 18; c++) setText(getOrCreateRow(sh, r3), c, "-", centerBorder);
 
-                        fillNoiseThirdRowDiffs(sh, r1, r2, r3, centerBorder, plusMinusNoLR);
+                        fillNoiseThirdRowDiffs(sh, r1, r2, r3, thirdRowDiff, thirdRowFixed, plusMinusNoLR);
 
                         // Рамки объединений
                         for (CellRangeAddress rg : new CellRangeAddress[]{aMerge, bMerge, tv1, wy1, ci2, tv2, wy2, ci3}) {
