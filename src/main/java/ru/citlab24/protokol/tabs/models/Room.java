@@ -16,6 +16,7 @@ public class Room {
     public void setPosition(int position) { this.position = Math.max(0, position); }
     public Room() {
         this.id = nextId++;
+        this.originalRoomId = this.id;
     }
 
     // Геттеры и сеттеры
