@@ -230,13 +230,19 @@ public class NoiseSheetCommon {
         org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, a2y2, sh);
     }
 
-    /** Колонка C (1-я строка блока): "<идентификатор>, <комната>[, <секция>]". Без этажа. */
+    /**
+     * Колонка C (1-я строка блока): "<идентификатор>, <комната>[, <секция>]". Без этажа.
+     * Для офисов выводим только название комнаты (без идентификатора помещения).
+     */
     public static String formatPlace(Building b, Section sec, Floor f, Space s, Room r) {
         StringBuilder sb = new StringBuilder();
         String spaceId  = (s != null && s.getIdentifier() != null) ? s.getIdentifier().trim() : "";
         String roomName = (r != null && r.getName() != null)       ? r.getName().trim()       : "";
 
-        if (!spaceId.isEmpty()) {
+        boolean officeSpace = s != null && s.getType() == Space.SpaceType.OFFICE;
+        boolean appendSpaceId = !officeSpace && !spaceId.isEmpty();
+
+        if (appendSpaceId) {
             sb.append(spaceId);
             if (!roomName.isEmpty()) sb.append(", ");
         }
