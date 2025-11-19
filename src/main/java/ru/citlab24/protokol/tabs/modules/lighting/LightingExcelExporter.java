@@ -159,7 +159,7 @@ public final class LightingExcelExporter {
                         (roomIdx == 0 ? localPrevAnchorForFirstBlock : null), 150);
 
                 double[] Mvals = new double[5];
-                int[] Gvals = new int[5];
+                double[] Gvals = new double[5];
                 Double prevMRow = null;
 
                 // Границы М и мин. разницы по типу помещения
@@ -205,16 +205,22 @@ public final class LightingExcelExporter {
                     Cell L = cell(rr, 11); L.setCellFormula("J" + R + "*0.08*2/POWER(3,0.5)"); L.setCellStyle(S.num0NoLeft);
 
                     // --- G/H/I ---
-                    int Gv;
+                    IntRange kRange;
+                    int gInt;
                     if (isOfficePublic) {
-                        IntRange kRange = kRangeForM(Jv, M_RANGES_OFF[i][0], M_RANGES_OFF[i][1]);
-                        Gv = chooseKWithDiff(Jv, kRange, prevMRow, M_DIFF_OFF[i]);
-                        if (Gv < kRange.min) Gv = kRange.min;
-                        if (Gv > kRange.max) Gv = kRange.max;
+                        kRange = kRangeForM(Jv, M_RANGES_OFF[i][0], M_RANGES_OFF[i][1]);
+                        gInt = chooseKWithDiff(Jv, kRange, prevMRow, M_DIFF_OFF[i]);
                     } else { // жилые
-                        IntRange kRange = kRangeForM(Jv, M_RANGES_RES[i][0], M_RANGES_RES[i][1]);
-                        Gv = chooseKWithDiff(Jv, kRange, prevMRow, M_DIFF_RES[i]);
-                        if (Gv < kRange.min) Gv = kRange.min;
+                        kRange = kRangeForM(Jv, M_RANGES_RES[i][0], M_RANGES_RES[i][1]);
+                        gInt = chooseKWithDiff(Jv, kRange, prevMRow, M_DIFF_RES[i]);
+                    }
+                    if (gInt < kRange.min) gInt = kRange.min;
+                    if (gInt > kRange.max) gInt = kRange.max;
+
+                    double Gv = gInt;
+                    if (Gv < 100 && gInt < kRange.max) {
+                        int decimals = (Gv >= 10) ? 1 : 2;
+                        Gv = addDecimalNoise(gInt, decimals);
                         if (Gv > kRange.max) Gv = kRange.max;
                     }
                     Gvals[i] = Gv;
@@ -391,6 +397,13 @@ public final class LightingExcelExporter {
     private static int round10Int(int v) { return round10(v); }
     private static int clamp(int v, int min, int max) { return Math.max(min, Math.min(max, v)); }
     private static double min(double[] a) { double m = Double.POSITIVE_INFINITY; for (double x: a) m = Math.min(m, x); return m; }
+    private static double addDecimalNoise(int baseValue, int decimals) {
+        if (decimals <= 0) return baseValue;
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
+        int scale = (int) Math.pow(10, decimals);
+        int fraction = rnd.nextInt(scale);
+        return baseValue + fraction / (double) scale;
+    }
 
     // ===== Табличные утилиты и сбор данных =====
 
@@ -716,11 +729,11 @@ public final class LightingExcelExporter {
     private static final class RoomBlock {
         final Entry e;
         final int startRow;
-        final int[] Gvals;
+        final double[] Gvals;
         final int[] Jvals;
         final double[] Mvals;
         final boolean isResidential, isOfficeOrPublic, isKitchen;
-        RoomBlock(Entry e, int startRow, int[] g, int[] j, double[] m,
+        RoomBlock(Entry e, int startRow, double[] g, int[] j, double[] m,
                   boolean isResidential, boolean isOfficeOrPublic, boolean isKitchen) {
             this.e = e; this.startRow = startRow; this.Gvals = g; this.Jvals = j; this.Mvals = m;
             this.isResidential = isResidential; this.isOfficeOrPublic = isOfficeOrPublic; this.isKitchen = isKitchen;

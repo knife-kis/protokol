@@ -205,14 +205,14 @@ public final class ArtificialLightingExcelExporter {
 
             // ---------- H/I/J: значение + «±» + погрешность ----------
             Integer lNormByName = normativeL(roomName); // 20/30 или null
-            int hVal;
+            double hVal;
             if (isOffice) {
                 // офисы: 500..610
-                hVal = ThreadLocalRandom.current().nextInt(500, 611);
+                hVal = randomWithDecimals(500, 610, 0);
             } else if (lNormByName != null && lNormByName == 20) {
-                hVal = ThreadLocalRandom.current().nextInt(49, 106);   // 49..105
+                hVal = randomWithDecimals(49, 105, 1);   // 49.0 .. 105.0 (шаг 0.1)
             } else if (lNormByName != null && lNormByName == 30) {
-                hVal = ThreadLocalRandom.current().nextInt(110, 176);  // 110..175
+                hVal = randomWithDecimals(110, 175, 1);  // 110.0 .. 175.0 (шаг 0.1)
             } else {
                 hVal = 100;
             }
@@ -432,6 +432,12 @@ public final class ArtificialLightingExcelExporter {
         if (style != null) c.setCellStyle(style);
     }
 
+    private static void set(Row r, int c0, double val, CellStyle style) {
+        Cell c = cell(r, c0);
+        c.setCellValue(val);
+        if (style != null) c.setCellStyle(style);
+    }
+
     private static void setBlank(Row r, int c0, CellStyle style) {
         Cell c = cell(r, c0);
         c.setBlank();
@@ -455,6 +461,18 @@ public final class ArtificialLightingExcelExporter {
     }
 
     private static float pxToPt(int px) { return px * 0.75f; }
+
+    private static double randomWithDecimals(int minInclusive, int maxInclusive, int decimals) {
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
+        if (decimals <= 0) {
+            return rnd.nextInt(minInclusive, maxInclusive + 1);
+        }
+        int scale = (int) Math.pow(10, decimals);
+        int minScaled = minInclusive * scale;
+        int maxScaled = maxInclusive * scale;
+        int valueScaled = rnd.nextInt(minScaled, maxScaled + 1);
+        return valueScaled / (double) scale;
+    }
 
     private static void mergeWithBorder(Sheet sh, String addr) {
         CellRangeAddress r = CellRangeAddress.valueOf(addr);
