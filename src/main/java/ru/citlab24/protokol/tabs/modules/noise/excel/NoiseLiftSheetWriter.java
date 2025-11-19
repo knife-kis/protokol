@@ -206,6 +206,11 @@ public class NoiseLiftSheetWriter {
         centerBorder.setFont(f8);
         setThinBorder(centerBorder);
 
+        CellStyle plusMinusNoLR = wb.createCellStyle();
+        plusMinusNoLR.cloneStyleFrom(centerBorder);
+        plusMinusNoLR.setBorderLeft(BorderStyle.NONE);
+        plusMinusNoLR.setBorderRight(BorderStyle.NONE);
+
         CellStyle centerWrapBorder = wb.createCellStyle();
         centerWrapBorder.cloneStyleFrom(centerBorder);
         centerWrapBorder.setWrapText(true); // D с переносом
@@ -315,6 +320,8 @@ public class NoiseLiftSheetWriter {
                         CellRangeAddress ci3 = merge(sh, r3, r3, 2, 8);
                         setText(getOrCreateRow(sh, r3), 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", leftNoWrapBorder);
                         for (int c = 9; c <= 18; c++) setText(getOrCreateRow(sh, r3), c, "-", centerBorder);
+
+                        fillNoiseThirdRowDiffs(sh, r1, r2, r3, centerBorder, plusMinusNoLR);
 
                         // Рамки объединений
                         for (CellRangeAddress rg : new CellRangeAddress[]{aMerge, bMerge, tv1, wy1, ci2, tv2, wy2, ci3}) {
