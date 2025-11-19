@@ -769,8 +769,11 @@ public class BuildingTab extends JPanel {
             if (noise != null) {
                 java.util.Map<String, DatabaseManager.NoiseValue> nv =
                         DatabaseManager.loadNoiseSelectionsByKey(loadedBuilding.getId());
+                java.util.Map<String, double[]> th =
+                        DatabaseManager.loadNoiseThresholds(loadedBuilding.getId());
                 noise.setBuilding(loadedBuilding);
                 noise.applySelectionsByKey(nv);
+                noise.applyThresholds(th);
                 noise.refreshData();
             }
         } catch (SQLException ex) {
@@ -827,9 +830,11 @@ public class BuildingTab extends JPanel {
         // НОВОЕ: Шумы — снимок по ключу
         ru.citlab24.protokol.tabs.modules.noise.NoiseTab noise = getNoiseTab();
         java.util.Map<String, ru.citlab24.protokol.db.DatabaseManager.NoiseValue> snapNoise = java.util.Collections.emptyMap();
+        java.util.Map<String, double[]> snapNoiseThresholds = java.util.Collections.emptyMap();
         if (noise != null) {
             noise.updateRoomSelectionStates();
             snapNoise = noise.saveSelectionsByKey();
+            snapNoiseThresholds = noise.saveThresholdsByKey();
         }
 
         // Микроклимат
@@ -879,6 +884,12 @@ public class BuildingTab extends JPanel {
             handleError("Не удалось сохранить настройки 'Шумы': " + ex.getMessage(), "Ошибка");
         }
 
+        try {
+            DatabaseManager.updateNoiseThresholds(newProject, snapNoiseThresholds);
+        } catch (SQLException ex) {
+            handleError("Не удалось сохранить пороги 'Шумы': " + ex.getMessage(), "Ошибка");
+        }
+
         // 4.4) Синхронизация состояния UI
         this.building = newProject;
         this.ops.setBuilding(this.building);
@@ -909,6 +920,7 @@ public class BuildingTab extends JPanel {
         if (noise != null) {
             noise.setBuilding(newProject);
             noise.applySelectionsByKey(snapNoise);
+            noise.applyThresholds(snapNoiseThresholds);
             noise.refreshData();
         }
 

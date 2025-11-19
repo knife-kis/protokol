@@ -92,6 +92,15 @@ public class DatabaseManager {
                     "auto_src BOOLEAN," +
                     "zum BOOLEAN)");
 
+            stmt.execute("CREATE TABLE IF NOT EXISTS noise_thresholds (" +
+                    "building_id INT," +
+                    "key VARCHAR(64)," +
+                    "eq_min DOUBLE," +
+                    "eq_max DOUBLE," +
+                    "m_min DOUBLE," +
+                    "m_max DOUBLE," +
+                    "PRIMARY KEY (building_id, key))");
+
             // миграции
 
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
@@ -795,6 +804,31 @@ public class DatabaseManager {
         }
         return res;
     }
+
+    /**
+     * Прочитать сохранённые пороги шумов по building_id. Возвращает карту key -> {EqMin, EqMax, MaxMin, MaxMax},
+     * где отсутствующие значения представлены Double.NaN.
+     */
+    public static Map<String, double[]> loadNoiseThresholds(int buildingId) throws SQLException {
+        Map<String, double[]> res = new LinkedHashMap<>();
+        if (buildingId <= 0) return res;
+
+        String sql = "SELECT key, eq_min, eq_max, m_min, m_max FROM noise_thresholds WHERE building_id = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, buildingId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String key = rs.getString(1);
+                    double eqMin = readDoubleOrNaN(rs, 2);
+                    double eqMax = readDoubleOrNaN(rs, 3);
+                    double mMin  = readDoubleOrNaN(rs, 4);
+                    double mMax  = readDoubleOrNaN(rs, 5);
+                    res.put(key, new double[]{ eqMin, eqMax, mMin, mMax });
+                }
+            }
+        }
+        return res;
+    }
     /** Обновить/вставить настройки шума по ключу "sectionIndex|floorNumber|spaceIdentifier|roomName" в рамках здания. */
     public static void updateNoiseValueByKey(Building building, String key, NoiseValue v) {
         if (key == null || v == null) return;
@@ -860,5 +894,58 @@ public class DatabaseManager {
                     "Ошибка обновления шумов: " + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    /** Полностью перезаписать пороги шумов для building. */
+    public static void updateNoiseThresholds(Building building, Map<String, double[]> thresholds) throws SQLException {
+        if (building == null || building.getId() <= 0) return;
+        int buildingId = building.getId();
+
+        try (PreparedStatement del = connection.prepareStatement(
+                "DELETE FROM noise_thresholds WHERE building_id = ?")) {
+            del.setInt(1, buildingId);
+            del.executeUpdate();
+        }
+
+        if (thresholds == null || thresholds.isEmpty()) return;
+
+        String sql = "MERGE INTO noise_thresholds (building_id, key, eq_min, eq_max, m_min, m_max) " +
+                "KEY(building_id, key) VALUES (?,?,?,?,?,?)";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            for (Map.Entry<String, double[]> e : thresholds.entrySet()) {
+                String key = e.getKey();
+                if (key == null) continue;
+                double[] arr = e.getValue();
+
+                ps.setInt(1, buildingId);
+                ps.setString(2, key);
+                setDoubleOrNull(ps, 3, arr, 0);
+                setDoubleOrNull(ps, 4, arr, 1);
+                setDoubleOrNull(ps, 5, arr, 2);
+                setDoubleOrNull(ps, 6, arr, 3);
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        }
+    }
+
+    private static void setDoubleOrNull(PreparedStatement ps, int idx, double[] arr, int arrIndex) throws SQLException {
+        Double value = null;
+        if (arr != null && arr.length > arrIndex) {
+            double raw = arr[arrIndex];
+            if (!Double.isNaN(raw)) {
+                value = raw;
+            }
+        }
+        if (value == null) {
+            ps.setNull(idx, Types.DOUBLE);
+        } else {
+            ps.setDouble(idx, value);
+        }
+    }
+
+    private static double readDoubleOrNaN(ResultSet rs, int columnIndex) throws SQLException {
+        double value = rs.getDouble(columnIndex);
+        return rs.wasNull() ? Double.NaN : value;
     }
 }
