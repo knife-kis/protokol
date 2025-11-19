@@ -374,7 +374,8 @@ public final class LightingExcelExporter {
         if (prevM == null || minDiff <= 0.0) {
             int mid = (kRange.min + kRange.max) / 2;
             int span = Math.max(1, (kRange.max - kRange.min) / 4);
-            return clamp(round10Int(mid + rnd.nextInt(-span, span + 1)), kRange.min, kRange.max);
+            int raw = mid + rnd.nextInt(-span, span + 1);
+            return clamp(raw, kRange.min, kRange.max);
         }
         List<Integer> candidates = new ArrayList<>();
         for (int k = kRange.min; k <= kRange.max; k++) {
