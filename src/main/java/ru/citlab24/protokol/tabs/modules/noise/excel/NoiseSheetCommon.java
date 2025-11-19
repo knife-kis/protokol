@@ -11,6 +11,11 @@ import java.util.Map;
 
 public class NoiseSheetCommon {
 
+    public static final String NORM_SANPIN_DAY   = "Нормативные требования: СанПиН 1.2.3685-21 (с 07. 00 ч. до 23.00 ч.)";
+    public static final String NORM_SANPIN_NIGHT = "Нормативные требования: СанПиН 1.2.3685-21 (с 23. 00 ч. до 07.00 ч.)";
+    public static final String NORM_SANPIN       = "Нормативные требования: СанПиН 1.2.3685-21";
+    public static final String NORM_SP_51        = "Нормативные требования: СП 51.13330.2011";
+
     private NoiseSheetCommon() {}
 
     /* ===== Общие помощники по странице/колонкам/печати ===== */
@@ -270,4 +275,63 @@ public class NoiseSheetCommon {
         setRowHeightCm(sh, rowIndex, maxLines * lineCm); // 0.53 см на строку, как по ТЗ
     }
 
+    /** Добавляет строку с нормативными требованиями и возвращает следующий индекс строки. */
+    public static int appendNormativeRow(Workbook wb,
+                                         Sheet sh,
+                                         int rowIndex,
+                                         String text,
+                                         String eqValue,
+                                         String maxValue) {
+        if (text == null) text = "";
+        if (eqValue == null) eqValue = "";
+        if (maxValue == null) maxValue = "";
+
+        Font bold = wb.createFont();
+        bold.setFontName("Arial");
+        bold.setFontHeightInPoints((short) 10);
+        bold.setBold(true);
+
+        Font regular = wb.createFont();
+        regular.setFontName("Arial");
+        regular.setFontHeightInPoints((short) 10);
+
+        CellStyle textStyle = wb.createCellStyle();
+        textStyle.setAlignment(HorizontalAlignment.LEFT);
+        textStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        textStyle.setWrapText(true);
+        textStyle.setFont(bold);
+        setThinBorder(textStyle);
+
+        CellStyle centerStyle = wb.createCellStyle();
+        centerStyle.setAlignment(HorizontalAlignment.CENTER);
+        centerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        centerStyle.setWrapText(false);
+        centerStyle.setFont(regular);
+        setThinBorder(centerStyle);
+
+        Row row = getOrCreateRow(sh, rowIndex);
+        CellRangeAddress normText = merge(sh, rowIndex, rowIndex, 0, 18);
+        setText(row, 0, text, textStyle);
+
+        CellRangeAddress eqRange = merge(sh, rowIndex, rowIndex, 19, 21);
+        setCenter(sh, rowIndex, 19, eqValue, centerStyle);
+
+        CellRangeAddress maxRange = merge(sh, rowIndex, rowIndex, 22, 24);
+        setCenter(sh, rowIndex, 22, maxValue, centerStyle);
+
+        for (CellRangeAddress rg : new CellRangeAddress[]{normText, eqRange, maxRange}) {
+            org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, rg, sh);
+            org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, rg, sh);
+            org.apache.poi.ss.util.RegionUtil.setBorderLeft(BorderStyle.THIN, rg, sh);
+            org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, rg, sh);
+        }
+
+        double totalChars = 0.0;
+        for (int c = 0; c <= 18; c++) {
+            totalChars += Math.max(1.0, sh.getColumnWidth(c) / 256.0);
+        }
+        int lines = estimateWrappedLines(text, totalChars);
+        setRowHeightCm(sh, rowIndex, Math.max(0.53, lines * 0.53));
+        return rowIndex + 1;
+    }
 }

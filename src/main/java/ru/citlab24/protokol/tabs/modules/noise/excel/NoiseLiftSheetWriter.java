@@ -7,6 +7,7 @@ import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.models.*;
 
 import java.util.Map;
+import java.util.function.Predicate;
 
 import static ru.citlab24.protokol.tabs.modules.noise.excel.NoiseSheetCommon.*;
 
@@ -195,6 +196,38 @@ public class NoiseLiftSheetWriter {
                                                    ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
         if (building == null) return;
 
+        LiftAppendState state = new LiftAppendState(Math.max(0, startRow), 1);
+
+        boolean hasApt = appendLiftRoomBlocksFiltered(wb, sh, building, byKey, state,
+                sp -> sp != null && sp.getType() == Space.SpaceType.APARTMENT,
+                thresholds, sheetKind);
+        if (hasApt) {
+            String text = isNight ? NoiseSheetCommon.NORM_SANPIN_NIGHT : NoiseSheetCommon.NORM_SANPIN_DAY;
+            String eq   = isNight ? "25" : "35";
+            String max  = isNight ? "40" : "50";
+            state.row = NoiseSheetCommon.appendNormativeRow(wb, sh, state.row, text, eq, max);
+        }
+
+        if (!isNight) {
+            boolean hasOffice = appendLiftRoomBlocksFiltered(wb, sh, building, byKey, state,
+                    sp -> sp != null && sp.getType() == Space.SpaceType.OFFICE,
+                    thresholds, sheetKind);
+            if (hasOffice) {
+                state.row = NoiseSheetCommon.appendNormativeRow(wb, sh, state.row,
+                        NoiseSheetCommon.NORM_SP_51, "45", "60");
+            }
+        }
+    }
+
+    private static boolean appendLiftRoomBlocksFiltered(Workbook wb, Sheet sh,
+                                                        Building building,
+                                                        Map<String, DatabaseManager.NoiseValue> byKey,
+                                                        LiftAppendState state,
+                                                        Predicate<Space> spacePredicate,
+                                                        Map<String, double[]> thresholds,
+                                                        ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+        if (building == null || spacePredicate == null) return false;
+
         org.apache.poi.ss.usermodel.Font f8 = wb.createFont();
         f8.setFontName("Arial");
         f8.setFontHeightInPoints((short)8);
@@ -224,14 +257,13 @@ public class NoiseLiftSheetWriter {
 
         CellStyle centerWrapBorder = wb.createCellStyle();
         centerWrapBorder.cloneStyleFrom(centerBorder);
-        centerWrapBorder.setWrapText(true); // D с переносом
+        centerWrapBorder.setWrapText(true);
 
         CellStyle leftNoWrapBorder = wb.createCellStyle();
         leftNoWrapBorder.cloneStyleFrom(centerBorder);
         leftNoWrapBorder.setAlignment(HorizontalAlignment.LEFT);
         leftNoWrapBorder.setWrapText(false);
 
-        // C: место измерений — с переносом
         CellStyle leftWrapBorder = wb.createCellStyle();
         leftWrapBorder.cloneStyleFrom(centerBorder);
         leftWrapBorder.setAlignment(HorizontalAlignment.LEFT);
@@ -239,8 +271,9 @@ public class NoiseLiftSheetWriter {
 
         final String[] PLUS_MINUS = { "+","-","-","+","-","-","-","-","-","-","-","-","-","-","-" };
 
-        int row = Math.max(0, startRow);
-        int no  = 1;
+        int row = state.row;
+        int no  = state.no;
+        boolean appended = false;
 
         java.util.List<Section> sections = building.getSections();
         boolean multiSections = sections != null && sections.size() > 1;
@@ -255,8 +288,7 @@ public class NoiseLiftSheetWriter {
             spaces.sort(java.util.Comparator.comparingInt(Space::getPosition));
 
             for (Space sp : spaces) {
-                // на ночном листе лифта — игнорируем офисы
-                if (isNight && sp != null && sp.getType() == Space.SpaceType.OFFICE) continue;
+                if (!spacePredicate.test(sp)) continue;
 
                 String spaceId = (sp.getIdentifier() == null) ? "" : sp.getIdentifier().trim();
 
@@ -276,13 +308,12 @@ public class NoiseLiftSheetWriter {
                     }
 
                     String place = formatPlace(building, sec, fl, sp, rm);
-                    // Текст в D — с \n как было для лифта
                     String dText = "Суммарные источники шума\n(работает лифтовое оборудование)";
 
                     for (int t = 1; t <= 3; t++) {
+                        appended = true;
                         int r1 = row, r2 = row + 1, r3 = row + 2;
 
-                        // базовая сетка A..Y
                         for (int rr = r1; rr <= r3; rr++) {
                             Row cur = getOrCreateRow(sh, rr);
                             for (int c = 0; c <= 24; c++) {
@@ -291,34 +322,26 @@ public class NoiseLiftSheetWriter {
                             }
                         }
 
-                        // A (№ п/п) и B (т1/т2/т3)
                         CellRangeAddress aMerge = merge(sh, r1, r3, 0, 0);
                         setCenter(sh, r1, 0, String.valueOf(no++), centerBorder);
                         CellRangeAddress bMerge = merge(sh, r1, r3, 1, 1);
                         setCenter(sh, r1, 1, "т" + t, centerBorder);
 
-                        // C — место (wrap)
                         setText(getOrCreateRow(sh, r1), 2, place, leftWrapBorder);
-
-                        // D — текст источника (wrap)
                         setText(getOrCreateRow(sh, r1), 3, dText, centerWrapBorder);
 
-                        // E..S: +/- (первая строка)
                         for (int i = 0; i <= (18 - 4); i++) {
                             setText(getOrCreateRow(sh, r1), 4 + i, PLUS_MINUS[i], centerBorder);
                         }
 
-                        // T–V и W–Y (первая строка)
                         CellRangeAddress tv1 = merge(sh, r1, r1, 19, 21);
                         setCenter(sh, r1, 19, "-", centerBorder);
                         CellRangeAddress wy1 = merge(sh, r1, r1, 22, 24);
                         setCenter(sh, r1, 22, "-", centerBorder);
 
-                        // <<< ВСТАВКА ГЕНЕРАЦИИ ПО ПОРОГАМ >>>
                         ru.citlab24.protokol.tabs.modules.noise.NoiseExcelExporter
                                 .fillEqMaxFirstRow(sh, r1, sheetKind, thresholds);
 
-                        // Вторая строка
                         CellRangeAddress ci2 = merge(sh, r2, r2, 2, 8);
                         setText(getOrCreateRow(sh, r2), 2, "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ)", leftNoWrapBorder);
                         for (int c = 9; c <= 18; c++) setText(getOrCreateRow(sh, r2), c, "-", centerBorder);
@@ -327,14 +350,12 @@ public class NoiseLiftSheetWriter {
                         CellRangeAddress wy2 = merge(sh, r2, r2, 22, 24);
                         setCenter(sh, r2, 22, "2", centerBorder);
 
-                        // Третья строка
                         CellRangeAddress ci3 = merge(sh, r3, r3, 2, 8);
                         setText(getOrCreateRow(sh, r3), 2, "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ)", leftNoWrapBorder);
                         for (int c = 9; c <= 18; c++) setText(getOrCreateRow(sh, r3), c, "-", centerBorder);
 
                         fillNoiseThirdRowDiffs(sh, r1, r2, r3, thirdRowDiff, thirdRowFixed, plusMinusNoLR);
 
-                        // Рамки объединений
                         for (CellRangeAddress rg : new CellRangeAddress[]{aMerge, bMerge, tv1, wy1, ci2, tv2, wy2, ci3}) {
                             org.apache.poi.ss.util.RegionUtil.setBorderTop(BorderStyle.THIN, rg, sh);
                             org.apache.poi.ss.util.RegionUtil.setBorderBottom(BorderStyle.THIN, rg, sh);
@@ -342,10 +363,7 @@ public class NoiseLiftSheetWriter {
                             org.apache.poi.ss.util.RegionUtil.setBorderRight(BorderStyle.THIN, rg, sh);
                         }
 
-                        // ВАЖНО: явная подгонка высоты первой строки (из-за merge в той же строке)
                         adjustRowHeightForWrapped(sh, r1, 0.53, new int[]{2, 3}, new String[]{place, dText});
-
-                        // фикс-высоты для 2 и 3 строк (как было)
                         setRowHeightCm(sh, r2, 0.53);
                         setRowHeightCm(sh, r3, 0.53);
 
@@ -353,6 +371,20 @@ public class NoiseLiftSheetWriter {
                     }
                 }
             }
+        }
+
+        state.row = row;
+        state.no = no;
+        return appended;
+    }
+
+    private static final class LiftAppendState {
+        int row;
+        int no;
+
+        LiftAppendState(int row, int no) {
+            this.row = row;
+            this.no = no;
         }
     }
 }

@@ -149,6 +149,9 @@ public final class NoiseSiteSheetWriter {
                 }
             }
         }
+
+        NoiseSheetCommon.appendNormativeRow(wb, sh, row,
+                NoiseSheetCommon.NORM_SANPIN, "45", "60");
     }
 
     private static String siteDText(boolean auto, boolean train) {

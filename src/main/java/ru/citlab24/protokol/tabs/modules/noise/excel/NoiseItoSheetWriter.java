@@ -203,6 +203,11 @@ public final class NoiseItoSheetWriter {
                 }
             }
         }
+
+        NormativeRow norm = normativeFor(sheetKind);
+        if (norm != null) {
+            NoiseSheetCommon.appendNormativeRow(wb, sh, row, norm.text, norm.eq, norm.max);
+        }
     }
 
     /* ===== Правила ИТО ===== */
@@ -223,5 +228,31 @@ public final class NoiseItoSheetWriter {
         if (nv.zum)         parts.add("зачистного устройства мусоропровода");
         String joined = String.join(", ", parts);
         return "Суммарные источники шума (работает оборудование " + joined + ")";
+    }
+
+    private static NormativeRow normativeFor(ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind kind) {
+        if (kind == null) return null;
+        switch (kind) {
+            case ITO_NONRES:
+                return new NormativeRow(NoiseSheetCommon.NORM_SP_51, "45", "60");
+            case ITO_RES_DAY:
+                return new NormativeRow(NoiseSheetCommon.NORM_SANPIN_DAY, "35", "50");
+            case ITO_RES_NIGHT:
+                return new NormativeRow(NoiseSheetCommon.NORM_SANPIN_NIGHT, "25", "40");
+            default:
+                return null;
+        }
+    }
+
+    private static final class NormativeRow {
+        final String text;
+        final String eq;
+        final String max;
+
+        NormativeRow(String text, String eq, String max) {
+            this.text = text;
+            this.eq = eq;
+            this.max = max;
+        }
     }
 }
