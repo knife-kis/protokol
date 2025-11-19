@@ -551,14 +551,15 @@ public final class AllExcelExporter {
         String headerText = "&\"Arial\"&9" +
                 "Протокол от " + dateText +
                 " № " + protocolNumber +
-                "    Общее количество страниц &[Страниц] Страница &[Страница]";
+                "\n" +
+                "Общее количество страниц &[Страниц] Страница &[Страница]";
 
         for (int i = 1; i < wb.getNumberOfSheets(); i++) {
             Sheet sheet = wb.getSheetAt(i);
             if (sheet == null) continue;
-            Header header = sheet.getHeader();
-            if (header != null) {
-                header.setCenter(headerText);
+            Footer footer = sheet.getFooter();
+            if (footer != null) {
+                footer.setRight(headerText);
             }
         }
     }
