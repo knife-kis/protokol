@@ -46,6 +46,17 @@ public final class NoiseSiteSheetWriter {
         plusMinusNoLR.setBorderLeft(BorderStyle.NONE);
         plusMinusNoLR.setBorderRight(BorderStyle.NONE);
 
+        short oneDecimalFormat = wb.createDataFormat().getFormat("0.0");
+
+        CellStyle noRightOneDecimal = wb.createCellStyle();
+        noRightOneDecimal.cloneStyleFrom(centerBorder);
+        noRightOneDecimal.setBorderRight(BorderStyle.NONE);
+        noRightOneDecimal.setDataFormat(oneDecimalFormat);
+
+        CellStyle noLeftBorder = wb.createCellStyle();
+        noLeftBorder.cloneStyleFrom(centerBorder);
+        noLeftBorder.setBorderLeft(BorderStyle.NONE);
+
         CellStyle leftWrapBorder = wb.createCellStyle();
         leftWrapBorder.cloneStyleFrom(centerBorder);
         leftWrapBorder.setAlignment(HorizontalAlignment.LEFT);
@@ -99,6 +110,10 @@ public final class NoiseSiteSheetWriter {
                             cell.setCellStyle(centerBorder);
                             if (c >= 19) cell.setBlank(); // T..Y пустые по умолчанию
                         }
+                        getOrCreateCell(rr, 19).setCellStyle(noRightOneDecimal);
+                        getOrCreateCell(rr, 21).setCellStyle(noLeftBorder);
+                        getOrCreateCell(rr, 22).setCellStyle(noRightOneDecimal);
+                        getOrCreateCell(rr, 24).setCellStyle(noLeftBorder);
 
                         // A — № п/п
                         setCenter(sh, r, 0, String.valueOf(no++), centerBorder);
@@ -121,12 +136,12 @@ public final class NoiseSiteSheetWriter {
                         Cell uCell = getOrCreateCell(rr, 20);
                         uCell.setCellValue("±");
                         uCell.setCellStyle(plusMinusNoLR);
-                        setText(rr, 21, "2,3", centerBorder);
+                        setText(rr, 21, "2,3", noLeftBorder);
 
                         Cell xCell = getOrCreateCell(rr, 23);
                         xCell.setCellValue("±");
                         xCell.setCellStyle(plusMinusNoLR);
-                        setText(rr, 24, "2,3", centerBorder);
+                        setText(rr, 24, "2,3", noLeftBorder);
 
                         // высота строки по C и D
                         adjustRowHeightForWrapped(sh, r, 0.53, new int[]{2,3}, new String[]{roomName, dText});

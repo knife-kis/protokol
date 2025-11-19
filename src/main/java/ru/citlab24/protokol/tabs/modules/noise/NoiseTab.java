@@ -331,6 +331,7 @@ public class NoiseTab extends JPanel {
 
             dls.put(NoiseTestKind.AUTO_DAY,   excelDateLine(NoiseTestKind.AUTO_DAY));
             dls.put(NoiseTestKind.AUTO_NIGHT, excelDateLine(NoiseTestKind.AUTO_NIGHT));
+            dls.put(NoiseTestKind.SITE,       excelDateLine(NoiseTestKind.SITE));
 
             // Конвертируем внутренние Threshold -> простой Map<String,double[4]>: {EqMin,EqMax,MaxMin,MaxMax}
             Map<String, double[]> thSimple = buildThresholdsForExport();

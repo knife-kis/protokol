@@ -111,16 +111,17 @@ public class NoiseSheetCommon {
                                               int rowFirst,
                                               int rowSecond,
                                               int rowThird,
-                                              CellStyle valueStyle,
+                                              CellStyle diffValueStyle,
+                                              CellStyle fixedValueStyle,
                                               CellStyle plusMinusStyle) {
-        fillDiffFormula(sh, rowFirst, rowSecond, rowThird, 19, valueStyle);
-        fillDiffFormula(sh, rowFirst, rowSecond, rowThird, 22, valueStyle);
+        fillDiffFormula(sh, rowFirst, rowSecond, rowThird, 19, diffValueStyle);
+        fillDiffFormula(sh, rowFirst, rowSecond, rowThird, 22, diffValueStyle);
 
         setPlusMinus(sh, rowThird, 20, plusMinusStyle);
         setPlusMinus(sh, rowThird, 23, plusMinusStyle);
 
-        setFixedText(sh, rowThird, 21, "2,3", valueStyle);
-        setFixedText(sh, rowThird, 24, "2,3", valueStyle);
+        setFixedText(sh, rowThird, 21, "2,3", fixedValueStyle);
+        setFixedText(sh, rowThird, 24, "2,3", fixedValueStyle);
     }
 
     private static void fillDiffFormula(Sheet sh,
@@ -138,8 +139,9 @@ public class NoiseSheetCommon {
         int excelRowSecond = rowSecond + 1;
         String refFirst = col + excelRowFirst;
         String refSecond = col + excelRowSecond;
-        String formula = "IF(OR(" + refFirst + "=\"\"," + refSecond + "=\"\"),\"\"," +
-                refFirst + "-VALUE(" + refSecond + "))";
+        String diffExpr = refFirst + "-VALUE(" + refSecond + ")";
+        String formula = "IF(OR(" + refFirst + "=\"\"," + refSecond + "=\"\"),\"\",ROUND(" +
+                diffExpr + ",1))";
         cell.setCellFormula(formula);
     }
 
