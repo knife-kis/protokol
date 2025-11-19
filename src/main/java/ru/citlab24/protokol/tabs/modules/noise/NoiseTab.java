@@ -96,6 +96,13 @@ public class NoiseTab extends JPanel {
         }
     }
 
+    /** Применить сохранённые пороги (key -> {EqMin, EqMax, MaxMin, MaxMax}). */
+    public void applyThresholds(java.util.Map<String, double[]> snapshot) {
+        thresholds.clear();
+        if (snapshot == null) return;
+        snapshot.forEach((key, arr) -> thresholds.put(key, thresholdFromArray(arr)));
+    }
+
     /** Сохранить внутренние состояния в БД: собрать актуальные значения из таблицы. */
     /** Снимок состояний по ключу "sectionIndex|floorNumber|spaceId|roomName". */
     public java.util.Map<String, DatabaseManager.NoiseValue> saveSelectionsByKey() {
@@ -128,6 +135,11 @@ public class NoiseTab extends JPanel {
             }
         }
         return snap;
+    }
+
+    /** Сохранить текущие пороги: key -> {EqMin, EqMax, MaxMin, MaxMax}. */
+    public java.util.Map<String, double[]> saveThresholdsByKey() {
+        return buildThresholdsForExport();
     }
 
     /** Зафиксировать текущее редактирование и протолкнуть значения из редактора в модель. */
@@ -361,6 +373,22 @@ public class NoiseTab extends JPanel {
             out.put(e.getKey(), new double[]{ ekMin, ekMax, mMin, mMax });
         }
         return out;
+    }
+
+    private static Threshold thresholdFromArray(double[] arr) {
+        if (arr == null) return new Threshold();
+        return new Threshold(
+                valueFromArray(arr, 0),
+                valueFromArray(arr, 1),
+                valueFromArray(arr, 2),
+                valueFromArray(arr, 3)
+        );
+    }
+
+    private static Double valueFromArray(double[] arr, int idx) {
+        if (arr == null || arr.length <= idx) return null;
+        double v = arr[idx];
+        return Double.isNaN(v) ? null : v;
     }
 
     private Set<String> getActiveFilterSources() {
