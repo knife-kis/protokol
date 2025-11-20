@@ -57,7 +57,7 @@ public final class LightingExcelExporter {
     // === ВЕСЬ КОД ПОСТРОЕНИЯ ЛИСТА ПЕРЕНЕСЁН СЮДА (без диалога «Сохранить») ===
     private static void buildLightingSheets(Building building, int sectionIndex, Workbook wb) {
         Styles S = new Styles(wb);
-        Sheet sh = wb.createSheet("Естественное освещение");
+        Sheet sh = wb.createSheet("КЕО");
         setupLandscapePage(sh);
         sh.setRepeatingRows(CellRangeAddress.valueOf("5:5"));
         setupPage(sh);
