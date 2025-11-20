@@ -12,7 +12,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.util.List;
 
-/** Экспорт листа «Осв улица». */
+/** Экспорт листа «Иск освещение (2)». */
 public final class StreetLightingExcelExporter {
 
     private StreetLightingExcelExporter() {}
@@ -40,7 +40,7 @@ public final class StreetLightingExcelExporter {
             appendToWorkbook(rows, wb);
 
             JFileChooser chooser = new JFileChooser();
-            chooser.setDialogTitle("Сохранить Excel (Осв улица)");
+            chooser.setDialogTitle("Сохранить Excel (Иск освещение (2))");
             chooser.setSelectedFile(new File("Освещение_улица.xlsx"));
             if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
@@ -58,7 +58,7 @@ public final class StreetLightingExcelExporter {
 
     /** Заполнение книги согласно заданным габаритам/объединениям. */
     public static void appendToWorkbook(List<RowData> rows, Workbook wb) {
-        Sheet sh = wb.createSheet("Осв улица");
+        Sheet sh = wb.createSheet("Иск освещение (2)");
 
 
         // Ориентация/поля/умещение по ширине

@@ -55,7 +55,7 @@ public final class AllExcelExporter {
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
 
-            // 4) «Осв улица» — ближе к концу
+            // 4) «Иск освещение (2)» — ближе к концу
             appendStreetLightingSheet(wb, building);
 
             // 5) Искусственное освещение
@@ -80,7 +80,7 @@ public final class AllExcelExporter {
                 t.printStackTrace();
             }
 
-            // 6) Естественное освещение (КЕО) — последним листом
+            // 6) КЕО — последним листом
             tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter",
                     new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
                     new Object[]{building, -1, wb});
@@ -286,7 +286,7 @@ public final class AllExcelExporter {
             t.printStackTrace();
         }
     }
-    // === НОВОЕ: «Осв улица» — собираем строки и добавляем лист в текущую книгу ===
+    // === НОВОЕ: «Иск освещение (2)» — собираем строки и добавляем лист в текущую книгу ===
     private static void appendStreetLightingSheet(Workbook wb, Building building) {
         try {
             // 1) Подтянуть сохранённые 4 значения по ключам (если есть)
@@ -295,7 +295,7 @@ public final class AllExcelExporter {
                 byKey = ru.citlab24.protokol.db.DatabaseManager
                         .loadStreetLightingValuesByKey(building.getId());
             } catch (java.sql.SQLException ex) {
-                System.err.println("[AllExcelExporter] WARN: не удалось прочитать 'Осв улица' из БД: " + ex.getMessage());
+                System.err.println("[AllExcelExporter] WARN: не удалось прочитать 'Иск освещение (2)' из БД: " + ex.getMessage());
             }
 
             // 2) Собрать все комнаты на этажах STREET → помещения только OUTDOOR
@@ -350,21 +350,21 @@ public final class AllExcelExporter {
                 }
             }
 
-            // 3) Вставить лист «Осв улица» в текущую книгу
+            // 3) Вставить лист «Иск освещение (2)» в текущую книгу
             ru.citlab24.protokol.tabs.modules.lighting.StreetLightingExcelExporter.appendToWorkbook(rows, wb);
 
-            // 4) Попробовать зафиксировать порядок: «Осв улица» перед «Естественное освещение»
+            // 4) Попробовать зафиксировать порядок: «Иск освещение (2)» перед «КЕО»
             try {
-                int streetIdx = wb.getSheetIndex("Осв улица");
-                int keoIdx    = wb.getSheetIndex("Естественное освещение");
+                int streetIdx = wb.getSheetIndex("Иск освещение (2)");
+                int keoIdx    = wb.getSheetIndex("КЕО");
                 if (streetIdx >= 0 && keoIdx >= 0 && streetIdx > keoIdx) {
-                    wb.setSheetOrder("Осв улица", keoIdx);
+                    wb.setSheetOrder("Иск освещение (2)", keoIdx);
                 }
             } catch (Throwable ignore) {
                 // на случай, если лист КЕО назван иначе — порядок уже обеспечен самим вызовом до КЕО
             }
         } catch (Throwable t) {
-            System.err.println("[AllExcelExporter] Ошибка добавления 'Осв улица': " + t.getMessage());
+            System.err.println("[AllExcelExporter] Ошибка добавления 'Иск освещение (2)': " + t.getMessage());
         }
     }
     /** Применяет настройку печати "уместить по ширине в 1 страницу" ко всем листам книги. */
