@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import ru.citlab24.protokol.tabs.models.*;
 
 import javax.swing.*;
+import java.io.Serializable;
 import java.sql.*;
 import java.util.*;
 
@@ -727,7 +728,8 @@ public class DatabaseManager {
     }
 
     // ==== «Шумы»: DTO для обмена с вкладкой ====
-    public static class NoiseValue {
+    public static class NoiseValue implements Serializable {
+        private static final long serialVersionUID = 1L;
         public boolean measure;
         public boolean lift;
         public boolean vent;

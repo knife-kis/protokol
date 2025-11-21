@@ -1,6 +1,9 @@
 package ru.citlab24.protokol.tabs.models;
 
-public class Section {
+import java.io.Serializable;
+
+public class Section implements Serializable {
+    private static final long serialVersionUID = 1L;
     private int id;         // id записи в БД (table section)
     private String name;    // название секции (подъезда)
     private int position;   // порядок показа (0,1,2,...)

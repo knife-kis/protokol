@@ -1,9 +1,11 @@
 package ru.citlab24.protokol.tabs.models;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Space {
+public class Space implements Serializable {
+    private static final long serialVersionUID = 1L;
     private static int nextId = 1;
 
     private int id;

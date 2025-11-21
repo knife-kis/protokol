@@ -1,6 +1,9 @@
 package ru.citlab24.protokol.tabs.models;
 
-public class Room {
+import java.io.Serializable;
+
+public class Room implements Serializable {
+    private static final long serialVersionUID = 1L;
     private Integer originalRoomId;
     private boolean selected;
     private static int nextId = 1;
