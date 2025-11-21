@@ -1,9 +1,11 @@
 package ru.citlab24.protokol.tabs.models;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Floor {
+public class Floor implements Serializable {
+    private static final long serialVersionUID = 1L;
     private int id;
     private String number;
     private String name;
