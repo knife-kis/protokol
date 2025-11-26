@@ -141,9 +141,9 @@ public final class AllExcelExporter {
         // Высоты строк: фиксированный список (значения заданы в пикселях).
         float[] rowHeightsPx = new float[] {
                 20f, 21f, 10f, 20f, 16f, 20f, 20f, 47f, 20f, 20f,
-                19f, 20f, 20f, 20f, 20f, 20f, 20f, 9f, 20f, 9f,
-                20f, 9f, 40f, 9f, 20f, 9f, 20f, 9f, 20f, 9f,
-                87f, 9f, 20f, 20f, 20f, 10f, 49f
+                19f, 20f, 20f, 20f, 20f, 20f, 9f, 20f, 9f, 20f,
+                9f, 20f, 9f, 20f, 9f, 20f, 9f, 20f, 9f, 20f,
+                9f, 20f, 9f, 20f, 9f, 10f, 49f
         };// Высоты строк оставляем как раньше — тебе они подошли
         for (int r = 0; r < rowHeightsPx.length; r++) {
             Row row = sheet.getRow(r);
@@ -247,7 +247,7 @@ public final class AllExcelExporter {
 
         // Табличные строки 1–6
         setCellValue(sheet, centerMiddleStyle, 15, 0, "1.");
-        setCellValue(sheet, baseStyle, 15, 1,
+        setMergedText(sheet, baseStyle, 15, 15, 1, 25,
                 "Наименование и контактные данные заявителя (заказчика): " +
                         safe(titleValues.customerNameAndContacts));
 
