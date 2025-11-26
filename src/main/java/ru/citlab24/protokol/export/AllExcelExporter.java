@@ -4,6 +4,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateExcelExporter;
@@ -127,6 +128,11 @@ public final class AllExcelExporter {
         baseFont.setFontName("Arial");
         baseFont.setFontHeightInPoints((short) 10);
 
+        Font boldFont = wb.createFont();
+        boldFont.setFontName("Arial");
+        boldFont.setFontHeightInPoints((short) 10);
+        boldFont.setBold(true);
+
         CellStyle baseStyle = wb.createCellStyle();
         baseStyle.setFont(baseFont);
         baseStyle.setWrapText(true);
@@ -137,6 +143,10 @@ public final class AllExcelExporter {
         centerMiddleStyle.cloneStyleFrom(baseStyle);
         centerMiddleStyle.setAlignment(HorizontalAlignment.CENTER);
         centerMiddleStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        CellStyle boldCenterStyle = wb.createCellStyle();
+        boldCenterStyle.cloneStyleFrom(centerMiddleStyle);
+        boldCenterStyle.setFont(boldFont);
 
         // Высоты строк: фиксированный список (значения заданы в пикселях).
         float[] rowHeightsPx = new float[] {
@@ -193,11 +203,11 @@ public final class AllExcelExporter {
         // 1) A1-I3
         String txtA1 = "Общество с ограниченной ответственностью «Центр исследовательских технологий»\n" +
                 "(ООО «ЦИТ»)";
-        setMergedText(sheet, centerMiddleStyle, 0, 2, 0, 8, txtA1);
+        setMergedText(sheet, boldCenterStyle, 0, 2, 0, 8, txtA1);
 
         // 2) S1-Z3
         String txtS1 = "УТВЕРЖДАЮ\nЗаместитель заведующего лабораторией";
-        setMergedText(sheet, centerMiddleStyle, 0, 2, 18, 25, txtS1);
+        setMergedText(sheet, boldCenterStyle, 0, 2, 18, 25, txtS1);
 
         // 3) A4-I5
         String txtA4 = "660064, Красноярский край, г.о. Красноярск,\n" +
@@ -209,7 +219,14 @@ public final class AllExcelExporter {
                 "Общества с ограниченной ответственностью\n" +
                 "«Центр исследовательских технологий»\n" +
                 "Уникальный номер записи в Реестре аккредитованных лиц RA.RU.21ОХ37 от 07.04.2023";
-        setMergedText(sheet, centerMiddleStyle, 5, 7, 0, 8, txtA6);
+        XSSFRichTextString richA6 = new XSSFRichTextString(txtA6);
+        int registryIndex = txtA6.lastIndexOf("Уникальный номер записи");
+        int boldEnd = (registryIndex >= 0) ? registryIndex : txtA6.length();
+        richA6.applyFont(0, boldEnd, boldFont);
+        if (boldEnd < txtA6.length()) {
+            richA6.applyFont(boldEnd, txtA6.length(), baseFont);
+        }
+        setMergedRichText(sheet, centerMiddleStyle, 5, 7, 0, 8, richA6);
 
         // 5) A9-I11
         String txtA9 = "660041, Красноярский край, г. Красноярск,\n" +
@@ -219,7 +236,7 @@ public final class AllExcelExporter {
 
         // S5-Z5: _______________/М.Е. Гаврилова/
         String txtS5 = "_______________/М.Е. Гаврилова/";
-        setMergedText(sheet, centerMiddleStyle, 4, 4, 18, 25, txtS5);
+        setMergedText(sheet, boldCenterStyle, 4, 4, 18, 25, txtS5);
 
         // S7-Z7: дата из программы + " г."
         String protocolDate = resolveProtocolDateText(frame);
@@ -230,16 +247,16 @@ public final class AllExcelExporter {
             // запасной вариант, если датy из программы не нашли
             txtS7 = "____.__.____ г.";
         }
-        setMergedText(sheet, centerMiddleStyle, 6, 6, 18, 25, txtS7);
+        setMergedText(sheet, boldCenterStyle, 6, 6, 18, 25, txtS7);
 
         // S9-Z9: МП
-        setMergedText(sheet, centerMiddleStyle, 8, 8, 18, 25, "МП");
+        setMergedText(sheet, boldCenterStyle, 8, 8, 18, 25, "МП");
 
         TitlePageValues titleValues = readTitlePageValues(frame);
 
         // A13-Z13 — заголовок с номером заявки и суффиксом Ф/XX
         String protocolTitle = buildProtocolTitle(titleValues.applicationNumber);
-        setMergedText(sheet, centerMiddleStyle, 12, 12, 0, 25, protocolTitle);
+        setMergedText(sheet, boldCenterStyle, 12, 12, 0, 25, protocolTitle);
 
         // A14-Z14 — Вид испытаний
         setMergedText(sheet, centerMiddleStyle, 13, 13, 0, 25,
@@ -550,6 +567,28 @@ public final class AllExcelExporter {
         sheet.addMergedRegion(region);
 
         // Заполняем все ячейки стилем, а текст кладём в левую верхнюю
+        for (int r = firstRow; r <= lastRow; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) row = sheet.createRow(r);
+            for (int c = firstCol; c <= lastCol; c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null) cell = row.createCell(c);
+                cell.setCellStyle(style);
+                if (r == firstRow && c == firstCol) {
+                    cell.setCellValue(text);
+                }
+            }
+        }
+    }
+
+    private static void setMergedRichText(Sheet sheet,
+                                          CellStyle style,
+                                          int firstRow, int lastRow,
+                                          int firstCol, int lastCol,
+                                          XSSFRichTextString text) {
+        CellRangeAddress region = new CellRangeAddress(firstRow, lastRow, firstCol, lastCol);
+        sheet.addMergedRegion(region);
+
         for (int r = firstRow; r <= lastRow; r++) {
             Row row = sheet.getRow(r);
             if (row == null) row = sheet.createRow(r);
