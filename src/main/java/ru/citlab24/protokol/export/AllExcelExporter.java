@@ -252,24 +252,40 @@ public final class AllExcelExporter {
                         safe(titleValues.customerNameAndContacts));
 
         setCellValue(sheet, centerMiddleStyle, 17, 0, "2.");
-        setCellValue(sheet, baseStyle, 17, 1,
+        setMergedText(sheet, baseStyle, 17, 17, 1, 25,
                 "Юридический адрес заказчика: " + safe(titleValues.customerLegalAddress));
 
         setCellValue(sheet, centerMiddleStyle, 19, 0, "3.");
-        setCellValue(sheet, baseStyle, 19, 1,
+        setMergedText(sheet, baseStyle, 19, 19, 1, 25,
                 "Фактический адрес заказчика: " + safe(titleValues.customerActualAddress));
 
         setCellValue(sheet, centerMiddleStyle, 21, 0, "4.");
-        setCellValue(sheet, baseStyle, 21, 1,
+        setMergedText(sheet, baseStyle, 21, 21, 1, 25,
                 "Наименование предприятия, организации, объекта, где производились измерения: " +
                         safe(titleValues.objectName));
 
         setCellValue(sheet, centerMiddleStyle, 23, 0, "5.");
-        setCellValue(sheet, baseStyle, 23, 1,
+        setMergedText(sheet, baseStyle, 23, 23, 1, 25,
                 "Адрес предприятия (объекта): " + safe(titleValues.objectAddress));
 
         setCellValue(sheet, centerMiddleStyle, 25, 0, "6.");
-        setCellValue(sheet, baseStyle, 25, 1, buildBasisLine(titleValues));
+        setMergedText(sheet, baseStyle, 25, 25, 1, 25, buildBasisLine(titleValues));
+
+        setCellValue(sheet, centerMiddleStyle, 27, 0, "7.");
+        setMergedText(sheet, baseStyle, 27, 27, 1, 25,
+                "Измерения проводились в присутствии представителя заказчика: " +
+                        safe(titleValues.representative));
+
+        setCellValue(sheet, centerMiddleStyle, 29, 0, "8.");
+        setMergedText(sheet, baseStyle, 29, 29, 1, 25,
+                "Регистрационный номер карты замеров: " + buildMeasurementCardNumber(titleValues.applicationNumber));
+
+        setCellValue(sheet, centerMiddleStyle, 31, 0, "9.");
+        setMergedText(sheet, baseStyle, 31, 31, 1, 25,
+                "Сведения о средствах измерения:");
+
+        setCellValue(sheet, centerMiddleStyle, 33, 0, "10.");
+        setMergedText(sheet, baseStyle, 33, 33, 1, 25, "");
     }
 
     private static void tryInvokeAppend(String fqcn, Class<?>[] sig, Object[] args) {
@@ -388,6 +404,7 @@ public final class AllExcelExporter {
             values.contractDate = safe(tab.getContractDate());
             values.applicationNumber = safe(tab.getApplicationNumber());
             values.applicationDate = safe(tab.getApplicationDate());
+            values.representative = safe(tab.getRepresentative());
         }
         return values;
     }
@@ -414,6 +431,11 @@ public final class AllExcelExporter {
                 " от " + contractDate +
                 ", заявка №" + applicationNum +
                 " от " + applicationDate + ".";
+    }
+
+    private static String buildMeasurementCardNumber(String applicationNumber) {
+        String base = valueOrPlaceholder(applicationNumber);
+        return base + "-1К";
     }
 
     private static void setCellValue(Sheet sheet, CellStyle style, int rowIdx, int colIdx, String text) {
@@ -629,6 +651,7 @@ public final class AllExcelExporter {
         String contractDate = "";
         String applicationNumber = "";
         String applicationDate = "";
+        String representative = "";
     }
 
     /** Настроить один лист: 1 страница по ширине, произвольная по высоте. */
