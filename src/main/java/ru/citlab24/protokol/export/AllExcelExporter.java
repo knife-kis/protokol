@@ -277,15 +277,20 @@ public final class AllExcelExporter {
                         safe(titleValues.representative));
 
         setCellValue(sheet, centerMiddleStyle, 29, 0, "8.");
-        setMergedText(sheet, baseStyle, 29, 29, 1, 25,
-                "Регистрационный номер карты замеров: " + buildMeasurementCardNumber(titleValues.applicationNumber));
+        String indicatorsText = "Показатели, по которым проводились измерения:";
+        setMergedText(sheet, baseStyle, 29, 29, 1, 25, indicatorsText);
+        adjustRowHeightForMergedText(sheet, 29, 1, 25, indicatorsText);
 
         setCellValue(sheet, centerMiddleStyle, 31, 0, "9.");
         setMergedText(sheet, baseStyle, 31, 31, 1, 25,
-                "Сведения о средствах измерения:");
+                "Регистрационный номер карты замеров: " + buildMeasurementCardNumber(titleValues.applicationNumber));
 
         setCellValue(sheet, centerMiddleStyle, 33, 0, "10.");
-        setMergedText(sheet, baseStyle, 33, 33, 1, 25, "");
+        setMergedText(sheet, baseStyle, 33, 33, 1, 25,
+                "Сведения о средствах измерения:");
+
+        setCellValue(sheet, centerMiddleStyle, 35, 0, "11.");
+        setMergedText(sheet, baseStyle, 35, 35, 1, 25, "");
     }
 
     private static void tryInvokeAppend(String fqcn, Class<?>[] sig, Object[] args) {
@@ -558,6 +563,41 @@ public final class AllExcelExporter {
             }
         }
     }
+    private static void adjustRowHeightForMergedText(Sheet sheet,
+                                                     int rowIndex,
+                                                     int firstCol,
+                                                     int lastCol,
+                                                     String text) {
+        if (sheet == null) return;
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        double totalChars = 0.0;
+        for (int c = firstCol; c <= lastCol; c++) {
+            totalChars += sheet.getColumnWidth(c) / 256.0;
+        }
+        totalChars = Math.max(1.0, totalChars);
+
+        int lines = estimateWrappedLines(text, totalChars);
+        float baseHeightPx = pointsToPixels(row.getHeightInPoints());
+        float newHeightPx = baseHeightPx * Math.max(1, lines);
+        row.setHeightInPoints(pixelsToPoints(newHeightPx));
+    }
+
+    private static int estimateWrappedLines(String text, double colChars) {
+        if (text == null || text.isBlank()) return 1;
+
+        int lines = 0;
+        String[] segments = text.split("\\r?\\n");
+        for (String seg : segments) {
+            int len = Math.max(1, seg.trim().length());
+            lines += (int) Math.ceil(len / Math.max(1.0, colChars));
+        }
+        return Math.max(1, lines);
+    }
     private static String safe(String value) {
         return (value == null) ? "" : value.trim();
     }
@@ -679,5 +719,9 @@ public final class AllExcelExporter {
     }
     private static float pixelsToPoints(float pixels) {
         return pixels * 72f / 96f;
+    }
+
+    private static float pointsToPixels(float points) {
+        return points * 96f / 72f;
     }
 }
