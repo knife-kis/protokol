@@ -39,7 +39,18 @@ public class DatabaseManager {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS building (" +
                     "id INT AUTO_INCREMENT PRIMARY KEY," +
-                    "name VARCHAR(255))");
+                    "name VARCHAR(255)," +
+                    "protocol_date VARCHAR(32)," +
+                    "customer_contacts VARCHAR(512)," +
+                    "customer_legal_address VARCHAR(512)," +
+                    "customer_actual_address VARCHAR(512)," +
+                    "object_name CLOB," +
+                    "object_address VARCHAR(512)," +
+                    "contract_number VARCHAR(128)," +
+                    "contract_date VARCHAR(32)," +
+                    "application_number VARCHAR(128)," +
+                    "application_date VARCHAR(32)," +
+                    "representative VARCHAR(512))");
 
             stmt.execute("CREATE TABLE IF NOT EXISTS section (" +
                     "id INT AUTO_INCREMENT PRIMARY KEY," +
@@ -102,6 +113,16 @@ public class DatabaseManager {
                     "m_max DOUBLE," +
                     "PRIMARY KEY (building_id, threshold_key))");
 
+            stmt.execute("CREATE TABLE IF NOT EXISTS title_measurement (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "building_id INT," +
+                    "row_index INT," +
+                    "date VARCHAR(32)," +
+                    "temp_inside_start VARCHAR(32)," +
+                    "temp_inside_end VARCHAR(32)," +
+                    "temp_outside_start VARCHAR(32)," +
+                    "temp_outside_end VARCHAR(32))");
+
             // миграции
 
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
@@ -122,6 +143,17 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "room", "street_bottom_min", "DOUBLE");
             addColumnIfMissing(stmt, "room",  "ventilation_duct_shape", "VARCHAR(16)");
             addColumnIfMissing(stmt, "room",  "ventilation_width",      "DOUBLE");
+            addColumnIfMissing(stmt, "building", "protocol_date", "VARCHAR(32)");
+            addColumnIfMissing(stmt, "building", "customer_contacts", "VARCHAR(512)");
+            addColumnIfMissing(stmt, "building", "customer_legal_address", "VARCHAR(512)");
+            addColumnIfMissing(stmt, "building", "customer_actual_address", "VARCHAR(512)");
+            addColumnIfMissing(stmt, "building", "object_name", "CLOB");
+            addColumnIfMissing(stmt, "building", "object_address", "VARCHAR(512)");
+            addColumnIfMissing(stmt, "building", "contract_number", "VARCHAR(128)");
+            addColumnIfMissing(stmt, "building", "contract_date", "VARCHAR(32)");
+            addColumnIfMissing(stmt, "building", "application_number", "VARCHAR(128)");
+            addColumnIfMissing(stmt, "building", "application_date", "VARCHAR(32)");
+            addColumnIfMissing(stmt, "building", "representative", "VARCHAR(512)");
         }
     }
 
@@ -140,10 +172,25 @@ public class DatabaseManager {
 
     public static void saveBuilding(Building building) throws SQLException {
         try (PreparedStatement stmt = connection.prepareStatement(
-                "INSERT INTO building (name) VALUES (?)",
+                "INSERT INTO building (name, protocol_date, customer_contacts, customer_legal_address, " +
+                        "customer_actual_address, object_name, object_address, contract_number, contract_date, " +
+                        "application_number, application_date, representative) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 Statement.RETURN_GENERATED_KEYS
         )) {
             stmt.setString(1, building.getName());
+            TitlePageData tpd = building.getTitlePageData();
+            stmt.setString(2, tpd.getProtocolDate());
+            stmt.setString(3, tpd.getCustomerNameAndContacts());
+            stmt.setString(4, tpd.getCustomerLegalAddress());
+            stmt.setString(5, tpd.getCustomerActualAddress());
+            stmt.setString(6, tpd.getObjectName());
+            stmt.setString(7, tpd.getObjectAddress());
+            stmt.setString(8, tpd.getContractNumber());
+            stmt.setString(9, tpd.getContractDate());
+            stmt.setString(10, tpd.getApplicationNumber());
+            stmt.setString(11, tpd.getApplicationDate());
+            stmt.setString(12, tpd.getRepresentative());
             stmt.executeUpdate();
 
             try (ResultSet rs = stmt.getGeneratedKeys()) {
@@ -158,6 +205,8 @@ public class DatabaseManager {
                     for (Floor floor : building.getFloors()) {
                         saveFloor(buildingId, floor);
                     }
+
+                    saveTitleMeasurements(buildingId, tpd.getMeasurements());
                 }
             }
         }
@@ -200,6 +249,13 @@ public class DatabaseManager {
         // Удаляем сам объект здания
         try (PreparedStatement ps = connection.prepareStatement(
                 "DELETE FROM building WHERE id = ?")) {
+            ps.setInt(1, buildingId);
+            ps.executeUpdate();
+        }
+
+        // Удаляем строки измерений титульной страницы
+        try (PreparedStatement ps = connection.prepareStatement(
+                "DELETE FROM title_measurement WHERE building_id = ?")) {
             ps.setInt(1, buildingId);
             ps.executeUpdate();
         }
@@ -394,11 +450,67 @@ public class DatabaseManager {
             if (rs.next()) {
                 building.setId(rs.getInt("id"));
                 building.setName(rs.getString("name"));
+                TitlePageData data = new TitlePageData();
+                data.setProtocolDate(rs.getString("protocol_date"));
+                data.setCustomerNameAndContacts(rs.getString("customer_contacts"));
+                data.setCustomerLegalAddress(rs.getString("customer_legal_address"));
+                data.setCustomerActualAddress(rs.getString("customer_actual_address"));
+                data.setObjectName(rs.getString("object_name"));
+                data.setObjectAddress(rs.getString("object_address"));
+                data.setContractNumber(rs.getString("contract_number"));
+                data.setContractDate(rs.getString("contract_date"));
+                data.setApplicationNumber(rs.getString("application_number"));
+                data.setApplicationDate(rs.getString("application_date"));
+                data.setRepresentative(rs.getString("representative"));
+                data.setMeasurements(loadTitleMeasurements(buildingId));
+                building.setTitlePageData(data);
                 loadSections(building, buildingId);
                 loadFloors(building, buildingId);
             }
         }
         return building;
+    }
+
+    private static void saveTitleMeasurements(int buildingId, List<TitlePageData.Measurement> measurements) throws SQLException {
+        if (measurements == null || measurements.isEmpty()) return;
+
+        String sql = "INSERT INTO title_measurement (building_id, row_index, date, temp_inside_start, temp_inside_end, " +
+                "temp_outside_start, temp_outside_end) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            int idx = 0;
+            for (TitlePageData.Measurement m : measurements) {
+                if (m == null) continue;
+                ps.setInt(1, buildingId);
+                ps.setInt(2, idx++);
+                ps.setString(3, m.getDate());
+                ps.setString(4, m.getTempInsideStart());
+                ps.setString(5, m.getTempInsideEnd());
+                ps.setString(6, m.getTempOutsideStart());
+                ps.setString(7, m.getTempOutsideEnd());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        }
+    }
+
+    private static List<TitlePageData.Measurement> loadTitleMeasurements(int buildingId) throws SQLException {
+        List<TitlePageData.Measurement> measurements = new ArrayList<>();
+        String sql = "SELECT * FROM title_measurement WHERE building_id = ? ORDER BY row_index, id";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, buildingId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    TitlePageData.Measurement m = new TitlePageData.Measurement();
+                    m.setDate(rs.getString("date"));
+                    m.setTempInsideStart(rs.getString("temp_inside_start"));
+                    m.setTempInsideEnd(rs.getString("temp_inside_end"));
+                    m.setTempOutsideStart(rs.getString("temp_outside_start"));
+                    m.setTempOutsideEnd(rs.getString("temp_outside_end"));
+                    measurements.add(m);
+                }
+            }
+        }
+        return measurements;
     }
 
     private static void loadFloors(Building building, int buildingId) throws SQLException {

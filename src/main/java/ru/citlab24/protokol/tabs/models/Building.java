@@ -9,6 +9,7 @@ public class Building implements Serializable {
     private int plannedFloorsCount;
     private int id;
     private String name;
+    private TitlePageData titlePageData = new TitlePageData();
     private final List<Section> sections = new ArrayList<>(); // <-- секции
     private final List<Floor> floors = new ArrayList<>();
 
@@ -29,4 +30,15 @@ public class Building implements Serializable {
         if (newSections != null) sections.addAll(newSections);
     }
     public void addSection(Section s) { sections.add(s); }
+
+    public TitlePageData getTitlePageData() {
+        if (titlePageData == null) {
+            titlePageData = new TitlePageData();
+        }
+        return titlePageData;
+    }
+
+    public void setTitlePageData(TitlePageData titlePageData) {
+        this.titlePageData = (titlePageData == null) ? new TitlePageData() : titlePageData;
+    }
 }
