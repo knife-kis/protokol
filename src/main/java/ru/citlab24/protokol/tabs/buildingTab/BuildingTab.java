@@ -22,6 +22,7 @@ import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.renderers.FloorListRenderer;
 import ru.citlab24.protokol.tabs.renderers.RoomListRenderer;
 import ru.citlab24.protokol.tabs.renderers.SpaceListRenderer;
+import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 
 
 import javax.swing.*;
@@ -777,6 +778,10 @@ public class BuildingTab extends JPanel {
         updateRadiationTab(loadedBuilding, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
         updateLightingTab(loadedBuilding, /*autoApplyDefaults=*/false);
         updateMicroclimateTab(loadedBuilding, /*autoApplyDefaults=*/false);
+        TitlePageTab titleTab = getTitlePageTab();
+        if (titleTab != null) {
+            titleTab.loadFromBuilding(loadedBuilding);
+        }
 
         // Искусственное освещение — галочки из БД
         ArtificialLightingTab alt = getArtificialLightingTab();
@@ -883,6 +888,12 @@ public class BuildingTab extends JPanel {
         MicroclimateTab microTab = getMicroclimateTab();
         if (microTab != null) microTab.updateRoomSelectionStates();
 
+        // Титульная страница
+        TitlePageTab titleTab = getTitlePageTab();
+        if (titleTab != null) {
+            titleTab.applyToBuilding(this.building);
+        }
+
         // 2) Имя проекта
         String baseName = projectNameField.getText().trim();
         if (baseName.isEmpty()) {
@@ -936,6 +947,9 @@ public class BuildingTab extends JPanel {
         this.building = newProject;
         this.ops.setBuilding(this.building);
         projectNameField.setText(extractBaseName(newProject.getName()));
+        if (titleTab != null) {
+            titleTab.loadFromBuilding(newProject);
+        }
 
         // 5) Обновляем вкладки (без автодефолтов)
         refreshAllLists();
@@ -1008,6 +1022,7 @@ public class BuildingTab extends JPanel {
     private Building createBuildingCopy() {
         Building copy = new Building();
         copy.setName(building.getName());
+        copy.setTitlePageData(building.getTitlePageData().copy());
 
         // копируем секции
         List<Section> copiedSections = new ArrayList<>();
@@ -1988,6 +2003,16 @@ public class BuildingTab extends JPanel {
 
 
     private Space createSpaceCopyPreserve(Space original) { return ops.createSpaceCopyPreserve(original); }
+
+    private TitlePageTab getTitlePageTab() {
+        Window wnd = SwingUtilities.getWindowAncestor(this);
+        if (wnd instanceof MainFrame) {
+            for (Component c : ((MainFrame) wnd).getTabbedPane().getComponents()) {
+                if (c instanceof TitlePageTab) return (TitlePageTab) c;
+            }
+        }
+        return null;
+    }
 
     private LightingTab getLightingTab() {
         Window wnd = SwingUtilities.getWindowAncestor(this);

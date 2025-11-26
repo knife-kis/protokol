@@ -25,6 +25,7 @@ import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
+import ru.citlab24.protokol.tabs.models.TitlePageData;
 
 import java.awt.KeyboardFocusManager;
 import java.awt.Window;
@@ -74,6 +75,7 @@ public class TitlePageTab extends JPanel {
     // 10) Даты измерений и температуры
     private final JPanel measurementRowsPanel;
     private final List<MeasurementRow> measurementRows = new ArrayList<>();
+    private final Color defaultTextColor = UIManager.getColor("TextField.foreground");
 
     /** Одна строка измерений: панель, дата + 4 температуры. */
     private static class MeasurementRow {
@@ -379,6 +381,123 @@ public class TitlePageTab extends JPanel {
         measurementRowsPanel.remove(last.panel);
         measurementRowsPanel.revalidate();
         measurementRowsPanel.repaint();
+    }
+
+    public void applyToBuilding(Building target) {
+        if (target == null) return;
+
+        TitlePageData data = new TitlePageData();
+        data.setProtocolDate(getProtocolDate());
+        data.setCustomerNameAndContacts(getCustomerNameAndContacts());
+        data.setCustomerLegalAddress(getCustomerLegalAddress());
+        data.setCustomerActualAddress(getCustomerActualAddress());
+        data.setObjectName(getObjectName());
+        data.setObjectAddress(getObjectAddress());
+        data.setContractNumber(getContractNumber());
+        data.setContractDate(getContractDate());
+        data.setApplicationNumber(getApplicationNumber());
+        data.setApplicationDate(getApplicationDate());
+        data.setRepresentative(getRepresentative());
+        data.setMeasurements(collectMeasurementsForModel());
+
+        target.setTitlePageData(data);
+    }
+
+    public void loadFromBuilding(Building source) {
+        if (source == null) return;
+        TitlePageData data = source.getTitlePageData();
+        if (data == null) return;
+
+        setDatePickerDate(protocolDatePicker, data.getProtocolDate());
+        setFieldWithPlaceholder(customerNameContactsField, data.getCustomerNameAndContacts(), CUSTOMER_PLACEHOLDER);
+        setFieldText(customerLegalAddressField, data.getCustomerLegalAddress());
+        setFieldText(customerActualAddressField, data.getCustomerActualAddress());
+        objectNameArea.setText(data.getObjectName() == null ? "" : data.getObjectName());
+        setFieldText(objectAddressField, data.getObjectAddress());
+
+        contractNumberField.setText(data.getContractNumber() == null ? "" : data.getContractNumber());
+        setDatePickerDate(contractDatePicker, data.getContractDate());
+
+        applicationNumberField.setText(data.getApplicationNumber() == null ? "" : data.getApplicationNumber());
+        setDatePickerDate(applicationDatePicker, data.getApplicationDate());
+
+        setFieldText(representativeField, data.getRepresentative());
+
+        applyMeasurementRows(data.getMeasurements());
+    }
+
+    private void clearMeasurementRows() {
+        measurementRows.clear();
+        measurementRowsPanel.removeAll();
+    }
+
+    private void applyMeasurementRows(List<TitlePageData.Measurement> rows) {
+        clearMeasurementRows();
+        if (rows == null || rows.isEmpty()) {
+            addMeasurementRow(null);
+            measurementRowsPanel.revalidate();
+            measurementRowsPanel.repaint();
+            return;
+        }
+
+        for (TitlePageData.Measurement m : rows) {
+            LocalDate date = parseDate(m.getDate());
+            addMeasurementRow(date);
+            MeasurementRow row = measurementRows.get(measurementRows.size() - 1);
+            setMeasurementRowValues(row, m);
+        }
+        measurementRowsPanel.revalidate();
+        measurementRowsPanel.repaint();
+    }
+
+    private void setMeasurementRowValues(MeasurementRow row, TitlePageData.Measurement measurement) {
+        if (row == null || measurement == null) return;
+        row.tempInsideStart.setText(measurement.getTempInsideStart() == null ? "" : measurement.getTempInsideStart());
+        row.tempInsideEnd.setText(measurement.getTempInsideEnd() == null ? "" : measurement.getTempInsideEnd());
+        row.tempOutsideStart.setText(measurement.getTempOutsideStart() == null ? "" : measurement.getTempOutsideStart());
+        row.tempOutsideEnd.setText(measurement.getTempOutsideEnd() == null ? "" : measurement.getTempOutsideEnd());
+    }
+
+    private void setDatePickerDate(DatePicker picker, String value) {
+        if (picker == null) return;
+        picker.setDate(parseDate(value));
+    }
+
+    private LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return LocalDate.parse(value, DATE_FORMAT);
+        } catch (Exception ignore) {
+            return null;
+        }
+    }
+
+    private void setFieldWithPlaceholder(JTextField field, String value, String placeholder) {
+        if (value == null || value.isBlank()) {
+            field.setForeground(Color.GRAY);
+            field.setText(placeholder);
+        } else {
+            setFieldText(field, value);
+        }
+    }
+
+    private void setFieldText(JTextField field, String value) {
+        field.setForeground((defaultTextColor != null) ? defaultTextColor : Color.BLACK);
+        field.setText(value == null ? "" : value);
+    }
+
+    private List<TitlePageData.Measurement> collectMeasurementsForModel() {
+        List<TitlePageData.Measurement> rows = new ArrayList<>();
+        for (MeasurementRowData r : getMeasurementRows()) {
+            TitlePageData.Measurement m = new TitlePageData.Measurement();
+            m.setDate(r.date);
+            m.setTempInsideStart(r.tempInsideStart);
+            m.setTempInsideEnd(r.tempInsideEnd);
+            m.setTempOutsideStart(r.tempOutsideStart);
+            m.setTempOutsideEnd(r.tempOutsideEnd);
+            rows.add(m);
+        }
+        return rows;
     }
 
     private RadiationTab getRadiationTab() {
