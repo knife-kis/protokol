@@ -847,10 +847,8 @@ public class NoiseTab extends JPanel {
 
 
     /** Выпадающее меню с тремя строками: <источник> день/ночь/офис, поля «мин/макс». */
-    /** Всплывающий редактор порогов в виде таблицы: Ек мин/Ек макс/М мин/М макс. */
+    /** Редактор порогов в виде таблицы: Ек мин/Ек макс/М мин/М макс. */
     private void showThresholdPopup(JButton owner, String srcLabel) {
-        JPopupMenu pm = new JPopupMenu();
-
         JPanel content = new JPanel(new GridBagLayout());
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(4, 6, 4, 6);
@@ -946,7 +944,11 @@ public class NoiseTab extends JPanel {
         gc.fill = GridBagConstraints.HORIZONTAL; gc.weightx = 1.0;
         content.add(actions, gc);
 
-        pm.add(content);
+        Window window = SwingUtilities.getWindowAncestor(owner);
+        JDialog dialog = new JDialog(window, "Пороговые значения: " + srcLabel, Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        dialog.setContentPane(content);
+        dialog.getRootPane().setDefaultButton(save);
 
         // Логика кнопок
         save.addActionListener(e -> {
@@ -966,12 +968,13 @@ public class NoiseTab extends JPanel {
                     thresholds.put(key, new Threshold(ekMin, ekMax, mMin, mMax));
                 }
             }
-            pm.setVisible(false);
+            dialog.dispose();
         });
-        cancel.addActionListener(e -> pm.setVisible(false));
+        cancel.addActionListener(e -> dialog.dispose());
 
-        pm.show(owner, 0, owner.getHeight());
-
+        dialog.pack();
+        dialog.setLocationRelativeTo(owner);
+        dialog.setVisible(true);
     }
     /** Ключ порога: "<источник>|<вариант>", например "Лифт|день" или "Улица|диапазон". */
     private static String thKey(String srcLabel, String variant) {
