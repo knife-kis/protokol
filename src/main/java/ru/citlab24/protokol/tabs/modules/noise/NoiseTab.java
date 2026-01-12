@@ -960,12 +960,16 @@ public class NoiseTab extends JPanel {
                     javax.swing.JFormattedTextField fMMin  = (javax.swing.JFormattedTextField) lbl.getClientProperty("fMMin");
                     javax.swing.JFormattedTextField fMMax  = (javax.swing.JFormattedTextField) lbl.getClientProperty("fMMax");
 
-                    Double ekMin = (fEkMin != null && fEkMin.getValue() instanceof Number n1) ? n1.doubleValue() : null;
-                    Double ekMax = (fEkMax != null && fEkMax.getValue() instanceof Number n2) ? n2.doubleValue() : null;
-                    Double mMin  = (fMMin  != null && fMMin .getValue() instanceof Number n3) ? n3.doubleValue() : null;
-                    Double mMax  = (fMMax  != null && fMMax .getValue() instanceof Number n4) ? n4.doubleValue() : null;
+                    Double ekMin = fieldValueOrNull(fEkMin);
+                    Double ekMax = fieldValueOrNull(fEkMax);
+                    Double mMin  = fieldValueOrNull(fMMin);
+                    Double mMax  = fieldValueOrNull(fMMax);
 
-                    thresholds.put(key, new Threshold(ekMin, ekMax, mMin, mMax));
+                    if (ekMin == null && ekMax == null && mMin == null && mMax == null) {
+                        thresholds.remove(key);
+                    } else {
+                        thresholds.put(key, new Threshold(ekMin, ekMax, mMin, mMax));
+                    }
                 }
             }
             dialog.dispose();
@@ -975,6 +979,14 @@ public class NoiseTab extends JPanel {
         dialog.pack();
         dialog.setLocationRelativeTo(owner);
         dialog.setVisible(true);
+    }
+
+    private static Double fieldValueOrNull(javax.swing.JFormattedTextField field) {
+        if (field == null) return null;
+        String text = field.getText();
+        if (text == null || text.trim().isEmpty()) return null;
+        Object value = field.getValue();
+        return (value instanceof Number n) ? n.doubleValue() : null;
     }
     /** Ключ порога: "<источник>|<вариант>", например "Лифт|день" или "Улица|диапазон". */
     private static String thKey(String srcLabel, String variant) {
