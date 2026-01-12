@@ -98,6 +98,7 @@ public final class NoiseItoSheetWriter {
 
         int row = Math.max(0, startRow);
         int no  = Math.max(1, startNo);
+        NoiseSheetCommon.PageBreakTracker pageTracker = NoiseSheetCommon.createPageBreakTracker(sh, row);
 
         java.util.List<Section> sections = building.getSections();
         boolean multiSections = sections != null && sections.size() > 1;
@@ -200,6 +201,11 @@ public final class NoiseItoSheetWriter {
                         // фикс-высоты для 2 и 3 строк
                         setRowHeightCm(sh, r2, 0.53);
                         setRowHeightCm(sh, r3, 0.53);
+
+                        if (pageTracker != null) {
+                            double blockHeight = NoiseSheetCommon.blockHeightPoints(sh, r1, 3);
+                            pageTracker.keepBlockTogether(sh, r1, blockHeight);
+                        }
 
                         row += 3;
                     }
