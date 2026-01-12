@@ -928,9 +928,6 @@ public class NoiseTab extends JPanel {
 
         // ---- Строки вариантов ----
         java.util.List<String> variants = variantsForSource(srcLabel);
-        javax.swing.text.NumberFormatter fmt = new javax.swing.text.NumberFormatter(java.text.NumberFormat.getNumberInstance());
-        fmt.setValueClass(Double.class);
-        fmt.setAllowsInvalid(true);
 
         for (String variant : variants) {
             String key = thKey(srcLabel, variant);
@@ -943,28 +940,28 @@ public class NoiseTab extends JPanel {
             gc.gridx = 0; content.add(lbl, gc);
 
             // Колонка 1 — Ек мин
-            javax.swing.JFormattedTextField fEkMin = new javax.swing.JFormattedTextField(fmt);
+            javax.swing.JFormattedTextField fEkMin = new javax.swing.JFormattedTextField(buildNumberFormatter());
             fEkMin.setColumns(6);
             fEkMin.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
             if (t.ekMin != null) fEkMin.setValue(t.ekMin);
             gc.gridx = 1; content.add(fEkMin, gc);
 
             // Колонка 2 — Ек макс
-            javax.swing.JFormattedTextField fEkMax = new javax.swing.JFormattedTextField(fmt);
+            javax.swing.JFormattedTextField fEkMax = new javax.swing.JFormattedTextField(buildNumberFormatter());
             fEkMax.setColumns(6);
             fEkMax.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
             if (t.ekMax != null) fEkMax.setValue(t.ekMax);
             gc.gridx = 2; content.add(fEkMax, gc);
 
             // Колонка 3 — М мин
-            javax.swing.JFormattedTextField fMMin = new javax.swing.JFormattedTextField(fmt);
+            javax.swing.JFormattedTextField fMMin = new javax.swing.JFormattedTextField(buildNumberFormatter());
             fMMin.setColumns(6);
             fMMin.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
             if (t.mMin != null) fMMin.setValue(t.mMin);
             gc.gridx = 3; content.add(fMMin, gc);
 
             // Колонка 4 — М макс
-            javax.swing.JFormattedTextField fMMax = new javax.swing.JFormattedTextField(fmt);
+            javax.swing.JFormattedTextField fMMax = new javax.swing.JFormattedTextField(buildNumberFormatter());
             fMMax.setColumns(6);
             fMMax.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
             if (t.mMax != null) fMMax.setValue(t.mMax);
@@ -1028,10 +1025,23 @@ public class NoiseTab extends JPanel {
         dialog.setVisible(true);
     }
 
+    private static javax.swing.text.NumberFormatter buildNumberFormatter() {
+        javax.swing.text.NumberFormatter fmt = new javax.swing.text.NumberFormatter(
+                java.text.NumberFormat.getNumberInstance());
+        fmt.setValueClass(Double.class);
+        fmt.setAllowsInvalid(true);
+        return fmt;
+    }
+
     private static Double fieldValueOrNull(javax.swing.JFormattedTextField field) {
         if (field == null) return null;
         String text = field.getText();
         if (text == null || text.trim().isEmpty()) return null;
+        try {
+            field.commitEdit();
+        } catch (java.text.ParseException ignore) {
+            return null;
+        }
         Object value = field.getValue();
         return (value instanceof Number n) ? n.doubleValue() : null;
     }
