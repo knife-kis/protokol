@@ -902,24 +902,28 @@ public class NoiseTab extends JPanel {
             // Колонка 1 — Ек мин
             javax.swing.JFormattedTextField fEkMin = new javax.swing.JFormattedTextField(fmt);
             fEkMin.setColumns(6);
+            fEkMin.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
             if (t.ekMin != null) fEkMin.setValue(t.ekMin);
             gc.gridx = 1; content.add(fEkMin, gc);
 
             // Колонка 2 — Ек макс
             javax.swing.JFormattedTextField fEkMax = new javax.swing.JFormattedTextField(fmt);
             fEkMax.setColumns(6);
+            fEkMax.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
             if (t.ekMax != null) fEkMax.setValue(t.ekMax);
             gc.gridx = 2; content.add(fEkMax, gc);
 
             // Колонка 3 — М мин
             javax.swing.JFormattedTextField fMMin = new javax.swing.JFormattedTextField(fmt);
             fMMin.setColumns(6);
+            fMMin.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
             if (t.mMin != null) fMMin.setValue(t.mMin);
             gc.gridx = 3; content.add(fMMin, gc);
 
             // Колонка 4 — М макс
             javax.swing.JFormattedTextField fMMax = new javax.swing.JFormattedTextField(fmt);
             fMMax.setColumns(6);
+            fMMax.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
             if (t.mMax != null) fMMax.setValue(t.mMax);
             gc.gridx = 4; content.add(fMMax, gc);
 
