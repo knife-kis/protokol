@@ -44,7 +44,7 @@ public final class TechnicalAssignmentImporter {
             int searchStart = (anchorIndex >= 0) ? anchorIndex + 1 : 0;
 
             CustomerExtract customerExtract = extractCustomerName(lines, searchStart);
-            String email = extractValueAfterLabel(lines, searchStart, EMAIL_LABEL);
+            String email = extractValueAfterLabel(lines, 0, EMAIL_LABEL);
             String customerNameAndContacts = buildNameAndContacts(customerExtract.name(), email);
             String address = extractAddress(lines, customerExtract.lineIndex(), searchStart);
 
@@ -130,23 +130,8 @@ public final class TechnicalAssignmentImporter {
             }
             Matcher matcher = CUSTOMER_LABEL.matcher(line);
             if (matcher.find()) {
-                List<String> parts = new ArrayList<>();
                 String initial = matcher.group(1);
-                if (initial != null && !initial.isBlank()) {
-                    parts.add(initial);
-                }
-                for (int j = i + 1; j < lines.size(); j++) {
-                    String next = lines.get(j);
-                    if (next == null || next.isBlank()) {
-                        break;
-                    }
-                    if (isCustomerNameStopLine(next)) {
-                        break;
-                    }
-                    parts.add(next);
-                }
-                String name = normalizeSpace(String.join(" ", parts));
-                return new CustomerExtract(name, i);
+                return new CustomerExtract(normalizeSpace(initial), i);
             }
         }
         return new CustomerExtract("", -1);
