@@ -12,6 +12,7 @@ import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -257,6 +258,27 @@ public class TitlePageTab extends JPanel {
     private JPanel createExportPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
 
+        JButton btnLoad = new JButton(
+                "Загрузить ТЗ",
+                FontIcon.of(FontAwesomeSolid.FILE_UPLOAD, 16, Color.WHITE)
+        );
+        btnLoad.setFocusPainted(false);
+        btnLoad.setBackground(new Color(33, 150, 243));
+        btnLoad.setForeground(Color.WHITE);
+        btnLoad.setFont(UIManager.getFont("Button.font"));
+        btnLoad.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                btnLoad.setBackground(new Color(30, 136, 229));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                btnLoad.setBackground(new Color(33, 150, 243));
+            }
+        });
+        btnLoad.addActionListener(e -> importTechnicalAssignment());
+
         JButton btnExport = new JButton(
                 "Экспорт: все модули (одной книгой)",
                 FontIcon.of(FontAwesomeSolid.FILE_EXCEL, 16, Color.WHITE)
@@ -312,6 +334,7 @@ public class TitlePageTab extends JPanel {
             AllExcelExporter.exportAll(frame, buildingForExport, this);
         });
 
+        panel.add(btnLoad);
         panel.add(btnExport);
         return panel;
     }
@@ -662,5 +685,40 @@ public class TitlePageTab extends JPanel {
             }
         }
         return building;
+    }
+
+    private void importTechnicalAssignment() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Загрузить ТЗ (Word)");
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "Word document (*.docx)", "docx"));
+
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File file = chooser.getSelectedFile();
+        try {
+            TitlePageImportData data = TechnicalAssignmentImporter.importFromFile(file);
+            if (data.protocolDate() != null && !data.protocolDate().isBlank()) {
+                setDatePickerDate(protocolDatePicker, data.protocolDate());
+            }
+            if (data.customerNameAndContacts() != null && !data.customerNameAndContacts().isBlank()) {
+                setFieldText(customerNameContactsField, data.customerNameAndContacts());
+            }
+            if (data.customerLegalAddress() != null && !data.customerLegalAddress().isBlank()) {
+                setFieldText(customerLegalAddressField, data.customerLegalAddress());
+            }
+            if (data.customerActualAddress() != null && !data.customerActualAddress().isBlank()) {
+                setFieldText(customerActualAddressField, data.customerActualAddress());
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Не удалось загрузить ТЗ: " + ex.getMessage(),
+                    "Загрузка ТЗ",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
     }
 }
