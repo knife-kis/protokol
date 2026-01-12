@@ -312,7 +312,7 @@ public class NoiseSheetCommon {
         centerStyle.setAlignment(HorizontalAlignment.CENTER);
         centerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
         centerStyle.setWrapText(false);
-        centerStyle.setFont(regular);
+        centerStyle.setFont(bold);
         setThinBorder(centerStyle);
 
         Row row = getOrCreateRow(sh, rowIndex);
