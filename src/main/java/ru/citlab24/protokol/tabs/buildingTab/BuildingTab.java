@@ -1008,6 +1008,7 @@ public class BuildingTab extends JPanel {
         }
 
         logger.info("Проект успешно сохранен");
+        showMessage("Проект успешно сохранен", "Сохранение", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private String generateProjectVersionName(String baseName) {
