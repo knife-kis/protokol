@@ -199,7 +199,9 @@ public class NoiseLiftSheetWriter {
                                                   ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
         if (building == null) return startNo;
 
-        LiftAppendState state = new LiftAppendState(Math.max(0, startRow), Math.max(1, startNo));
+        int initialRow = Math.max(0, startRow);
+        LiftAppendState state = new LiftAppendState(initialRow, Math.max(1, startNo),
+                NoiseSheetCommon.createPageBreakTracker(sh, initialRow));
 
         boolean hasApt = appendLiftRoomBlocksFiltered(wb, sh, building, byKey, state,
                 sp -> sp != null && sp.getType() == Space.SpaceType.APARTMENT,
@@ -208,7 +210,11 @@ public class NoiseLiftSheetWriter {
             String text = isNight ? NoiseSheetCommon.NORM_SANPIN_NIGHT : NoiseSheetCommon.NORM_SANPIN_DAY;
             String eq   = isNight ? "25" : "35";
             String max  = isNight ? "40" : "50";
+            int normRow = state.row;
             state.row = NoiseSheetCommon.appendNormativeRow(wb, sh, state.row, text, eq, max);
+            if (state.pageTracker != null) {
+                state.pageTracker.addRowHeightPoints(NoiseSheetCommon.rowHeightPoints(sh, normRow));
+            }
         }
 
         if (!isNight) {
@@ -216,8 +222,12 @@ public class NoiseLiftSheetWriter {
                     sp -> sp != null && sp.getType() == Space.SpaceType.OFFICE,
                     thresholds, sheetKind);
             if (hasOffice) {
+                int normRow = state.row;
                 state.row = NoiseSheetCommon.appendNormativeRow(wb, sh, state.row,
                         NoiseSheetCommon.NORM_SP_51, "45", "60");
+                if (state.pageTracker != null) {
+                    state.pageTracker.addRowHeightPoints(NoiseSheetCommon.rowHeightPoints(sh, normRow));
+                }
             }
         }
 
@@ -278,6 +288,7 @@ public class NoiseLiftSheetWriter {
 
         int row = state.row;
         int no  = state.no;
+        NoiseSheetCommon.PageBreakTracker pageTracker = state.pageTracker;
         boolean appended = false;
 
         java.util.List<Section> sections = building.getSections();
@@ -372,6 +383,11 @@ public class NoiseLiftSheetWriter {
                         setRowHeightCm(sh, r2, 0.53);
                         setRowHeightCm(sh, r3, 0.53);
 
+                        if (pageTracker != null) {
+                            double blockHeight = NoiseSheetCommon.blockHeightPoints(sh, r1, 3);
+                            pageTracker.keepBlockTogether(sh, r1, blockHeight);
+                        }
+
                         row += 3;
                     }
                 }
@@ -386,10 +402,12 @@ public class NoiseLiftSheetWriter {
     private static final class LiftAppendState {
         int row;
         int no;
+        NoiseSheetCommon.PageBreakTracker pageTracker;
 
-        LiftAppendState(int row, int no) {
+        LiftAppendState(int row, int no, NoiseSheetCommon.PageBreakTracker pageTracker) {
             this.row = row;
             this.no = no;
+            this.pageTracker = pageTracker;
         }
     }
 }

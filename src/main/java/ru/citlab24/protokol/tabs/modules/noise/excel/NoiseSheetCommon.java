@@ -179,6 +179,70 @@ public class NoiseSheetCommon {
         return (float) (cm * 72.0 / 2.54);
     }
 
+    public static double rowHeightPoints(Sheet sh, int rowIndex) {
+        Row row = sh.getRow(rowIndex);
+        return (row != null) ? row.getHeightInPoints() : sh.getDefaultRowHeightInPoints();
+    }
+
+    public static double blockHeightPoints(Sheet sh, int startRow, int rowCount) {
+        double sum = 0.0;
+        int safeStart = Math.max(0, startRow);
+        int safeCount = Math.max(0, rowCount);
+        for (int r = 0; r < safeCount; r++) {
+            sum += rowHeightPoints(sh, safeStart + r);
+        }
+        return sum;
+    }
+
+    public static double printableHeightPoints(Sheet sh) {
+        PrintSetup ps = sh.getPrintSetup();
+        double pageHeightCm = ps.getLandscape() ? 21.0 : 29.7;
+        double topCm = sh.getMargin(Sheet.TopMargin) * 2.54;
+        double bottomCm = sh.getMargin(Sheet.BottomMargin) * 2.54;
+        double printableCm = pageHeightCm - (topCm + bottomCm);
+        if (printableCm <= 0.1) {
+            printableCm = pageHeightCm;
+        }
+        return cmToPt(printableCm);
+    }
+
+    public static PageBreakTracker createPageBreakTracker(Sheet sh, int startRow) {
+        int safeStart = Math.max(0, startRow);
+        double usedHeight = 0.0;
+        for (int r = 0; r < safeStart; r++) {
+            usedHeight += rowHeightPoints(sh, r);
+        }
+        return new PageBreakTracker(printableHeightPoints(sh), usedHeight);
+    }
+
+    public static final class PageBreakTracker {
+        private final double printableHeightPoints;
+        private double usedHeightPoints;
+
+        PageBreakTracker(double printableHeightPoints, double usedHeightPoints) {
+            this.printableHeightPoints = printableHeightPoints;
+            this.usedHeightPoints = usedHeightPoints;
+        }
+
+        public void keepBlockTogether(Sheet sh, int startRow, double blockHeightPoints) {
+            if (blockHeightPoints <= 0) {
+                return;
+            }
+            if (printableHeightPoints > 0.0 && usedHeightPoints + blockHeightPoints > printableHeightPoints) {
+                if (startRow > 0) {
+                    sh.setRowBreak(startRow - 1);
+                }
+                usedHeightPoints = blockHeightPoints;
+                return;
+            }
+            usedHeightPoints += blockHeightPoints;
+        }
+
+        public void addRowHeightPoints(double rowHeightPoints) {
+            usedHeightPoints += Math.max(0.0, rowHeightPoints);
+        }
+    }
+
     public static File ensureXlsx(File f) {
         String name = f.getName().toLowerCase();
         return name.endsWith(".xlsx") ? f : new File(f.getParentFile(), f.getName() + ".xlsx");
