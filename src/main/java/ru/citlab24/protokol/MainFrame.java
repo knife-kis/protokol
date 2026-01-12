@@ -96,6 +96,10 @@ public class MainFrame extends JFrame {
         viewMenu.add(tabsMenu);
 
         menuBar.add(viewMenu);
+        menuBar.add(Box.createHorizontalStrut(6));
+        JLabel versionLabel = new JLabel("v 1.1.1");
+        versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
+        menuBar.add(versionLabel);
         return menuBar;
     }
 
