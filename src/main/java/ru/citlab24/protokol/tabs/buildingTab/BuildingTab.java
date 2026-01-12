@@ -27,6 +27,8 @@ import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
@@ -97,6 +99,13 @@ public class BuildingTab extends JPanel {
         // Инициализация будет после создания компонентов
     }
 
+    private void updateWindowTitle() {
+        Window window = SwingUtilities.getWindowAncestor(this);
+        if (window instanceof MainFrame) {
+            ((MainFrame) window).setProjectTitle(projectNameField.getText());
+        }
+    }
+
     private JPanel createProjectNamePanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
@@ -108,6 +117,22 @@ public class BuildingTab extends JPanel {
         projectNameField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         String bName = (this.building.getName() != null) ? this.building.getName() : "";
         projectNameField.setText(bName);
+        projectNameField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                updateWindowTitle();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                updateWindowTitle();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                updateWindowTitle();
+            }
+        });
 
         panel.add(label);
         panel.add(projectNameField);
@@ -771,6 +796,7 @@ public class BuildingTab extends JPanel {
         this.building = loadedBuilding;
         this.ops.setBuilding(this.building);
         projectNameField.setText(loadedBuilding.getName());
+        updateWindowTitle();
 
         // Обновляем списки/вкладки
         refreshAllLists();
@@ -947,6 +973,7 @@ public class BuildingTab extends JPanel {
         this.building = newProject;
         this.ops.setBuilding(this.building);
         projectNameField.setText(extractBaseName(newProject.getName()));
+        updateWindowTitle();
         if (titleTab != null) {
             titleTab.loadFromBuilding(newProject);
         }

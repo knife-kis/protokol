@@ -29,7 +29,8 @@ public class MainFrame extends JFrame {
 
 
     public MainFrame() {
-        super("Протокол испытаний");
+        super();
+        setProjectTitle(building.getName());
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         setMinimumSize(new Dimension(1100, 720));
         setLocationByPlatform(true);
@@ -191,5 +192,12 @@ public class MainFrame extends JFrame {
 
     public JTabbedPane getTabbedPane() {
         return tabbedPane;
+    }
+
+    public void setProjectTitle(String projectName) {
+        String title = (projectName == null || projectName.isBlank())
+                ? "новый проект"
+                : projectName.trim();
+        setTitle(title);
     }
 }
