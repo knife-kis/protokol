@@ -323,6 +323,24 @@ public class NoiseTab extends JPanel {
             p.add(b);
         }
 
+        JButton exportThresholds = new JButton("Экспорт пороговых значений");
+        exportThresholds.setFocusable(false);
+        exportThresholds.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_EXPORT, 16));
+        exportThresholds.setIconTextGap(6);
+        exportThresholds.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "buttonType: toolBarButton; arc: 8; focusWidth: 1");
+        exportThresholds.setToolTipText("Сформировать Excel-шаблон для пороговых значений шума");
+        exportThresholds.addActionListener(e -> onExportThresholdsTemplate());
+        p.add(exportThresholds);
+
+        JButton importThresholds = new JButton("Импорт порогов");
+        importThresholds.setFocusable(false);
+        importThresholds.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "buttonType: toolBarButton; arc: 8; focusWidth: 1");
+        importThresholds.setToolTipText("Загрузить заполненный Excel-шаблон порогов");
+        importThresholds.addActionListener(e -> onImportThresholdsTemplate());
+        p.add(importThresholds);
+
         return p;
     }
 
@@ -360,6 +378,31 @@ public class NoiseTab extends JPanel {
     private String excelDateLine(NoiseTestKind kind) {
         NoisePeriod p = periods.get(kind);
         return (p != null) ? p.toExcelLine() : new NoisePeriod().toExcelLine();
+    }
+
+    private void onExportThresholdsTemplate() {
+        try {
+            Map<String, double[]> thSimple = buildThresholdsForExport();
+            NoiseThresholdsExcelIO.exportTemplate(this, thSimple);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Ошибка экспорта порогов: " + ex.getMessage(),
+                    "Пороговые значения", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onImportThresholdsTemplate() {
+        try {
+            Map<String, double[]> imported = NoiseThresholdsExcelIO.importTemplate(this);
+            if (imported == null) return;
+            thresholds.clear();
+            imported.forEach((key, arr) -> thresholds.put(key, thresholdFromArray(arr)));
+            DatabaseManager.updateNoiseThresholds(building, imported);
+            JOptionPane.showMessageDialog(this, "Пороговые значения загружены.",
+                    "Пороговые значения", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Ошибка импорта порогов: " + ex.getMessage(),
+                    "Пороговые значения", JOptionPane.ERROR_MESSAGE);
+        }
     }
     /** Упаковка порогов в простой вид для экспортёра: key -> {EqMin, EqMax, MaxMin, MaxMax}. */
     private Map<String, double[]> buildThresholdsForExport() {
