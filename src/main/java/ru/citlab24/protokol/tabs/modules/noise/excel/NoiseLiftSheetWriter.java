@@ -77,6 +77,7 @@ public class NoiseLiftSheetWriter {
         CellStyle verticalWrapBorderF10 = wb.createCellStyle();
         verticalWrapBorderF10.cloneStyleFrom(verticalBorderF10);
         verticalWrapBorderF10.setWrapText(true);
+        sh.setRepeatingRows(CellRangeAddress.valueOf("6:6"));
 
         sh.setDefaultRowHeightInPoints(cmToPt(0.53));
         setRowHeightCm(sh, 0, 0.53);

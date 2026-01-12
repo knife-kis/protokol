@@ -267,6 +267,7 @@ public class NoiseSheetCommon {
         centerBorder.setWrapText(false);
         centerBorder.setFont(f8);
         setThinBorder(centerBorder);
+        sh.setRepeatingRows(CellRangeAddress.valueOf("1:1"));
 
         setRowHeightCm(sh, 0, 0.53);
         Row r1 = getOrCreateRow(sh, 0);
