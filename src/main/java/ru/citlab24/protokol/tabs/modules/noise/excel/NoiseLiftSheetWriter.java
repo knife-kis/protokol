@@ -177,26 +177,29 @@ public class NoiseLiftSheetWriter {
     }
 
     /** Добавляет блоки «т1/т2/т3» начиная со строки 7 (дневной) / с указанной строки (ночной). */
-    public static void appendLiftRoomBlocks(Workbook wb, Sheet sh,
-                                            Building building,
-                                            Map<String, DatabaseManager.NoiseValue> byKey,
-                                            boolean isOffice,
-                                            Map<String, double[]> thresholds,
-                                            ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+    public static int appendLiftRoomBlocks(Workbook wb, Sheet sh,
+                                           Building building,
+                                           Map<String, DatabaseManager.NoiseValue> byKey,
+                                           boolean isOffice,
+                                           int startNo,
+                                           Map<String, double[]> thresholds,
+                                           ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
         // дневной лист начинается с 7-й строки; isNight = false
-        appendLiftRoomBlocksFromRow(wb, sh, building, byKey, 7, false, thresholds, sheetKind);
+        return appendLiftRoomBlocksFromRow(wb, sh, building, byKey, 7, startNo, false, thresholds, sheetKind);
     }
 
 
-    public static void appendLiftRoomBlocksFromRow(Workbook wb, Sheet sh,
-                                                   Building building,
-                                                   Map<String, DatabaseManager.NoiseValue> byKey,
-                                                   int startRow, boolean isNight,
-                                                   Map<String, double[]> thresholds,
-                                                   ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
-        if (building == null) return;
+    public static int appendLiftRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                  Building building,
+                                                  Map<String, DatabaseManager.NoiseValue> byKey,
+                                                  int startRow,
+                                                  int startNo,
+                                                  boolean isNight,
+                                                  Map<String, double[]> thresholds,
+                                                  ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+        if (building == null) return startNo;
 
-        LiftAppendState state = new LiftAppendState(Math.max(0, startRow), 1);
+        LiftAppendState state = new LiftAppendState(Math.max(0, startRow), Math.max(1, startNo));
 
         boolean hasApt = appendLiftRoomBlocksFiltered(wb, sh, building, byKey, state,
                 sp -> sp != null && sp.getType() == Space.SpaceType.APARTMENT,
@@ -217,6 +220,8 @@ public class NoiseLiftSheetWriter {
                         NoiseSheetCommon.NORM_SP_51, "45", "60");
             }
         }
+
+        return state.no;
     }
 
     private static boolean appendLiftRoomBlocksFiltered(Workbook wb, Sheet sh,
