@@ -1,5 +1,6 @@
 package ru.citlab24.protokol.tabs.modules.noise;
 
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -17,6 +18,8 @@ import java.util.Map;
 public final class NoiseExcelExporter {
 
     private NoiseExcelExporter() {}
+    private static final java.util.Map<Workbook, java.util.Map<CellStyle, CellStyle>> ONE_DECIMAL_STYLES =
+            new java.util.WeakHashMap<>();
     public static void export(Building building,
                               Map<String, DatabaseManager.NoiseValue> byKey,
                               Component parent,
@@ -139,12 +142,14 @@ public final class NoiseExcelExporter {
             org.apache.poi.ss.usermodel.Cell cT = r.getCell(COL_T);
             if (cT == null) cT = r.createCell(COL_T);
             cT.setCellValue(eqVal);
+            cT.setCellStyle(oneDecimalStyle(sh.getWorkbook(), cT.getCellStyle()));
         }
 
         if (maxVal != null) {
             org.apache.poi.ss.usermodel.Cell cW = r.getCell(COL_W);
             if (cW == null) cW = r.createCell(COL_W);
             cW.setCellValue(maxVal);
+            cW.setCellStyle(oneDecimalStyle(sh.getWorkbook(), cW.getCellStyle()));
         }
     }
     /** Ключ порогов: "<источник>|<вариант>" */
@@ -173,6 +178,17 @@ public final class NoiseExcelExporter {
         if (min > max) { double t = min; min = max; max = t; }
         double v = java.util.concurrent.ThreadLocalRandom.current().nextDouble(min, Math.nextUp(max));
         return Math.round(v * 10.0) / 10.0;
+    }
+
+    private static CellStyle oneDecimalStyle(Workbook wb, CellStyle baseStyle) {
+        java.util.Map<CellStyle, CellStyle> cache = ONE_DECIMAL_STYLES.computeIfAbsent(
+                wb, key -> new java.util.IdentityHashMap<>());
+        return cache.computeIfAbsent(baseStyle, style -> {
+            CellStyle oneDecimal = wb.createCellStyle();
+            oneDecimal.cloneStyleFrom(style);
+            oneDecimal.setDataFormat(wb.createDataFormat().getFormat("0.0"));
+            return oneDecimal;
+        });
     }
 
 }
