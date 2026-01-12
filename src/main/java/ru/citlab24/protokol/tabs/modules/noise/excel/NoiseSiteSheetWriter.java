@@ -22,13 +22,14 @@ public final class NoiseSiteSheetWriter {
 
     private NoiseSiteSheetWriter() {}
 
-    public static void appendSiteRoomRowsFromRow(Workbook wb, Sheet sh,
-                                                 Building building,
-                                                 java.util.Map<String, DatabaseManager.NoiseValue> byKey,
-                                                 int startRow,
-                                                 java.util.Map<String, double[]> thresholds,
-                                                 ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
-        if (building == null) return;
+    public static int appendSiteRoomRowsFromRow(Workbook wb, Sheet sh,
+                                                Building building,
+                                                java.util.Map<String, DatabaseManager.NoiseValue> byKey,
+                                                int startRow,
+                                                int startNo,
+                                                java.util.Map<String, double[]> thresholds,
+                                                ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+        if (building == null) return startNo;
 
         Font f8 = wb.createFont();
         f8.setFontName("Arial");
@@ -69,7 +70,7 @@ public final class NoiseSiteSheetWriter {
         final String[] PLUS_MINUS = { "+","-","-","+","-","-","-","-","-","-","-","-","-","-","-" };
 
         int row = Math.max(0, startRow);
-        int no  = 1;
+        int no  = Math.max(1, startNo);
 
         java.util.List<Floor> floors = new java.util.ArrayList<>(building.getFloors());
         floors.sort(java.util.Comparator.comparingInt(Floor::getPosition));
@@ -152,6 +153,8 @@ public final class NoiseSiteSheetWriter {
 
         NoiseSheetCommon.appendNormativeRow(wb, sh, row,
                 NoiseSheetCommon.NORM_SANPIN, "45", "60");
+
+        return no;
     }
 
     private static String siteDText(boolean auto, boolean train) {

@@ -13,31 +13,34 @@ public final class NoiseAutoSheetWriter {
     private NoiseAutoSheetWriter() {}
 
     /** Обёртка: начинает с 2-й строки (после простой шапки). */
-    public static void appendAutoRoomBlocks(Workbook wb, Sheet sh,
-                                            Building building,
-                                            Map<String, DatabaseManager.NoiseValue> byKey) {
-        appendAutoRoomBlocksFromRow(wb, sh, building, byKey, 2);
+    public static int appendAutoRoomBlocks(Workbook wb, Sheet sh,
+                                           Building building,
+                                           Map<String, DatabaseManager.NoiseValue> byKey,
+                                           int startNo) {
+        return appendAutoRoomBlocksFromRow(wb, sh, building, byKey, 2, startNo);
     }
     // СТАРАЯ СИГНАТУРА — для совместимости со старым вызовом обёртки
-    public static void appendAutoRoomBlocksFromRow(Workbook wb, Sheet sh,
-                                                   Building building,
-                                                   java.util.Map<String, DatabaseManager.NoiseValue> byKey,
-                                                   int startRow) {
-        appendAutoRoomBlocksFromRow(
-                wb, sh, building, byKey, startRow,
+    public static int appendAutoRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                  Building building,
+                                                  java.util.Map<String, DatabaseManager.NoiseValue> byKey,
+                                                  int startRow,
+                                                  int startNo) {
+        return appendAutoRoomBlocksFromRow(
+                wb, sh, building, byKey, startRow, startNo,
                 java.util.Collections.emptyMap(),
                 ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind.AUTO_DAY
         );
     }
 
     /** Наполняет лист «Авто» блоками т1/т2/т3. Только квартиры (APARTMENT), только где включён «Авто». */
-    public static void appendAutoRoomBlocksFromRow(Workbook wb, Sheet sh,
-                                                   Building building,
-                                                   Map<String, DatabaseManager.NoiseValue> byKey,
-                                                   int startRow,
-                                                   Map<String, double[]> thresholds,
-                                                   ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
-        if (building == null) return;
+    public static int appendAutoRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                  Building building,
+                                                  Map<String, DatabaseManager.NoiseValue> byKey,
+                                                  int startRow,
+                                                  int startNo,
+                                                  Map<String, double[]> thresholds,
+                                                  ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+        if (building == null) return startNo;
 
         Font f8 = wb.createFont();
         f8.setFontName("Arial");
@@ -86,7 +89,7 @@ public final class NoiseAutoSheetWriter {
         final String[] PLUS_MINUS = { "+","-","-","+","-","-","-","-","-","-","-","-","-","-","-" };
 
         int row = Math.max(0, startRow);
-        int no  = 1;
+        int no  = Math.max(1, startNo);
 
         var sections = building.getSections();
         boolean multiSections = sections != null && sections.size() > 1;
@@ -199,6 +202,8 @@ public final class NoiseAutoSheetWriter {
         if (norm != null) {
             NoiseSheetCommon.appendNormativeRow(wb, sh, row, norm.text, norm.eq, norm.max);
         }
+
+        return no;
     }
 
     private static NormativeRow normativeFor(ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind kind) {

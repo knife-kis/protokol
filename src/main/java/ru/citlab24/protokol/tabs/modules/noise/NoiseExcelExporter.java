@@ -39,50 +39,52 @@ public final class NoiseExcelExporter {
                 NoiseSheetCommon.shrinkColumnsToOnePrintedPage(sh);
             }
 
+            int nextNo = 1;
+
             // Лифты
             NoiseLiftSheetWriter.writeLiftHeader(
                     wb, day,  NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.LIFT_DAY));
             // ВАЖНО: передаём thresholds + kind
-            NoiseLiftSheetWriter.appendLiftRoomBlocks(
-                    wb, day, building, byKey, false, thresholds, NoiseTestKind.LIFT_DAY);
+            nextNo = NoiseLiftSheetWriter.appendLiftRoomBlocks(
+                    wb, day, building, byKey, false, nextNo, thresholds, NoiseTestKind.LIFT_DAY);
 
             NoiseSheetCommon.writeSimpleHeader(
                     wb, night, NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.LIFT_NIGHT));
-            NoiseLiftSheetWriter.appendLiftRoomBlocksFromRow(
-                    wb, night, building, byKey, 2, true, thresholds, NoiseTestKind.LIFT_NIGHT);
+            nextNo = NoiseLiftSheetWriter.appendLiftRoomBlocksFromRow(
+                    wb, night, building, byKey, 2, nextNo, true, thresholds, NoiseTestKind.LIFT_NIGHT);
 
             // ИТО
             NoiseSheetCommon.writeSimpleHeader(
                     wb, nonResIto,   NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.ITO_NONRES));
-            ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoNonResRoomBlocksFromRow(
-                    wb, nonResIto, building, byKey, 2, thresholds, NoiseTestKind.ITO_NONRES);
+            nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoNonResRoomBlocksFromRow(
+                    wb, nonResIto, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_NONRES);
 
             NoiseSheetCommon.writeSimpleHeader(
                     wb, resItoDay,   NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.ITO_RES_DAY));
-            ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoResRoomBlocksFromRow(
-                    wb, resItoDay, building, byKey, 2, thresholds, NoiseTestKind.ITO_RES_DAY);
+            nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoResRoomBlocksFromRow(
+                    wb, resItoDay, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_RES_DAY);
 
             NoiseSheetCommon.writeSimpleHeader(
                     wb, resItoNight, NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.ITO_RES_NIGHT));
-            ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoResRoomBlocksFromRow(
-                    wb, resItoNight, building, byKey, 2, thresholds, NoiseTestKind.ITO_RES_NIGHT);
+            nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoResRoomBlocksFromRow(
+                    wb, resItoNight, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_RES_NIGHT);
 
             // Авто
             NoiseSheetCommon.writeSimpleHeader(
                     wb, autoDay, NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.AUTO_DAY));
-            ru.citlab24.protokol.tabs.modules.noise.excel.NoiseAutoSheetWriter.appendAutoRoomBlocksFromRow(
-                    wb, autoDay, building, byKey, 2, thresholds, NoiseTestKind.AUTO_DAY);
+            nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseAutoSheetWriter.appendAutoRoomBlocksFromRow(
+                    wb, autoDay, building, byKey, 2, nextNo, thresholds, NoiseTestKind.AUTO_DAY);
 
             NoiseSheetCommon.writeSimpleHeader(
                     wb, autoNight, NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.AUTO_NIGHT));
-            ru.citlab24.protokol.tabs.modules.noise.excel.NoiseAutoSheetWriter.appendAutoRoomBlocksFromRow(
-                    wb, autoNight, building, byKey, 2, thresholds, NoiseTestKind.AUTO_NIGHT);
+            nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseAutoSheetWriter.appendAutoRoomBlocksFromRow(
+                    wb, autoNight, building, byKey, 2, nextNo, thresholds, NoiseTestKind.AUTO_NIGHT);
 
             // Площадка (улица)
             NoiseSheetCommon.writeSimpleHeader(
                     wb, site, NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.SITE));
             ru.citlab24.protokol.tabs.modules.noise.excel.NoiseSiteSheetWriter.appendSiteRoomRowsFromRow(
-                    wb, site, building, byKey, 2, thresholds, NoiseTestKind.SITE);
+                    wb, site, building, byKey, 2, nextNo, thresholds, NoiseTestKind.SITE);
 
             JFileChooser fc = new JFileChooser();
             fc.setDialogTitle("Сохранить Excel (шумы)");
