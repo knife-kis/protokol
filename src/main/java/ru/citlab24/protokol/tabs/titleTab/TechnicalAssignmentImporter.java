@@ -275,8 +275,22 @@ public final class TechnicalAssignmentImporter {
                 break;
             }
         }
+        if (contractIndex >= 0) {
+            int start = Math.min(lines.size(), contractIndex + 1);
+            int end = Math.min(lines.size(), start + 8);
+            for (int i = start; i < end; i++) {
+                String line = lines.get(i);
+                if (line == null || line.isBlank()) {
+                    continue;
+                }
+                String date = extractDateFromLine(line);
+                if (!date.isBlank()) {
+                    return date;
+                }
+            }
+        }
         int start = (contractIndex >= 0) ? contractIndex : 0;
-        int end = Math.min(lines.size(), start + 4);
+        int end = Math.min(lines.size(), start + 6);
         for (int i = start; i < end; i++) {
             String line = lines.get(i);
             if (line == null || line.isBlank()) {
