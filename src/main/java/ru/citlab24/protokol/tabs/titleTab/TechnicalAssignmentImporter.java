@@ -30,6 +30,7 @@ public final class TechnicalAssignmentImporter {
     private static final Pattern OBJECT_NAME_LABEL = Pattern.compile(
             "(?i)Наименование\\s+объекта\\s+испытаний\\s*\\(исследований\\)");
     private static final Pattern OBJECT_ADDRESS_LABEL = Pattern.compile("(?i)Адрес\\s+объекта");
+    private static final Pattern ADDRESS_FALLBACK_LABEL = Pattern.compile("(?i)Адрес\\s*:?\\s*(.*)");
     private static final Pattern APPLICATION_LABEL = Pattern.compile(
             "(?i)Основание\\s+для\\s+проведения\\s+работ\\s*:?\\s*(.*)");
     private static final Pattern CONTRACT_NUMBER_PATTERN = Pattern.compile("(?i)ДОГОВОР\\s*№\\s*([^\\s]+)");
@@ -59,6 +60,9 @@ public final class TechnicalAssignmentImporter {
             String phone = extractCustomerSectionValue(lines, anchorIndex, CUSTOMER_PHONE_LABEL, 10);
             String customerNameAndContacts = buildNameAndContacts(customerExtract.name(), email, phone);
             String address = extractCustomerSectionValue(lines, anchorIndex, CUSTOMER_ADDRESS_LABEL, 10);
+            if (address.isBlank()) {
+                address = extractCustomerAddressFallback(lines, anchorIndex);
+            }
             String objectName = extractTableValue(document, OBJECT_NAME_LABEL);
             String objectAddress = extractTableValue(document, OBJECT_ADDRESS_LABEL);
             String contractNumber = extractContractNumber(lines);
@@ -294,6 +298,28 @@ public final class TechnicalAssignmentImporter {
             if (matcher.find()) {
                 String value = matcher.group(1);
                 if ((value == null || value.isBlank()) && i + 1 < end) {
+                    value = lines.get(i + 1);
+                }
+                return normalizeSpace(value);
+            }
+        }
+        return "";
+    }
+
+    private static String extractCustomerAddressFallback(List<String> lines, int anchorIndex) {
+        int customerIndex = findCustomerSectionIndex(lines, anchorIndex);
+        if (customerIndex < 0) {
+            return "";
+        }
+        for (int i = customerIndex + 1; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line == null || line.isBlank()) {
+                continue;
+            }
+            Matcher matcher = ADDRESS_FALLBACK_LABEL.matcher(line);
+            if (matcher.find()) {
+                String value = matcher.group(1);
+                if ((value == null || value.isBlank()) && i + 1 < lines.size()) {
                     value = lines.get(i + 1);
                 }
                 return normalizeSpace(value);
