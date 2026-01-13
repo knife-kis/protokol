@@ -19,10 +19,19 @@ import java.util.regex.Pattern;
 
 public final class TechnicalAssignmentImporter {
     private static final Pattern DATE_PATTERN = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");
+    private static final Pattern TEXT_DATE_PATTERN = Pattern.compile(
+            "«?\\s*(\\d{1,2})\\s*»?\\s*([А-Яа-я]+)\\s*(\\d{4})\\s*г?\\.?");
     private static final Pattern CUSTOMER_LABEL = Pattern.compile("(?i)ЗАКАЗЧИК\\s*:?\\s*(.*)");
     private static final Pattern EMAIL_LABEL = Pattern.compile(
             "(?i)Адрес\\s+электронной\\s+почты\\s+Заказчика\\s*:?\\s*(.*)");
     private static final Pattern ADDRESS_LABEL = Pattern.compile("(?i)Адрес\\s*:?\\s*(.*)");
+    private static final Pattern OBJECT_NAME_LABEL = Pattern.compile(
+            "(?i)Наименование\\s+объекта\\s+испытаний\\s*\\(исследований\\)");
+    private static final Pattern OBJECT_ADDRESS_LABEL = Pattern.compile("(?i)Адрес\\s+объекта");
+    private static final Pattern APPLICATION_LABEL = Pattern.compile(
+            "(?i)Основание\\s+для\\s+проведения\\s+работ\\s*:?\\s*(.*)");
+    private static final Pattern CONTRACT_NUMBER_PATTERN = Pattern.compile("(?i)ДОГОВОР\\s*№\\s*([^\\s]+)");
+    private static final Pattern CONTRACT_DATE_HINT = Pattern.compile("(?i)ОТ\\s+");
     private static final String ANCHOR_SECTION = "АДРЕСА, РЕКВИЗИТЫ И ПОДПИСИ СТОРОН";
 
     private TechnicalAssignmentImporter() {
@@ -47,12 +56,27 @@ public final class TechnicalAssignmentImporter {
             String email = extractValueAfterLabel(lines, 0, EMAIL_LABEL);
             String customerNameAndContacts = buildNameAndContacts(customerExtract.name(), email);
             String address = extractAddress(lines, customerExtract.lineIndex(), searchStart);
+            String objectName = extractTableValue(document, OBJECT_NAME_LABEL);
+            String objectAddress = extractTableValue(document, OBJECT_ADDRESS_LABEL);
+            String contractNumber = extractContractNumber(lines);
+            String contractDate = extractContractDate(lines);
+            String applicationText = extractTableValue(document, APPLICATION_LABEL);
+            if (applicationText.isBlank()) {
+                applicationText = extractValueAfterLabel(lines, 0, APPLICATION_LABEL);
+            }
+            ApplicationExtract applicationExtract = extractApplicationInfo(applicationText);
 
             return new TitlePageImportData(
                     protocolDate,
                     customerNameAndContacts,
                     address,
-                    address
+                    address,
+                    objectName,
+                    objectAddress,
+                    contractNumber,
+                    contractDate,
+                    applicationExtract.number(),
+                    applicationExtract.date()
             );
         }
     }
@@ -105,6 +129,35 @@ public final class TechnicalAssignmentImporter {
                 return matcher.group(1);
             }
             break;
+        }
+        return "";
+    }
+
+    private static String extractTableValue(XWPFDocument document, Pattern labelPattern) {
+        for (XWPFTable table : document.getTables()) {
+            for (XWPFTableRow row : table.getRows()) {
+                List<XWPFTableCell> cells = row.getTableCells();
+                for (int i = 0; i < cells.size(); i++) {
+                    String cellText = normalizeSpace(cells.get(i).getText());
+                    if (cellText.isBlank()) {
+                        continue;
+                    }
+                    Matcher matcher = labelPattern.matcher(cellText);
+                    if (!matcher.find()) {
+                        continue;
+                    }
+                    String remainder = normalizeSpace(cellText.substring(matcher.end()));
+                    if (!remainder.isBlank()) {
+                        return remainder;
+                    }
+                    for (int j = i + 1; j < cells.size(); j++) {
+                        String value = normalizeSpace(cells.get(j).getText());
+                        if (!value.isBlank()) {
+                            return value;
+                        }
+                    }
+                }
+            }
         }
         return "";
     }
@@ -190,6 +243,122 @@ public final class TechnicalAssignmentImporter {
         return "";
     }
 
+    private static String extractContractNumber(List<String> lines) {
+        for (String line : lines) {
+            if (line == null || line.isBlank()) {
+                continue;
+            }
+            Matcher matcher = CONTRACT_NUMBER_PATTERN.matcher(line);
+            if (matcher.find()) {
+                return normalizeSpace(matcher.group(1));
+            }
+            if (line.toUpperCase(Locale.ROOT).contains("ДОГОВОР")) {
+                return "";
+            }
+        }
+        return "";
+    }
+
+    private static String extractContractDate(List<String> lines) {
+        int contractIndex = -1;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line == null || line.isBlank()) {
+                continue;
+            }
+            if (line.toUpperCase(Locale.ROOT).contains("ДОГОВОР")) {
+                contractIndex = i;
+                String date = extractDateFromLine(line);
+                if (!date.isBlank()) {
+                    return date;
+                }
+                break;
+            }
+        }
+        int start = (contractIndex >= 0) ? contractIndex : 0;
+        int end = Math.min(lines.size(), start + 4);
+        for (int i = start; i < end; i++) {
+            String line = lines.get(i);
+            if (line == null || line.isBlank()) {
+                continue;
+            }
+            if (CONTRACT_DATE_HINT.matcher(line).find()) {
+                String date = extractDateFromLine(line);
+                if (!date.isBlank()) {
+                    return date;
+                }
+            }
+        }
+        return "";
+    }
+
+    private static ApplicationExtract extractApplicationInfo(String value) {
+        if (value == null || value.isBlank()) {
+            return new ApplicationExtract("", "");
+        }
+        String normalized = normalizeSpace(value);
+        String number = "";
+        String date = "";
+        Matcher matcher = Pattern.compile("(?i)Заявка\\s*№\\s*([^\\s]+)").matcher(normalized);
+        if (matcher.find()) {
+            number = matcher.group(1);
+            int stopIndex = number.toLowerCase(Locale.ROOT).indexOf("от");
+            if (stopIndex >= 0) {
+                number = number.substring(0, stopIndex).trim();
+            }
+        }
+        int fromIndex = normalized.toLowerCase(Locale.ROOT).indexOf("от");
+        if (fromIndex >= 0) {
+            String after = normalized.substring(fromIndex + 2).trim();
+            date = extractDateFromLine(after);
+        } else {
+            date = extractDateFromLine(normalized);
+        }
+        return new ApplicationExtract(normalizeSpace(number), date);
+    }
+
+    private static String extractDateFromLine(String line) {
+        if (line == null || line.isBlank()) {
+            return "";
+        }
+        Matcher numeric = DATE_PATTERN.matcher(line);
+        if (numeric.find()) {
+            return numeric.group(1);
+        }
+        Matcher text = TEXT_DATE_PATTERN.matcher(line);
+        if (text.find()) {
+            int day = Integer.parseInt(text.group(1));
+            int month = resolveMonth(text.group(2));
+            int year = Integer.parseInt(text.group(3));
+            if (month > 0) {
+                return String.format("%02d.%02d.%04d", day, month, year);
+            }
+        }
+        return "";
+    }
+
+    private static int resolveMonth(String value) {
+        if (value == null) {
+            return 0;
+        }
+        String normalized = value.toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "января" -> 1;
+            case "февраля" -> 2;
+            case "марта" -> 3;
+            case "апреля" -> 4;
+            case "мая" -> 5;
+            case "июня" -> 6;
+            case "июля" -> 7;
+            case "августа" -> 8;
+            case "сентября" -> 9;
+            case "октября" -> 10;
+            case "ноября" -> 11;
+            case "декабря" -> 12;
+            default -> 0;
+        };
+    }
+
     private static String buildNameAndContacts(String name, String email) {
         String normalizedName = normalizeSpace(name);
         String normalizedEmail = normalizeSpace(email);
@@ -210,5 +379,8 @@ public final class TechnicalAssignmentImporter {
     }
 
     private record CustomerExtract(String name, int lineIndex) {
+    }
+
+    private record ApplicationExtract(String number, String date) {
     }
 }
