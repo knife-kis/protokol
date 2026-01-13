@@ -712,6 +712,24 @@ public class TitlePageTab extends JPanel {
             if (data.customerActualAddress() != null && !data.customerActualAddress().isBlank()) {
                 setFieldText(customerActualAddressField, data.customerActualAddress());
             }
+            if (data.objectName() != null && !data.objectName().isBlank()) {
+                objectNameArea.setText(data.objectName());
+            }
+            if (data.objectAddress() != null && !data.objectAddress().isBlank()) {
+                setFieldText(objectAddressField, data.objectAddress());
+            }
+            if (data.contractNumber() != null && !data.contractNumber().isBlank()) {
+                setFieldText(contractNumberField, data.contractNumber());
+            }
+            if (data.contractDate() != null && !data.contractDate().isBlank()) {
+                setDatePickerDate(contractDatePicker, data.contractDate());
+            }
+            if (data.applicationNumber() != null && !data.applicationNumber().isBlank()) {
+                setFieldText(applicationNumberField, data.applicationNumber());
+            }
+            if (data.applicationDate() != null && !data.applicationDate().isBlank()) {
+                setDatePickerDate(applicationDatePicker, data.applicationDate());
+            }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(
                     this,
