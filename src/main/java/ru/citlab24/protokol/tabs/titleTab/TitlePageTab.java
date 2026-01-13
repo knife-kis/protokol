@@ -699,37 +699,15 @@ public class TitlePageTab extends JPanel {
 
         File file = chooser.getSelectedFile();
         try {
-            TitlePageImportData data = TechnicalAssignmentImporter.importFromFile(file);
-            if (data.protocolDate() != null && !data.protocolDate().isBlank()) {
-                setDatePickerDate(protocolDatePicker, data.protocolDate());
+            List<TitlePageImportData> dataList = TechnicalAssignmentImporter.importAllFromFile(file);
+            if (dataList.isEmpty()) {
+                return;
             }
-            if (data.customerNameAndContacts() != null && !data.customerNameAndContacts().isBlank()) {
-                setFieldText(customerNameContactsField, data.customerNameAndContacts());
+            TitlePageImportData data = pickTechnicalAssignment(dataList);
+            if (data == null) {
+                return;
             }
-            if (data.customerLegalAddress() != null && !data.customerLegalAddress().isBlank()) {
-                setFieldText(customerLegalAddressField, data.customerLegalAddress());
-            }
-            if (data.customerActualAddress() != null && !data.customerActualAddress().isBlank()) {
-                setFieldText(customerActualAddressField, data.customerActualAddress());
-            }
-            if (data.objectName() != null && !data.objectName().isBlank()) {
-                objectNameArea.setText(data.objectName());
-            }
-            if (data.objectAddress() != null && !data.objectAddress().isBlank()) {
-                setFieldText(objectAddressField, data.objectAddress());
-            }
-            if (data.contractNumber() != null && !data.contractNumber().isBlank()) {
-                setFieldText(contractNumberField, data.contractNumber());
-            }
-            if (data.contractDate() != null && !data.contractDate().isBlank()) {
-                setDatePickerDate(contractDatePicker, data.contractDate());
-            }
-            if (data.applicationNumber() != null && !data.applicationNumber().isBlank()) {
-                setFieldText(applicationNumberField, data.applicationNumber());
-            }
-            if (data.applicationDate() != null && !data.applicationDate().isBlank()) {
-                setDatePickerDate(applicationDatePicker, data.applicationDate());
-            }
+            applyImportData(data);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(
                     this,
@@ -738,5 +716,95 @@ public class TitlePageTab extends JPanel {
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    private void applyImportData(TitlePageImportData data) {
+        if (data.protocolDate() != null && !data.protocolDate().isBlank()) {
+            setDatePickerDate(protocolDatePicker, data.protocolDate());
+        }
+        if (data.customerNameAndContacts() != null && !data.customerNameAndContacts().isBlank()) {
+            setFieldText(customerNameContactsField, data.customerNameAndContacts());
+        }
+        if (data.customerLegalAddress() != null && !data.customerLegalAddress().isBlank()) {
+            setFieldText(customerLegalAddressField, data.customerLegalAddress());
+        }
+        if (data.customerActualAddress() != null && !data.customerActualAddress().isBlank()) {
+            setFieldText(customerActualAddressField, data.customerActualAddress());
+        }
+        if (data.objectName() != null && !data.objectName().isBlank()) {
+            objectNameArea.setText(data.objectName());
+        }
+        if (data.objectAddress() != null && !data.objectAddress().isBlank()) {
+            setFieldText(objectAddressField, data.objectAddress());
+        }
+        if (data.contractNumber() != null && !data.contractNumber().isBlank()) {
+            setFieldText(contractNumberField, data.contractNumber());
+        }
+        if (data.contractDate() != null && !data.contractDate().isBlank()) {
+            setDatePickerDate(contractDatePicker, data.contractDate());
+        }
+        if (data.applicationNumber() != null && !data.applicationNumber().isBlank()) {
+            setFieldText(applicationNumberField, data.applicationNumber());
+        }
+        if (data.applicationDate() != null && !data.applicationDate().isBlank()) {
+            setDatePickerDate(applicationDatePicker, data.applicationDate());
+        }
+    }
+
+    private TitlePageImportData pickTechnicalAssignment(List<TitlePageImportData> dataList) {
+        if (dataList.size() == 1) {
+            return dataList.get(0);
+        }
+        String[] options = buildTechnicalAssignmentOptions(dataList);
+        Object selected = JOptionPane.showInputDialog(
+                this,
+                "Мы нашли несколько технических заданий. Какое будем заполнять?",
+                "Выбор технического задания",
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                options,
+                options[0]
+        );
+        if (selected == null) {
+            return null;
+        }
+        for (int i = 0; i < options.length; i++) {
+            if (options[i].equals(selected)) {
+                return dataList.get(i);
+            }
+        }
+        return dataList.get(0);
+    }
+
+    private String[] buildTechnicalAssignmentOptions(List<TitlePageImportData> dataList) {
+        List<String> options = new ArrayList<>();
+        for (int i = 0; i < dataList.size(); i++) {
+            String objectName = dataList.get(i).objectName();
+            String hint = extractNumberedSentence(objectName);
+            if (hint.isBlank()) {
+                hint = objectName == null ? "" : objectName.trim();
+            }
+            if (hint.isBlank()) {
+                hint = "Вариант " + (i + 1);
+            }
+            if (options.contains(hint)) {
+                hint = hint + " (вариант " + (i + 1) + ")";
+            }
+            options.add(hint);
+        }
+        return options.toArray(new String[0]);
+    }
+
+    private String extractNumberedSentence(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String[] sentences = text.split("[\\n\\.\\!\\?]+");
+        for (String sentence : sentences) {
+            if (sentence.matches(".*\\d+.*")) {
+                return sentence.trim();
+            }
+        }
+        return "";
     }
 }

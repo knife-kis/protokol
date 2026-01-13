@@ -39,7 +39,7 @@ public final class TechnicalAssignmentImporter {
     private TechnicalAssignmentImporter() {
     }
 
-    public static TitlePageImportData importFromFile(File file) throws IOException {
+    public static List<TitlePageImportData> importAllFromFile(File file) throws IOException {
         if (file == null) {
             throw new IOException("Файл не выбран.");
         }
@@ -67,21 +67,49 @@ public final class TechnicalAssignmentImporter {
             if (applicationText.isBlank()) {
                 applicationText = extractValueAfterLabel(lines, 0, APPLICATION_LABEL);
             }
-            ApplicationExtract applicationExtract = extractApplicationInfo(applicationText);
+            List<String> objectNames = extractTableValues(document, OBJECT_NAME_LABEL);
+            List<String> objectAddresses = extractTableValues(document, OBJECT_ADDRESS_LABEL);
+            List<String> applicationTexts = extractTableValues(document, APPLICATION_LABEL);
+            if (applicationTexts.isEmpty() && !applicationText.isBlank()) {
+                applicationTexts = List.of(applicationText);
+            }
 
-            return new TitlePageImportData(
-                    protocolDate,
-                    customerNameAndContacts,
-                    address,
-                    address,
-                    objectName,
-                    objectAddress,
-                    contractNumber,
-                    contractDate,
-                    applicationExtract.number(),
-                    applicationExtract.date()
-            );
+            int maxEntries = Math.max(objectNames.size(),
+                    Math.max(objectAddresses.size(), applicationTexts.size()));
+            if (maxEntries == 0) {
+                maxEntries = 1;
+            }
+
+            List<TitlePageImportData> results = new ArrayList<>();
+            for (int i = 0; i < maxEntries; i++) {
+                String resolvedObjectName = valueAtOrDefault(objectNames, i, objectName);
+                String resolvedObjectAddress = valueAtOrDefault(objectAddresses, i, objectAddress);
+                String resolvedApplicationText = valueAtOrDefault(applicationTexts, i, applicationText);
+                ApplicationExtract applicationExtract = extractApplicationInfo(resolvedApplicationText);
+
+                results.add(new TitlePageImportData(
+                        protocolDate,
+                        customerNameAndContacts,
+                        address,
+                        address,
+                        resolvedObjectName,
+                        resolvedObjectAddress,
+                        contractNumber,
+                        contractDate,
+                        applicationExtract.number(),
+                        applicationExtract.date()
+                ));
+            }
+            return results;
         }
+    }
+
+    public static TitlePageImportData importFromFile(File file) throws IOException {
+        List<TitlePageImportData> results = importAllFromFile(file);
+        if (results.isEmpty()) {
+            return new TitlePageImportData("", "", "", "", "", "", "", "", "", "");
+        }
+        return results.get(0);
     }
 
     private static List<String> extractLines(XWPFDocument document) {
@@ -163,6 +191,39 @@ public final class TechnicalAssignmentImporter {
             }
         }
         return "";
+    }
+
+    private static List<String> extractTableValues(XWPFDocument document, Pattern labelPattern) {
+        List<String> results = new ArrayList<>();
+        for (XWPFTable table : document.getTables()) {
+            for (XWPFTableRow row : table.getRows()) {
+                List<XWPFTableCell> cells = row.getTableCells();
+                for (int i = 0; i < cells.size(); i++) {
+                    String cellText = normalizeSpace(cells.get(i).getText());
+                    if (cellText.isBlank()) {
+                        continue;
+                    }
+                    Matcher matcher = labelPattern.matcher(cellText);
+                    if (!matcher.find()) {
+                        continue;
+                    }
+                    String remainder = normalizeSpace(cellText.substring(matcher.end()));
+                    if (!remainder.isBlank()) {
+                        results.add(remainder);
+                        break;
+                    }
+                    for (int j = i + 1; j < cells.size(); j++) {
+                        String value = normalizeSpace(cells.get(j).getText());
+                        if (!value.isBlank()) {
+                            results.add(value);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        return results;
     }
 
     private static int findAnchorIndex(List<String> lines) {
@@ -411,6 +472,16 @@ public final class TechnicalAssignmentImporter {
             return "";
         }
         return value.replaceAll("\\s+", " ").trim();
+    }
+
+    private static String valueAtOrDefault(List<String> values, int index, String fallback) {
+        if (values == null || values.isEmpty()) {
+            return fallback == null ? "" : fallback;
+        }
+        if (index >= 0 && index < values.size()) {
+            return values.get(index);
+        }
+        return values.get(0);
     }
 
     private record CustomerExtract(String name, int lineIndex) {
