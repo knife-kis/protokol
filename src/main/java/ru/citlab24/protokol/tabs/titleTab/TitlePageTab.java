@@ -781,7 +781,7 @@ public class TitlePageTab extends JPanel {
         String commonPrefix = findCommonPrefix(dataList);
         for (int i = 0; i < dataList.size(); i++) {
             String objectName = dataList.get(i).objectName();
-            String hint = extractDistinctSuffix(objectName, commonPrefix);
+            String hint = extractDistinctSentence(objectName, commonPrefix);
             if (hint.isBlank()) {
                 hint = extractNumberedSentence(objectName);
             }
@@ -827,25 +827,34 @@ public class TitlePageTab extends JPanel {
         return left.substring(0, i);
     }
 
-    private String extractDistinctSuffix(String text, String commonPrefix) {
+    private String extractDistinctSentence(String text, String commonPrefix) {
         if (text == null || text.isBlank()) {
             return "";
         }
-        String remainder = text;
+        int diffIndex = 0;
         if (commonPrefix != null && !commonPrefix.isBlank() && text.startsWith(commonPrefix)) {
-            remainder = text.substring(commonPrefix.length());
+            diffIndex = commonPrefix.length();
         }
-        remainder = remainder.replaceFirst("^[\\s\\p{Punct}]+", "");
-        if (remainder.isBlank()) {
-            return "";
-        }
-        String[] sentences = remainder.split("[\\n\\.\\!\\?]+");
-        for (String sentence : sentences) {
-            if (!sentence.isBlank()) {
-                return sentence.trim();
+        int start = 0;
+        for (int i = diffIndex - 1; i >= 0; i--) {
+            if (isSentenceSeparator(text.charAt(i))) {
+                start = i + 1;
+                break;
             }
         }
-        return remainder.trim();
+        int end = text.length();
+        for (int i = diffIndex; i < text.length(); i++) {
+            if (isSentenceSeparator(text.charAt(i))) {
+                end = i;
+                break;
+            }
+        }
+        String sentence = text.substring(start, end).trim();
+        return sentence.isBlank() ? "" : sentence;
+    }
+
+    private boolean isSentenceSeparator(char ch) {
+        return ch == '.' || ch == '!' || ch == '?' || ch == '\n' || ch == '\r';
     }
 
     private String extractNumberedSentence(String text) {
