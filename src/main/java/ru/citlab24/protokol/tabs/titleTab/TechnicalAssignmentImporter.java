@@ -24,7 +24,9 @@ public final class TechnicalAssignmentImporter {
     private static final Pattern CUSTOMER_LABEL = Pattern.compile("(?i)ЗАКАЗЧИК\\s*:?\\s*(.*)");
     private static final Pattern EMAIL_LABEL = Pattern.compile(
             "(?i)Адрес\\s+электронной\\s+почты\\s+Заказчика\\s*:?\\s*(.*)");
-    private static final Pattern ADDRESS_LABEL = Pattern.compile("(?i)Адрес\\s*:?\\s*(.*)");
+    private static final Pattern CUSTOMER_ADDRESS_LABEL = Pattern.compile(
+            "(?i)(?:юр\\s*/\\s*почтовый\\s+адрес|адрес)\\s*:?\\s*(.*)");
+    private static final Pattern CUSTOMER_PHONE_LABEL = Pattern.compile("(?i)Тел\\.?\\s*:?\\s*(.*)");
     private static final Pattern OBJECT_NAME_LABEL = Pattern.compile(
             "(?i)Наименование\\s+объекта\\s+испытаний\\s*\\(исследований\\)");
     private static final Pattern OBJECT_ADDRESS_LABEL = Pattern.compile("(?i)Адрес\\s+объекта");
@@ -54,8 +56,9 @@ public final class TechnicalAssignmentImporter {
 
             CustomerExtract customerExtract = extractCustomerName(lines, searchStart);
             String email = extractValueAfterLabel(lines, 0, EMAIL_LABEL);
-            String customerNameAndContacts = buildNameAndContacts(customerExtract.name(), email);
-            String address = extractAddress(lines, customerExtract.lineIndex(), searchStart);
+            String phone = extractCustomerSectionValue(lines, anchorIndex, CUSTOMER_PHONE_LABEL, 10);
+            String customerNameAndContacts = buildNameAndContacts(customerExtract.name(), email, phone);
+            String address = extractCustomerSectionValue(lines, anchorIndex, CUSTOMER_ADDRESS_LABEL, 10);
             String objectName = extractTableValue(document, OBJECT_NAME_LABEL);
             String objectAddress = extractTableValue(document, OBJECT_ADDRESS_LABEL);
             String contractNumber = extractContractNumber(lines);
@@ -190,15 +193,6 @@ public final class TechnicalAssignmentImporter {
         return new CustomerExtract("", -1);
     }
 
-    private static boolean isCustomerNameStopLine(String line) {
-        String upper = line.toUpperCase(Locale.ROOT);
-        return upper.contains("АДРЕС")
-                || upper.contains("ЭЛЕКТРОННОЙ ПОЧТЫ")
-                || upper.contains("ИСПОЛНИТЕЛЬ")
-                || upper.contains("ПОДПИСИ")
-                || upper.contains("РЕКВИЗИТ");
-    }
-
     private static String extractValueAfterLabel(List<String> lines, int startIndex, Pattern label) {
         for (int i = startIndex; i < lines.size(); i++) {
             String line = lines.get(i);
@@ -219,28 +213,46 @@ public final class TechnicalAssignmentImporter {
         return "";
     }
 
-    private static String extractAddress(List<String> lines, int customerIndex, int startIndex) {
-        int from = (customerIndex >= 0) ? customerIndex : startIndex;
-        for (int i = from; i < lines.size(); i++) {
+    private static String extractCustomerSectionValue(List<String> lines, int anchorIndex, Pattern labelPattern,
+                                                      int lookAhead) {
+        int customerIndex = findCustomerSectionIndex(lines, anchorIndex);
+        if (customerIndex < 0) {
+            return "";
+        }
+        int start = Math.min(lines.size(), customerIndex + 1);
+        int end = Math.min(lines.size(), start + lookAhead);
+        for (int i = start; i < end; i++) {
             String line = lines.get(i);
-            if (line == null) {
+            if (line == null || line.isBlank()) {
                 continue;
             }
             if (line.toUpperCase(Locale.ROOT).contains("ЭЛЕКТРОННОЙ ПОЧТЫ")) {
                 continue;
             }
-            Matcher matcher = ADDRESS_LABEL.matcher(line);
+            Matcher matcher = labelPattern.matcher(line);
             if (matcher.find()) {
                 String value = matcher.group(1);
-                if (value == null || value.isBlank()) {
-                    if (i + 1 < lines.size()) {
-                        value = lines.get(i + 1);
-                    }
+                if ((value == null || value.isBlank()) && i + 1 < end) {
+                    value = lines.get(i + 1);
                 }
                 return normalizeSpace(value);
             }
         }
         return "";
+    }
+
+    private static int findCustomerSectionIndex(List<String> lines, int anchorIndex) {
+        int start = anchorIndex >= 0 ? anchorIndex : 0;
+        for (int i = start; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line == null) {
+                continue;
+            }
+            if (line.toUpperCase(Locale.ROOT).contains("ЗАКАЗЧИК")) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static String extractContractNumber(List<String> lines) {
@@ -373,16 +385,25 @@ public final class TechnicalAssignmentImporter {
         };
     }
 
-    private static String buildNameAndContacts(String name, String email) {
+    private static String buildNameAndContacts(String name, String email, String phone) {
         String normalizedName = normalizeSpace(name);
         String normalizedEmail = normalizeSpace(email);
-        if (!normalizedName.isBlank() && !normalizedEmail.isBlank()) {
-            return normalizedName + ". " + normalizedEmail;
+        String normalizedPhone = normalizeSpace(phone);
+        List<String> contacts = new ArrayList<>();
+        if (!normalizedEmail.isBlank()) {
+            contacts.add(normalizedEmail);
+        }
+        if (!normalizedPhone.isBlank()) {
+            contacts.add(normalizedPhone);
+        }
+        String contactsValue = String.join(", ", contacts);
+        if (!normalizedName.isBlank() && !contactsValue.isBlank()) {
+            return normalizedName + ". " + contactsValue;
         }
         if (!normalizedName.isBlank()) {
             return normalizedName;
         }
-        return normalizedEmail;
+        return contactsValue;
     }
 
     private static String normalizeSpace(String value) {
