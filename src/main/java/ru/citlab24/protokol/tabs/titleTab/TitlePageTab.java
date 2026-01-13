@@ -778,9 +778,13 @@ public class TitlePageTab extends JPanel {
 
     private String[] buildTechnicalAssignmentOptions(List<TitlePageImportData> dataList) {
         List<String> options = new ArrayList<>();
+        String commonPrefix = findCommonPrefix(dataList);
         for (int i = 0; i < dataList.size(); i++) {
             String objectName = dataList.get(i).objectName();
-            String hint = extractNumberedSentence(objectName);
+            String hint = extractDistinctSuffix(objectName, commonPrefix);
+            if (hint.isBlank()) {
+                hint = extractNumberedSentence(objectName);
+            }
             if (hint.isBlank()) {
                 hint = objectName == null ? "" : objectName.trim();
             }
@@ -793,6 +797,55 @@ public class TitlePageTab extends JPanel {
             options.add(hint);
         }
         return options.toArray(new String[0]);
+    }
+
+    private String findCommonPrefix(List<TitlePageImportData> dataList) {
+        String prefix = null;
+        for (TitlePageImportData data : dataList) {
+            String name = data.objectName();
+            if (name == null || name.isBlank()) {
+                continue;
+            }
+            if (prefix == null) {
+                prefix = name;
+                continue;
+            }
+            prefix = commonPrefix(prefix, name);
+            if (prefix.isBlank()) {
+                break;
+            }
+        }
+        return prefix == null ? "" : prefix;
+    }
+
+    private String commonPrefix(String left, String right) {
+        int max = Math.min(left.length(), right.length());
+        int i = 0;
+        while (i < max && left.charAt(i) == right.charAt(i)) {
+            i++;
+        }
+        return left.substring(0, i);
+    }
+
+    private String extractDistinctSuffix(String text, String commonPrefix) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String remainder = text;
+        if (commonPrefix != null && !commonPrefix.isBlank() && text.startsWith(commonPrefix)) {
+            remainder = text.substring(commonPrefix.length());
+        }
+        remainder = remainder.replaceFirst("^[\\s\\p{Punct}]+", "");
+        if (remainder.isBlank()) {
+            return "";
+        }
+        String[] sentences = remainder.split("[\\n\\.\\!\\?]+");
+        for (String sentence : sentences) {
+            if (!sentence.isBlank()) {
+                return sentence.trim();
+            }
+        }
+        return remainder.trim();
     }
 
     private String extractNumberedSentence(String text) {
