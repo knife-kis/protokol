@@ -99,6 +99,9 @@ public final class AllExcelExporter {
                         new Object[]{building, -1, wb});
             }
 
+            // Обновляем строку с перечнем показателей на титульной странице
+            IndicatorsTextUpdater.updateIndicatorsText(wb);
+
             // Приводим ВСЕ листы к печати "в 1 страницу по ширине"
             applyFitToPageWidthForAllSheets(wb);
             PrintSetupUtils.applyDuplexShortEdge(wb);
@@ -730,6 +733,30 @@ public final class AllExcelExporter {
             lines += (int) Math.ceil(len / Math.max(1.0, colChars));
         }
         return Math.max(1, lines);
+    }
+
+    static void adjustRowHeightForMergedText(Sheet sheet,
+                                             int rowIndex,
+                                             int firstCol,
+                                             int lastCol,
+                                             String text) {
+        if (sheet == null) return;
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        double totalChars = 0.0;
+        for (int c = firstCol; c <= lastCol; c++) {
+            totalChars += sheet.getColumnWidth(c) / 256.0;
+        }
+        totalChars = Math.max(1.0, totalChars);
+
+        int lines = estimateWrappedLines(text, totalChars);
+        float baseHeightPx = pointsToPixels(row.getHeightInPoints());
+        float newHeightPx = baseHeightPx * Math.max(1, lines);
+        row.setHeightInPoints(pixelsToPoints(newHeightPx));
     }
     private static String safe(String value) {
         return (value == null) ? "" : value.trim();
