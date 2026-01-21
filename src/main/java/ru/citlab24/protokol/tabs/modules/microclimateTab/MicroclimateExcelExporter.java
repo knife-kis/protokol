@@ -102,6 +102,8 @@ public final class MicroclimateExcelExporter {
         ensureRow(sh, 3).setHeightInPoints(121); // 4-я
         ensureRow(sh, 4).setHeightInPoints(15);  // ~20 px (5-я)
 
+        PageBreakHelper pageBreakHelper = new PageBreakHelper(sh, 5);
+
         // ===== заголовки =====
         put(sh, 0, 0, "15. Результаты измерений параметров микроклимата", S.title);
         put(sh, 1, 0, "15.2.  Показатели микроклимата в помещениях:", S.title);
@@ -203,9 +205,11 @@ public final class MicroclimateExcelExporter {
             for (Floor f : floors) {
                 // заголовок (A:V объединено); если секция одна — не печатаем её имя
                 String title = floorTitleForExcel(f); // ровно то, что пользователь ввёл (номер этажа)
+                pageBreakHelper.ensureSpace(row, 1);
                 mergeWithBorder(sh, "A" + (row + 1) + ":V" + (row + 1));
                 put(sh, row, 0, title, S.sectionHeader);
                 row++;
+                pageBreakHelper.consume(1);
 
                 // сгруппировать по помещению
                 Map<Space, List<Room>> bySpace = new LinkedHashMap<>();
@@ -230,20 +234,26 @@ public final class MicroclimateExcelExporter {
                         roomOBase.computeIfAbsent(room, r -> clamp(rnd(rng, spaceOBase.get(space) - 0.5, spaceOBase.get(space) + 0.5), 34.0, 42.0));
 
                         // 1) центральная точка (3 строки по высотам)
+                        pageBreakHelper.ensureSpace(row, 3);
                         row = emitBlock(sh, row, seq++, building, f, space, room,
                                 Position.CENTER, today, isResidential, isOffice, mode, S, rng, spaceOBase, roomOBase);
+                        pageBreakHelper.consume(3);
 
                         // 2) у наружной стены — по числу стен (0..N)
                         int walls = externalWallsCount(room);
                         if (isOffice) {
                             if (walls >= 1) {
+                                pageBreakHelper.ensureSpace(row, 3);
                                 row = emitBlock(sh, row, seq++, building, f, space, room,
                                         Position.NEAR_WALL, today, isResidential, isOffice, mode, S, rng, spaceOBase, roomOBase);
+                                pageBreakHelper.consume(3);
                             }
                         } else {
                             for (int i = 0; i < Math.min(walls, 2); i++) {
+                                pageBreakHelper.ensureSpace(row, 3);
                                 row = emitBlock(sh, row, seq++, building, f, space, room,
                                         Position.NEAR_WALL, today, isResidential, isOffice, mode, S, rng, spaceOBase, roomOBase);
+                                pageBreakHelper.consume(3);
                             }
                         }
                     }
@@ -516,6 +526,59 @@ public final class MicroclimateExcelExporter {
         if (isBathroomToilet(roomName))     return "17-25";
         if (isLiving(roomName))             return "19-23";
         return "-";
+    }
+
+    private static final class PageBreakHelper {
+        private static final double POINTS_PER_INCH = 72.0;
+        private static final double A4_HEIGHT_POINTS = 842.0;
+        private static final double A4_WIDTH_POINTS = 595.0;
+
+        private final Sheet sheet;
+        private final int dataStartRow;
+        private final int rowsPerPage;
+        private int rowsOnPage = 0;
+
+        private PageBreakHelper(Sheet sheet, int dataStartRow) {
+            this.sheet = sheet;
+            this.dataStartRow = dataStartRow;
+            this.rowsPerPage = calculateRowsPerPage();
+        }
+
+        void ensureSpace(int rowIndex, int neededRows) {
+            if (rowIndex < dataStartRow || rowsPerPage <= 0 || neededRows > rowsPerPage) {
+                return;
+            }
+            if (rowsOnPage + neededRows > rowsPerPage) {
+                sheet.setRowBreak(rowIndex - 1);
+                rowsOnPage = 0;
+            }
+        }
+
+        void consume(int rows) {
+            if (rowsPerPage <= 0) return;
+            rowsOnPage += rows;
+        }
+
+        private int calculateRowsPerPage() {
+            double rowHeight = 15.0;
+            double headerHeight = 0.0;
+            for (int i = 0; i < dataStartRow; i++) {
+                headerHeight += ensureRow(sheet, i).getHeightInPoints();
+            }
+            double marginPoints = (sheet.getMargin(Sheet.TopMargin) + sheet.getMargin(Sheet.BottomMargin)) * POINTS_PER_INCH;
+            double pageHeight = pageHeightPoints();
+            double available = pageHeight - marginPoints - headerHeight;
+            if (available <= 0) return 0;
+            return (int) Math.floor(available / rowHeight);
+        }
+
+        private double pageHeightPoints() {
+            PrintSetup ps = sheet.getPrintSetup();
+            if (ps != null && ps.getPaperSize() == PrintSetup.A4_PAPERSIZE) {
+                return ps.getLandscape() ? A4_WIDTH_POINTS : A4_HEIGHT_POINTS;
+            }
+            return A4_WIDTH_POINTS;
+        }
     }
 
     // ===== табличные/числовые утилиты =====
