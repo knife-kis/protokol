@@ -166,12 +166,20 @@ public final class AllExcelExporter {
         boldCenterStyle.cloneStyleFrom(centerMiddleStyle);
         boldCenterStyle.setFont(boldFont);
 
+        CellStyle headerBorderStyle = wb.createCellStyle();
+        headerBorderStyle.cloneStyleFrom(centerMiddleStyle);
+        setThinBorders(headerBorderStyle);
+
+        CellStyle dataBorderStyle = wb.createCellStyle();
+        dataBorderStyle.cloneStyleFrom(baseStyle);
+        setThinBorders(dataBorderStyle);
+
         // Высоты строк: фиксированный список (значения заданы в пикселях).
         float[] rowHeightsPx = new float[] {
                 20f, 21f, 10f, 20f, 16f, 20f, 20f, 47f, 20f, 20f,
                 19f, 20f, 20f, 20f, 20f, 20f, 9f, 20f, 9f, 20f,
                 9f, 20f, 9f, 20f, 9f, 20f, 9f, 20f, 9f, 20f,
-                9f, 20f, 9f, 20f, 9f, 10f, 49f
+                9f, 20f, 9f, 20f, 9f, 20f, 126f
         };// Высоты строк оставляем как раньше — тебе они подошли
         for (int r = 0; r < rowHeightsPx.length; r++) {
             Row row = sheet.getRow(r);
@@ -324,11 +332,11 @@ public final class AllExcelExporter {
         String errorHeader = "Погрешность средства измерения";
         String verificationHeader = "Сведения о поверке (№ свидетельства, срок действия)";
 
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 0, 3, indicatorHeader);
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 4, 9, instrumentHeader);
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 10, 12, serialHeader);
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 13, 19, errorHeader);
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 20, 25, verificationHeader);
+        setMergedText(sheet, headerBorderStyle, headerRow, headerRow, 0, 3, indicatorHeader);
+        setMergedText(sheet, headerBorderStyle, headerRow, headerRow, 4, 9, instrumentHeader);
+        setMergedText(sheet, headerBorderStyle, headerRow, headerRow, 10, 12, serialHeader);
+        setMergedText(sheet, headerBorderStyle, headerRow, headerRow, 13, 19, errorHeader);
+        setMergedText(sheet, headerBorderStyle, headerRow, headerRow, 20, 25, verificationHeader);
 
         adjustRowHeightForMergedSections(sheet, headerRow, new int[][] {
                 {0, 3},
@@ -343,6 +351,22 @@ public final class AllExcelExporter {
                 errorHeader,
                 verificationHeader
         });
+
+        int dataRow = headerRow + 1;
+        String indicatorValue = "Длительность интервала времени";
+        String instrumentValue = "Секундомеры электронные, Интеграл С-01";
+        String serialValue = "462667";
+        String errorValue = "Основная абсолютная погрешность, при температуре 25 \u00b1 5 (\u02da\u0421):\n" +
+                "\u00b1(9,6\u00b710-6 \u00b7\u0422x+0,01) \u0441\n" +
+                "Дополнительная абсолютная погрешность при отклонении температуры от нормальных условий 25 \u00b1 5 (\u02da\u0421) на 1 \u02da\u0421 изменения температуры:\n" +
+                "-(2,2\u00b710-6\u00b7\u0422x) \u0441";
+        String verificationValue = "\u0421-\u0410\u0428/21-05-2025/433383424 \u0434\u043e 20.05.2026";
+
+        setMergedText(sheet, dataBorderStyle, dataRow, dataRow, 0, 3, indicatorValue);
+        setMergedText(sheet, dataBorderStyle, dataRow, dataRow, 4, 9, instrumentValue);
+        setMergedText(sheet, dataBorderStyle, dataRow, dataRow, 10, 12, serialValue);
+        setMergedText(sheet, dataBorderStyle, dataRow, dataRow, 13, 19, errorValue);
+        setMergedText(sheet, dataBorderStyle, dataRow, dataRow, 20, 25, verificationValue);
     }
 
     private static void tryInvokeAppend(String fqcn, Class<?>[] sig, Object[] args) {
@@ -722,6 +746,14 @@ public final class AllExcelExporter {
                 }
             }
         }
+    }
+
+    private static void setThinBorders(CellStyle style) {
+        if (style == null) return;
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
     }
     static void adjustRowHeightForMergedText(Sheet sheet,
                                              int rowIndex,
