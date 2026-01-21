@@ -40,12 +40,14 @@ public final class AllExcelExporter {
             appendTitleSheet(frame, building, wb);
 
             // 1) Микроклимат
-            MicroclimateExcelExporter.appendToWorkbook(
-                    building,
-                    -1,
-                    wb,
-                    MicroclimateExcelExporter.TemperatureMode.COLD
-            );
+            if (hasAnyMicroclimateSelections(building)) {
+                MicroclimateExcelExporter.appendToWorkbook(
+                        building,
+                        -1,
+                        wb,
+                        MicroclimateExcelExporter.TemperatureMode.COLD
+                );
+            }
 
             // 2) Вентиляция (берём текущие записи из вкладки)
             List<VentilationRecord> ventRecords = null;
@@ -57,9 +59,11 @@ public final class AllExcelExporter {
             }
 
             // 3) Радиация
-            tryInvokeAppend("ru.citlab24.protokol.tabs.modules.med.RadiationExcelExporter",
-                    new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
-                    new Object[]{building, -1, wb});
+            if (hasAnyRadiationSelections(building)) {
+                tryInvokeAppend("ru.citlab24.protokol.tabs.modules.med.RadiationExcelExporter",
+                        new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
+                        new Object[]{building, -1, wb});
+            }
 
             // 4) «Иск освещение (2)» — ближе к концу
             appendStreetLightingSheet(wb, building);
@@ -71,25 +75,29 @@ public final class AllExcelExporter {
                     litMap = frame.getArtificialLightingTab().snapshotSelectionMap();
                 }
             } catch (Throwable ignore) {}
-            try {
-                Class<?> clazz = Class.forName("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter");
-                java.lang.reflect.Method m = clazz.getMethod(
-                        "appendToWorkbook",
-                        ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class, java.util.Map.class
-                );
-                m.invoke(null, building, -1, wb, litMap);
-            } catch (NoSuchMethodException e) {
-                tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter",
-                        new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
-                        new Object[]{building, -1, wb});
-            } catch (Throwable t) {
-                t.printStackTrace();
+            if (hasAnyArtificialLightingSelections(litMap)) {
+                try {
+                    Class<?> clazz = Class.forName("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter");
+                    java.lang.reflect.Method m = clazz.getMethod(
+                            "appendToWorkbook",
+                            ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class, java.util.Map.class
+                    );
+                    m.invoke(null, building, -1, wb, litMap);
+                } catch (NoSuchMethodException e) {
+                    tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingExcelExporter",
+                            new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
+                            new Object[]{building, -1, wb});
+                } catch (Throwable t) {
+                    t.printStackTrace();
+                }
             }
 
             // 6) КЕО — последним листом
-            tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter",
-                    new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
-                    new Object[]{building, -1, wb});
+            if (hasAnyLightingSelections(building)) {
+                tryInvokeAppend("ru.citlab24.protokol.tabs.modules.lighting.LightingExcelExporter",
+                        new Class[]{ru.citlab24.protokol.tabs.models.Building.class, int.class, Workbook.class},
+                        new Object[]{building, -1, wb});
+            }
 
             // Приводим ВСЕ листы к печати "в 1 страницу по ширине"
             applyFitToPageWidthForAllSheets(wb);
@@ -388,6 +396,10 @@ public final class AllExcelExporter {
                 }
             }
 
+            if (!hasAnyStreetLightingValues(rows)) {
+                return;
+            }
+
             // 3) Вставить лист «Иск освещение (2)» в текущую книгу
             ru.citlab24.protokol.tabs.modules.lighting.StreetLightingExcelExporter.appendToWorkbook(rows, wb);
 
@@ -424,6 +436,68 @@ public final class AllExcelExporter {
         if (original != null && original > 0) return original;
         int id = r.getId();
         return (id > 0) ? id : null;
+    }
+
+    private static boolean hasAnyMicroclimateSelections(Building building) {
+        if (building == null || building.getFloors() == null) return false;
+        for (ru.citlab24.protokol.tabs.models.Floor floor : building.getFloors()) {
+            if (floor == null || floor.getSpaces() == null) continue;
+            for (ru.citlab24.protokol.tabs.models.Space space : floor.getSpaces()) {
+                if (space == null || space.getRooms() == null) continue;
+                for (ru.citlab24.protokol.tabs.models.Room room : space.getRooms()) {
+                    if (room != null && room.isMicroclimateSelected()) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasAnyRadiationSelections(Building building) {
+        if (building == null || building.getFloors() == null) return false;
+        for (ru.citlab24.protokol.tabs.models.Floor floor : building.getFloors()) {
+            if (floor == null || floor.getSpaces() == null) continue;
+            for (ru.citlab24.protokol.tabs.models.Space space : floor.getSpaces()) {
+                if (space == null || space.getRooms() == null) continue;
+                for (ru.citlab24.protokol.tabs.models.Room room : space.getRooms()) {
+                    if (room != null && room.isRadiationSelected()) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasAnyLightingSelections(Building building) {
+        if (building == null || building.getFloors() == null) return false;
+        for (ru.citlab24.protokol.tabs.models.Floor floor : building.getFloors()) {
+            if (floor == null || floor.getSpaces() == null) continue;
+            for (ru.citlab24.protokol.tabs.models.Space space : floor.getSpaces()) {
+                if (space == null || space.getRooms() == null) continue;
+                for (ru.citlab24.protokol.tabs.models.Room room : space.getRooms()) {
+                    if (room != null && room.isSelected()) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasAnyArtificialLightingSelections(java.util.Map<Integer, Boolean> selectionMap) {
+        if (selectionMap == null || selectionMap.isEmpty()) return false;
+        for (Boolean value : selectionMap.values()) {
+            if (Boolean.TRUE.equals(value)) return true;
+        }
+        return false;
+    }
+
+    private static boolean hasAnyStreetLightingValues(
+            java.util.List<ru.citlab24.protokol.tabs.modules.lighting.StreetLightingExcelExporter.RowData> rows) {
+        if (rows == null || rows.isEmpty()) return false;
+        for (ru.citlab24.protokol.tabs.modules.lighting.StreetLightingExcelExporter.RowData row : rows) {
+            if (row == null) continue;
+            if (row.leftMax != null || row.centerMin != null || row.rightMax != null || row.bottomMin != null) {
+                return true;
+            }
+        }
+        return false;
     }
     /** Применяет настройку печати "уместить по ширине в 1 страницу" ко всем листам книги. */
     private static void applyFitToPageWidthForAllSheets(Workbook wb) {
