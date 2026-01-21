@@ -990,7 +990,7 @@ public class NoiseTab extends JPanel {
 
         Window window = SwingUtilities.getWindowAncestor(owner);
         JDialog dialog = new JDialog(window, "Пороговые значения: " + srcLabel, Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         dialog.setContentPane(content);
         dialog.getRootPane().setDefaultButton(save);
 
