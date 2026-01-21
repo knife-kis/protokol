@@ -317,7 +317,7 @@ public class NoiseTab extends JPanel {
         // ==== Пороговые значения (урезанные) ====
         p.add(new JLabel("Пороговые:"));
 
-        String[] srcForThresholds = {"Лифт","ИТО","Авто","Улица"};
+        String[] srcForThresholds = {"Лифт","ИТО","Зум","Авто","Улица"};
         for (String src : srcForThresholds) {
             JButton b = createThresholdButton(src);
             p.add(b);
@@ -863,6 +863,9 @@ public class NoiseTab extends JPanel {
     private static List<String> variantsForSource(String src) {
         if ("Лифт".equals(src) || "ИТО".equals(src)) {
             return java.util.Arrays.asList("день","ночь","офис");
+        }
+        if ("Зум".equals(src)) {
+            return java.util.Arrays.asList("день");
         }
         if ("Авто".equals(src)) {
             return java.util.Arrays.asList("день","ночь");
