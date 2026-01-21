@@ -50,7 +50,9 @@ final class NoisePeriodsDialog extends JDialog {
     // Площадка (улица)
     private final PeriodPanel pSite         = new PeriodPanel("Площадка (улица)",    LocalTime.of(8, 0),  LocalTime.of(21, 0));
 
-    NoisePeriodsDialog(Window owner, Map<NoiseTestKind, NoisePeriod> initial) {
+    NoisePeriodsDialog(Window owner,
+                       Map<NoiseTestKind, NoisePeriod> initial,
+                       Map<NoiseTestKind, Integer> points) {
         super(owner, "Периоды измерений (шумы)", ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
@@ -112,6 +114,17 @@ final class NoisePeriodsDialog extends JDialog {
             setIfPresent(initial, NoiseTestKind.AUTO_NIGHT,    pAutoNight);
             setIfPresent(initial, NoiseTestKind.SITE,          pSite);
         }
+        if (points != null) {
+            setPointsIfPresent(points, NoiseTestKind.LIFT_DAY, pLiftDay);
+            setPointsIfPresent(points, NoiseTestKind.LIFT_NIGHT, pLiftNight);
+            setPointsIfPresent(points, NoiseTestKind.ITO_NONRES, pItoNonres);
+            setPointsIfPresent(points, NoiseTestKind.ITO_RES_DAY, pItoResDay);
+            setPointsIfPresent(points, NoiseTestKind.ITO_RES_NIGHT, pItoResNight);
+            setPointsIfPresent(points, NoiseTestKind.ZUM_DAY, pZumDay);
+            setPointsIfPresent(points, NoiseTestKind.AUTO_DAY, pAutoDay);
+            setPointsIfPresent(points, NoiseTestKind.AUTO_NIGHT, pAutoNight);
+            setPointsIfPresent(points, NoiseTestKind.SITE, pSite);
+        }
 
         getContentPane().setLayout(new BorderLayout(8, 8));
         getContentPane().add(center, BorderLayout.CENTER);
@@ -140,6 +153,12 @@ final class NoisePeriodsDialog extends JDialog {
         if (np != null) p.setPeriod(np);
     }
 
+    private static void setPointsIfPresent(Map<NoiseTestKind, Integer> m, NoiseTestKind k, PeriodPanel p) {
+        if (m == null || k == null || p == null) return;
+        Integer points = m.get(k);
+        p.setPointsCount((points != null) ? points : 0);
+    }
+
     Map<NoiseTestKind, NoisePeriod> getResult() { return result; }
 
     /* ====== панель одной строки: дата + с/до ====== */
@@ -147,6 +166,7 @@ final class NoisePeriodsDialog extends JDialog {
         private final JSpinner dDate = new JSpinner(new SpinnerDateModel());
         private final JSpinner tFrom = new JSpinner(new SpinnerDateModel());
         private final JSpinner tTo   = new JSpinner(new SpinnerDateModel());
+        private final JLabel pointsLabel = new JLabel();
 
         PeriodPanel(String title, LocalTime defFrom, LocalTime defTo) {
             super(new GridBagLayout());
@@ -183,7 +203,11 @@ final class NoisePeriodsDialog extends JDialog {
             c.gridx = 4; add(new JLabel("до:"), c);
             c.gridx = 5; add(tTo, c);
 
-            c.weightx = 1; c.gridx = 6; c.fill = GridBagConstraints.HORIZONTAL;
+            setPointsCount(0);
+            c.gridx = 6; c.fill = GridBagConstraints.NONE; c.weightx = 0;
+            add(pointsLabel, c);
+
+            c.weightx = 1; c.gridx = 7; c.fill = GridBagConstraints.HORIZONTAL;
             add(Box.createHorizontalStrut(1), c);
         }
 
@@ -208,6 +232,10 @@ final class NoisePeriodsDialog extends JDialog {
             dDate.setValue(java.util.Date.from(d.atStartOfDay(z).toInstant()));
             tFrom.setValue(java.util.Date.from(d.atTime(f).atZone(z).toInstant()));
             tTo.setValue(java.util.Date.from(d.atTime(t).atZone(z).toInstant()));
+        }
+
+        void setPointsCount(int points) {
+            pointsLabel.setText("Точек: " + points);
         }
     }
 }
