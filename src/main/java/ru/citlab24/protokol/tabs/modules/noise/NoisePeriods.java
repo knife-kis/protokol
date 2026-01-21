@@ -41,9 +41,6 @@ final class NoisePeriodsDialog extends JDialog {
     private final PeriodPanel pItoResDay    = new PeriodPanel("ИТО — жилые день",    LocalTime.of(8, 0),  LocalTime.of(21, 0));  // новое имя
     private final PeriodPanel pItoResNight  = new PeriodPanel("ИТО — жилые ночь",    LocalTime.of(22, 0), LocalTime.of(6,  0));  // новый пункт
 
-    // ЗУМ
-    private final PeriodPanel pZumDay       = new PeriodPanel("ЗУМ — день",          LocalTime.of(8, 0),  LocalTime.of(21, 0));
-
     // Авто
     private final PeriodPanel pAutoDay      = new PeriodPanel("Авто — день",         LocalTime.of(8, 0),  LocalTime.of(21, 0));
     private final PeriodPanel pAutoNight    = new PeriodPanel("Авто — ночь",         LocalTime.of(22, 0), LocalTime.of(6,  0));
@@ -66,9 +63,6 @@ final class NoisePeriodsDialog extends JDialog {
         center.add(Box.createVerticalStrut(8));
 
         center.add(makeGroup("ИТО", pItoNonres, pItoResDay, pItoResNight)); // было pItoRes
-        center.add(Box.createVerticalStrut(8));
-
-        center.add(makeGroup("ЗУМ", pZumDay));
         center.add(Box.createVerticalStrut(8));
 
         center.add(makeGroup("Авто", pAutoDay, pAutoNight));
@@ -108,8 +102,6 @@ final class NoisePeriodsDialog extends JDialog {
             result.put(NoiseTestKind.ITO_RES_DAY,   pItoResDay.getPeriod());    // новое
             result.put(NoiseTestKind.ITO_RES_NIGHT, pItoResNight.getPeriod());  // новое
 
-            result.put(NoiseTestKind.ZUM_DAY,       pZumDay.getPeriod());
-
             result.put(NoiseTestKind.AUTO_DAY,      pAutoDay.getPeriod());
             result.put(NoiseTestKind.AUTO_NIGHT,    pAutoNight.getPeriod());
 
@@ -123,15 +115,15 @@ final class NoisePeriodsDialog extends JDialog {
 
         // Проставим начальные значения, если были
         if (initial != null) {
-            setIfPresent(initial, NoiseTestKind.LIFT_DAY,      pLiftDay);
-            setIfPresent(initial, NoiseTestKind.LIFT_NIGHT,    pLiftNight);
-            setIfPresent(initial, NoiseTestKind.ITO_NONRES,    pItoNonres);
-            setIfPresent(initial, NoiseTestKind.ITO_RES_DAY,   pItoResDay);     // новое
-            setIfPresent(initial, NoiseTestKind.ITO_RES_NIGHT, pItoResNight);   // новое
-            setIfPresent(initial, NoiseTestKind.ZUM_DAY,       pZumDay);
-            setIfPresent(initial, NoiseTestKind.AUTO_DAY,      pAutoDay);
-            setIfPresent(initial, NoiseTestKind.AUTO_NIGHT,    pAutoNight);
-            setIfPresent(initial, NoiseTestKind.SITE,          pSite);
+            Map<NoiseTestKind, NoisePeriod> normalized = normalizePeriods(initial);
+            setIfPresent(normalized, NoiseTestKind.LIFT_DAY,      pLiftDay);
+            setIfPresent(normalized, NoiseTestKind.LIFT_NIGHT,    pLiftNight);
+            setIfPresent(normalized, NoiseTestKind.ITO_NONRES,    pItoNonres);
+            setIfPresent(normalized, NoiseTestKind.ITO_RES_DAY,   pItoResDay);     // новое
+            setIfPresent(normalized, NoiseTestKind.ITO_RES_NIGHT, pItoResNight);   // новое
+            setIfPresent(normalized, NoiseTestKind.AUTO_DAY,      pAutoDay);
+            setIfPresent(normalized, NoiseTestKind.AUTO_NIGHT,    pAutoNight);
+            setIfPresent(normalized, NoiseTestKind.SITE,          pSite);
         }
         if (points != null) {
             setPointsIfPresent(points, NoiseTestKind.LIFT_DAY, pLiftDay);
@@ -139,7 +131,6 @@ final class NoisePeriodsDialog extends JDialog {
             setPointsIfPresent(points, NoiseTestKind.ITO_NONRES, pItoNonres);
             setPointsIfPresent(points, NoiseTestKind.ITO_RES_DAY, pItoResDay);
             setPointsIfPresent(points, NoiseTestKind.ITO_RES_NIGHT, pItoResNight);
-            setPointsIfPresent(points, NoiseTestKind.ZUM_DAY, pZumDay);
             setPointsIfPresent(points, NoiseTestKind.AUTO_DAY, pAutoDay);
             setPointsIfPresent(points, NoiseTestKind.AUTO_NIGHT, pAutoNight);
             setPointsIfPresent(points, NoiseTestKind.SITE, pSite);
@@ -192,7 +183,6 @@ final class NoisePeriodsDialog extends JDialog {
         current.put(NoiseTestKind.ITO_NONRES,    pItoNonres.getPeriod());
         current.put(NoiseTestKind.ITO_RES_DAY,   pItoResDay.getPeriod());
         current.put(NoiseTestKind.ITO_RES_NIGHT, pItoResNight.getPeriod());
-        current.put(NoiseTestKind.ZUM_DAY,       pZumDay.getPeriod());
         current.put(NoiseTestKind.AUTO_DAY,      pAutoDay.getPeriod());
         current.put(NoiseTestKind.AUTO_NIGHT,    pAutoNight.getPeriod());
         current.put(NoiseTestKind.SITE,          pSite.getPeriod());
@@ -206,7 +196,6 @@ final class NoisePeriodsDialog extends JDialog {
         setIfPresent(data, NoiseTestKind.ITO_NONRES, pItoNonres);
         setIfPresent(data, NoiseTestKind.ITO_RES_DAY, pItoResDay);
         setIfPresent(data, NoiseTestKind.ITO_RES_NIGHT, pItoResNight);
-        setIfPresent(data, NoiseTestKind.ZUM_DAY, pZumDay);
         setIfPresent(data, NoiseTestKind.AUTO_DAY, pAutoDay);
         setIfPresent(data, NoiseTestKind.AUTO_NIGHT, pAutoNight);
         setIfPresent(data, NoiseTestKind.SITE, pSite);
@@ -219,9 +208,22 @@ final class NoisePeriodsDialog extends JDialog {
     private void onImportPeriods() {
         Map<NoiseTestKind, NoisePeriod> imported = NoisePeriodsExcelIO.importPeriods(this);
         if (imported == null || imported.isEmpty()) return;
-        applyPeriods(imported);
+        applyPeriods(normalizePeriods(imported));
         JOptionPane.showMessageDialog(this, "Периоды измерений загружены.",
                 "Периоды измерений", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static Map<NoiseTestKind, NoisePeriod> normalizePeriods(Map<NoiseTestKind, NoisePeriod> data) {
+        Map<NoiseTestKind, NoisePeriod> out = new EnumMap<>(NoiseTestKind.class);
+        if (data != null) {
+            out.putAll(data);
+        }
+        NoisePeriod ito = out.get(NoiseTestKind.ITO_RES_DAY);
+        NoisePeriod zum = out.get(NoiseTestKind.ZUM_DAY);
+        if (ito == null && zum != null) {
+            out.put(NoiseTestKind.ITO_RES_DAY, zum);
+        }
+        return out;
     }
 
     /* ====== панель одной строки: дата + с/до ====== */

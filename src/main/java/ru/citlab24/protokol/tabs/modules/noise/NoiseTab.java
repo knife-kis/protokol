@@ -360,7 +360,6 @@ public class NoiseTab extends JPanel {
             dls.put(NoiseTestKind.ITO_NONRES,    excelDateLine(NoiseTestKind.ITO_NONRES));
             dls.put(NoiseTestKind.ITO_RES_DAY,   excelDateLine(NoiseTestKind.ITO_RES_DAY));
             dls.put(NoiseTestKind.ITO_RES_NIGHT, excelDateLine(NoiseTestKind.ITO_RES_NIGHT));
-            dls.put(NoiseTestKind.ZUM_DAY,       excelDateLine(NoiseTestKind.ZUM_DAY));
 
             dls.put(NoiseTestKind.AUTO_DAY,   excelDateLine(NoiseTestKind.AUTO_DAY));
             dls.put(NoiseTestKind.AUTO_NIGHT, excelDateLine(NoiseTestKind.AUTO_NIGHT));
@@ -380,6 +379,9 @@ public class NoiseTab extends JPanel {
     /** Построить текст "Дата, время проведения измерений ..." для нужного вида испытаний. */
     private String excelDateLine(NoiseTestKind kind) {
         NoisePeriod p = periods.get(kind);
+        if (p == null && kind == NoiseTestKind.ITO_RES_DAY) {
+            p = periods.get(NoiseTestKind.ZUM_DAY);
+        }
         return (p != null) ? p.toExcelLine() : new NoisePeriod().toExcelLine();
     }
 
@@ -849,7 +851,7 @@ public class NoiseTab extends JPanel {
                     }
 
                     if (nv.zum && sp.getType() == Space.SpaceType.APARTMENT) {
-                        addPoints(counts, NoiseTestKind.ZUM_DAY, 3);
+                        addPoints(counts, NoiseTestKind.ITO_RES_DAY, 3);
                     }
 
                     if (nv.autoSrc && sp.getType() == Space.SpaceType.APARTMENT) {
