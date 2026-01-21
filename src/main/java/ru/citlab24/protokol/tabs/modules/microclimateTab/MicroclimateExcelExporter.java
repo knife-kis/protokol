@@ -535,41 +535,72 @@ public final class MicroclimateExcelExporter {
 
         private final Sheet sheet;
         private final int dataStartRow;
-        private final int rowsPerPage;
+        private final int firstPageRowsPerPage;
+        private final int nextPageRowsPerPage;
         private int rowsOnPage = 0;
+        private boolean firstPage = true;
 
         private PageBreakHelper(Sheet sheet, int dataStartRow) {
             this.sheet = sheet;
             this.dataStartRow = dataStartRow;
-            this.rowsPerPage = calculateRowsPerPage();
+            this.firstPageRowsPerPage = calculateRowsPerPage(firstPageHeaderHeight());
+            this.nextPageRowsPerPage = calculateRowsPerPage(repeatingHeaderHeight());
         }
 
         void ensureSpace(int rowIndex, int neededRows) {
+            int rowsPerPage = rowsPerPage();
             if (rowIndex < dataStartRow || rowsPerPage <= 0 || neededRows > rowsPerPage) {
                 return;
             }
             if (rowsOnPage + neededRows > rowsPerPage) {
                 sheet.setRowBreak(rowIndex - 1);
                 rowsOnPage = 0;
+                firstPage = false;
             }
         }
 
         void consume(int rows) {
-            if (rowsPerPage <= 0) return;
+            if (rowsPerPage() <= 0) return;
             rowsOnPage += rows;
         }
 
-        private int calculateRowsPerPage() {
-            double rowHeight = 15.0;
-            double headerHeight = 0.0;
-            for (int i = 0; i < dataStartRow; i++) {
-                headerHeight += ensureRow(sheet, i).getHeightInPoints();
+        private int rowsPerPage() {
+            int rowsPerPage = firstPage ? firstPageRowsPerPage : nextPageRowsPerPage;
+            if (rowsPerPage <= 0 && firstPageRowsPerPage > 0) {
+                return firstPageRowsPerPage;
             }
+            return rowsPerPage;
+        }
+
+        private int calculateRowsPerPage(double headerHeight) {
+            double rowHeight = 15.0;
             double marginPoints = (sheet.getMargin(Sheet.TopMargin) + sheet.getMargin(Sheet.BottomMargin)) * POINTS_PER_INCH;
             double pageHeight = pageHeightPoints();
             double available = pageHeight - marginPoints - headerHeight;
             if (available <= 0) return 0;
             return (int) Math.floor(available / rowHeight);
+        }
+
+        private double firstPageHeaderHeight() {
+            double headerHeight = 0.0;
+            for (int i = 0; i < dataStartRow; i++) {
+                headerHeight += ensureRow(sheet, i).getHeightInPoints();
+            }
+            return headerHeight;
+        }
+
+        private double repeatingHeaderHeight() {
+            CellRangeAddress repeating = sheet.getRepeatingRows();
+            if (repeating == null) {
+                return 0.0;
+            }
+            int start = Math.max(0, repeating.getFirstRow());
+            int end = Math.max(start, repeating.getLastRow());
+            double headerHeight = 0.0;
+            for (int i = start; i <= end; i++) {
+                headerHeight += ensureRow(sheet, i).getHeightInPoints();
+            }
+            return headerHeight;
         }
 
         private double pageHeightPoints() {
