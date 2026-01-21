@@ -194,7 +194,8 @@ final class TitlePageMeasurementTableWriter {
                 "Измерение расстояний",
                 "Дальномер лазерный ADA Cosmo 70",
                 "\u00b11,5 мм",
-                "С-АШ/22-01-2025/403727315  до 21.01.2026");
+                "С-АШ/22-01-2025/403727315  до 21.01.2026",
+                "000873");
 
         int medRow = distanceRow + 1;
         setRowHeightPx(sheet, medRow, 45f);
