@@ -40,6 +40,9 @@ final class NoisePeriodsDialog extends JDialog {
     private final PeriodPanel pItoResDay    = new PeriodPanel("ИТО — жилые день",    LocalTime.of(8, 0),  LocalTime.of(21, 0));  // новое имя
     private final PeriodPanel pItoResNight  = new PeriodPanel("ИТО — жилые ночь",    LocalTime.of(22, 0), LocalTime.of(6,  0));  // новый пункт
 
+    // ЗУМ
+    private final PeriodPanel pZumDay       = new PeriodPanel("ЗУМ — день",          LocalTime.of(8, 0),  LocalTime.of(21, 0));
+
     // Авто
     private final PeriodPanel pAutoDay      = new PeriodPanel("Авто — день",         LocalTime.of(8, 0),  LocalTime.of(21, 0));
     private final PeriodPanel pAutoNight    = new PeriodPanel("Авто — ночь",         LocalTime.of(22, 0), LocalTime.of(6,  0));
@@ -59,6 +62,9 @@ final class NoisePeriodsDialog extends JDialog {
         center.add(Box.createVerticalStrut(8));
 
         center.add(makeGroup("ИТО", pItoNonres, pItoResDay, pItoResNight)); // было pItoRes
+        center.add(Box.createVerticalStrut(8));
+
+        center.add(makeGroup("ЗУМ", pZumDay));
         center.add(Box.createVerticalStrut(8));
 
         center.add(makeGroup("Авто", pAutoDay, pAutoNight));
@@ -81,6 +87,8 @@ final class NoisePeriodsDialog extends JDialog {
             result.put(NoiseTestKind.ITO_RES_DAY,   pItoResDay.getPeriod());    // новое
             result.put(NoiseTestKind.ITO_RES_NIGHT, pItoResNight.getPeriod());  // новое
 
+            result.put(NoiseTestKind.ZUM_DAY,       pZumDay.getPeriod());
+
             result.put(NoiseTestKind.AUTO_DAY,      pAutoDay.getPeriod());
             result.put(NoiseTestKind.AUTO_NIGHT,    pAutoNight.getPeriod());
 
@@ -99,6 +107,7 @@ final class NoisePeriodsDialog extends JDialog {
             setIfPresent(initial, NoiseTestKind.ITO_NONRES,    pItoNonres);
             setIfPresent(initial, NoiseTestKind.ITO_RES_DAY,   pItoResDay);     // новое
             setIfPresent(initial, NoiseTestKind.ITO_RES_NIGHT, pItoResNight);   // новое
+            setIfPresent(initial, NoiseTestKind.ZUM_DAY,       pZumDay);
             setIfPresent(initial, NoiseTestKind.AUTO_DAY,      pAutoDay);
             setIfPresent(initial, NoiseTestKind.AUTO_NIGHT,    pAutoNight);
             setIfPresent(initial, NoiseTestKind.SITE,          pSite);

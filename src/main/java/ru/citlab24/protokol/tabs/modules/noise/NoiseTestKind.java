@@ -8,6 +8,8 @@ public enum NoiseTestKind {
     ITO_RES_DAY,     // было ITO_RES
     ITO_RES_NIGHT,   // новое
 
+    ZUM_DAY,
+
     AUTO_DAY,
     AUTO_NIGHT,
     SITE

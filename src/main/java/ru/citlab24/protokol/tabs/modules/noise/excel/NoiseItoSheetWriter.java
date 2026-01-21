@@ -9,8 +9,9 @@ import static ru.citlab24.protokol.tabs.modules.noise.excel.NoiseSheetCommon.*;
 
 /**
  * Наполнение листов ИТО:
- * - «шум неж ИТО»    — помещения OFFICE и PUBLIC_SPACE, если выбран ≥1 ИТО-источник (Вент/Завеса/ИТП/ПНС/Э/Щ/Зум)
+ * - «шум неж ИТО»    — помещения OFFICE и PUBLIC_SPACE, если выбран ≥1 ИТО-источник (Вент/Завеса/ИТП/ПНС/Э/Щ)
  * - «шум жил ИТО день/ночь» — только APARTMENT, те же правила источников
+ * - «шум зум» — только APARTMENT и только «зачистное устройство мусоропровода»
  *
  * Сетка и стили как на «лифт ночь» (упрощённая шапка), колонка D — динамический текст по выбранным источникам.
  */
@@ -27,7 +28,9 @@ public final class NoiseItoSheetWriter {
                                                        java.util.Map<String, double[]> thresholds,
                                                        ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
         return appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow, startNo, thresholds, sheetKind,
-                sp -> sp != null && (sp.getType() == Space.SpaceType.OFFICE || sp.getType() == Space.SpaceType.PUBLIC_SPACE));
+                sp -> sp != null && (sp.getType() == Space.SpaceType.OFFICE || sp.getType() == Space.SpaceType.PUBLIC_SPACE),
+                NoiseItoSheetWriter::hasItoSources,
+                NoiseItoSheetWriter::itoDText);
     }
 
     /** Жилые ИТО (день/ночь): только APARTMENT. Стартовая строка передаётся явно (обычно 2). */
@@ -39,7 +42,23 @@ public final class NoiseItoSheetWriter {
                                                     java.util.Map<String, double[]> thresholds,
                                                     ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
         return appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow, startNo, thresholds, sheetKind,
-                sp -> sp != null && sp.getType() == Space.SpaceType.APARTMENT);
+                sp -> sp != null && sp.getType() == Space.SpaceType.APARTMENT,
+                NoiseItoSheetWriter::hasItoSources,
+                NoiseItoSheetWriter::itoDText);
+    }
+
+    /** ЗУМ (жилые): только APARTMENT, отдельный лист. */
+    public static int appendZumResRoomBlocksFromRow(Workbook wb, Sheet sh,
+                                                    Building building,
+                                                    java.util.Map<String, DatabaseManager.NoiseValue> byKey,
+                                                    int startRow,
+                                                    int startNo,
+                                                    java.util.Map<String, double[]> thresholds,
+                                                    ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind) {
+        return appendItoRoomBlocksFromRow(wb, sh, building, byKey, startRow, startNo, thresholds, sheetKind,
+                sp -> sp != null && sp.getType() == Space.SpaceType.APARTMENT,
+                NoiseItoSheetWriter::hasZumSource,
+                NoiseItoSheetWriter::zumDText);
     }
 
     /* ===== Общая реализация для ИТО ===== */
@@ -50,7 +69,9 @@ public final class NoiseItoSheetWriter {
                                                   int startNo,
                                                   java.util.Map<String, double[]> thresholds,
                                                   ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind sheetKind,
-                                                  java.util.function.Predicate<Space> spacePredicate) {
+                                                  java.util.function.Predicate<Space> spacePredicate,
+                                                  java.util.function.Predicate<DatabaseManager.NoiseValue> sourcesPredicate,
+                                                  java.util.function.Function<DatabaseManager.NoiseValue, String> dTextProvider) {
         if (building == null) return startNo;
 
         org.apache.poi.ss.usermodel.Font f8 = wb.createFont();
@@ -125,7 +146,7 @@ public final class NoiseItoSheetWriter {
                     String key = Math.max(0, fl.getSectionIndex()) + "|" + floorNum + "|" + spaceId + "|" + roomName;
 
                     DatabaseManager.NoiseValue nv = byKey.get(key);
-                    if (!hasItoSources(nv)) continue;
+                    if (!sourcesPredicate.test(nv)) continue;
 
                     Section sec = null;
                     if (multiSections && fl.getSectionIndex() >= 0 && fl.getSectionIndex() < sections.size()) {
@@ -133,7 +154,7 @@ public final class NoiseItoSheetWriter {
                     }
 
                     String place = formatPlace(building, sec, fl, sp, rm);
-                    String dText = itoDText(nv);
+                    String dText = dTextProvider.apply(nv);
 
                     for (int t = 1; t <= 3; t++) {
                         int r1 = row, r2 = row + 1, r3 = row + 2;
@@ -225,7 +246,7 @@ public final class NoiseItoSheetWriter {
 
     /** Есть ли выбранные источники для ИТО (без «Лифт»). */
     private static boolean hasItoSources(DatabaseManager.NoiseValue nv) {
-        return nv != null && (nv.vent || nv.heatCurtain || nv.itp || nv.pns || nv.electrical || nv.zum);
+        return nv != null && (nv.vent || nv.heatCurtain || nv.itp || nv.pns || nv.electrical);
     }
 
     /** Текст для колонки D на листах ИТО. */
@@ -236,9 +257,16 @@ public final class NoiseItoSheetWriter {
         if (nv.itp)         parts.add("ИТП");
         if (nv.pns)         parts.add("ПНС");
         if (nv.electrical)  parts.add("электрощитовой");
-        if (nv.zum)         parts.add("зачистного устройства мусоропровода");
         String joined = String.join(", ", parts);
         return "Суммарные источники шума (работает оборудование " + joined + ")";
+    }
+
+    private static boolean hasZumSource(DatabaseManager.NoiseValue nv) {
+        return nv != null && nv.zum;
+    }
+
+    private static String zumDText(DatabaseManager.NoiseValue nv) {
+        return "Суммарные источники шума (работает оборудование зачистного устройства мусоропровода)";
     }
 
     private static NormativeRow normativeFor(ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind kind) {
@@ -250,6 +278,8 @@ public final class NoiseItoSheetWriter {
                 return new NormativeRow(NoiseSheetCommon.NORM_SANPIN_DAY, "35", "50");
             case ITO_RES_NIGHT:
                 return new NormativeRow(NoiseSheetCommon.NORM_SANPIN_NIGHT, "25", "40");
+            case ZUM_DAY:
+                return new NormativeRow(NoiseSheetCommon.NORM_SANPIN_DAY, "35", "50");
             default:
                 return null;
         }
