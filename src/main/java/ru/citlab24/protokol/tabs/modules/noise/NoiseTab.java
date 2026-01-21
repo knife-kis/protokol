@@ -287,7 +287,9 @@ public class NoiseTab extends JPanel {
         periodsBtn.setToolTipText("Указать дату и время: лифт (день/ночь), ИТО (неж/жил), авто (день/ночь), площадка");
         periodsBtn.addActionListener(e -> {
             Window w = SwingUtilities.getWindowAncestor(this);
-            NoisePeriodsDialog dlg = new NoisePeriodsDialog(w, periods);
+            updateRoomSelectionStates();
+            java.util.Map<NoiseTestKind, Integer> points = buildPointsCountByKind();
+            NoisePeriodsDialog dlg = new NoisePeriodsDialog(w, periods, points);
             dlg.setVisible(true);
             java.util.Map<NoiseTestKind, NoisePeriod> res = dlg.getResult();
             if (res != null && !res.isEmpty()) {
@@ -799,6 +801,81 @@ public class NoiseTab extends JPanel {
         List<Section> all = building.getSections();
         int idx = all.indexOf(sel);
         return (idx < 0) ? 0 : idx;
+    }
+    private java.util.Map<NoiseTestKind, Integer> buildPointsCountByKind() {
+        java.util.EnumMap<NoiseTestKind, Integer> counts = new java.util.EnumMap<>(NoiseTestKind.class);
+        for (NoiseTestKind kind : NoiseTestKind.values()) {
+            counts.put(kind, 0);
+        }
+
+        if (building == null) return counts;
+
+        java.util.List<Floor> floors = new java.util.ArrayList<>(building.getFloors());
+        floors.sort(java.util.Comparator.comparingInt(Floor::getPosition));
+
+        for (Floor fl : floors) {
+            String floorNum = (fl.getNumber() == null) ? "" : fl.getNumber().trim();
+            java.util.List<Space> spaces = new java.util.ArrayList<>(fl.getSpaces());
+            spaces.sort(java.util.Comparator.comparingInt(Space::getPosition));
+
+            for (Space sp : spaces) {
+                String spaceId = (sp.getIdentifier() == null) ? "" : sp.getIdentifier().trim();
+                java.util.List<Room> rooms = new java.util.ArrayList<>(sp.getRooms());
+                rooms.sort(java.util.Comparator.comparingInt(Room::getPosition));
+
+                for (Room rm : rooms) {
+                    String roomName = (rm.getName() == null) ? "" : rm.getName().trim();
+                    String key = Math.max(0, fl.getSectionIndex()) + "|" + floorNum + "|" + spaceId + "|" + roomName;
+                    DatabaseManager.NoiseValue nv = byKey.get(key);
+                    if (nv == null) continue;
+
+                    if (nv.lift) {
+                        if (sp.getType() == Space.SpaceType.APARTMENT) {
+                            addPoints(counts, NoiseTestKind.LIFT_DAY, 3);
+                            addPoints(counts, NoiseTestKind.LIFT_NIGHT, 3);
+                        } else if (sp.getType() == Space.SpaceType.OFFICE) {
+                            addPoints(counts, NoiseTestKind.LIFT_DAY, 3);
+                        }
+                    }
+
+                    if (hasItoSources(nv)) {
+                        if (sp.getType() == Space.SpaceType.OFFICE || sp.getType() == Space.SpaceType.PUBLIC_SPACE) {
+                            addPoints(counts, NoiseTestKind.ITO_NONRES, 3);
+                        }
+                        if (sp.getType() == Space.SpaceType.APARTMENT) {
+                            addPoints(counts, NoiseTestKind.ITO_RES_DAY, 3);
+                            addPoints(counts, NoiseTestKind.ITO_RES_NIGHT, 3);
+                        }
+                    }
+
+                    if (nv.zum && sp.getType() == Space.SpaceType.APARTMENT) {
+                        addPoints(counts, NoiseTestKind.ZUM_DAY, 3);
+                    }
+
+                    if (nv.autoSrc && sp.getType() == Space.SpaceType.APARTMENT) {
+                        addPoints(counts, NoiseTestKind.AUTO_DAY, 3);
+                        addPoints(counts, NoiseTestKind.AUTO_NIGHT, 3);
+                    }
+
+                    if (fl.getType() == Floor.FloorType.STREET
+                            && sp.getType() == Space.SpaceType.OUTDOOR
+                            && (nv.autoSrc || nv.zum)) {
+                        addPoints(counts, NoiseTestKind.SITE, 3);
+                    }
+                }
+            }
+        }
+
+        return counts;
+    }
+
+    private static void addPoints(java.util.Map<NoiseTestKind, Integer> counts, NoiseTestKind kind, int delta) {
+        if (counts == null || kind == null) return;
+        counts.put(kind, counts.getOrDefault(kind, 0) + delta);
+    }
+
+    private static boolean hasItoSources(DatabaseManager.NoiseValue nv) {
+        return nv != null && (nv.vent || nv.heatCurtain || nv.itp || nv.pns || nv.electrical);
     }
     /** Игнорируем в «Шумах» служебные помещения. */
     private static boolean isIgnoredNoiseRoomName(String name) {
