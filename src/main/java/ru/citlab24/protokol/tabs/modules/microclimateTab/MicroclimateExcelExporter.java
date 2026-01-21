@@ -90,6 +90,10 @@ public final class MicroclimateExcelExporter {
         PrintSetup ps = sh.getPrintSetup();
         ps.setLandscape(true);
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
+        sh.setFitToPage(true);
+        ps.setFitWidth((short) 1);
+        ps.setFitHeight((short) 0);
+        sh.setAutobreaks(true);
         sh.setRepeatingRows(new CellRangeAddress(4, 4, 0, 21)); // 5-я строка, столбцы A..V
         // ===== ширина столбцов (A..V) в пикселях =====
         int[] px = {33,200,28,31,30,34,22,31,40,99,34,14,31,40,34,20,31,40,23,23,23,86};
