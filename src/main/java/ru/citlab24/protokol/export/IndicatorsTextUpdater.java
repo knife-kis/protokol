@@ -29,6 +29,7 @@ final class IndicatorsTextUpdater {
         AllExcelExporter.adjustRowHeightForMergedText(titleSheet, 29, 1, 25, indicatorsText);
     }
 
+    // Стало
     private static String buildIndicatorsText(Workbook wb) {
         String baseText = "Показатели, по которым проводились измерения:";
         if (wb == null) return baseText;
@@ -74,7 +75,9 @@ final class IndicatorsTextUpdater {
         if (wb.getSheet("Иск освещение") != null) {
             lightingIndicatorIndex = indicators.size();
             indicators.add("освещенность (искусственная);");
-            boolean hasPulsation = hasDataInColumnAfterRow(
+
+            // ВАЖНО: пульсацию проверяем ТОЛЬКО на листе "Иск освещение", а не по префиксу
+            boolean hasPulsation = hasDataInExactSheetColumnAfterRow(
                     wb, "Иск освещение", 12, 7, formatter, evaluator);
             if (hasPulsation) {
                 indicators.add("коэффициент пульсации;");
@@ -183,6 +186,18 @@ final class IndicatorsTextUpdater {
         }
 
         return indicators;
+    }
+    //  проверка строго по одному листу (точное имя)
+    private static boolean hasDataInExactSheetColumnAfterRow(Workbook wb,
+                                                             String sheetName,
+                                                             int columnIndex,
+                                                             int startRowIndex,
+                                                             DataFormatter formatter,
+                                                             FormulaEvaluator evaluator) {
+        if (wb == null || sheetName == null) return false;
+        Sheet sheet = wb.getSheet(sheetName);
+        if (sheet == null) return false;
+        return hasDataInColumnAfterRow(sheet, columnIndex, startRowIndex, formatter, evaluator);
     }
 
     private static final class VentilationIndicators {
