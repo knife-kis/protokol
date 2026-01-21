@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.tabs.modules.lighting;
 
 import org.apache.poi.ss.usermodel.*;
+import ru.citlab24.protokol.export.PrintSetupUtils;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
@@ -71,6 +72,7 @@ public final class StreetLightingExcelExporter {
         sh.setMargin(Sheet.RightMargin, cmToInches(1.8));
         sh.setMargin(Sheet.TopMargin,   cmToInches(1.9));
         sh.setMargin(Sheet.BottomMargin,cmToInches(1.9));
+        PrintSetupUtils.applyDuplexShortEdge(sh);
         sh.setRepeatingRows(CellRangeAddress.valueOf("6:6"));
         // Шрифты/стили
         Font baseFont = wb.createFont();

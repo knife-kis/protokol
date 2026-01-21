@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.tabs.modules.med;
 
 import org.apache.poi.ss.usermodel.*;
+import ru.citlab24.protokol.export.PrintSetupUtils;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import ru.citlab24.protokol.tabs.models.*;
@@ -795,5 +796,6 @@ public final class RadiationExcelExporter {
         ps.setFitHeight((short) 0);
         sheet.setMargin(Sheet.LeftMargin, 0.25);
         sheet.setMargin(Sheet.RightMargin, 0.25);
+        PrintSetupUtils.applyDuplexShortEdge(sheet);
     }
 }

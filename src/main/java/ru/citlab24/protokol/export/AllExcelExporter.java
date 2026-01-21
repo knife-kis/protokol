@@ -127,6 +127,7 @@ public final class AllExcelExporter {
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
         ps.setLandscape(true);
         sheet.setFitToPage(true);
+        PrintSetupUtils.applyDuplexShortEdge(sheet);
 
         // Базовый стиль: Arial 10, перенос по словам
         Font baseFont = wb.createFont();
@@ -763,6 +764,7 @@ public final class AllExcelExporter {
             ps.setLandscape(true);          // обычно удобнее для широких таблиц
             ps.setFitWidth((short) 1);      // 1 страница по ширине
             ps.setFitHeight((short) 0);     // по высоте — сколько понадобится
+            PrintSetupUtils.applyDuplexShortEdge(sh);
 
             // Чуть ужмём поля, чтобы выиграть место по ширине
             sh.setMargin(org.apache.poi.ss.usermodel.Sheet.LeftMargin, 0.25);

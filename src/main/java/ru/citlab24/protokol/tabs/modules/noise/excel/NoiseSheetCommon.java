@@ -3,6 +3,7 @@ package ru.citlab24.protokol.tabs.modules.noise.excel;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.CellReference;
+import ru.citlab24.protokol.export.PrintSetupUtils;
 import ru.citlab24.protokol.tabs.models.*;
 import ru.citlab24.protokol.tabs.modules.noise.NoiseTestKind;
 
@@ -30,6 +31,7 @@ public class NoiseSheetCommon {
         sh.setFitToPage(true);
         ps.setFitWidth((short) 1);
         ps.setFitHeight((short) 0);
+        PrintSetupUtils.applyDuplexShortEdge(sh);
     }
 
     public static void setupColumns(Sheet sh) {

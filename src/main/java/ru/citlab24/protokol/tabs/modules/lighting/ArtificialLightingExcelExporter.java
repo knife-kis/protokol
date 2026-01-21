@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.tabs.modules.lighting;
 
 import org.apache.poi.ss.usermodel.*;
+import ru.citlab24.protokol.export.PrintSetupUtils;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -102,6 +103,7 @@ public final class ArtificialLightingExcelExporter {
         sh.setFitToPage(true);
         ps.setFitWidth((short) 1);
         ps.setFitHeight((short) 0);
+        PrintSetupUtils.applyDuplexShortEdge(sh);
         sh.setRepeatingRows(CellRangeAddress.valueOf("7:7"));
         int[] px = {46, 34, 301, 33, 77, 33, 44, 48, 15, 43, 66, 66, 43, 29, 43, 58};
         for (int c = 0; c < px.length; c++) setColWidthPx(sh, c, px[c]);

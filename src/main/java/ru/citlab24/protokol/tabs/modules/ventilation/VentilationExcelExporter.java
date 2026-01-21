@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.tabs.modules.ventilation;
 
 import org.apache.poi.ss.usermodel.*;
+import ru.citlab24.protokol.export.PrintSetupUtils;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -210,6 +211,7 @@ public class VentilationExcelExporter {
         ps.setFitHeight((short) 0);
         sheet.setMargin(Sheet.LeftMargin, 0.25);
         sheet.setMargin(Sheet.RightMargin, 0.25);
+        PrintSetupUtils.applyDuplexShortEdge(sheet);
     }
 
 
