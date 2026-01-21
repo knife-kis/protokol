@@ -1451,6 +1451,10 @@ public class BuildingTab extends JPanel {
                 : java.util.Collections.emptyMap();
 
         if (index >= 0) {
+            Floor floor = floorListModel.get(index);
+            if (!confirmDeleteFloor(floor)) {
+                return;
+            }
             building.getFloors().remove(index);
             floorListModel.remove(index);
         }
@@ -1584,6 +1588,10 @@ public class BuildingTab extends JPanel {
         Floor floor = floorList.getSelectedValue();
         int index = spaceList.getSelectedIndex();
         if (floor != null && index >= 0) {
+            Space space = spaceListModel.get(index);
+            if (!confirmDeleteSpace(space)) {
+                return;
+            }
             floor.getSpaces().remove(index);
             spaceListModel.remove(index);
         }
@@ -1872,6 +1880,10 @@ public class BuildingTab extends JPanel {
         int index = roomList.getSelectedIndex();
 
         if (space != null && index >= 0) {
+            Room room = roomListModel.get(index);
+            if (!confirmDeleteRoom(room)) {
+                return;
+            }
             space.getRooms().remove(index);
             roomListModel.remove(index);
         }
@@ -1894,6 +1906,47 @@ public class BuildingTab extends JPanel {
                 roomListModel.addElement(room);
             }
         }
+    }
+
+    private boolean confirmDeleteFloor(Floor floor) {
+        String label = (floor != null && floor.getNumber() != null) ? floor.getNumber().trim() : "";
+        String message = label.isEmpty()
+                ? "Вы действительно хотите удалить выбранный этаж?"
+                : String.format("Вы действительно хотите удалить этаж «%s»?", label);
+        return confirmDelete(message);
+    }
+
+    private boolean confirmDeleteSpace(Space space) {
+        String label = (space != null && space.getIdentifier() != null) ? space.getIdentifier().trim() : "";
+        String message = label.isEmpty()
+                ? "Вы действительно хотите удалить выбранное помещение?"
+                : String.format("Вы действительно хотите удалить помещение «%s»?", label);
+        return confirmDelete(message);
+    }
+
+    private boolean confirmDeleteRoom(Room room) {
+        String label = (room != null && room.getName() != null) ? room.getName().trim() : "";
+        String message = label.isEmpty()
+                ? "Вы действительно хотите удалить выбранную комнату?"
+                : String.format("Вы действительно хотите удалить комнату «%s»?", label);
+        return confirmDelete(message);
+    }
+
+    private boolean confirmDelete(String message) {
+        Window parent = SwingUtilities.getWindowAncestor(this);
+        String title = "Подтверждение удаления";
+        String[] options = {"Да", "Нет", "Отмена"};
+        int choice = JOptionPane.showOptionDialog(
+                parent,
+                message,
+                title,
+                JOptionPane.YES_NO_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE,
+                null,
+                options,
+                options[0]
+        );
+        return choice == JOptionPane.YES_OPTION;
     }
 
     private void refreshAllLists() {
