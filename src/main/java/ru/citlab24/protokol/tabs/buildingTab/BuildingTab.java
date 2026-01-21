@@ -312,45 +312,35 @@ public class BuildingTab extends JPanel {
 
         Platform.runLater(() -> {
             // Кнопки
-            javafx.scene.control.Button btnLoad    = new javafx.scene.control.Button("Загрузить проект");
-            javafx.scene.control.Button btnSave    = new javafx.scene.control.Button("Сохранить проект");
             javafx.scene.control.Button btnExport  = new javafx.scene.control.Button("Экспорт в файл");
             javafx.scene.control.Button btnImport  = new javafx.scene.control.Button("Импорт из файла");
             javafx.scene.control.Button btnCalc    = new javafx.scene.control.Button("Рассчитать показатели");
             javafx.scene.control.Button btnSummary = new javafx.scene.control.Button("Сводка квартир");
 
             // Иконки (Ikonli JavaFX)
-            org.kordamp.ikonli.javafx.FontIcon icLoad    = new org.kordamp.ikonli.javafx.FontIcon("fas-folder-open");
-            org.kordamp.ikonli.javafx.FontIcon icSave    = new org.kordamp.ikonli.javafx.FontIcon("fas-save");
             org.kordamp.ikonli.javafx.FontIcon icExport  = new org.kordamp.ikonli.javafx.FontIcon("fas-file-export");
             org.kordamp.ikonli.javafx.FontIcon icImport  = new org.kordamp.ikonli.javafx.FontIcon("fas-file-import");
             org.kordamp.ikonli.javafx.FontIcon icCalc    = new org.kordamp.ikonli.javafx.FontIcon("fas-calculator");
             org.kordamp.ikonli.javafx.FontIcon icSummary = new org.kordamp.ikonli.javafx.FontIcon("fas-table");
-            icLoad.setIconSize(16);
-            icSave.setIconSize(16);
             icExport.setIconSize(16);
             icImport.setIconSize(16);
             icCalc.setIconSize(16);
             icSummary.setIconSize(16);
-            btnLoad.setGraphic(icLoad);
-            btnSave.setGraphic(icSave);
             btnExport.setGraphic(icExport);
             btnImport.setGraphic(icImport);
             btnCalc.setGraphic(icCalc);
             btnSummary.setGraphic(icSummary);
 
             // CSS-классы для цветов/hover
-            btnLoad.getStyleClass().addAll("button", "btn-load");
-            btnSave.getStyleClass().addAll("button", "btn-save");
             btnExport.getStyleClass().addAll("button", "btn-save");
             btnImport.getStyleClass().addAll("button", "btn-load");
             btnCalc.getStyleClass().addAll("button", "btn-calc");
             btnSummary.getStyleClass().addAll("button", "btn-summary");
 
             // Растягиваем равномерно
-            javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(10, btnLoad, btnSave, btnExport, btnImport, btnCalc, btnSummary);
+            javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(10, btnExport, btnImport, btnCalc, btnSummary);
             box.getStyleClass().addAll("controls-bar", "theme-light");
-            for (javafx.scene.control.Button b : java.util.List.of(btnLoad, btnSave, btnExport, btnImport, btnCalc, btnSummary)) {
+            for (javafx.scene.control.Button b : java.util.List.of(btnExport, btnImport, btnCalc, btnSummary)) {
                 b.setMaxWidth(Double.MAX_VALUE);
                 javafx.scene.layout.HBox.setHgrow(b, javafx.scene.layout.Priority.ALWAYS);
             }
@@ -377,15 +367,13 @@ public class BuildingTab extends JPanel {
             });
 
             // Цвета и "активность"
-            final String COL_LOAD    = "#3949ab";
-            final String COL_SAVE    = "#43a047";
             final String COL_EXPORT  = "#00897b";
             final String COL_IMPORT  = "#6d4c41";
             final String COL_CALC    = "#1e88e5";
             final String COL_SUMMARY = "#00897b";
 
             final java.util.List<javafx.scene.control.Button> all =
-                    java.util.List.of(btnLoad, btnSave, btnExport, btnImport, btnCalc, btnSummary);
+                    java.util.List.of(btnExport, btnImport, btnCalc, btnSummary);
 
             final java.util.function.BiConsumer<javafx.scene.control.Button, String> markActive =
                     (btn, hex) -> {
@@ -395,14 +383,6 @@ public class BuildingTab extends JPanel {
                     };
 
             // Обработчики: сначала отметить активной, потом вызвать Swing-логику
-            btnLoad.setOnAction(ev -> {
-                markActive.accept(btnLoad, COL_LOAD);
-                javax.swing.SwingUtilities.invokeLater(() -> loadProject(null));
-            });
-            btnSave.setOnAction(ev -> {
-                markActive.accept(btnSave, COL_SAVE);
-                javax.swing.SwingUtilities.invokeLater(() -> saveProject(null));
-            });
             btnExport.setOnAction(ev -> {
                 markActive.accept(btnExport, COL_EXPORT);
                 javax.swing.SwingUtilities.invokeLater(() -> exportProject(null));
@@ -750,6 +730,14 @@ public class BuildingTab extends JPanel {
     }
 
     // Основные операции с проектом
+    public void requestLoadProject() {
+        loadProject(null);
+    }
+
+    public void requestSaveProject() {
+        saveProject(null);
+    }
+
     private void loadProject(ActionEvent e) {
         try {
             List<Building> projects = DatabaseManager.getAllBuildings();
