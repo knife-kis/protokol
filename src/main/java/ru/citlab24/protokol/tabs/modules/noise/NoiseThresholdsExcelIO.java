@@ -37,6 +37,7 @@ final class NoiseThresholdsExcelIO {
                 new RowSpec("ИТО день", "ИТО|день"),
                 new RowSpec("ИТО ночь", "ИТО|ночь"),
                 new RowSpec("ИТО офис", "ИТО|офис"),
+                new RowSpec("Зум день", "Зум|день"),
                 new RowSpec("Авто день", "Авто|день"),
                 new RowSpec("Авто ночь", "Авто|ночь"),
                 new RowSpec("Улица", "Улица|диапазон")
