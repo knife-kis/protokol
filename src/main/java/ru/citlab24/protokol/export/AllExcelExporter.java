@@ -166,12 +166,20 @@ public final class AllExcelExporter {
         boldCenterStyle.cloneStyleFrom(centerMiddleStyle);
         boldCenterStyle.setFont(boldFont);
 
+        CellStyle headerBorderStyle = wb.createCellStyle();
+        headerBorderStyle.cloneStyleFrom(centerMiddleStyle);
+        setThinBorders(headerBorderStyle);
+
+        CellStyle dataBorderStyle = wb.createCellStyle();
+        dataBorderStyle.cloneStyleFrom(baseStyle);
+        setThinBorders(dataBorderStyle);
+
         // Высоты строк: фиксированный список (значения заданы в пикселях).
         float[] rowHeightsPx = new float[] {
                 20f, 21f, 10f, 20f, 16f, 20f, 20f, 47f, 20f, 20f,
                 19f, 20f, 20f, 20f, 20f, 20f, 9f, 20f, 9f, 20f,
                 9f, 20f, 9f, 20f, 9f, 20f, 9f, 20f, 9f, 20f,
-                9f, 20f, 9f, 20f, 9f, 10f, 49f
+                9f, 20f, 9f, 20f, 9f, 20f, 126f
         };// Высоты строк оставляем как раньше — тебе они подошли
         for (int r = 0; r < rowHeightsPx.length; r++) {
             Row row = sheet.getRow(r);
@@ -318,31 +326,13 @@ public final class AllExcelExporter {
                 "Сведения о средствах измерения:");
 
         int headerRow = 35;
-        String indicatorHeader = "Измеряемый показатель";
-        String instrumentHeader = "Наименование, тип средства Измерения";
-        String serialHeader = "Заводской номер";
-        String errorHeader = "Погрешность средства измерения";
-        String verificationHeader = "Сведения о поверке (№ свидетельства, срок действия)";
-
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 0, 3, indicatorHeader);
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 4, 9, instrumentHeader);
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 10, 12, serialHeader);
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 13, 19, errorHeader);
-        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 20, 25, verificationHeader);
-
-        adjustRowHeightForMergedSections(sheet, headerRow, new int[][] {
-                {0, 3},
-                {4, 9},
-                {10, 12},
-                {13, 19},
-                {20, 25}
-        }, new String[] {
-                indicatorHeader,
-                instrumentHeader,
-                serialHeader,
-                errorHeader,
-                verificationHeader
-        });
+        TitlePageMeasurementTableWriter.write(sheet, headerRow, headerBorderStyle, dataBorderStyle);
+        adjustRowHeightForMergedSections(
+                sheet,
+                headerRow,
+                TitlePageMeasurementTableWriter.headerRanges(),
+                TitlePageMeasurementTableWriter.headerTexts()
+        );
     }
 
     private static void tryInvokeAppend(String fqcn, Class<?>[] sig, Object[] args) {
@@ -722,6 +712,14 @@ public final class AllExcelExporter {
                 }
             }
         }
+    }
+
+    private static void setThinBorders(CellStyle style) {
+        if (style == null) return;
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
     }
     static void adjustRowHeightForMergedText(Sheet sheet,
                                              int rowIndex,
