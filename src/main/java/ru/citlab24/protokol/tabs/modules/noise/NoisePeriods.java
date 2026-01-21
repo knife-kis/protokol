@@ -30,6 +30,7 @@ final class NoisePeriod {
 /** Диалог ввода периодов для всех нужных испытаний: лифт/ИТО/авто/площадка. */
 final class NoisePeriodsDialog extends JDialog {
     private final Map<NoiseTestKind, NoisePeriod> result = new EnumMap<>(NoiseTestKind.class);
+    private final Map<NoiseTestKind, Integer> pointsByKind;
 
     // Лифт
     private final PeriodPanel pLiftDay      = new PeriodPanel("Лифт — день",         LocalTime.of(8, 0),  LocalTime.of(21, 0));
@@ -54,6 +55,7 @@ final class NoisePeriodsDialog extends JDialog {
                        Map<NoiseTestKind, NoisePeriod> initial,
                        Map<NoiseTestKind, Integer> points) {
         super(owner, "Периоды измерений (шумы)", ModalityType.APPLICATION_MODAL);
+        this.pointsByKind = (points == null) ? new EnumMap<>(NoiseTestKind.class) : new EnumMap<>(points);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
         JPanel center = new JPanel();
@@ -74,11 +76,28 @@ final class NoisePeriodsDialog extends JDialog {
 
         center.add(makeGroup("Площадка (улица)", pSite));
 
+        JButton exportBtn = new JButton("Выгрузка времени");
+        exportBtn.setToolTipText("Сохранить периоды измерений в Excel");
+        exportBtn.addActionListener(e -> onExportPeriods());
+
+        JButton importBtn = new JButton("Загрузка времени");
+        importBtn.setToolTipText("Загрузить периоды измерений из Excel");
+        importBtn.addActionListener(e -> onImportPeriods());
+
         JButton ok = new JButton("OK");
         JButton cancel = new JButton("Отмена");
-        JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        south.add(cancel);
-        south.add(ok);
+
+        JPanel southLeft = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        southLeft.add(exportBtn);
+        southLeft.add(importBtn);
+
+        JPanel southRight = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        southRight.add(cancel);
+        southRight.add(ok);
+
+        JPanel south = new JPanel(new BorderLayout());
+        south.add(southLeft, BorderLayout.WEST);
+        south.add(southRight, BorderLayout.EAST);
 
         ok.addActionListener(e -> {
             result.clear();
@@ -165,6 +184,45 @@ final class NoisePeriodsDialog extends JDialog {
     }
 
     Map<NoiseTestKind, NoisePeriod> getResult() { return result; }
+
+    private Map<NoiseTestKind, NoisePeriod> collectPeriods() {
+        Map<NoiseTestKind, NoisePeriod> current = new EnumMap<>(NoiseTestKind.class);
+        current.put(NoiseTestKind.LIFT_DAY,      pLiftDay.getPeriod());
+        current.put(NoiseTestKind.LIFT_NIGHT,    pLiftNight.getPeriod());
+        current.put(NoiseTestKind.ITO_NONRES,    pItoNonres.getPeriod());
+        current.put(NoiseTestKind.ITO_RES_DAY,   pItoResDay.getPeriod());
+        current.put(NoiseTestKind.ITO_RES_NIGHT, pItoResNight.getPeriod());
+        current.put(NoiseTestKind.ZUM_DAY,       pZumDay.getPeriod());
+        current.put(NoiseTestKind.AUTO_DAY,      pAutoDay.getPeriod());
+        current.put(NoiseTestKind.AUTO_NIGHT,    pAutoNight.getPeriod());
+        current.put(NoiseTestKind.SITE,          pSite.getPeriod());
+        return current;
+    }
+
+    private void applyPeriods(Map<NoiseTestKind, NoisePeriod> data) {
+        if (data == null) return;
+        setIfPresent(data, NoiseTestKind.LIFT_DAY, pLiftDay);
+        setIfPresent(data, NoiseTestKind.LIFT_NIGHT, pLiftNight);
+        setIfPresent(data, NoiseTestKind.ITO_NONRES, pItoNonres);
+        setIfPresent(data, NoiseTestKind.ITO_RES_DAY, pItoResDay);
+        setIfPresent(data, NoiseTestKind.ITO_RES_NIGHT, pItoResNight);
+        setIfPresent(data, NoiseTestKind.ZUM_DAY, pZumDay);
+        setIfPresent(data, NoiseTestKind.AUTO_DAY, pAutoDay);
+        setIfPresent(data, NoiseTestKind.AUTO_NIGHT, pAutoNight);
+        setIfPresent(data, NoiseTestKind.SITE, pSite);
+    }
+
+    private void onExportPeriods() {
+        NoisePeriodsExcelIO.exportPeriods(this, collectPeriods(), pointsByKind);
+    }
+
+    private void onImportPeriods() {
+        Map<NoiseTestKind, NoisePeriod> imported = NoisePeriodsExcelIO.importPeriods(this);
+        if (imported == null || imported.isEmpty()) return;
+        applyPeriods(imported);
+        JOptionPane.showMessageDialog(this, "Периоды измерений загружены.",
+                "Периоды измерений", JOptionPane.INFORMATION_MESSAGE);
+    }
 
     /* ====== панель одной строки: дата + с/до ====== */
     private static final class PeriodPanel extends JPanel {
