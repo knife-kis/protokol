@@ -153,7 +153,7 @@ final class TitlePageMeasurementTableWriter {
         setMergedText(sheet, measurementStyle, microStartRow,
                 microStartRow + (hasResultantTemperature ? 4 : 3), 4, 9, instrumentValue);
         setMergedText(sheet, measurementStyle, microStartRow,
-                microStartRow + (hasResultantTemperature ? 4 : 3), 10, 12, "");
+                microStartRow + (hasResultantTemperature ? 4 : 3), 10, 12, "569521");
         setMergedText(sheet, measurementStyle, microStartRow,
                 microStartRow + (hasResultantTemperature ? 4 : 3), 20, 25, verificationValue);
 
@@ -225,7 +225,9 @@ final class TitlePageMeasurementTableWriter {
 
         int headerRepeatRow = eroaRow + 1;
         float headerHeight = getRowHeightPoints(sheet, headerRow);
-        if (headerHeight > 0) {
+        if (hasResultantTemperature) {
+            setRowHeightPx(sheet, headerRepeatRow, 49f);
+        } else if (headerHeight > 0) {
             setRowHeightPoints(sheet, headerRepeatRow, headerHeight);
         }
         writeHeaderRow(sheet, headerRepeatRow, headerStyle, headers);
