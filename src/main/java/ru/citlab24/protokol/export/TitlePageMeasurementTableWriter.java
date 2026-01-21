@@ -3,8 +3,10 @@ package ru.citlab24.protokol.export;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 
 final class TitlePageMeasurementTableWriter {
@@ -36,7 +38,8 @@ final class TitlePageMeasurementTableWriter {
         writeHeaderRow(sheet, headerRow, headerStyle, headers);
 
         String indicatorsText = readIndicatorsText(sheet).toLowerCase();
-        boolean hasResultantTemperature = indicatorsText.contains("результирующая температура");
+        boolean hasResultantTemperature = indicatorsText.contains("результирующая температура")
+                && hasResultantTemperatureValues(sheet.getWorkbook());
         boolean hasPulsation = indicatorsText.contains("коэффициент пульсации");
         boolean hasLightingIndicator = indicatorsText.contains("освещенность (");
         boolean hasKeoIndicator = indicatorsText.contains("коэффициент естественной освещенности");
@@ -53,12 +56,15 @@ final class TitlePageMeasurementTableWriter {
                 || sheet.getWorkbook().getSheet("Иск освещение (2)") != null;
 
         int rowIndex = headerRow + 1;
-        setRowHeightPx(sheet, rowIndex, 20f);
-        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 0, 3, "");
-        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 4, 9, "");
-        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 10, 12, "");
-        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "");
-        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 20, 25, "");
+        setRowHeightPx(sheet, rowIndex, 126f);
+        writeMeasurementRow(sheet, measurementStyle, rowIndex,
+                "Длительность интервала времени",
+                "Секундомеры электронные, Интеграл С-01",
+                "\u00b1(9,6\u00b710-6 \u00b7\u0422x+0,01) \u0441\n" +
+                        "\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u0430\u044f \u0430\u0431\u0441\u043e\u043b\u044e\u0442\u043d\u0430\u044f \u043f\u043e\u0433\u0440\u0435\u0448\u043d\u043e\u0441\u0442\u044c \u043f\u0440\u0438 \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0438 \u0442\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u044b \u043e\u0442 \u043d\u043e\u0440\u043c\u0430\u043b\u044c\u043d\u044b\u0445 \u0443\u0441\u043b\u043e\u0432\u0438\u0439 25 \u00b1 5 (\u02da\u0421) \u043d\u0430 1 \u02da\u0421 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0442\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u044b:\n" +
+                        "-(2,2\u00b710-6\u00b7\u0422x) \u0441",
+                "\u0421-\u0410\u0428/21-05-2025/433383424 \u0434\u043e 20.05.2026",
+                "462667");
         rowIndex++;
 
         int microStartRow = rowIndex;
@@ -97,7 +103,7 @@ final class TitlePageMeasurementTableWriter {
                         "где V – значение измеряемой скорости, м/с");
         rowIndex++;
 
-        setRowHeightPx(sheet, rowIndex, 7f);
+        setRowHeightPx(sheet, rowIndex, 37f);
         setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 0, 3, "Атмосферное давление");
         setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "\u00b1 0,13 кПа\n(\u00b11 мм рт.ст)");
         rowIndex++;
@@ -246,6 +252,30 @@ final class TitlePageMeasurementTableWriter {
         Cell cell = row.getCell(1);
         if (cell == null) return "";
         return new DataFormatter().formatCellValue(cell);
+    }
+
+    private static boolean hasResultantTemperatureValues(Workbook workbook) {
+        if (workbook == null) return false;
+        DataFormatter formatter = new DataFormatter();
+        FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet sheet = workbook.getSheetAt(i);
+            if (sheet == null) continue;
+            String name = sheet.getSheetName();
+            if (name == null || !name.startsWith("Микроклимат")) continue;
+            int lastRow = sheet.getLastRowNum();
+            for (int rowIndex = 5; rowIndex <= lastRow; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) continue;
+                Cell cell = row.getCell(10);
+                if (cell == null) continue;
+                String value = formatter.formatCellValue(cell, evaluator);
+                if (value != null && !value.trim().isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static void setRowHeightPx(Sheet sheet, int rowIndex, float heightPx) {
