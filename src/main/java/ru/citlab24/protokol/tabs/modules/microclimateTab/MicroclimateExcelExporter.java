@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.tabs.modules.microclimateTab;
 
 import org.apache.poi.ss.usermodel.*;
+import ru.citlab24.protokol.export.PrintSetupUtils;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -94,6 +95,7 @@ public final class MicroclimateExcelExporter {
         ps.setFitWidth((short) 1);
         ps.setFitHeight((short) 0);
         sh.setAutobreaks(true);
+        PrintSetupUtils.applyDuplexShortEdge(sh);
         sh.setRepeatingRows(new CellRangeAddress(4, 4, 0, 21)); // 5-я строка, столбцы A..V
         // ===== ширина столбцов (A..V) в пикселях =====
         int[] px = {33,200,28,31,30,34,22,31,40,99,34,14,31,40,34,20,31,40,23,23,23,86};

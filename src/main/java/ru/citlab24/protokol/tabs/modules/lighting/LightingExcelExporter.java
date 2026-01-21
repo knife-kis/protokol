@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.tabs.modules.lighting;
 
 import org.apache.poi.ss.usermodel.*;
+import ru.citlab24.protokol.export.PrintSetupUtils;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -718,6 +719,7 @@ public final class LightingExcelExporter {
         ps.setFitHeight((short) 0);
         sheet.setMargin(Sheet.LeftMargin, 0.25);
         sheet.setMargin(Sheet.RightMargin, 0.25);
+        PrintSetupUtils.applyDuplexShortEdge(sheet);
     }
 
     // ===== внутренние типы =====
@@ -751,5 +753,6 @@ public final class LightingExcelExporter {
         ps.setFitHeight((short) 0);
         sheet.setMargin(Sheet.LeftMargin, 0.25);
         sheet.setMargin(Sheet.RightMargin, 0.25);
+        PrintSetupUtils.applyDuplexShortEdge(sheet);
     }
 }
