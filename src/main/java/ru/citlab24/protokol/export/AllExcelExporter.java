@@ -699,11 +699,11 @@ public final class AllExcelExporter {
             }
         }
     }
-    private static void adjustRowHeightForMergedText(Sheet sheet,
-                                                     int rowIndex,
-                                                     int firstCol,
-                                                     int lastCol,
-                                                     String text) {
+    static void adjustRowHeightForMergedText(Sheet sheet,
+                                             int rowIndex,
+                                             int firstCol,
+                                             int lastCol,
+                                             String text) {
         if (sheet == null) return;
 
         Row row = sheet.getRow(rowIndex);
@@ -735,29 +735,6 @@ public final class AllExcelExporter {
         return Math.max(1, lines);
     }
 
-    static void adjustRowHeightForMergedText(Sheet sheet,
-                                             int rowIndex,
-                                             int firstCol,
-                                             int lastCol,
-                                             String text) {
-        if (sheet == null) return;
-
-        Row row = sheet.getRow(rowIndex);
-        if (row == null) {
-            row = sheet.createRow(rowIndex);
-        }
-
-        double totalChars = 0.0;
-        for (int c = firstCol; c <= lastCol; c++) {
-            totalChars += sheet.getColumnWidth(c) / 256.0;
-        }
-        totalChars = Math.max(1.0, totalChars);
-
-        int lines = estimateWrappedLines(text, totalChars);
-        float baseHeightPx = pointsToPixels(row.getHeightInPoints());
-        float newHeightPx = baseHeightPx * Math.max(1, lines);
-        row.setHeightInPoints(pixelsToPoints(newHeightPx));
-    }
     private static String safe(String value) {
         return (value == null) ? "" : value.trim();
     }
