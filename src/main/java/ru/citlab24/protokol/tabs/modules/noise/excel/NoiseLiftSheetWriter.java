@@ -150,7 +150,7 @@ public class NoiseLiftSheetWriter {
         setCenter(sh, 2, 22, "Максимальные уровни звука  (дБА)", verticalWrapBorderF10);
 
         Row r6 = getOrCreateRow(sh, 5);
-        for (int c = 0; c <= 18; c++) setText(r6, c, String.valueOf(c + 1), (c <= 3) ? centerBorderF10 : centerBorder);
+        for (int c = 0; c <= 18; c++) setText(r6, c, String.valueOf(c + 1), centerBorder);
         merges.add(merge(sh, 5, 5, 19, 21)); setCenter(sh, 5, 19, "20", centerBorder);
         merges.add(merge(sh, 5, 5, 22, 24)); setCenter(sh, 5, 22, "21", centerBorder);
 
