@@ -238,16 +238,9 @@ public final class AllExcelExporter {
         String txtS5 = "_______________/М.Е. Гаврилова/";
         setMergedText(sheet, boldCenterStyle, 4, 4, 18, 25, txtS5);
 
-        // S7-Z7: дата из программы + " г."
-        String protocolDate = resolveProtocolDateText(frame);
-        String txtS7;
-        if (protocolDate != null && !protocolDate.isBlank()) {
-            txtS7 = protocolDate.trim() + " г.";
-        } else {
-            // запасной вариант, если датy из программы не нашли
-            txtS7 = "____.__.____ г.";
-        }
-        setMergedText(sheet, boldCenterStyle, 6, 6, 18, 25, txtS7);
+        // S7-Z7: дата из программы в формате "12 декабря 2025 г."
+        String protocolDate = formatProtocolDateForHeader(resolveProtocolDateText(frame));
+        setMergedText(sheet, boldCenterStyle, 6, 6, 18, 25, protocolDate);
 
         // S9-Z9: МП
         setMergedText(sheet, boldCenterStyle, 8, 8, 18, 25, "МП");
