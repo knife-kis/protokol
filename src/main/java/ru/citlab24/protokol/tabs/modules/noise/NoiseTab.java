@@ -1092,6 +1092,13 @@ public class NoiseTab extends JPanel {
                     Double mMin  = fieldValueOrNull(fMMin);
                     Double mMax  = fieldValueOrNull(fMMax);
 
+                    if (!validateRange(lbl.getText(), "Eq", ekMin, ekMax, dialog)) {
+                        return;
+                    }
+                    if (!validateRange(lbl.getText(), "MAX", mMin, mMax, dialog)) {
+                        return;
+                    }
+
                     if (ekMin == null && ekMax == null && mMin == null && mMax == null) {
                         thresholds.remove(key);
                     } else {
@@ -1127,6 +1134,18 @@ public class NoiseTab extends JPanel {
         }
         Object value = field.getValue();
         return (value instanceof Number n) ? n.doubleValue() : null;
+    }
+
+    private static boolean validateRange(String label, String kind, Double min, Double max, Component parent) {
+        if (min == null || max == null) return true;
+        double range = Math.abs(max - min);
+        if (range < 0.6) {
+            JOptionPane.showMessageDialog(parent,
+                    "Диапазон для \"" + label + "\" (" + kind + ") должен быть не меньше 0,6.",
+                    "Пороговые значения", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+        return true;
     }
     /** Ключ порога: "<источник>|<вариант>", например "Лифт|день" или "Улица|диапазон". */
     private static String thKey(String srcLabel, String variant) {
