@@ -7,6 +7,7 @@ import ru.citlab24.protokol.tabs.renderers.SpaceListRenderer;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.awt.event.ActionListener;
 import java.util.List;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -47,6 +48,8 @@ public class MicroclimateTab extends JPanel {
     private final MicroclimateRoomsTableModel roomTableModel =
             new MicroclimateRoomsTableModel(globalRoomSelectionMap);
     private final JTable roomTable = new JTable(roomTableModel);
+    private MicroclimateExcelExporter.TemperatureMode temperatureMode =
+            MicroclimateExcelExporter.TemperatureMode.COLD;
 
     public MicroclimateTab() {
         setLayout(new BorderLayout(10, 0));
@@ -320,7 +323,37 @@ public class MicroclimateTab extends JPanel {
         refreshFloors();
     }
     private JPanel buildBottomPanel() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel p = new JPanel(new BorderLayout());
+        JPanel tempPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 5));
+        JLabel tempLabel = new JLabel("Температура воздуха:");
+        JRadioButton coldButton = new JRadioButton("Холодно");
+        JRadioButton normalButton = new JRadioButton("Нормально");
+        JRadioButton warmButton = new JRadioButton("Тепло");
+        ButtonGroup tempGroup = new ButtonGroup();
+        tempGroup.add(coldButton);
+        tempGroup.add(normalButton);
+        tempGroup.add(warmButton);
+        coldButton.setSelected(true);
+
+        ActionListener tempListener = e -> {
+            if (coldButton.isSelected()) {
+                temperatureMode = MicroclimateExcelExporter.TemperatureMode.COLD;
+            } else if (normalButton.isSelected()) {
+                temperatureMode = MicroclimateExcelExporter.TemperatureMode.NORMAL;
+            } else if (warmButton.isSelected()) {
+                temperatureMode = MicroclimateExcelExporter.TemperatureMode.WARM;
+            }
+        };
+        coldButton.addActionListener(tempListener);
+        normalButton.addActionListener(tempListener);
+        warmButton.addActionListener(tempListener);
+
+        tempPanel.add(tempLabel);
+        tempPanel.add(coldButton);
+        tempPanel.add(normalButton);
+        tempPanel.add(warmButton);
+
+        JPanel exportPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton exportBtn = new JButton("Экспорт в Excel");
 
         exportBtn.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -333,6 +366,7 @@ public class MicroclimateTab extends JPanel {
             MicroclimateExcelExporter.export(
                     currentBuilding,
                     sectionIndexToExport(),  // текущая секция или все
+                    temperatureMode,
                     this
             );
         });
@@ -342,7 +376,9 @@ public class MicroclimateTab extends JPanel {
             public void mouseExited (java.awt.event.MouseEvent e) { exportBtn.setBackground(new Color(0,100,0)); }
         });
 
-        p.add(exportBtn);
+        exportPanel.add(exportBtn);
+        p.add(tempPanel, BorderLayout.WEST);
+        p.add(exportPanel, BorderLayout.EAST);
         return p;
     }
 

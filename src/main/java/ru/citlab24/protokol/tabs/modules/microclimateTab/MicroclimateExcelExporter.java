@@ -18,23 +18,45 @@ public final class MicroclimateExcelExporter {
 
     private MicroclimateExcelExporter() {}
 
+    public enum TemperatureMode {
+        COLD("Холодно", 0.0),
+        NORMAL("Нормально", 0.4),
+        WARM("Тепло", 1.0);
+
+        private final String label;
+        private final double offset;
+
+        TemperatureMode(String label, double offset) {
+            this.label = label;
+            this.offset = offset;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+
+        public double getOffset() {
+            return offset;
+        }
+    }
+
     /* ===== ПУБЛИЧНЫЕ API ===== */
 
     /** append: строит «большой» лист точь-в-точь как при экспорте из вкладки. */
-    public static void appendToWorkbook(Building building, int sectionIndex, Workbook wb) {
+    public static void appendToWorkbook(Building building, int sectionIndex, Workbook wb, TemperatureMode mode) {
         if (building == null || wb == null) return;
-        buildMicroclimateSheets(wb, building, sectionIndex);
+        buildMicroclimateSheets(wb, building, sectionIndex, mode);
     }
 
     /** export: обёртка — создаёт книгу, вызывает builder и предлагает сохранить. */
-    public static void export(Building building, int sectionIndex, Component parent) {
+    public static void export(Building building, int sectionIndex, TemperatureMode mode, Component parent) {
         if (building == null) {
             JOptionPane.showMessageDialog(parent, "Сначала загрузите проект (здание).",
                     "Экспорт", JOptionPane.WARNING_MESSAGE);
             return;
         }
         try (Workbook wb = new XSSFWorkbook()) {
-            buildMicroclimateSheets(wb, building, sectionIndex);
+            buildMicroclimateSheets(wb, building, sectionIndex, mode);
 
             // ===== сохранение =====
             JFileChooser chooser = new JFileChooser();
@@ -59,7 +81,7 @@ public final class MicroclimateExcelExporter {
     /* ===== ВЕСЬ СТРОИТЕЛЬ ЛИСТА — как во вкладке ===== */
 
     /** Весь «большой» шаблон (A..V, объединения, стили, допуски и т. п.). */
-    private static void buildMicroclimateSheets(Workbook wb, Building building, int sectionIndex) {
+    private static void buildMicroclimateSheets(Workbook wb, Building building, int sectionIndex, TemperatureMode mode) {
         Styles S = new Styles(wb);
         Sheet sh = wb.createSheet(uniqueName(wb, "Микроклимат"));
 
@@ -209,19 +231,19 @@ public final class MicroclimateExcelExporter {
 
                         // 1) центральная точка (3 строки по высотам)
                         row = emitBlock(sh, row, seq++, building, f, space, room,
-                                Position.CENTER, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
+                                Position.CENTER, today, isResidential, isOffice, mode, S, rng, spaceOBase, roomOBase);
 
                         // 2) у наружной стены — по числу стен (0..N)
                         int walls = externalWallsCount(room);
                         if (isOffice) {
                             if (walls >= 1) {
                                 row = emitBlock(sh, row, seq++, building, f, space, room,
-                                        Position.NEAR_WALL, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
+                                        Position.NEAR_WALL, today, isResidential, isOffice, mode, S, rng, spaceOBase, roomOBase);
                             }
                         } else {
                             for (int i = 0; i < Math.min(walls, 2); i++) {
                                 row = emitBlock(sh, row, seq++, building, f, space, room,
-                                        Position.NEAR_WALL, today, isResidential, isOffice, S, rng, spaceOBase, roomOBase);
+                                        Position.NEAR_WALL, today, isResidential, isOffice, mode, S, rng, spaceOBase, roomOBase);
                             }
                         }
                     }
@@ -242,7 +264,7 @@ public final class MicroclimateExcelExporter {
     /** вывод одного блока (3 строки) + генерация значений */
     private static int emitBlock(
             Sheet sh, int row, int seq, Building building, Floor f, Space space, Room room,
-            Position pos, String date, boolean isResidential, boolean isOffice,
+            Position pos, String date, boolean isResidential, boolean isOffice, TemperatureMode mode,
             Styles S, Random rng, Map<Space, Double> spaceOBase, Map<Room, Double> roomOBase) {
 
         int start = row;
@@ -291,7 +313,8 @@ public final class MicroclimateExcelExporter {
         // ====== ГЕНЕРАЦИЯ ДАННЫХ ======
 
         // --- F/G/H ---
-        double[] fVals = genFTriplet(rng, isOffice);
+        double[] baseFVals = genFTriplet(rng, isOffice);
+        double[] fVals = applyAirTempOffset(baseFVals, mode);
         for (int i = 0; i < 3; i++) {
             put(sh, start + i, 5, fVals[i], S.centerNoRightNum1); // F 0.0
             put(sh, start + i, 6, "±",      S.plusMinusTB);       // G
@@ -299,7 +322,7 @@ public final class MicroclimateExcelExporter {
         }
 
         // --- K/L/M ---
-        double[] kVals = genKFromF(rng, fVals); // ≥ 19.7; шаги ≤ 0.2
+        double[] kVals = genKFromF(rng, baseFVals); // ≥ 19.7; шаги ≤ 0.2
         for (int i = 0; i < 3; i++) {
             put(sh, start + i, 10, kVals[i], S.centerNoRightNum1); // K 0.0
             put(sh, start + i, 11, "±",       S.plusMinusTB);      // L
@@ -393,6 +416,14 @@ public final class MicroclimateExcelExporter {
         k[0] = k1;
         for (int i = 0; i < 3; i++) k[i] = Math.max(19.7, k[i]);
         return k;
+    }
+    private static double[] applyAirTempOffset(double[] base, TemperatureMode mode) {
+        double offset = mode != null ? mode.getOffset() : 0.0;
+        double[] adjusted = new double[base.length];
+        for (int i = 0; i < base.length; i++) {
+            adjusted[i] = round1(base[i] + offset);
+        }
+        return adjusted;
     }
 
     // ===== утилиты модели/текста =====
