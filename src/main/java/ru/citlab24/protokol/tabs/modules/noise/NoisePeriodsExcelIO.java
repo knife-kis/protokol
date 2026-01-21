@@ -42,7 +42,6 @@ final class NoisePeriodsExcelIO {
                 new RowSpec("ИТО — нежилые", NoiseTestKind.ITO_NONRES),
                 new RowSpec("ИТО — жилые день", NoiseTestKind.ITO_RES_DAY),
                 new RowSpec("ИТО — жилые ночь", NoiseTestKind.ITO_RES_NIGHT),
-                new RowSpec("ЗУМ — день", NoiseTestKind.ZUM_DAY),
                 new RowSpec("Авто — день", NoiseTestKind.AUTO_DAY),
                 new RowSpec("Авто — ночь", NoiseTestKind.AUTO_NIGHT),
                 new RowSpec("Площадка (улица)", NoiseTestKind.SITE)
@@ -133,6 +132,8 @@ final class NoisePeriodsExcelIO {
             for (RowSpec spec : rowSpecs()) {
                 byLabel.put(spec.label().toLowerCase(), spec.kind());
             }
+            byLabel.put("зум — день", NoiseTestKind.ITO_RES_DAY);
+            byLabel.put("зум - день", NoiseTestKind.ITO_RES_DAY);
 
             int lastRow = sheet.getLastRowNum();
             for (int i = 1; i <= lastRow; i++) {
@@ -179,7 +180,7 @@ final class NoisePeriodsExcelIO {
             case ITO_NONRES -> "Шум ИТО — нежилые";
             case ITO_RES_DAY -> "Шум ИТО — жилые день";
             case ITO_RES_NIGHT -> "Шум ИТО — жилые ночь";
-            case ZUM_DAY -> "Шум ЗУМ — день";
+            case ZUM_DAY -> "Шум ИТО — жилые день";
             case AUTO_DAY -> "Шум авто — день";
             case AUTO_NIGHT -> "Шум авто — ночь";
             case SITE -> "Шум площадка (улица)";

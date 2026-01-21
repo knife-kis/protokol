@@ -32,12 +32,11 @@ public final class NoiseExcelExporter {
             Sheet nonResIto   = wb.createSheet("шум неж ИТО");
             Sheet resItoDay   = wb.createSheet("шум жил ИТО день");
             Sheet resItoNight = wb.createSheet("шум жил ИТО ночь");
-            Sheet zumDay      = wb.createSheet("шум зум");
             Sheet autoDay     = wb.createSheet("шум авто день");
             Sheet autoNight   = wb.createSheet("шум авто ночь");
             Sheet site        = wb.createSheet("шум площадка");
 
-            for (Sheet sh : new Sheet[]{day, night, nonResIto, resItoDay, resItoNight, zumDay, autoDay, autoNight, site}) {
+            for (Sheet sh : new Sheet[]{day, night, nonResIto, resItoDay, resItoNight, autoDay, autoNight, site}) {
                 NoiseSheetCommon.setupPage(sh);
                 NoiseSheetCommon.setupColumns(sh);
                 NoiseSheetCommon.shrinkColumnsToOnePrintedPage(sh);
@@ -61,22 +60,20 @@ public final class NoiseExcelExporter {
             NoiseSheetCommon.writeSimpleHeader(
                     wb, nonResIto,   NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.ITO_NONRES));
             nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoNonResRoomBlocksFromRow(
-                    wb, nonResIto, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_NONRES);
+                    wb, nonResIto, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_NONRES, true);
 
             NoiseSheetCommon.writeSimpleHeader(
                     wb, resItoDay,   NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.ITO_RES_DAY));
             nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoResRoomBlocksFromRow(
-                    wb, resItoDay, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_RES_DAY);
+                    wb, resItoDay, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_RES_DAY, false);
+            int zumStartRow = Math.max(2, resItoDay.getLastRowNum() + 1);
+            nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendZumResRoomBlocksFromRow(
+                    wb, resItoDay, building, byKey, zumStartRow, nextNo, thresholds, NoiseTestKind.ITO_RES_DAY, true);
 
             NoiseSheetCommon.writeSimpleHeader(
                     wb, resItoNight, NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.ITO_RES_NIGHT));
             nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendItoResRoomBlocksFromRow(
-                    wb, resItoNight, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_RES_NIGHT);
-
-            NoiseSheetCommon.writeSimpleHeader(
-                    wb, zumDay, NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.ZUM_DAY));
-            nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendZumResRoomBlocksFromRow(
-                    wb, zumDay, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ZUM_DAY);
+                    wb, resItoNight, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_RES_NIGHT, true);
 
             // Авто
             NoiseSheetCommon.writeSimpleHeader(
@@ -169,7 +166,7 @@ public final class NoiseExcelExporter {
             case ITO_NONRES:    return "ИТО|офис"; // «шум неж ИТО»
             case ITO_RES_DAY:   return "ИТО|день";
             case ITO_RES_NIGHT: return "ИТО|ночь";
-            case ZUM_DAY:       return "Зум|день";
+            case ZUM_DAY:       return "ИТО|день";
 
             case AUTO_DAY:   return "Авто|день";
             case AUTO_NIGHT: return "Авто|ночь";
