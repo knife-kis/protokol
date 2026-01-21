@@ -20,12 +20,15 @@ public final class NoiseExcelExporter {
     private NoiseExcelExporter() {}
     private static final java.util.Map<Workbook, java.util.Map<CellStyle, CellStyle>> ONE_DECIMAL_STYLES =
             new java.util.WeakHashMap<>();
+    private static final java.util.Map<RangeKey, java.util.Deque<Double>> RECENT_BY_RANGE =
+            new java.util.HashMap<>();
     public static void export(Building building,
                               Map<String, DatabaseManager.NoiseValue> byKey,
                               Component parent,
                               Map<NoiseTestKind, String> dateLines,
                               Map<String, double[]> thresholds) {
         try (Workbook wb = new XSSFWorkbook()) {
+            RECENT_BY_RANGE.clear();
 
             Sheet day         = wb.createSheet("шум лифт день");
             Sheet night       = wb.createSheet("шум лифт ночь");
@@ -180,8 +183,39 @@ public final class NoiseExcelExporter {
     static Double randomBetween(double min, double max) {
         if (Double.isNaN(min) || Double.isNaN(max)) return null;
         if (min > max) { double t = min; min = max; max = t; }
-        double v = java.util.concurrent.ThreadLocalRandom.current().nextDouble(min, Math.nextUp(max));
-        return Math.round(v * 10.0) / 10.0;
+        java.util.List<Double> candidates = buildCandidates(min, max);
+        if (candidates.isEmpty()) return null;
+
+        RangeKey key = new RangeKey(min, max);
+        java.util.Deque<Double> recent = RECENT_BY_RANGE.computeIfAbsent(key, k -> new java.util.ArrayDeque<>());
+        java.util.Set<Double> recentSet = new java.util.HashSet<>(recent);
+
+        java.util.List<Double> available = new java.util.ArrayList<>(candidates.size());
+        for (Double value : candidates) {
+            if (!recentSet.contains(value)) {
+                available.add(value);
+            }
+        }
+        java.util.List<Double> source = available.isEmpty() ? candidates : available;
+        int pick = java.util.concurrent.ThreadLocalRandom.current().nextInt(source.size());
+        Double chosen = source.get(pick);
+
+        recent.addLast(chosen);
+        while (recent.size() > 6) {
+            recent.removeFirst();
+        }
+        return chosen;
+    }
+
+    private static java.util.List<Double> buildCandidates(double min, double max) {
+        double start = Math.round(min * 10.0) / 10.0;
+        double end = Math.round(max * 10.0) / 10.0;
+        if (start > end) { double t = start; start = end; end = t; }
+        java.util.List<Double> values = new java.util.ArrayList<>();
+        for (double v = start; v <= end + 0.0000001; v += 0.1) {
+            values.add(Math.round(v * 10.0) / 10.0);
+        }
+        return values;
     }
 
     private static CellStyle oneDecimalStyle(Workbook wb, CellStyle baseStyle) {
@@ -193,6 +227,29 @@ public final class NoiseExcelExporter {
             oneDecimal.setDataFormat(wb.createDataFormat().getFormat("0.0"));
             return oneDecimal;
         });
+    }
+
+    private static final class RangeKey {
+        private final long minDec;
+        private final long maxDec;
+
+        private RangeKey(double min, double max) {
+            this.minDec = Math.round(min * 10.0);
+            this.maxDec = Math.round(max * 10.0);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof RangeKey)) return false;
+            RangeKey rangeKey = (RangeKey) o;
+            return minDec == rangeKey.minDec && maxDec == rangeKey.maxDec;
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(minDec, maxDec);
+        }
     }
 
 }
