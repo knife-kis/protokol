@@ -126,11 +126,16 @@ final class NoisePeriodsDialog extends JDialog {
             setPointsIfPresent(points, NoiseTestKind.SITE, pSite);
         }
 
+        JScrollPane centerScroll = new JScrollPane(center);
+        centerScroll.setBorder(BorderFactory.createEmptyBorder());
+        centerScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        centerScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+
         getContentPane().setLayout(new BorderLayout(8, 8));
-        getContentPane().add(center, BorderLayout.CENTER);
+        getContentPane().add(centerScroll, BorderLayout.CENTER);
         getContentPane().add(south,  BorderLayout.SOUTH);
 
-        setPreferredSize(new Dimension(560, 800));
+        setPreferredSize(new Dimension(840, 800));
         pack();
         setLocationRelativeTo(owner);
     }
