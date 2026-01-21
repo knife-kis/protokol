@@ -93,6 +93,7 @@ public final class AllExcelExporter {
 
             // Приводим ВСЕ листы к печати "в 1 страницу по ширине"
             applyFitToPageWidthForAllSheets(wb);
+            PrintSetupUtils.applyDuplexShortEdge(wb);
 
             // Общий колонтитул для всех листов, кроме титульного
             applyCommonHeaderToSheets(wb, frame);

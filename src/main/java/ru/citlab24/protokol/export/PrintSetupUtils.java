@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.export;
 
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.xmlbeans.XmlCursor;
 import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTPageSetup;
@@ -32,6 +33,18 @@ public final class PrintSetupUtils {
         } finally {
             if (cursor != null) {
                 cursor.dispose();
+            }
+        }
+    }
+
+    public static void applyDuplexShortEdge(Workbook workbook) {
+        if (workbook == null) {
+            return;
+        }
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet sheet = workbook.getSheetAt(i);
+            if (sheet != null) {
+                applyDuplexShortEdge(sheet);
             }
         }
     }
