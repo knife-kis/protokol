@@ -20,6 +20,7 @@ public class NoiseLiftSheetWriter {
         Font f8  = wb.createFont();  f8.setFontName("Arial");  f8.setFontHeightInPoints((short) 8);
         Font f10 = wb.createFont();  f10.setFontName("Arial"); f10.setFontHeightInPoints((short)10);
         Font f7  = wb.createFont();  f7.setFontName("Arial");  f7.setFontHeightInPoints((short) 7);
+        Font f9  = wb.createFont();  f9.setFontName("Arial");  f9.setFontHeightInPoints((short) 9);
 
         CellStyle center = wb.createCellStyle();
         center.setAlignment(HorizontalAlignment.CENTER);
@@ -74,6 +75,10 @@ public class NoiseLiftSheetWriter {
         verticalBorderF10.cloneStyleFrom(verticalBorder);
         verticalBorderF10.setFont(f10);
 
+        CellStyle verticalBorderF9 = wb.createCellStyle();
+        verticalBorderF9.cloneStyleFrom(verticalBorder);
+        verticalBorderF9.setFont(f9);
+
         CellStyle verticalWrapBorderF10 = wb.createCellStyle();
         verticalWrapBorderF10.cloneStyleFrom(verticalBorderF10);
         verticalWrapBorderF10.setWrapText(true);
@@ -121,7 +126,7 @@ public class NoiseLiftSheetWriter {
         setCenter(sh, 3, 6, "по временным характеристикам", centerWrapBorderF7);
 
         Row r5 = getOrCreateRow(sh, 4);
-        setText(r5, 4, "широкополосный", verticalBorderF10);
+        setText(r5, 4, "широкополосный", verticalBorderF9);
         setText(r5, 5, "тональный",       verticalBorderF10);
         setText(r5, 6, "постоянный",      verticalBorderF10);
         setText(r5, 7, "непостоянный",    verticalBorderF10);
