@@ -9,6 +9,7 @@ import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.noise.NoiseTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
+import ru.citlab24.protokol.tabs.projectTab.ProjectTab;
 import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 
 
@@ -126,8 +127,12 @@ public class MainFrame extends JFrame {
     }
 
     private void initUI() {
+        BuildingTab buildingTab = new BuildingTab(building);
+        ProjectTab projectTab = new ProjectTab(buildingTab::requestLoadProject, buildingTab::requestSaveProject);
+
+        tabbedPane.addTab("Проект",                projectTab);
         tabbedPane.addTab("Титульная страница",    new TitlePageTab(building));
-        tabbedPane.addTab("Характеристики здания", new BuildingTab(building));
+        tabbedPane.addTab("Характеристики здания", buildingTab);
         tabbedPane.addTab("Микроклимат",           new MicroclimateTab());
         tabbedPane.addTab("Вентиляция",            new VentilationTab(building));
         tabbedPane.addTab("Ионизирующее излучение",new RadiationTab());
