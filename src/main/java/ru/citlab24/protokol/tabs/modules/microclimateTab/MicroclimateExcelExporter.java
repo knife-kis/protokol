@@ -290,12 +290,15 @@ public final class MicroclimateExcelExporter {
         // B — место измерения (3 строки) — БЕЗ запятой перед скобками
         String roomName  = room.getName() != null ? room.getName() : "";
         String spaceName = spaceDisplayName(space);
-        String postfix   = (pos == Position.CENTER) ? "(в центре помещения)" : "(0,5 метра от наружной стены)";
+        int externalWalls = externalWallsCount(room);
+        String postfix   = (pos == Position.CENTER)
+                ? "(в центре помещения)"
+                : (externalWalls >= 2 ? "(0,5 метра от наружной стены, ось )" : "(0,5 метра от наружной стены)");
 
         String base = isOffice ? nonEmpty(roomName) : joinComma(spaceName, roomName);
         String where = base + (postfix.isBlank() ? "" : " " + postfix);
 
-        boolean highlightBlue = externalWallsCount(room) > 1;
+        boolean highlightBlue = externalWalls > 1;
         mergeWithBorder(sh, "B" + (start + 1) + ":B" + (start + 3));
         put(sh, start, 1, where, highlightBlue ? S.textLeftBorderWrapBlue : S.textLeftBorderWrap);
 
