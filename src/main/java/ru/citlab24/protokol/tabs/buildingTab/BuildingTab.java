@@ -276,6 +276,7 @@ public class BuildingTab extends JPanel {
     private JPanel createRoomButtons() {
         return createButtonPanel(
                 createStyledButton("", FontAwesomeSolid.PLUS, new Color(46, 125, 50), this::addRoom),
+                createStyledButton("", FontAwesomeSolid.CLONE, new Color(100, 181, 246), this::copyRoom),
                 createStyledButton("", FontAwesomeSolid.EDIT, new Color(255, 152, 0), this::editRoom),
                 createStyledButton("", FontAwesomeSolid.TRASH, new Color(198, 40, 40), this::removeRoom)
         );
@@ -1202,6 +1203,7 @@ public class BuildingTab extends JPanel {
     }
 
     private Space createSpaceCopyWithNewIds(Space originalSpace) { return ops.createSpaceCopyWithNewIds(originalSpace); }
+    private Room createRoomCopy(Room originalRoom) { return ops.createRoomCopy(originalRoom); }
 
     private String generateNextSpaceId(Floor floor, String currentId) {
         String prefix = "";
@@ -1751,6 +1753,34 @@ public class BuildingTab extends JPanel {
                 }
             }
         }
+        updateNoiseTabNow();
+    }
+
+    private void copyRoom(ActionEvent e) {
+        Space space = spaceList.getSelectedValue();
+        int index = roomList.getSelectedIndex();
+
+        if (space == null || index < 0) {
+            showMessage("Выберите комнату для копирования", "Ошибка", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Map<String, Boolean> savedSelections = saveRadiationSelections();
+
+        Room originalRoom = roomListModel.get(index);
+        Room roomCopy = createRoomCopy(originalRoom);
+        int maxPos = space.getRooms().stream()
+                .mapToInt(Room::getPosition)
+                .max().orElse(-1);
+        roomCopy.setPosition(maxPos + 1);
+        space.addRoom(roomCopy);
+        roomListModel.addElement(roomCopy);
+        roomList.setSelectedValue(roomCopy, true);
+
+        updateRadiationTab(building, /*forceOfficeSelection=*/false, /*autoApplyRules=*/false);
+        updateLightingTab(building, /*autoApplyDefaults=*/true);
+        updateMicroclimateTab(building, /*autoApplyDefaults=*/false);
+        restoreRadiationSelections(savedSelections);
         updateNoiseTabNow();
     }
 
