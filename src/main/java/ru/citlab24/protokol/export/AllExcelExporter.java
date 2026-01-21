@@ -368,9 +368,9 @@ public final class AllExcelExporter {
                         String spacePart = (s.getIdentifier() == null) ? "" : s.getIdentifier().trim();
                         String roomPart  = (r.getName() == null) ? "" : r.getName().trim();
 
-                        // Ключ как во вкладке StreetLightingTab:
-                        // sectionIndex|этаж|помещение|комната
-                        String key = f.getSectionIndex() + "|" + floorPart + "|" + spacePart + "|" + roomPart;
+                        // Ключ как во вкладке StreetLightingTab/DatabaseManager:
+                        // ID|roomId (если есть) иначе sectionIndex|этаж|помещение|комната
+                        String key = buildStreetLightingKey(f, s, r, floorPart, spacePart, roomPart);
 
                         Double leftMax = null, centerMin = null, rightMax = null, bottomMin = null;
                         Double[] vals = (byKey != null) ? byKey.get(key) : null;
@@ -404,6 +404,26 @@ public final class AllExcelExporter {
         } catch (Throwable t) {
             System.err.println("[AllExcelExporter] Ошибка добавления 'Иск освещение (2)': " + t.getMessage());
         }
+    }
+    private static String buildStreetLightingKey(ru.citlab24.protokol.tabs.models.Floor f,
+                                                 ru.citlab24.protokol.tabs.models.Space s,
+                                                 ru.citlab24.protokol.tabs.models.Room r,
+                                                 String floorPart,
+                                                 String spacePart,
+                                                 String roomPart) {
+        Integer stableId = resolveStableRoomId(r);
+        if (stableId != null) {
+            return "ID|" + stableId;
+        }
+        int sectionIndex = (f != null) ? f.getSectionIndex() : 0;
+        return sectionIndex + "|" + floorPart + "|" + spacePart + "|" + roomPart;
+    }
+    private static Integer resolveStableRoomId(ru.citlab24.protokol.tabs.models.Room r) {
+        if (r == null) return null;
+        Integer original = r.getOriginalRoomId();
+        if (original != null && original > 0) return original;
+        int id = r.getId();
+        return (id > 0) ? id : null;
     }
     /** Применяет настройку печати "уместить по ширине в 1 страницу" ко всем листам книги. */
     private static void applyFitToPageWidthForAllSheets(Workbook wb) {
