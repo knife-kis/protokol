@@ -151,6 +151,10 @@ public final class AllExcelExporter {
         boldFont.setFontHeightInPoints((short) 10);
         boldFont.setBold(true);
 
+        Font smallFont = wb.createFont();
+        smallFont.setFontName("Arial");
+        smallFont.setFontHeightInPoints((short) 8);
+
         CellStyle baseStyle = wb.createCellStyle();
         baseStyle.setFont(baseFont);
         baseStyle.setWrapText(true);
@@ -170,9 +174,10 @@ public final class AllExcelExporter {
         headerBorderStyle.cloneStyleFrom(centerMiddleStyle);
         setThinBorders(headerBorderStyle);
 
-        CellStyle dataBorderStyle = wb.createCellStyle();
-        dataBorderStyle.cloneStyleFrom(baseStyle);
-        setThinBorders(dataBorderStyle);
+        CellStyle measurementStyle = wb.createCellStyle();
+        measurementStyle.cloneStyleFrom(centerMiddleStyle);
+        measurementStyle.setFont(smallFont);
+        setThinBorders(measurementStyle);
 
         // Высоты строк: фиксированный список (значения заданы в пикселях).
         float[] rowHeightsPx = new float[] {
@@ -326,7 +331,7 @@ public final class AllExcelExporter {
                 "Сведения о средствах измерения:");
 
         int headerRow = 35;
-        TitlePageMeasurementTableWriter.write(sheet, headerRow, headerBorderStyle, dataBorderStyle);
+        TitlePageMeasurementTableWriter.write(sheet, headerRow, headerBorderStyle, measurementStyle);
         adjustRowHeightForMergedSections(
                 sheet,
                 headerRow,
