@@ -102,7 +102,11 @@ public final class AllExcelExporter {
             // Обновляем строку с перечнем показателей на титульной странице
             IndicatorsTextUpdater.updateIndicatorsText(wb);
 
-            // Приводим ВСЕ листы к печати "в 1 страницу по ширине"
+// ПЕРЕСТРАИВАЕМ таблицу "Сведения о средствах измерения" уже ПОСЛЕ того,
+// как появились листы и обновился перечень показателей
+            TitlePageMeasurementTableWriter.rebuildTable(wb);
+
+// Приводим ВСЕ листы к печати "в 1 страницу по ширине"
             applyFitToPageWidthForAllSheets(wb);
             PrintSetupUtils.applyDuplexShortEdge(wb);
 
@@ -330,14 +334,6 @@ public final class AllExcelExporter {
         setMergedText(sheet, baseStyle, 33, 33, 1, 25,
                 "Сведения о средствах измерения:");
 
-        int headerRow = 35;
-        TitlePageMeasurementTableWriter.write(sheet, headerRow, headerBorderStyle, measurementStyle);
-        adjustRowHeightForMergedSections(
-                sheet,
-                headerRow,
-                TitlePageMeasurementTableWriter.headerRanges(),
-                TitlePageMeasurementTableWriter.headerTexts()
-        );
     }
 
     private static void tryInvokeAppend(String fqcn, Class<?>[] sig, Object[] args) {

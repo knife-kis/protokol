@@ -1,13 +1,9 @@
 package ru.citlab24.protokol.export;
 
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.FormulaEvaluator;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+
+import static ru.citlab24.protokol.tabs.modules.noise.excel.NoiseSheetCommon.estimateWrappedLines;
 
 final class TitlePageMeasurementTableWriter {
     private TitlePageMeasurementTableWriter() {
@@ -32,6 +28,90 @@ final class TitlePageMeasurementTableWriter {
                 "Сведения о поверке (№ свидетельства, срок действия)"
         };
     }
+
+    static void rebuildTable(Workbook wb) {
+        if (wb == null) return;
+
+        Sheet sheet = wb.getSheet("Титульная страница");
+        if (sheet == null) return;
+
+        // стили делаем заново (чтобы не зависеть от локальных переменных appendTitleSheet)
+        Font baseFont = wb.createFont();
+        baseFont.setFontName("Arial");
+        baseFont.setFontHeightInPoints((short) 10);
+
+        Font smallFont = wb.createFont();
+        smallFont.setFontName("Arial");
+        smallFont.setFontHeightInPoints((short) 8);
+
+        CellStyle headerStyle = wb.createCellStyle();
+        headerStyle.setFont(baseFont);
+        headerStyle.setWrapText(true);
+        headerStyle.setAlignment(HorizontalAlignment.CENTER);
+        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        setThinBorders(headerStyle);
+
+        CellStyle measurementStyle = wb.createCellStyle();
+        measurementStyle.cloneStyleFrom(headerStyle);
+        measurementStyle.setFont(smallFont);
+        setThinBorders(measurementStyle);
+
+        int headerRow = 35;
+
+        // перезаписываем таблицу (setMergedText всё равно проставит текст/стили заново)
+        write(sheet, headerRow, headerStyle, measurementStyle);
+
+        // подгоняем высоту строки заголовка таблицы под переносы
+        // (это твоя логика из AllExcelExporter)
+        adjustHeaderRowHeightForMergedSections(
+                sheet,
+                headerRow,
+                headerRanges(),
+                headerTexts()
+        );
+    }
+
+    private static void setThinBorders(CellStyle style) {
+        if (style == null) return;
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+    }
+
+    // локальный аналог твоего adjustRowHeightForMergedSections для заголовка таблицы
+    private static void adjustHeaderRowHeightForMergedSections(Sheet sheet,
+                                                               int rowIndex,
+                                                               int[][] ranges,
+                                                               String[] texts) {
+        if (sheet == null || ranges == null || texts == null || ranges.length != texts.length) {
+            return;
+        }
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) row = sheet.createRow(rowIndex);
+
+        float baseHeightPoints = row.getHeightInPoints();
+        if (baseHeightPoints <= 0) baseHeightPoints = 15f;
+
+        int maxLines = 1;
+        for (int i = 0; i < ranges.length; i++) {
+            int[] range = ranges[i];
+            if (range == null || range.length != 2) continue;
+
+            double totalChars = 0.0;
+            for (int c = range[0]; c <= range[1]; c++) {
+                totalChars += sheet.getColumnWidth(c) / 256.0;
+            }
+            totalChars = Math.max(1.0, totalChars);
+
+            int lines = estimateWrappedLines(texts[i], totalChars);
+            maxLines = Math.max(maxLines, lines);
+        }
+
+        row.setHeightInPoints(baseHeightPoints * maxLines);
+    }
+
 
     static void write(Sheet sheet, int headerRow, CellStyle headerStyle, CellStyle measurementStyle) {
         String[] headers = headerTexts();
