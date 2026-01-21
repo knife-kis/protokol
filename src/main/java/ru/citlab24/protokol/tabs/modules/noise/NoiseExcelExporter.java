@@ -68,7 +68,7 @@ public final class NoiseExcelExporter {
                     wb, resItoDay, building, byKey, 2, nextNo, thresholds, NoiseTestKind.ITO_RES_DAY, false);
             int zumStartRow = Math.max(2, resItoDay.getLastRowNum() + 1);
             nextNo = ru.citlab24.protokol.tabs.modules.noise.excel.NoiseItoSheetWriter.appendZumResRoomBlocksFromRow(
-                    wb, resItoDay, building, byKey, zumStartRow, nextNo, thresholds, NoiseTestKind.ITO_RES_DAY, true);
+                    wb, resItoDay, building, byKey, zumStartRow, nextNo, thresholds, NoiseTestKind.ZUM_DAY, true);
 
             NoiseSheetCommon.writeSimpleHeader(
                     wb, resItoNight, NoiseSheetCommon.safeDateLine(dateLines, NoiseTestKind.ITO_RES_NIGHT));
@@ -166,7 +166,7 @@ public final class NoiseExcelExporter {
             case ITO_NONRES:    return "ИТО|офис"; // «шум неж ИТО»
             case ITO_RES_DAY:   return "ИТО|день";
             case ITO_RES_NIGHT: return "ИТО|ночь";
-            case ZUM_DAY:       return "ИТО|день";
+            case ZUM_DAY:       return "Зум|день";
 
             case AUTO_DAY:   return "Авто|день";
             case AUTO_NIGHT: return "Авто|ночь";
