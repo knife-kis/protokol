@@ -40,7 +40,12 @@ public final class AllExcelExporter {
             appendTitleSheet(frame, building, wb);
 
             // 1) Микроклимат
-            MicroclimateExcelExporter.appendToWorkbook(building, -1, wb);
+            MicroclimateExcelExporter.appendToWorkbook(
+                    building,
+                    -1,
+                    wb,
+                    MicroclimateExcelExporter.TemperatureMode.COLD
+            );
 
             // 2) Вентиляция (берём текущие записи из вкладки)
             List<VentilationRecord> ventRecords = null;
