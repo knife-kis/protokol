@@ -317,8 +317,32 @@ public final class AllExcelExporter {
         setMergedText(sheet, baseStyle, 33, 33, 1, 25,
                 "Сведения о средствах измерения:");
 
-        setCellValue(sheet, centerMiddleStyle, 35, 0, "11.");
-        setMergedText(sheet, baseStyle, 35, 35, 1, 25, "");
+        int headerRow = 35;
+        String indicatorHeader = "Измеряемый показатель";
+        String instrumentHeader = "Наименование, тип средства Измерения";
+        String serialHeader = "Заводской номер";
+        String errorHeader = "Погрешность средства измерения";
+        String verificationHeader = "Сведения о поверке (№ свидетельства, срок действия)";
+
+        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 0, 3, indicatorHeader);
+        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 4, 9, instrumentHeader);
+        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 10, 12, serialHeader);
+        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 13, 19, errorHeader);
+        setMergedText(sheet, centerMiddleStyle, headerRow, headerRow, 20, 25, verificationHeader);
+
+        adjustRowHeightForMergedSections(sheet, headerRow, new int[][] {
+                {0, 3},
+                {4, 9},
+                {10, 12},
+                {13, 19},
+                {20, 25}
+        }, new String[] {
+                indicatorHeader,
+                instrumentHeader,
+                serialHeader,
+                errorHeader,
+                verificationHeader
+        });
     }
 
     private static void tryInvokeAppend(String fqcn, Class<?>[] sig, Object[] args) {
@@ -721,6 +745,40 @@ public final class AllExcelExporter {
         float baseHeightPx = pointsToPixels(row.getHeightInPoints());
         float newHeightPx = baseHeightPx * Math.max(1, lines);
         row.setHeightInPoints(pixelsToPoints(newHeightPx));
+    }
+
+    private static void adjustRowHeightForMergedSections(Sheet sheet,
+                                                         int rowIndex,
+                                                         int[][] ranges,
+                                                         String[] texts) {
+        if (sheet == null || ranges == null || texts == null || ranges.length != texts.length) {
+            return;
+        }
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        float baseHeightPx = pointsToPixels(row.getHeightInPoints());
+        int maxLines = 1;
+        for (int i = 0; i < ranges.length; i++) {
+            int[] range = ranges[i];
+            if (range == null || range.length != 2) continue;
+            double totalChars = totalColumnChars(sheet, range[0], range[1]);
+            int lines = estimateWrappedLines(texts[i], totalChars);
+            maxLines = Math.max(maxLines, lines);
+        }
+
+        row.setHeightInPoints(pixelsToPoints(baseHeightPx * maxLines));
+    }
+
+    private static double totalColumnChars(Sheet sheet, int firstCol, int lastCol) {
+        double totalChars = 0.0;
+        for (int c = firstCol; c <= lastCol; c++) {
+            totalChars += sheet.getColumnWidth(c) / 256.0;
+        }
+        return Math.max(1.0, totalChars);
     }
 
     private static int estimateWrappedLines(String text, double colChars) {
