@@ -305,9 +305,10 @@ public final class AllExcelExporter {
                 "Фактический адрес заказчика: " + safe(titleValues.customerActualAddress));
 
         setCellValue(sheet, centerMiddleStyle, 21, 0, "4.");
-        setMergedText(sheet, baseStyle, 21, 21, 1, 25,
-                "Наименование предприятия, организации, объекта, где производились измерения: " +
-                        safe(titleValues.objectName));
+        String objectNameText = "Наименование предприятия, организации, объекта, где производились измерения: " +
+                safe(titleValues.objectName);
+        setMergedText(sheet, baseStyle, 21, 21, 1, 25, objectNameText);
+        adjustRowHeightForMergedTextDoubling(sheet, 21, 1, 25, objectNameText);
 
         setCellValue(sheet, centerMiddleStyle, 23, 0, "5.");
         setMergedText(sheet, baseStyle, 23, 23, 1, 25,
@@ -744,6 +745,34 @@ public final class AllExcelExporter {
         float baseHeightPx = pointsToPixels(row.getHeightInPoints());
         float newHeightPx = baseHeightPx * Math.max(1, lines);
         row.setHeightInPoints(pixelsToPoints(newHeightPx));
+    }
+
+    private static void adjustRowHeightForMergedTextDoubling(Sheet sheet,
+                                                             int rowIndex,
+                                                             int firstCol,
+                                                             int lastCol,
+                                                             String text) {
+        if (sheet == null) return;
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        double totalChars = totalColumnChars(sheet, firstCol, lastCol);
+        int lines = estimateWrappedLines(text, totalChars);
+
+        float baseHeightPx = pointsToPixels(row.getHeightInPoints());
+        if (baseHeightPx <= 0f) {
+            baseHeightPx = pointsToPixels(sheet.getDefaultRowHeightInPoints());
+        }
+
+        int multiplier = 1;
+        while (multiplier < lines) {
+            multiplier *= 2;
+        }
+
+        row.setHeightInPoints(pixelsToPoints(baseHeightPx * multiplier));
     }
 
     private static void adjustRowHeightForMergedSections(Sheet sheet,
