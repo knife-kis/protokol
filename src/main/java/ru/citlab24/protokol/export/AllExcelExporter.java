@@ -65,10 +65,7 @@ public final class AllExcelExporter {
                         new Object[]{building, -1, wb});
             }
 
-            // 4) «Иск освещение (2)» — ближе к концу
-            appendStreetLightingSheet(wb, building);
-
-            // 5) Искусственное освещение
+            // 4) Искусственное освещение
             java.util.Map<Integer, Boolean> litMap = null;
             try {
                 if (frame != null && frame.getArtificialLightingTab() != null) {
@@ -91,6 +88,9 @@ public final class AllExcelExporter {
                     t.printStackTrace();
                 }
             }
+
+            // 5) «Иск освещение (2)» — ближе к концу
+            appendStreetLightingSheet(wb, building);
 
             // 6) КЕО — последним листом
             if (hasAnyLightingSelections(building)) {
