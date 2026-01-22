@@ -199,8 +199,12 @@ public class MainFrame extends JFrame {
         JPanel header = new JPanel(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
 
-        JButton backButton = new JButton("Назад");
+        JButton backButton = new JButton("←");
         backButton.addActionListener(e -> cardLayout.show(cardPanel, CARD_HOME));
+        backButton.setToolTipText("Назад");
+        backButton.setFocusPainted(false);
+        backButton.setMargin(new Insets(2, 8, 2, 8));
+        backButton.setFont(backButton.getFont().deriveFont(Font.BOLD, 12f));
 
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
