@@ -99,7 +99,11 @@ final class IndicatorsTextUpdater {
             return baseText;
         }
 
-        return baseText + " " + String.join(" ", indicators);
+        String indicatorsText = String.join(" ", indicators);
+        if (indicatorsText.endsWith(";")) {
+            indicatorsText = indicatorsText.substring(0, indicatorsText.length() - 1);
+        }
+        return baseText + " " + indicatorsText;
     }
 
     private static boolean hasSheetWithPrefix(Workbook wb, String prefix) {
