@@ -84,40 +84,28 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Осв улица",             new StreetLightingTab(building));
         tabbedPane.addTab("Шумы",                  new NoiseTab(building));
 
-        cardPanel.add(createScenePanel("Заполнение протоколов — дом", tabbedPane), CARD_PROTOCOL_HOME);
-        cardPanel.add(createPlaceholderScene("Заполнение протоколов — участок"), CARD_PROTOCOL_AREA);
-        cardPanel.add(createPlaceholderScene("Сформировать карту по протоколу"), CARD_PROTOCOL_MAP);
-        cardPanel.add(createPlaceholderScene("Сформировать заявку по протоколу"), CARD_PROTOCOL_REQUEST);
+        cardPanel.add(createScenePanel(tabbedPane), CARD_PROTOCOL_HOME);
+        cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_AREA);
+        cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_MAP);
+        cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_REQUEST);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
         cardLayout.show(cardPanel, CARD_PROTOCOL_HOME);
     }
 
-    private JPanel createScenePanel(String title, JComponent content) {
+    private JPanel createScenePanel(JComponent content) {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.add(createSceneHeader(title), BorderLayout.NORTH);
         panel.add(content, BorderLayout.CENTER);
         return panel;
     }
 
-    private JPanel createPlaceholderScene(String title) {
+    private JPanel createPlaceholderScene() {
         JLabel label = new JLabel("В разработке", SwingConstants.CENTER);
         label.setFont(label.getFont().deriveFont(Font.BOLD, 22f));
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(label, BorderLayout.CENTER);
-        return createScenePanel(title, panel);
-    }
-
-    private JPanel createSceneHeader(String title) {
-        JPanel header = new JPanel(new BorderLayout());
-        header.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
-
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
-
-        header.add(titleLabel, BorderLayout.CENTER);
-        return header;
+        return createScenePanel(panel);
     }
 
     private JMenu createFileMenu() {
