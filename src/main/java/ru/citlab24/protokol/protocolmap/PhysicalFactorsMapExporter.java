@@ -162,16 +162,15 @@ public final class PhysicalFactorsMapExporter {
         setMergedCellValue(sheet, 3, "КАРТА ЗАМЕРОВ № " + registrationNumber, titleStyle);
 
         sheet.createRow(4);
-        sheet.createRow(5);
 
         String customerText = "1. Заказчик: " + safe(headerData.customerNameAndContacts);
-        setMergedCellValue(sheet, 6, customerText, sectionStyle);
+        setMergedCellValue(sheet, 5, customerText, sectionStyle);
 
-        Row heightRow = sheet.createRow(7);
+        Row heightRow = sheet.createRow(6);
         heightRow.setHeightInPoints(pixelsToPoints(16));
 
         String datesText = "2. Дата замеров: " + safe(headerData.measurementDates);
-        setMergedCellValue(sheet, 8, datesText, sectionStyle);
+        setMergedCellValue(sheet, 7, datesText, sectionStyle);
     }
 
     private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
