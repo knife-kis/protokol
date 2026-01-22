@@ -273,6 +273,78 @@ final class TitlePageMeasurementTableWriter {
         } else {
             writeMeasurementRow(sheet, measurementStyle, multimeterRow, "", "", "", "", "");
         }
+
+        Workbook workbook = sheet.getWorkbook();
+        Font sectionFont = workbook.createFont();
+        sectionFont.setFontName("Arial");
+        sectionFont.setFontHeightInPoints((short) 10);
+
+        CellStyle sectionTextStyle = workbook.createCellStyle();
+        sectionTextStyle.setFont(sectionFont);
+        sectionTextStyle.setWrapText(true);
+        sectionTextStyle.setAlignment(HorizontalAlignment.LEFT);
+        sectionTextStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        CellStyle sectionHeaderStyle = workbook.createCellStyle();
+        sectionHeaderStyle.cloneStyleFrom(sectionTextStyle);
+        sectionHeaderStyle.setAlignment(HorizontalAlignment.CENTER);
+        setThinBorders(sectionHeaderStyle);
+
+        CellStyle sectionCellStyle = workbook.createCellStyle();
+        sectionCellStyle.cloneStyleFrom(sectionTextStyle);
+        setThinBorders(sectionCellStyle);
+
+        int infoRow = multimeterRow + 1;
+        setRowHeightPx(sheet, infoRow, 10f);
+
+        int sectionTitleRow = infoRow + 1;
+        setRowHeightPx(sheet, sectionTitleRow, 20f);
+        setMergedText(sheet, sectionTextStyle, sectionTitleRow, sectionTitleRow, 0, 25,
+                "11. Сведения о нормативных документах (НД), регламентирующих значения показателей " +
+                        "и НД на методы (методики) измерений:");
+
+        int spacerRow = sectionTitleRow + 1;
+        setRowHeightPx(sheet, spacerRow, 10f);
+
+        int sectionHeaderRow = spacerRow + 1;
+        setRowHeightPx(sheet, sectionHeaderRow, 40f);
+        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 0, 4,
+                "Измеряемый показатель");
+        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 5, 14,
+                "Документы, наименование НД, регламентирующих значения характеристик, показателей (к сведению)");
+        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 15, 25,
+                "Документы, устанавливающие правила и методы исследований (испытаний) и измерений");
+
+        int sectionRowIndex = sectionHeaderRow + 1;
+        if (hasMedSheet) {
+            setRowHeightPx(sheet, sectionRowIndex, 96f);
+            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 0, 3,
+                    "Мощность дозы гамма-излучения; минимальное значение МЭД гамма-излучения; " +
+                            "максимальное значение МЭД гамма-излучения");
+            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 4, 14,
+                    "СанПиН 2.6.1.2800-10 \"Гигиенические требования по ограничению облучения населения " +
+                            "за счет природных источников ионизирующего излучения\"");
+            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 15, 25,
+                    "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
+                            "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
+                            "п. IV, V");
+            sectionRowIndex++;
+        }
+
+        if (hasEroaSheet) {
+            setRowHeightPx(sheet, sectionRowIndex, 96f);
+            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 0, 3,
+                    "Эквивалентная равновесная объемная активность (ЭРОА) радона; " +
+                            "Эквивалентная равновесная объемная активность (ЭРОА) торона; " +
+                            "Среднегодовое значение эквивалентной равновесной объемной активности изотопов радона");
+            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 4, 14,
+                    "СанПиН 2.6.1.2800-10 \"Гигиенические требования по ограничению облучения населения " +
+                            "за счет природных источников ионизирующего излучения\"");
+            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 15, 25,
+                    "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
+                            "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
+                            "п. IV, V");
+        }
     }
 
     private static void writeHeaderRow(Sheet sheet, int rowIndex, CellStyle headerStyle, String[] headers) {
