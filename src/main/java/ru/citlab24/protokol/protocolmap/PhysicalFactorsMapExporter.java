@@ -109,6 +109,10 @@ public final class PhysicalFactorsMapExporter {
 
         PrintSetup printSetup = sheet.getPrintSetup();
         printSetup.setLandscape(true);
+        printSetup.setFitWidth((short) 1);
+        printSetup.setFitHeight((short) 0);
+        sheet.setFitToPage(true);
+        sheet.setAutobreaks(true);
 
         sheet.setMargin(Sheet.LeftMargin, cmToInches(LEFT_MARGIN_CM));
         sheet.setMargin(Sheet.RightMargin, cmToInches(RIGHT_MARGIN_CM));
