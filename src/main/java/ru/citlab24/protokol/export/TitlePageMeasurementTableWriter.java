@@ -2,6 +2,7 @@ package ru.citlab24.protokol.export;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 
 import static ru.citlab24.protokol.tabs.modules.noise.excel.NoiseSheetCommon.estimateWrappedLines;
 
@@ -29,7 +30,7 @@ final class TitlePageMeasurementTableWriter {
         };
     }
 
-    static void rebuildTable(Workbook wb) {
+    static void rebuildTable(Workbook wb, String additionalInfoText) {
         if (wb == null) return;
 
         Sheet sheet = wb.getSheet("Титульная страница");
@@ -59,7 +60,7 @@ final class TitlePageMeasurementTableWriter {
         int headerRow = 35;
 
         // перезаписываем таблицу (setMergedText всё равно проставит текст/стили заново)
-        write(sheet, headerRow, headerStyle, measurementStyle);
+        write(sheet, headerRow, headerStyle, measurementStyle, additionalInfoText);
 
         // подгоняем высоту строки заголовка таблицы под переносы
         // (это твоя логика из AllExcelExporter)
@@ -113,7 +114,7 @@ final class TitlePageMeasurementTableWriter {
     }
 
 
-    static void write(Sheet sheet, int headerRow, CellStyle headerStyle, CellStyle measurementStyle) {
+    static void write(Sheet sheet, int headerRow, CellStyle headerStyle, CellStyle measurementStyle, String additionalInfoText) {
         String[] headers = headerTexts();
         writeHeaderRow(sheet, headerRow, headerStyle, headers);
 
@@ -326,6 +327,7 @@ final class TitlePageMeasurementTableWriter {
                 "Документы, устанавливающие правила и методы исследований (испытаний) и измерений");
 
         int sectionRowIndex = sectionHeaderRow + 1;
+        int lastSectionRow = sectionHeaderRow;
         if (hasMedSheet) {
             setRowHeightPx(sheet, sectionRowIndex, 96f);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
@@ -338,6 +340,7 @@ final class TitlePageMeasurementTableWriter {
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
                             "п. IV, V");
+            lastSectionRow = sectionRowIndex;
             sectionRowIndex++;
         }
 
@@ -354,6 +357,7 @@ final class TitlePageMeasurementTableWriter {
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
                             "п. IV, V");
+            lastSectionRow = sectionRowIndex;
             sectionRowIndex++;
         }
 
@@ -375,6 +379,7 @@ final class TitlePageMeasurementTableWriter {
                             "состава железнодорожного транспорта и метрополитена, в\n" +
                             "системах вентиляции промышленных, общественных и жилых\n" +
                             "зданий (сооружений), на открытом воздухе\" п.11.2");
+            lastSectionRow = sectionRowIndex;
             sectionRowIndex++;
         }
 
@@ -391,6 +396,7 @@ final class TitlePageMeasurementTableWriter {
                     "МИ СС.09\u22122021 \"Метод измерений показателей световой среды Методика измерений показателей " +
                             "световой среды\nна рабочих местах, в помещениях и оконных конструкциях жилых и общественных " +
                             "зданий (сооружений), селитебной территории\" п. 10.2");
+            lastSectionRow = sectionRowIndex;
             sectionRowIndex++;
         }
 
@@ -410,7 +416,40 @@ final class TitlePageMeasurementTableWriter {
                             "состава железнодорожного транспорта и метрополитена, в\n" +
                             "системах вентиляции промышленных, общественных и жилых\n" +
                             "зданий (сооружений), на открытом воздухе\" п.11.2");
+            lastSectionRow = sectionRowIndex;
         }
+
+        int spacerAfterSections = lastSectionRow + 1;
+        setRowHeightPx(sheet, spacerAfterSections, 10f);
+
+        int additionalInfoRow = spacerAfterSections + 1;
+        setRowHeightPx(sheet, additionalInfoRow, 200f);
+        String infoText = (additionalInfoText == null || additionalInfoText.isBlank())
+                ? "12. Дополнительные сведения (характеристика объекта):" : additionalInfoText;
+
+        Font infoFont = workbook.createFont();
+        infoFont.setFontName("Arial");
+        infoFont.setFontHeightInPoints((short) 10);
+
+        Font redFont = workbook.createFont();
+        redFont.setFontName("Arial");
+        redFont.setFontHeightInPoints((short) 10);
+        redFont.setColor(IndexedColors.RED.getIndex());
+
+        CellStyle additionalInfoStyle = workbook.createCellStyle();
+        additionalInfoStyle.setFont(infoFont);
+        additionalInfoStyle.setWrapText(true);
+        additionalInfoStyle.setAlignment(HorizontalAlignment.LEFT);
+        additionalInfoStyle.setVerticalAlignment(VerticalAlignment.TOP);
+
+        XSSFRichTextString richInfo = new XSSFRichTextString(infoText);
+        richInfo.applyFont(infoFont);
+        String highlight = "летний период";
+        int highlightIndex = infoText.indexOf(highlight);
+        if (highlightIndex >= 0) {
+            richInfo.applyFont(highlightIndex, highlightIndex + highlight.length(), redFont);
+        }
+        setMergedRichText(sheet, additionalInfoStyle, additionalInfoRow, additionalInfoRow, 0, 25, richInfo);
     }
 
     private static void writeHeaderRow(Sheet sheet, int rowIndex, CellStyle headerStyle, String[] headers) {
@@ -633,6 +672,28 @@ final class TitlePageMeasurementTableWriter {
                                       int firstRow, int lastRow,
                                       int firstCol, int lastCol,
                                       String text) {
+        CellRangeAddress region = new CellRangeAddress(firstRow, lastRow, firstCol, lastCol);
+        sheet.addMergedRegion(region);
+
+        for (int r = firstRow; r <= lastRow; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) row = sheet.createRow(r);
+            for (int c = firstCol; c <= lastCol; c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null) cell = row.createCell(c);
+                cell.setCellStyle(style);
+                if (r == firstRow && c == firstCol) {
+                    cell.setCellValue(text);
+                }
+            }
+        }
+    }
+
+    private static void setMergedRichText(Sheet sheet,
+                                          CellStyle style,
+                                          int firstRow, int lastRow,
+                                          int firstCol, int lastCol,
+                                          XSSFRichTextString text) {
         CellRangeAddress region = new CellRangeAddress(firstRow, lastRow, firstCol, lastCol);
         sheet.addMergedRegion(region);
 

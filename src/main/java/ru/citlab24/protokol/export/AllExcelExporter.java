@@ -104,7 +104,7 @@ public final class AllExcelExporter {
 
 // ПЕРЕСТРАИВАЕМ таблицу "Сведения о средствах измерения" уже ПОСЛЕ того,
 // как появились листы и обновился перечень показателей
-            TitlePageMeasurementTableWriter.rebuildTable(wb);
+            TitlePageMeasurementTableWriter.rebuildTable(wb, buildAdditionalInfoText(frame));
 
 // Приводим ВСЕ листы к печати "в 1 страницу по ширине"
             applyFitToPageWidthForAllSheets(wb);
@@ -542,6 +542,79 @@ public final class AllExcelExporter {
             values.representative = safe(tab.getRepresentative());
         }
         return values;
+    }
+
+    private static String buildAdditionalInfoText(MainFrame frame) {
+        TitlePageTab tab = findTitlePageTab(frame);
+        List<TitlePageTab.MeasurementRowData> rows =
+                (tab != null) ? tab.getMeasurementRows() : java.util.Collections.emptyList();
+
+        String datesText = buildMeasurementDatesText(rows);
+        String insideTempsText = buildInsideTemperatureText(rows);
+        String outsideTempsText = buildOutsideTemperatureText(rows);
+
+        return "12. Дополнительные сведения (характеристика объекта): " +
+                "Измерения проведены в жилых, общественных помещениях и придомовой территории. " +
+                "Измерения были проведены " + datesText + ". " +
+                "Температура воздуха в помещениях: " + insideTempsText + ". " +
+                "Измерения микроклимата проведены в зимний период. " +
+                "Измерения ионизирующих излучений проведены в летний период. " +
+                "Температура наружного воздуха: " + outsideTempsText + ". " +
+                "Абсолютная неопределенность далее \"ΔН\" приведена в результатах измерений. " +
+                "Поверхностных радиационных аномалий в конструкциях здания не обнаружено. " +
+                "Перед измерением ЭРОА радона здание выдержанно в течении более 12 часов при закрытых дверях и окнах. " +
+                "Измерения наружной освещенности проведены в светлое время суток при сплошной равномерной облачности, " +
+                "покрывающей весь небосвод. " +
+                "Измерения освещенности внутри помещения выполнены без наличия мебели, вымытых и исправных " +
+                "светопрозрачных заполнениях в светопроемах, при выключенных искусственных источниках световой среды. " +
+                "Измерения искусственного освещения проведены в темное время суток с отсутствием " +
+                "естественного освещения. Отношение естественной освещенности к искусственной составляет менее 0,1.";
+    }
+
+    private static String buildMeasurementDatesText(List<TitlePageTab.MeasurementRowData> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return "дд.мм.гггг";
+        }
+        java.util.List<String> dates = new java.util.ArrayList<>();
+        for (TitlePageTab.MeasurementRowData row : rows) {
+            if (row == null) continue;
+            String date = safe(row.date);
+            dates.add(date.isEmpty() ? "дд.мм.гггг" : date);
+        }
+        return String.join(", ", dates);
+    }
+
+    private static String buildInsideTemperatureText(List<TitlePageTab.MeasurementRowData> rows) {
+        return buildTemperatureText(rows, true);
+    }
+
+    private static String buildOutsideTemperatureText(List<TitlePageTab.MeasurementRowData> rows) {
+        return buildTemperatureText(rows, false);
+    }
+
+    private static String buildTemperatureText(List<TitlePageTab.MeasurementRowData> rows, boolean inside) {
+        if (rows == null || rows.isEmpty()) {
+            String temp = inside ? "___ °С до ___ °С" : "___°С до ___ °С";
+            return "дд.мм.гггг составила от " + temp;
+        }
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        for (TitlePageTab.MeasurementRowData row : rows) {
+            if (row == null) continue;
+            String date = safe(row.date);
+            if (date.isEmpty()) {
+                date = "дд.мм.гггг";
+            }
+            String start = inside ? safe(row.tempInsideStart) : safe(row.tempOutsideStart);
+            String end = inside ? safe(row.tempInsideEnd) : safe(row.tempOutsideEnd);
+            if (start.isEmpty()) start = "___";
+            if (end.isEmpty()) end = "___";
+            if (inside) {
+                parts.add(date + " составила от " + start + " °С до " + end + " °С");
+            } else {
+                parts.add(date + " составляла от " + start + "°С до " + end + " °С");
+            }
+        }
+        return String.join("; ", parts);
     }
 
     private static String buildProtocolTitle(String applicationNumber) {
