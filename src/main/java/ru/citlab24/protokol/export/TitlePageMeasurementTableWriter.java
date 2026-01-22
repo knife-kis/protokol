@@ -357,6 +357,43 @@ final class TitlePageMeasurementTableWriter {
             sectionRowIndex++;
         }
 
+        boolean hasMicroclimateSheet = hasSheetWithPrefix(sheet.getWorkbook(), "Микроклимат");
+        if (hasMicroclimateSheet) {
+            setRowHeightPx(sheet, sectionRowIndex, 133f);
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
+                    "Температура воздуха, скорость движения воздуха, " +
+                            "относительная влажность воздуха, результирующая температура");
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
+                    "СанПиН 1.2.3685-21 \"Гигиенические нормативы и требования к обеспечению безопасности " +
+                            "и (или) безвредности для человека факторов среды обитания\"");
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
+                    "МИ М.08-2021 \"Методика измерений показателей микроклимата\n" +
+                            "на рабочих местах в помещениях (сооружениях, кабинах), в\n" +
+                            "помещениях жилых зданий (в том числе зданиях общежитий),\n" +
+                            "помещениях общественных, административных и бытовых\n" +
+                            "зданий (сооружений), помещениях специального подвижного\n" +
+                            "состава железнодорожного транспорта и метрополитена, в\n" +
+                            "системах вентиляции промышленных, общественных и жилых\n" +
+                            "зданий (сооружений), на открытом воздухе\" п.11.2");
+            sectionRowIndex++;
+        }
+
+        boolean hasArtificialLightingSheet = sheet.getWorkbook().getSheet("Иск освещение") != null;
+        if (hasArtificialLightingSheet) {
+            setRowHeightPx(sheet, sectionRowIndex, 84f);
+            String lightingIndicatorText = buildLightingSectionIndicatorText(sheet.getWorkbook());
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
+                    lightingIndicatorText);
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
+                    "СанПиН 1.2.3685-21 \"Гигиенические нормативы и требования к обеспечению безопасности " +
+                            "и (или) безвредности для человека факторов среды обитания\"");
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
+                    "МИ СС.09\u22122021 \"Метод измерений показателей световой среды Методика измерений показателей " +
+                            "световой среды\nна рабочих местах, в помещениях и оконных конструкциях жилых и общественных " +
+                            "зданий (сооружений), селитебной территории\" п. 10.2");
+            sectionRowIndex++;
+        }
+
         if (hasVentilationSheet) {
             VentilationIndicators ventilationIndicators = findVentilationIndicators(sheet.getWorkbook());
             String indicatorText = buildVentilationIndicatorText(ventilationIndicators);
@@ -429,6 +466,28 @@ final class TitlePageMeasurementTableWriter {
         return String.join(", ", values);
     }
 
+    private static String buildLightingSectionIndicatorText(Workbook workbook) {
+        java.util.List<String> values = new java.util.ArrayList<>();
+        if (workbook == null) return "";
+
+        boolean hasKeoSheet = workbook.getSheet("КЕО") != null;
+        boolean hasStreetLightingSheet = workbook.getSheet("Иск освещение (2)") != null;
+        boolean hasPulsation = hasLightingPulsationValues(workbook);
+
+        if (hasKeoSheet) {
+            values.add("Освещённость, КЕО");
+        } else {
+            values.add("Освещённость");
+        }
+        if (hasStreetLightingSheet) {
+            values.add("средняя горизонтальная освещенность на уровне земли");
+        }
+        if (hasPulsation) {
+            values.add("коэффициент пульсации");
+        }
+        return String.join(", ", values);
+    }
+
     private static String readIndicatorsText(Sheet sheet) {
         if (sheet == null) return "";
         Row row = sheet.getRow(29);
@@ -457,6 +516,26 @@ final class TitlePageMeasurementTableWriter {
                 if (value != null && !value.trim().isEmpty()) {
                     return true;
                 }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasLightingPulsationValues(Workbook workbook) {
+        if (workbook == null) return false;
+        Sheet lightingSheet = workbook.getSheet("Иск освещение");
+        if (lightingSheet == null) return false;
+        DataFormatter formatter = new DataFormatter();
+        FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+        int lastRow = lightingSheet.getLastRowNum();
+        for (int rowIndex = 7; rowIndex <= lastRow; rowIndex++) {
+            Row row = lightingSheet.getRow(rowIndex);
+            if (row == null) continue;
+            Cell cell = row.getCell(12);
+            if (cell == null) continue;
+            String value = formatter.formatCellValue(cell, evaluator);
+            if (value != null && !value.trim().isEmpty()) {
+                return true;
             }
         }
         return false;
