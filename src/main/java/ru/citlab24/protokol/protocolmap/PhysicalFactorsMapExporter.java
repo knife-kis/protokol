@@ -21,6 +21,7 @@ import java.io.InputStream;
 
 public final class PhysicalFactorsMapExporter {
     private static final String REGISTRATION_PREFIX = "Регистрационный номер карты замеров:";
+    private static final double COLUMN_WIDTH_SCALE = 0.9;
 
     private PhysicalFactorsMapExporter() {
     }
@@ -122,6 +123,8 @@ public final class PhysicalFactorsMapExporter {
 
         CellStyle titleStyle = workbook.createCellStyle();
         titleStyle.setFont(titleFont);
+        titleStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        titleStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
 
         Row row = sheet.createRow(0);
         Cell cell = row.createCell(0);
@@ -131,28 +134,33 @@ public final class PhysicalFactorsMapExporter {
     }
 
     private static int[] buildColumnWidthsPx() {
-        int[] widths = new int[32];
-        widths[0] = 36;
-        widths[1] = 33;
-        widths[2] = 32;
-        widths[3] = 32;
-        widths[4] = 32;
-        widths[5] = 32;
-        widths[6] = 32;
-        widths[7] = 32;
-        widths[8] = 32;
+        int[] baseWidths = new int[32];
+        baseWidths[0] = 36;
+        baseWidths[1] = 33;
+        baseWidths[2] = 32;
+        baseWidths[3] = 32;
+        baseWidths[4] = 32;
+        baseWidths[5] = 32;
+        baseWidths[6] = 32;
+        baseWidths[7] = 32;
+        baseWidths[8] = 32;
         for (int col = 9; col <= 17; col++) {
-            widths[col] = 32;
+            baseWidths[col] = 32;
         }
-        widths[18] = 53;
-        widths[19] = 41;
-        widths[20] = 58;
-        widths[21] = 32;
+        baseWidths[18] = 53;
+        baseWidths[19] = 41;
+        baseWidths[20] = 58;
+        baseWidths[21] = 32;
         for (int col = 22; col <= 29; col++) {
-            widths[col] = 32;
+            baseWidths[col] = 32;
         }
-        widths[30] = 36;
-        widths[31] = 11;
+        baseWidths[30] = 36;
+        baseWidths[31] = 11;
+
+        int[] widths = new int[baseWidths.length];
+        for (int i = 0; i < baseWidths.length; i++) {
+            widths[i] = (int) Math.round(baseWidths[i] * COLUMN_WIDTH_SCALE);
+        }
         return widths;
     }
 
