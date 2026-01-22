@@ -12,11 +12,6 @@ import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 
 
-import com.formdev.flatlaf.FlatLaf;
-import com.formdev.flatlaf.FlatDarkLaf;
-import com.formdev.flatlaf.FlatLightLaf;
-import com.formdev.flatlaf.FlatDarculaLaf;
-import com.formdev.flatlaf.FlatIntelliJLaf;
 import com.formdev.flatlaf.FlatClientProperties;
 
 import javax.swing.*;
@@ -29,7 +24,6 @@ public class MainFrame extends JFrame {
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cardPanel = new JPanel(cardLayout);
 
-    private static final String CARD_HOME = "home";
     private static final String CARD_PROTOCOL_HOME = "protocol-home";
     private static final String CARD_PROTOCOL_AREA = "protocol-area";
     private static final String CARD_PROTOCOL_MAP = "protocol-map";
@@ -57,53 +51,7 @@ public class MainFrame extends JFrame {
     private JMenuBar createMenuBar(Runnable onLoadProject, Runnable onSaveProject) {
         JMenuBar menuBar = new JMenuBar();
 
-        // ===== Меню «Вид» -> «Тема» =====
-        JMenu viewMenu = new JMenu("Вид");
-        JMenu themeMenu = new JMenu("Тема");
-
-        JMenuItem light = new JMenuItem("Светлая");
-        JMenuItem dark = new JMenuItem("Тёмная");
-        JMenuItem intellij = new JMenuItem("IntelliJ");
-        JMenuItem darcula = new JMenuItem("Darcula");
-        JMenuItem system = new JMenuItem("Системная (классическая)");
-
-        light.addActionListener(e -> switchLaf(new FlatLightLaf()));
-        dark.addActionListener(e -> switchLaf(new FlatDarkLaf()));
-        intellij.addActionListener(e -> switchLaf(new FlatIntelliJLaf()));
-        darcula.addActionListener(e -> switchLaf(new FlatDarculaLaf()));
-        system.addActionListener(e -> {
-            try {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-                FlatLaf.updateUI();
-                SwingUtilities.updateComponentTreeUI(this);
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-        });
-
-        themeMenu.add(light);
-        themeMenu.add(dark);
-        themeMenu.add(intellij);
-        themeMenu.add(darcula);
-        themeMenu.addSeparator();
-        themeMenu.add(system);
-
-        // (Опционально) настройки вкладок
-        JMenu tabsMenu = new JMenu("Вкладки");
-        JCheckBoxMenuItem compactTabs = new JCheckBoxMenuItem("Компактный режим");
-        compactTabs.setSelected(true);
-        compactTabs.addActionListener(e -> {
-            boolean compact = compactTabs.isSelected();
-            tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_HEIGHT, compact ? 28 : 40);
-            tabbedPane.revalidate();
-            tabbedPane.repaint();
-        });
-
-        tabsMenu.add(compactTabs);
-        viewMenu.add(themeMenu);
-        viewMenu.add(tabsMenu);
-
-        menuBar.add(viewMenu);
+        menuBar.add(createFileMenu());
         menuBar.add(Box.createHorizontalStrut(8));
         menuBar.add(createProjectMenu(onLoadProject, onSaveProject));
         menuBar.add(Box.createHorizontalStrut(12));
@@ -111,16 +59,6 @@ public class MainFrame extends JFrame {
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
         menuBar.add(versionLabel);
         return menuBar;
-    }
-
-    private void switchLaf(LookAndFeel laf) {
-        try {
-            UIManager.setLookAndFeel(laf);
-            FlatLaf.updateUI();
-            SwingUtilities.updateComponentTreeUI(this);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
     }
 
     private void configureTabbedPane() {
@@ -146,7 +84,6 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Осв улица",             new StreetLightingTab(building));
         tabbedPane.addTab("Шумы",                  new NoiseTab(building));
 
-        cardPanel.add(createHomePanel(), CARD_HOME);
         cardPanel.add(createScenePanel("Заполнение протоколов — дом", tabbedPane), CARD_PROTOCOL_HOME);
         cardPanel.add(createPlaceholderScene("Заполнение протоколов — участок"), CARD_PROTOCOL_AREA);
         cardPanel.add(createPlaceholderScene("Сформировать карту по протоколу"), CARD_PROTOCOL_MAP);
@@ -154,30 +91,7 @@ public class MainFrame extends JFrame {
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
-        cardLayout.show(cardPanel, CARD_HOME);
-    }
-
-    private JPanel createHomePanel() {
-        JPanel container = new JPanel(new BorderLayout());
-        container.setBorder(BorderFactory.createEmptyBorder(32, 32, 32, 32));
-
-        JPanel grid = new JPanel(new GridLayout(2, 2, 24, 24));
-        grid.add(createHomeButton("Заполнение протоколов дом", CARD_PROTOCOL_HOME));
-        grid.add(createHomeButton("Заполнение протоколов участок", CARD_PROTOCOL_AREA));
-        grid.add(createHomeButton("Сформировать карту по протоколу", CARD_PROTOCOL_MAP));
-        grid.add(createHomeButton("Сформировать заявку по протоколу", CARD_PROTOCOL_REQUEST));
-
-        container.add(grid, BorderLayout.CENTER);
-        return container;
-    }
-
-    private JButton createHomeButton(String title, String cardName) {
-        JButton button = new JButton("<html><div style='text-align:center;'>" + title + "</div></html>");
-        button.setFocusPainted(false);
-        button.setFont(button.getFont().deriveFont(Font.BOLD, 18f));
-        button.setPreferredSize(new Dimension(280, 180));
-        button.addActionListener(e -> cardLayout.show(cardPanel, cardName));
-        return button;
+        cardLayout.show(cardPanel, CARD_PROTOCOL_HOME);
     }
 
     private JPanel createScenePanel(String title, JComponent content) {
@@ -199,19 +113,34 @@ public class MainFrame extends JFrame {
         JPanel header = new JPanel(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
 
-        JButton backButton = new JButton("←");
-        backButton.addActionListener(e -> cardLayout.show(cardPanel, CARD_HOME));
-        backButton.setToolTipText("Назад");
-        backButton.setFocusPainted(false);
-        backButton.setMargin(new Insets(2, 8, 2, 8));
-        backButton.setFont(backButton.getFont().deriveFont(Font.BOLD, 12f));
-
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
 
-        header.add(backButton, BorderLayout.WEST);
         header.add(titleLabel, BorderLayout.CENTER);
         return header;
+    }
+
+    private JMenu createFileMenu() {
+        JMenu fileMenu = new JMenu("Файл");
+
+        JMenuItem protocolHome = new JMenuItem("Заполнение протокола дом");
+        protocolHome.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_HOME));
+
+        JMenuItem protocolArea = new JMenuItem("Заполнение протокола участок");
+        protocolArea.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_AREA));
+
+        JMenuItem protocolMap = new JMenuItem("Сформировать карту по протоколу");
+        protocolMap.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_MAP));
+
+        JMenuItem protocolRequest = new JMenuItem("Сформировать заявку по протоколу");
+        protocolRequest.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_REQUEST));
+
+        fileMenu.add(protocolHome);
+        fileMenu.add(protocolArea);
+        fileMenu.add(protocolMap);
+        fileMenu.add(protocolRequest);
+
+        return fileMenu;
     }
 
     // ===== Утилиты доступа к вкладкам =====
