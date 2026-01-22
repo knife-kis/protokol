@@ -32,13 +32,14 @@ public final class PhysicalFactorsMapExporter {
 
     public static File generateMap(File sourceFile) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
+        MapHeaderData headerData = resolveHeaderData(sourceFile);
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("карта замеров");
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
-            createTitleRow(workbook, sheet);
+            createTitleRows(workbook, sheet, registrationNumber, headerData);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -128,7 +129,8 @@ public final class PhysicalFactorsMapExporter {
         header.setRight(font + "\nКоличество страниц: &[Страница] / &[Страниц] \n ");
     }
 
-    private static void createTitleRow(Workbook workbook, Sheet sheet) {
+    private static void createTitleRows(Workbook workbook, Sheet sheet, String registrationNumber,
+                                        MapHeaderData headerData) {
         Font titleFont = workbook.createFont();
         titleFont.setFontName("Arial");
         titleFont.setFontHeightInPoints((short) 16);
@@ -139,11 +141,49 @@ public final class PhysicalFactorsMapExporter {
         titleStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
         titleStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
 
-        Row row = sheet.createRow(0);
-        Cell cell = row.createCell(0);
-        cell.setCellValue("Испытательная лаборатория Общества с ограниченной ответственностью");
-        cell.setCellStyle(titleStyle);
-        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 31));
+        Font sectionFont = workbook.createFont();
+        sectionFont.setFontName("Arial");
+        sectionFont.setFontHeightInPoints((short) 14);
+        sectionFont.setBold(true);
+
+        CellStyle sectionStyle = workbook.createCellStyle();
+        sectionStyle.setFont(sectionFont);
+        sectionStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+        sectionStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        sectionStyle.setWrapText(true);
+
+        setMergedCellValue(sheet, 0, "«Центр исследовательских технологий»", titleStyle);
+
+        Row spacerRow = sheet.createRow(1);
+        spacerRow.setHeightInPoints(pixelsToPoints(3));
+
+        setMergedCellValue(sheet, 2, "КАРТА ЗАМЕРОВ № " + registrationNumber, titleStyle);
+
+        sheet.createRow(3);
+        sheet.createRow(4);
+
+        String customerText = "1. Заказчик: " + safe(headerData.customerNameAndContacts);
+        setMergedCellValue(sheet, 5, customerText, sectionStyle);
+
+        Row heightRow = sheet.createRow(6);
+        heightRow.setHeightInPoints(pixelsToPoints(16));
+
+        String datesText = "2. Дата замеров: " + safe(headerData.measurementDates);
+        setMergedCellValue(sheet, 7, datesText, sectionStyle);
+    }
+
+    private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        Cell cell = row.getCell(0);
+        if (cell == null) {
+            cell = row.createCell(0);
+        }
+        cell.setCellStyle(style);
+        cell.setCellValue(text);
+        sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, 31));
     }
 
     private static int[] buildColumnWidthsPx() {
@@ -187,5 +227,108 @@ public final class PhysicalFactorsMapExporter {
 
     private static double cmToInches(double centimeters) {
         return centimeters / 2.54d;
+    }
+
+    private static float pixelsToPoints(int pixels) {
+        return pixels * 0.75f;
+    }
+
+    private static MapHeaderData resolveHeaderData(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new MapHeaderData("", "");
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return new MapHeaderData("", "");
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findHeaderData(sheet);
+        } catch (Exception ex) {
+            return new MapHeaderData("", "");
+        }
+    }
+
+    private static MapHeaderData findHeaderData(Sheet sheet) {
+        String customer = "";
+        String dates = "";
+        DataFormatter formatter = new DataFormatter();
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                if (customer.isEmpty()) {
+                    customer = extractCustomer(text);
+                    if (customer.isEmpty() && text.startsWith(CUSTOMER_PREFIX)) {
+                        customer = readNextCellText(row, cell, formatter);
+                    }
+                }
+                if (dates.isEmpty()) {
+                    dates = extractMeasurementDates(text);
+                }
+                if (!customer.isEmpty() && !dates.isEmpty()) {
+                    return new MapHeaderData(customer, dates);
+                }
+            }
+        }
+        return new MapHeaderData(customer, dates);
+    }
+
+    private static String extractCustomer(String text) {
+        if (text == null) {
+            return "";
+        }
+        int index = text.indexOf(CUSTOMER_PREFIX);
+        if (index < 0) {
+            return "";
+        }
+        String tail = text.substring(index + CUSTOMER_PREFIX.length()).trim();
+        return tail;
+    }
+
+    private static String extractMeasurementDates(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        int start = text.indexOf(MEASUREMENT_DATES_PHRASE);
+        if (start < 0) {
+            return "";
+        }
+        int from = start + MEASUREMENT_DATES_PHRASE.length();
+        String tail = text.substring(from).trim();
+        if (tail.isEmpty()) {
+            return "";
+        }
+        int end = tail.indexOf('.');
+        if (end >= 0) {
+            tail = tail.substring(0, end).trim();
+        }
+        return tail;
+    }
+
+    private static String readNextCellText(Row row, Cell cell, DataFormatter formatter) {
+        Cell next = row.getCell(cell.getColumnIndex() + 1);
+        if (next == null) {
+            return "";
+        }
+        String nextText = formatter.formatCellValue(next).trim();
+        return nextText;
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static final String CUSTOMER_PREFIX =
+            "Наименование и контактные данные заявителя (заказчика):";
+    private static final String MEASUREMENT_DATES_PHRASE = "Измерения были проведены";
+
+    private static final class MapHeaderData {
+        private final String customerNameAndContacts;
+        private final String measurementDates;
+
+        private MapHeaderData(String customerNameAndContacts, String measurementDates) {
+            this.customerNameAndContacts = customerNameAndContacts;
+            this.measurementDates = measurementDates;
+        }
     }
 }
