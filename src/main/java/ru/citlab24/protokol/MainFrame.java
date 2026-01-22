@@ -83,6 +83,7 @@ public class MainFrame extends JFrame {
         // (Опционально) настройки вкладок
         JMenu tabsMenu = new JMenu("Вкладки");
         JCheckBoxMenuItem compactTabs = new JCheckBoxMenuItem("Компактный режим");
+        compactTabs.setSelected(true);
         compactTabs.addActionListener(e -> {
             boolean compact = compactTabs.isSelected();
             tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_HEIGHT, compact ? 28 : 40);
@@ -116,7 +117,7 @@ public class MainFrame extends JFrame {
 
     private void configureTabbedPane() {
         // «Воздушные» вкладки — только свойства, гарантированно присутствующие во FlatLaf
-        tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_HEIGHT, 40);
+        tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_HEIGHT, 28);
         tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_HAS_FULL_BORDER, Boolean.FALSE);
 
         // Скролл, если вкладок много
