@@ -312,6 +312,13 @@ public final class LightingExcelExporter {
                 }
             }
         }
+
+        int noteRow = row;
+        Row note = ensureRow(sh, noteRow);
+        note.setHeightInPoints(pixelsToPoints(67));
+        mergeWithBorder(sh, "A" + (noteRow + 1) + ":S" + (noteRow + 1));
+        String noteText = buildCustomerDataNote(wb);
+        put(sh, noteRow, 0, noteText, S.textLeftBorderWrap);
     }
 
     // ===== ЛОГИКА ДАННЫХ =====
@@ -408,6 +415,40 @@ public final class LightingExcelExporter {
     }
 
     // ===== Табличные утилиты и сбор данных =====
+
+    private static String buildCustomerDataNote(Workbook wb) {
+        if (hasVentilationVolumes(wb)) {
+            return "Данные, предоставленные заказчиком, за которые он несет ответственность: допустимые уровни в пунктах: 15, 17; нормируемая освещенность в пунктах 18.1, 18.3; допустимые значения в пункте 18.2 ; объемы помещений в пункте 15.4. Испытательная лаборатория не несет ответственность за данные, предоставленные заказчиком (заявление об ограничении ответственности испытательной лаборатории).";
+        }
+        return "Данные, предоставленные заказчиком, за которые он несет ответственность: допустимые уровни в пунктах: 15, 17; нормируемая освещенность в пунктах 18.1, 18.3; допустимые значения в пункте 18.2. Испытательная лаборатория не несет ответственность за данные, предоставленные заказчиком (заявление об ограничении ответственности испытательной лаборатории).";
+    }
+
+    private static boolean hasVentilationVolumes(Workbook wb) {
+        if (wb == null) return false;
+        Sheet sheet = findVentilationSheet(wb);
+        if (sheet == null) return false;
+        DataFormatter formatter = new DataFormatter();
+        int lastRow = sheet.getLastRowNum();
+        for (int r = 4; r <= lastRow; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            Cell cell = row.getCell(8);
+            if (cell == null) continue;
+            String text = formatter.formatCellValue(cell);
+            if (text != null && !text.isBlank()) return true;
+        }
+        return false;
+    }
+
+    private static Sheet findVentilationSheet(Workbook wb) {
+        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+            Sheet sheet = wb.getSheetAt(i);
+            if (sheet == null || sheet.getSheetName() == null) continue;
+            String name = sheet.getSheetName().trim().toLowerCase(Locale.ROOT);
+            if (name.equals("вентиляция") || name.startsWith("вентиляция ")) return sheet;
+        }
+        return null;
+    }
 
     private static void addRegionBorders(Sheet sh, int r1, int r2, int c1, int c2) {
         CellRangeAddress region = new CellRangeAddress(r1, r2, c1, c2);
@@ -580,6 +621,10 @@ public final class LightingExcelExporter {
         int width = (int) Math.round((px - 5) / 7.0 * 256.0);
         if (width < 0) width = 0;
         sh.setColumnWidth(col, width);
+    }
+
+    private static float pixelsToPoints(float px) {
+        return px * 72f / 96f;
     }
 
     // ===== СТИЛИ =====
