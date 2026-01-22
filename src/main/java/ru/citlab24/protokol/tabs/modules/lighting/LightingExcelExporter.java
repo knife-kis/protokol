@@ -316,9 +316,57 @@ public final class LightingExcelExporter {
         int noteRow = row;
         Row note = ensureRow(sh, noteRow);
         note.setHeightInPoints(pixelsToPoints(67));
-        mergeWithBorder(sh, "A" + (noteRow + 1) + ":S" + (noteRow + 1));
+        String noteRange = "A" + (noteRow + 1) + ":S" + (noteRow + 1);
+        mergeWithoutBorder(sh, noteRange);
+        addRegionTopBorder(sh, noteRange);
         String noteText = buildCustomerDataNote(wb);
-        put(sh, noteRow, 0, noteText, S.textLeftBorderWrap);
+        put(sh, noteRow, 0, noteText, S.textLeftItalicTopBorderWrap);
+
+        int footerRow = noteRow + 1;
+        Row spacer1 = ensureRow(sh, footerRow++);
+        spacer1.setHeightInPoints(pixelsToPoints(8));
+
+        Row measurerRow = ensureRow(sh, footerRow++);
+        measurerRow.setHeightInPoints(pixelsToPoints(17));
+        mergeWithoutBorder(sh, "A" + (measurerRow.getRowNum() + 1) + ":S" + (measurerRow.getRowNum() + 1));
+        put(sh, measurerRow.getRowNum(), 0,
+                "Измерения проводил: заведующий лабораторией ____________ Тарновский М.О.",
+                S.textLeft);
+
+        Row measurerSignRow = ensureRow(sh, footerRow++);
+        mergeWithoutBorder(sh, "A" + (measurerSignRow.getRowNum() + 1) + ":G" + (measurerSignRow.getRowNum() + 1));
+        put(sh, measurerSignRow.getRowNum(), 0, "(должность, подпись, Ф.И.О.)", S.center8);
+
+        Row preparedRow = ensureRow(sh, footerRow++);
+        mergeWithoutBorder(sh, "A" + (preparedRow.getRowNum() + 1) + ":S" + (preparedRow.getRowNum() + 1));
+        put(sh, preparedRow.getRowNum(), 0,
+                "Протокол подготовил: заведующий лабораторией ____________ Тарновский М.О.",
+                S.textLeft);
+
+        Row preparedSignRow = ensureRow(sh, footerRow++);
+        preparedSignRow.setHeightInPoints(pixelsToPoints(7));
+        mergeWithoutBorder(sh, "A" + (preparedSignRow.getRowNum() + 1) + ":G" + (preparedSignRow.getRowNum() + 1));
+        put(sh, preparedSignRow.getRowNum(), 0, "(должность, подпись, Ф.И.О.)", S.center8);
+
+        Row responsibilityRow = ensureRow(sh, footerRow++);
+        responsibilityRow.setHeightInPoints(pixelsToPoints(109));
+        mergeWithoutBorder(sh, "A" + (responsibilityRow.getRowNum() + 1) + ":S" + (responsibilityRow.getRowNum() + 1));
+        put(sh, responsibilityRow.getRowNum(), 0,
+                "Испытательная лаборатория несет ответственность за всю информацию, представленную в протоколе испытаний, за исключением случаев, когда информация предоставляется заказчиком.\n"
+                        + "Протокол не должен быть воспроизведен не в полном объеме без разрешения испытательной лаборатории ООО «ЦИТ».\n"
+                        + "Результаты относятся только к объектам, прошедшим испытания и предоставленным заказчиком.\n"
+                        + "Распределение экземпляров протокола испытаний: два протокола – Заказчику, один протокол – испытательной лаборатории ООО «ЦИТ».",
+                S.centerWrap);
+
+        Row spacer2 = ensureRow(sh, footerRow++);
+        spacer2.setHeightInPoints(pixelsToPoints(7));
+        String bottomBorderRange = "A" + (spacer2.getRowNum() + 1) + ":S" + (spacer2.getRowNum() + 1);
+        mergeWithoutBorder(sh, bottomBorderRange);
+        addRegionBottomBorder(sh, bottomBorderRange);
+
+        Row endRow = ensureRow(sh, footerRow);
+        mergeWithoutBorder(sh, "A" + (endRow.getRowNum() + 1) + ":S" + (endRow.getRowNum() + 1));
+        put(sh, endRow.getRowNum(), 0, "Конец протокола испытаний", S.centerBold);
     }
 
     // ===== ЛОГИКА ДАННЫХ =====
@@ -465,6 +513,21 @@ public final class LightingExcelExporter {
         RegionUtil.setBorderBottom(BorderStyle.THIN, r, sh);
         RegionUtil.setBorderLeft(BorderStyle.THIN, r, sh);
         RegionUtil.setBorderRight(BorderStyle.THIN, r, sh);
+    }
+
+    private static void mergeWithoutBorder(Sheet sh, String addr) {
+        CellRangeAddress r = CellRangeAddress.valueOf(addr);
+        sh.addMergedRegion(r);
+    }
+
+    private static void addRegionTopBorder(Sheet sh, String addr) {
+        CellRangeAddress r = CellRangeAddress.valueOf(addr);
+        RegionUtil.setBorderTop(BorderStyle.THIN, r, sh);
+    }
+
+    private static void addRegionBottomBorder(Sheet sh, String addr) {
+        CellRangeAddress r = CellRangeAddress.valueOf(addr);
+        RegionUtil.setBorderBottom(BorderStyle.THIN, r, sh);
     }
 
     private static void setPDashes(Sheet sh, int startRow, Styles S) {
@@ -632,6 +695,9 @@ public final class LightingExcelExporter {
         // Шрифты
         final Font arial10;
         final Font arial9;
+        final Font arial8;
+        final Font arial10Italic;
+        final Font arial10Bold;
 
         // Шапка (Arial 9)
         final CellStyle headCenterBorder;
@@ -641,9 +707,14 @@ public final class LightingExcelExporter {
         // Данные (Arial 10)
         final CellStyle title;
         final CellStyle center;
+        final CellStyle center8;
+        final CellStyle centerBold;
         final CellStyle centerBorder;
         final CellStyle centerBorderWrap;
+        final CellStyle centerWrap;
+        final CellStyle textLeft;
         final CellStyle textLeftBorderWrap;
+        final CellStyle textLeftItalicTopBorderWrap;
         final CellStyle box;
         final CellStyle num0;
         final CellStyle num1;
@@ -660,6 +731,9 @@ public final class LightingExcelExporter {
 
             arial10 = wb.createFont(); arial10.setFontName("Arial"); arial10.setFontHeightInPoints((short)10);
             arial9  = wb.createFont();  arial9.setFontName("Arial");  arial9.setFontHeightInPoints((short)9);
+            arial8  = wb.createFont();  arial8.setFontName("Arial");  arial8.setFontHeightInPoints((short)8);
+            arial10Italic = wb.createFont(); arial10Italic.setFontName("Arial"); arial10Italic.setFontHeightInPoints((short)10); arial10Italic.setItalic(true);
+            arial10Bold = wb.createFont(); arial10Bold.setFontName("Arial"); arial10Bold.setFontHeightInPoints((short)10); arial10Bold.setBold(true);
 
             title = wb.createCellStyle();
             title.setAlignment(HorizontalAlignment.LEFT);
@@ -690,6 +764,16 @@ public final class LightingExcelExporter {
             center.setVerticalAlignment(VerticalAlignment.CENTER);
             center.setFont(arial10);
 
+            center8 = wb.createCellStyle();
+            center8.setAlignment(HorizontalAlignment.CENTER);
+            center8.setVerticalAlignment(VerticalAlignment.CENTER);
+            center8.setFont(arial8);
+
+            centerBold = wb.createCellStyle();
+            centerBold.setAlignment(HorizontalAlignment.CENTER);
+            centerBold.setVerticalAlignment(VerticalAlignment.CENTER);
+            centerBold.setFont(arial10Bold);
+
             centerBorder = wb.createCellStyle();
             centerBorder.cloneStyleFrom(center);
             setAllBorders(centerBorder);
@@ -702,12 +786,33 @@ public final class LightingExcelExporter {
             setAllBorders(centerBorderWrap);
             centerBorderWrap.setFont(arial10);
 
+            centerWrap = wb.createCellStyle();
+            centerWrap.setAlignment(HorizontalAlignment.CENTER);
+            centerWrap.setVerticalAlignment(VerticalAlignment.CENTER);
+            centerWrap.setWrapText(true);
+            centerWrap.setFont(arial10);
+
+            textLeft = wb.createCellStyle();
+            textLeft.setAlignment(HorizontalAlignment.LEFT);
+            textLeft.setVerticalAlignment(VerticalAlignment.CENTER);
+            textLeft.setFont(arial10);
+
             textLeftBorderWrap = wb.createCellStyle();
             textLeftBorderWrap.setAlignment(HorizontalAlignment.LEFT);
             textLeftBorderWrap.setVerticalAlignment(VerticalAlignment.CENTER);
             textLeftBorderWrap.setWrapText(true);
             setAllBorders(textLeftBorderWrap);
             textLeftBorderWrap.setFont(arial10);
+
+            textLeftItalicTopBorderWrap = wb.createCellStyle();
+            textLeftItalicTopBorderWrap.setAlignment(HorizontalAlignment.LEFT);
+            textLeftItalicTopBorderWrap.setVerticalAlignment(VerticalAlignment.CENTER);
+            textLeftItalicTopBorderWrap.setWrapText(true);
+            textLeftItalicTopBorderWrap.setBorderTop(BorderStyle.THIN);
+            textLeftItalicTopBorderWrap.setBorderBottom(BorderStyle.NONE);
+            textLeftItalicTopBorderWrap.setBorderLeft(BorderStyle.NONE);
+            textLeftItalicTopBorderWrap.setBorderRight(BorderStyle.NONE);
+            textLeftItalicTopBorderWrap.setFont(arial10Italic);
 
             box = wb.createCellStyle(); setAllBorders(box); box.setFont(arial10);
 
