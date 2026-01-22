@@ -2,9 +2,11 @@ package ru.citlab24.protokol.export;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFRichTextString;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTHeaderFooter;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.tabs.models.Building;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateExcelExporter;
@@ -113,6 +115,9 @@ public final class AllExcelExporter {
             // Общий колонтитул для всех листов, кроме титульного
             applyCommonHeaderToSheets(wb, frame);
 
+            // Колонтитул для титульного листа (без вывода на первой странице)
+            applyTitleFooter(wb, frame);
+
             // 7) Диалог сохранения
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Сохранить общий Excel");
@@ -164,6 +169,11 @@ public final class AllExcelExporter {
         baseStyle.setWrapText(true);
         baseStyle.setVerticalAlignment(VerticalAlignment.TOP);
         baseStyle.setAlignment(HorizontalAlignment.LEFT);
+
+        CellStyle highlightStyle = wb.createCellStyle();
+        highlightStyle.cloneStyleFrom(baseStyle);
+        highlightStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        highlightStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
         CellStyle centerMiddleStyle = wb.createCellStyle();
         centerMiddleStyle.cloneStyleFrom(baseStyle);
@@ -318,7 +328,7 @@ public final class AllExcelExporter {
         setMergedText(sheet, baseStyle, 25, 25, 1, 25, buildBasisLine(titleValues));
 
         setCellValue(sheet, centerMiddleStyle, 27, 0, "7.");
-        setMergedText(sheet, baseStyle, 27, 27, 1, 25,
+        setMergedText(sheet, highlightStyle, 27, 27, 1, 25,
                 "Измерения проводились в присутствии представителя заказчика: " +
                         safe(titleValues.representative));
 
@@ -903,14 +913,7 @@ public final class AllExcelExporter {
             return;
         }
 
-        String dateText = formatProtocolDateForHeader(resolveProtocolDateText(frame));
-        String protocolNumber = resolveProtocolNumber(frame);
-
-        String headerText = "&\"Arial\"&9" +
-                "Протокол от " + dateText +
-                " № " + protocolNumber +
-                "\n" +
-                "Общее количество страниц &[Страниц] Страница &[Страница]";
+        String headerText = buildFooterText(frame);
 
         for (int i = 1; i < wb.getNumberOfSheets(); i++) {
             Sheet sheet = wb.getSheetAt(i);
@@ -920,6 +923,42 @@ public final class AllExcelExporter {
                 footer.setRight(headerText);
             }
         }
+    }
+
+    private static void applyTitleFooter(Workbook wb, MainFrame frame) {
+        if (wb == null || wb.getNumberOfSheets() == 0) {
+            return;
+        }
+
+        Sheet sheet = wb.getSheetAt(0);
+        if (sheet == null) {
+            return;
+        }
+
+        String footerText = buildFooterText(frame);
+        Footer footer = sheet.getFooter();
+        if (footer != null) {
+            footer.setRight(footerText);
+        }
+
+        if (sheet instanceof XSSFSheet xssfSheet) {
+            CTHeaderFooter headerFooter = xssfSheet.getCTWorksheet().isSetHeaderFooter()
+                    ? xssfSheet.getCTWorksheet().getHeaderFooter()
+                    : xssfSheet.getCTWorksheet().addNewHeaderFooter();
+            headerFooter.setDifferentFirst(true);
+            headerFooter.setFirstFooter("");
+        }
+    }
+
+    private static String buildFooterText(MainFrame frame) {
+        String dateText = formatProtocolDateForHeader(resolveProtocolDateText(frame));
+        String protocolNumber = resolveProtocolNumber(frame);
+
+        return "&\"Arial\"&9" +
+                "Протокол от " + dateText +
+                " № " + protocolNumber +
+                "\n" +
+                "Общее количество страниц &[Страниц] Страница &[Страница]";
     }
 
     private static String resolveProtocolNumber(MainFrame frame) {

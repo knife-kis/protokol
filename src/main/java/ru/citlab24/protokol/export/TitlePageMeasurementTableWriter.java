@@ -7,6 +7,13 @@ import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import static ru.citlab24.protokol.tabs.modules.noise.excel.NoiseSheetCommon.estimateWrappedLines;
 
 final class TitlePageMeasurementTableWriter {
+    private static final String HIGHLIGHT_LIGHTING_INDICATOR =
+            "Освещённость, КЕО, средняя горизонтальная освещенность на уровне земли";
+    private static final String HIGHLIGHT_VENTILATION_INDICATOR =
+            "Скорость воздушного потока, производительность вентсистем, " +
+                    "кратность воздухообмена по вытяжке, площадь сечения";
+    private static final String HIGHLIGHT_LIGHTING_ERROR = "\u00b1 8% (Освещенность)";
+
     private TitlePageMeasurementTableWriter() {
     }
 
@@ -247,15 +254,24 @@ final class TitlePageMeasurementTableWriter {
             if (hasPulsation) {
                 lightingErrorText += " / \u00b1 10% (Коэффициент пульсации)";
             }
-            writeMeasurementRow(sheet, measurementStyle, lightingRow,
-                    lightingIndicators,
+            CellStyle measurementHighlightStyle = createHighlightedStyle(sheet.getWorkbook(), measurementStyle);
+            CellStyle indicatorStyle = lightingIndicators.contains(HIGHLIGHT_LIGHTING_INDICATOR)
+                    ? measurementHighlightStyle
+                    : measurementStyle;
+            CellStyle errorStyle = lightingErrorText.contains(HIGHLIGHT_LIGHTING_ERROR)
+                    ? measurementHighlightStyle
+                    : measurementStyle;
+            setMergedText(sheet, indicatorStyle, lightingRow, lightingRow, 0, 3, lightingIndicators);
+            setMergedText(sheet, measurementStyle, lightingRow, lightingRow, 4, 9,
                     "Прибор комбинированный еЕлайт «еЛайт 01» исполнение 1, " +
                             "в комплектность входит: фотометрическая головка «еЛайт 03»; " +
-                            "блок отображения информации БОИ-01 ",
-                    lightingErrorText,
-                    "С-ВЬ/30-10-2025/477698253 до 29.10.2027",
+                            "блок отображения информации БОИ-01 ");
+            setMergedText(sheet, measurementStyle, lightingRow, lightingRow, 10, 12,
                     "Фотометрическая головка «еЛайт 03» зав. №03810-23; " +
                             "блок отображения информации БОИ-01 зав. №01807-23 Инв. № 31");
+            setMergedText(sheet, errorStyle, lightingRow, lightingRow, 13, 19, lightingErrorText);
+            setMergedText(sheet, measurementStyle, lightingRow, lightingRow, 20, 25,
+                    "С-ВЬ/30-10-2025/477698253 до 29.10.2027");
         } else {
             writeMeasurementRow(sheet, measurementStyle, lightingRow, "", "", "", "", "");
         }
@@ -384,10 +400,14 @@ final class TitlePageMeasurementTableWriter {
         }
 
         boolean hasArtificialLightingSheet = sheet.getWorkbook().getSheet("Иск освещение") != null;
+        CellStyle sectionHighlightStyle = createHighlightedStyle(workbook, sectionSmallCenterStyle);
         if (hasArtificialLightingSheet) {
             setRowHeightPx(sheet, sectionRowIndex, 84f);
             String lightingIndicatorText = buildLightingSectionIndicatorText(sheet.getWorkbook());
-            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
+            CellStyle lightingIndicatorStyle = lightingIndicatorText.contains(HIGHLIGHT_LIGHTING_INDICATOR)
+                    ? sectionHighlightStyle
+                    : sectionSmallCenterStyle;
+            setMergedText(sheet, lightingIndicatorStyle, sectionRowIndex, sectionRowIndex, 0, 4,
                     lightingIndicatorText);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
                     "СанПиН 1.2.3685-21 \"Гигиенические нормативы и требования к обеспечению безопасности " +
@@ -404,7 +424,10 @@ final class TitlePageMeasurementTableWriter {
             VentilationIndicators ventilationIndicators = findVentilationIndicators(sheet.getWorkbook());
             String indicatorText = buildVentilationIndicatorText(ventilationIndicators);
             setRowHeightPx(sheet, sectionRowIndex, 133f);
-            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4, indicatorText);
+            CellStyle ventilationIndicatorStyle = indicatorText.contains(HIGHLIGHT_VENTILATION_INDICATOR)
+                    ? sectionHighlightStyle
+                    : sectionSmallCenterStyle;
+            setMergedText(sheet, ventilationIndicatorStyle, sectionRowIndex, sectionRowIndex, 0, 4, indicatorText);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
                     "СП 54.13330.2022 \"СНиП 31-01-2003 Здания жилые многоквартирные\"");
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
@@ -469,7 +492,8 @@ final class TitlePageMeasurementTableWriter {
 
         int legendTitleRow = section14Row + 1;
         setRowHeightPx(sheet, legendTitleRow, 20f);
-        setCellValue(sheet, sectionTextStyle, legendTitleRow, 18, "Условные обозначения");
+        setMergedText(sheet, sectionTextStyle, legendTitleRow, legendTitleRow, 18, 22,
+                "Условные обозначения");
 
         CellStyle legendBoxStyle = workbook.createCellStyle();
         legendBoxStyle.cloneStyleFrom(sectionTextStyle);
@@ -484,7 +508,10 @@ final class TitlePageMeasurementTableWriter {
         legendTextStyle.setWrapText(true);
         legendTextStyle.setVerticalAlignment(VerticalAlignment.TOP);
 
-        int legendRow = legendTitleRow + 1;
+        int legendSpacerRow = legendTitleRow + 1;
+        setRowHeightPx(sheet, legendSpacerRow, 10f);
+
+        int legendRow = legendSpacerRow + 1;
         setRowHeightPx(sheet, legendRow, 45f);
         setMergedText(sheet, legendBoxStyle, legendRow, legendRow, 18, 20, "поле №1");
         setMergedText(sheet, legendTextStyle, legendRow, legendRow, 21, 25,
@@ -758,6 +785,15 @@ final class TitlePageMeasurementTableWriter {
         if (cell == null) cell = row.createCell(colIndex);
         cell.setCellStyle(style);
         cell.setCellValue(text);
+    }
+
+    private static CellStyle createHighlightedStyle(Workbook workbook, CellStyle baseStyle) {
+        if (workbook == null || baseStyle == null) return baseStyle;
+        CellStyle style = workbook.createCellStyle();
+        style.cloneStyleFrom(baseStyle);
+        style.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return style;
     }
 
     private static final class VentilationIndicators {
