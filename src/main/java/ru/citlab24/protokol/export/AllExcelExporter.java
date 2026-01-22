@@ -1043,12 +1043,7 @@ public final class AllExcelExporter {
             ps.setFitHeight((short) 0);     // по высоте — сколько понадобится
             PrintSetupUtils.applyDuplexShortEdge(sh);
 
-            // Чуть ужмём поля, чтобы выиграть место по ширине
-            sh.setMargin(org.apache.poi.ss.usermodel.Sheet.LeftMargin, 0.25);
-            sh.setMargin(org.apache.poi.ss.usermodel.Sheet.RightMargin, 0.25);
-            // Top/Bottom оставлю дефолтными; при желании можно тоже уменьшить:
-            // sh.setMargin(Sheet.TopMargin, 0.5);
-            // sh.setMargin(Sheet.BottomMargin, 0.5);
+            PrintSetupUtils.applyStandardMargins(sh);
         } catch (Throwable ignore) {
             // не мешаем экспорту даже если где-то не поддержано
         }

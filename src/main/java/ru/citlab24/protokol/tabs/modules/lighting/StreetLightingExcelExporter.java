@@ -68,10 +68,7 @@ public final class StreetLightingExcelExporter {
         sh.setAutobreaks(true);
         sh.getPrintSetup().setFitWidth((short) 1);
         sh.getPrintSetup().setFitHeight((short) 0);
-        sh.setMargin(Sheet.LeftMargin,  cmToInches(1.8));
-        sh.setMargin(Sheet.RightMargin, cmToInches(1.8));
-        sh.setMargin(Sheet.TopMargin,   cmToInches(1.9));
-        sh.setMargin(Sheet.BottomMargin,cmToInches(1.9));
+        PrintSetupUtils.applyStandardMargins(sh);
         PrintSetupUtils.applyDuplexShortEdge(sh);
         sh.setRepeatingRows(CellRangeAddress.valueOf("6:6"));
         // Шрифты/стили

@@ -25,8 +25,7 @@ public class NoiseSheetCommon {
         PrintSetup ps = sh.getPrintSetup();
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
         ps.setLandscape(true);
-        sh.setMargin(Sheet.LeftMargin,  1.80 / 2.54);
-        sh.setMargin(Sheet.RightMargin, 1.48 / 2.54);
+        PrintSetupUtils.applyStandardMargins(sh);
         sh.setAutobreaks(true);
         sh.setFitToPage(true);
         ps.setFitWidth((short) 1);

@@ -11,6 +11,11 @@ import javax.xml.namespace.QName;
 public final class PrintSetupUtils {
     private PrintSetupUtils() {}
 
+    public static final double DEFAULT_MARGIN_LEFT_CM = 0.8;
+    public static final double DEFAULT_MARGIN_RIGHT_CM = 0.5;
+    public static final double DEFAULT_MARGIN_TOP_CM = 3.3;
+    public static final double DEFAULT_MARGIN_BOTTOM_CM = 1.9;
+
     public static void applyDuplexShortEdge(Sheet sheet) {
         if (!(sheet instanceof XSSFSheet)) {
             return;
@@ -47,5 +52,19 @@ public final class PrintSetupUtils {
                 applyDuplexShortEdge(sheet);
             }
         }
+    }
+
+    public static void applyStandardMargins(Sheet sheet) {
+        if (sheet == null) {
+            return;
+        }
+        sheet.setMargin(Sheet.LeftMargin, cmToInches(DEFAULT_MARGIN_LEFT_CM));
+        sheet.setMargin(Sheet.RightMargin, cmToInches(DEFAULT_MARGIN_RIGHT_CM));
+        sheet.setMargin(Sheet.TopMargin, cmToInches(DEFAULT_MARGIN_TOP_CM));
+        sheet.setMargin(Sheet.BottomMargin, cmToInches(DEFAULT_MARGIN_BOTTOM_CM));
+    }
+
+    private static double cmToInches(double cm) {
+        return cm / 2.54;
     }
 }

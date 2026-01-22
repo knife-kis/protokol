@@ -867,8 +867,7 @@ public final class LightingExcelExporter {
         sheet.setAutobreaks(true);
         ps.setFitWidth((short) 1);
         ps.setFitHeight((short) 0);
-        sheet.setMargin(Sheet.LeftMargin, 0.25);
-        sheet.setMargin(Sheet.RightMargin, 0.25);
+        PrintSetupUtils.applyStandardMargins(sheet);
         PrintSetupUtils.applyDuplexShortEdge(sheet);
     }
 
@@ -901,8 +900,7 @@ public final class LightingExcelExporter {
         sheet.setAutobreaks(true);
         ps.setFitWidth((short) 1);
         ps.setFitHeight((short) 0);
-        sheet.setMargin(Sheet.LeftMargin, 0.25);
-        sheet.setMargin(Sheet.RightMargin, 0.25);
+        PrintSetupUtils.applyStandardMargins(sheet);
         PrintSetupUtils.applyDuplexShortEdge(sheet);
     }
 }
