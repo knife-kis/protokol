@@ -450,6 +450,45 @@ final class TitlePageMeasurementTableWriter {
             richInfo.applyFont(highlightIndex, highlightIndex + highlight.length(), redFont);
         }
         setMergedRichText(sheet, additionalInfoStyle, additionalInfoRow, additionalInfoRow, 0, 25, richInfo);
+
+        int spacerAfterAdditionalInfo = additionalInfoRow + 1;
+        setRowHeightPx(sheet, spacerAfterAdditionalInfo, 7f);
+
+        int section13Row = spacerAfterAdditionalInfo + 1;
+        setRowHeightPx(sheet, section13Row, 20f);
+        setMergedText(sheet, sectionTextStyle, section13Row, section13Row, 0, 25,
+                "13. Сведения о дополнении, отклонении или исключении из методов: - ");
+
+        int spacerAfterSection13 = section13Row + 1;
+        setRowHeightPx(sheet, spacerAfterSection13, 7f);
+
+        int section14Row = spacerAfterSection13 + 1;
+        setRowHeightPx(sheet, section14Row, 20f);
+        setMergedText(sheet, sectionTextStyle, section14Row, section14Row, 0, 25,
+                "14. Эскиз (ситуационный план) места проведения измерений с указанием точек измерений:");
+
+        int legendTitleRow = section14Row + 1;
+        setRowHeightPx(sheet, legendTitleRow, 20f);
+        setCellValue(sheet, sectionTextStyle, legendTitleRow, 18, "Условные обозначения");
+
+        CellStyle legendBoxStyle = workbook.createCellStyle();
+        legendBoxStyle.cloneStyleFrom(sectionTextStyle);
+        legendBoxStyle.setAlignment(HorizontalAlignment.CENTER);
+        legendBoxStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        legendBoxStyle.setWrapText(false);
+        legendBoxStyle.setIndention((short) 0);
+        setThinBorders(legendBoxStyle);
+
+        CellStyle legendTextStyle = workbook.createCellStyle();
+        legendTextStyle.cloneStyleFrom(sectionTextStyle);
+        legendTextStyle.setWrapText(true);
+        legendTextStyle.setVerticalAlignment(VerticalAlignment.TOP);
+
+        int legendRow = legendTitleRow + 1;
+        setRowHeightPx(sheet, legendRow, 45f);
+        setMergedText(sheet, legendBoxStyle, legendRow, legendRow, 18, 20, "поле №1");
+        setMergedText(sheet, legendTextStyle, legendRow, legendRow, 21, 25,
+                "- Поля для измерения средней горизонтальной освещенности на уровне земли");
     }
 
     private static void writeHeaderRow(Sheet sheet, int rowIndex, CellStyle headerStyle, String[] headers) {
@@ -709,6 +748,16 @@ final class TitlePageMeasurementTableWriter {
                 }
             }
         }
+    }
+
+    private static void setCellValue(Sheet sheet, CellStyle style, int rowIndex, int colIndex, String text) {
+        if (sheet == null) return;
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) row = sheet.createRow(rowIndex);
+        Cell cell = row.getCell(colIndex);
+        if (cell == null) cell = row.createCell(colIndex);
+        cell.setCellStyle(style);
+        cell.setCellValue(text);
     }
 
     private static final class VentilationIndicators {
