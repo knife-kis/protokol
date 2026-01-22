@@ -294,6 +294,15 @@ final class TitlePageMeasurementTableWriter {
         sectionCellStyle.cloneStyleFrom(sectionTextStyle);
         setThinBorders(sectionCellStyle);
 
+        Font sectionSmallFont = workbook.createFont();
+        sectionSmallFont.setFontName("Arial");
+        sectionSmallFont.setFontHeightInPoints((short) 9);
+
+        CellStyle sectionSmallCenterStyle = workbook.createCellStyle();
+        sectionSmallCenterStyle.cloneStyleFrom(sectionCellStyle);
+        sectionSmallCenterStyle.setFont(sectionSmallFont);
+        sectionSmallCenterStyle.setAlignment(HorizontalAlignment.CENTER);
+
         int infoRow = multimeterRow + 1;
         setRowHeightPx(sheet, infoRow, 10f);
 
@@ -318,13 +327,13 @@ final class TitlePageMeasurementTableWriter {
         int sectionRowIndex = sectionHeaderRow + 1;
         if (hasMedSheet) {
             setRowHeightPx(sheet, sectionRowIndex, 96f);
-            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 0, 3,
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
                     "Мощность дозы гамма-излучения; минимальное значение МЭД гамма-излучения; " +
                             "максимальное значение МЭД гамма-излучения");
-            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 4, 14,
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
                     "СанПиН 2.6.1.2800-10 \"Гигиенические требования по ограничению облучения населения " +
                             "за счет природных источников ионизирующего излучения\"");
-            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 15, 25,
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
                             "п. IV, V");
@@ -333,14 +342,14 @@ final class TitlePageMeasurementTableWriter {
 
         if (hasEroaSheet) {
             setRowHeightPx(sheet, sectionRowIndex, 96f);
-            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 0, 3,
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
                     "Эквивалентная равновесная объемная активность (ЭРОА) радона; " +
                             "Эквивалентная равновесная объемная активность (ЭРОА) торона; " +
                             "Среднегодовое значение эквивалентной равновесной объемной активности изотопов радона");
-            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 4, 14,
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
                     "СанПиН 2.6.1.2800-10 \"Гигиенические требования по ограничению облучения населения " +
                             "за счет природных источников ионизирующего излучения\"");
-            setMergedText(sheet, sectionCellStyle, sectionRowIndex, sectionRowIndex, 15, 25,
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
                             "п. IV, V");
