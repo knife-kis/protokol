@@ -6,6 +6,8 @@ import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 public class ProtocolMapPanel extends JPanel {
@@ -33,6 +35,8 @@ public class ProtocolMapPanel extends JPanel {
     private static class DropZonePanel extends JPanel {
         private final DefaultListModel<String> listModel = new DefaultListModel<>();
         private final MapGenerator generator;
+        private final JButton downloadButton;
+        private File generatedMapFile;
 
         DropZonePanel(String titleText, String hintText, MapGenerator generator) {
             super(new BorderLayout(8, 8));
@@ -58,8 +62,17 @@ public class ProtocolMapPanel extends JPanel {
             JScrollPane scrollPane = new JScrollPane(list);
             scrollPane.setBorder(BorderFactory.createEmptyBorder());
 
+            downloadButton = new JButton("Скачать карту");
+            downloadButton.setEnabled(false);
+            downloadButton.addActionListener(event -> downloadGeneratedMap());
+
+            JPanel footer = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+            footer.setOpaque(false);
+            footer.add(downloadButton);
+
             add(header, BorderLayout.NORTH);
             add(scrollPane, BorderLayout.CENTER);
+            add(footer, BorderLayout.SOUTH);
 
             setTransferHandler(new FileDropHandler());
         }
@@ -75,12 +88,38 @@ public class ProtocolMapPanel extends JPanel {
             listModel.addElement("Исходный файл: " + sourceFile.getName());
             String mapName = generatedFile != null ? generatedFile.getName() : buildMapName(sourceFile.getName());
             listModel.addElement("Сформированная карта: " + mapName);
+            generatedMapFile = generatedFile;
+            downloadButton.setEnabled(generatedMapFile != null && generatedMapFile.exists());
         }
 
         private String buildMapName(String originalName) {
             int dotIndex = originalName.lastIndexOf('.');
             String baseName = dotIndex > 0 ? originalName.substring(0, dotIndex) : originalName;
             return baseName + "_карта.xlsx";
+        }
+
+        private void downloadGeneratedMap() {
+            if (generatedMapFile == null || !generatedMapFile.exists()) {
+                JOptionPane.showMessageDialog(this, "Карта ещё не сформирована.",
+                        "Нет карты", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            JFileChooser chooser = new JFileChooser(generatedMapFile.getParentFile());
+            chooser.setSelectedFile(new File(generatedMapFile.getName()));
+            int result = chooser.showSaveDialog(this);
+            if (result != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            File target = chooser.getSelectedFile();
+            try {
+                Files.copy(generatedMapFile.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                JOptionPane.showMessageDialog(this, "Карта сохранена: " + target.getAbsolutePath(),
+                        "Готово", JOptionPane.INFORMATION_MESSAGE);
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "Не удалось сохранить карту: " + ex.getMessage(),
+                        "Ошибка", JOptionPane.ERROR_MESSAGE);
+            }
         }
 
         private class FileDropHandler extends TransferHandler {
