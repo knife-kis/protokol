@@ -9,7 +9,6 @@ import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
 import ru.citlab24.protokol.tabs.modules.noise.NoiseTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
-import ru.citlab24.protokol.tabs.projectTab.ProjectTab;
 import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 
 
@@ -97,7 +96,7 @@ public class MainFrame extends JFrame {
 
         menuBar.add(viewMenu);
         menuBar.add(Box.createHorizontalStrut(8));
-        menuBar.add(createProjectActions(onLoadProject, onSaveProject));
+        menuBar.add(createProjectMenu(onLoadProject, onSaveProject));
         menuBar.add(Box.createHorizontalStrut(12));
         JLabel versionLabel = new JLabel("v 1.1.2");
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
@@ -130,9 +129,7 @@ public class MainFrame extends JFrame {
     private void initUI() {
         BuildingTab buildingTab = new BuildingTab(building);
         setJMenuBar(createMenuBar(buildingTab::requestLoadProject, buildingTab::requestSaveProject));
-        ProjectTab projectTab = new ProjectTab();
 
-        tabbedPane.addTab("Проект",                projectTab);
         tabbedPane.addTab("Титульная страница",    new TitlePageTab(building));
         tabbedPane.addTab("Характеристики здания", buildingTab);
         tabbedPane.addTab("Микроклимат",           new MicroclimateTab());
@@ -212,36 +209,34 @@ public class MainFrame extends JFrame {
         setTitle(title);
     }
 
-    private JComponent createProjectActions(Runnable onLoadProject, Runnable onSaveProject) {
-        JButton loadButton = new JButton(
+    private JMenu createProjectMenu(Runnable onLoadProject, Runnable onSaveProject) {
+        JMenu projectMenu = new JMenu("Проект");
+        JMenuItem loadItem = new JMenuItem(
                 "Загрузить проект",
                 org.kordamp.ikonli.swing.FontIcon.of(
                         org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FOLDER_OPEN,
                         14
                 )
         );
-        JButton saveButton = new JButton(
+        JMenuItem saveItem = new JMenuItem(
                 "Сохранить проект",
                 org.kordamp.ikonli.swing.FontIcon.of(
                         org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.SAVE,
                         14
                 )
         );
-        loadButton.setFocusable(false);
-        saveButton.setFocusable(false);
-        loadButton.addActionListener(event -> {
+
+        loadItem.addActionListener(event -> {
             Runnable action = (onLoadProject != null) ? onLoadProject : () -> {};
             action.run();
         });
-        saveButton.addActionListener(event -> {
+        saveItem.addActionListener(event -> {
             Runnable action = (onSaveProject != null) ? onSaveProject : () -> {};
             action.run();
         });
 
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        panel.setOpaque(false);
-        panel.add(loadButton);
-        panel.add(saveButton);
-        return panel;
+        projectMenu.add(loadItem);
+        projectMenu.add(saveItem);
+        return projectMenu;
     }
 }
