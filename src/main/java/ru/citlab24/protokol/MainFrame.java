@@ -26,6 +26,14 @@ public class MainFrame extends JFrame {
 
     private final Building building = new Building();
     private final JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+    private final CardLayout cardLayout = new CardLayout();
+    private final JPanel cardPanel = new JPanel(cardLayout);
+
+    private static final String CARD_HOME = "home";
+    private static final String CARD_PROTOCOL_HOME = "protocol-home";
+    private static final String CARD_PROTOCOL_AREA = "protocol-area";
+    private static final String CARD_PROTOCOL_MAP = "protocol-map";
+    private static final String CARD_PROTOCOL_REQUEST = "protocol-request";
 
 
     public MainFrame() {
@@ -122,9 +130,6 @@ public class MainFrame extends JFrame {
 
         // Скролл, если вкладок много
         tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
-
-        getContentPane().setLayout(new BorderLayout());
-        getContentPane().add(tabbedPane, BorderLayout.CENTER);
     }
 
     private void initUI() {
@@ -140,6 +145,69 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Освещение",             new ArtificialLightingTab(building));
         tabbedPane.addTab("Осв улица",             new StreetLightingTab(building));
         tabbedPane.addTab("Шумы",                  new NoiseTab(building));
+
+        cardPanel.add(createHomePanel(), CARD_HOME);
+        cardPanel.add(createScenePanel("Заполнение протоколов — дом", tabbedPane), CARD_PROTOCOL_HOME);
+        cardPanel.add(createPlaceholderScene("Заполнение протоколов — участок"), CARD_PROTOCOL_AREA);
+        cardPanel.add(createPlaceholderScene("Сформировать карту по протоколу"), CARD_PROTOCOL_MAP);
+        cardPanel.add(createPlaceholderScene("Сформировать заявку по протоколу"), CARD_PROTOCOL_REQUEST);
+
+        getContentPane().setLayout(new BorderLayout());
+        getContentPane().add(cardPanel, BorderLayout.CENTER);
+        cardLayout.show(cardPanel, CARD_HOME);
+    }
+
+    private JPanel createHomePanel() {
+        JPanel container = new JPanel(new BorderLayout());
+        container.setBorder(BorderFactory.createEmptyBorder(32, 32, 32, 32));
+
+        JPanel grid = new JPanel(new GridLayout(2, 2, 24, 24));
+        grid.add(createHomeButton("Заполнение протоколов дом", CARD_PROTOCOL_HOME));
+        grid.add(createHomeButton("Заполнение протоколов участок", CARD_PROTOCOL_AREA));
+        grid.add(createHomeButton("Сформировать карту по протоколу", CARD_PROTOCOL_MAP));
+        grid.add(createHomeButton("Сформировать заявку по протоколу", CARD_PROTOCOL_REQUEST));
+
+        container.add(grid, BorderLayout.CENTER);
+        return container;
+    }
+
+    private JButton createHomeButton(String title, String cardName) {
+        JButton button = new JButton("<html><div style='text-align:center;'>" + title + "</div></html>");
+        button.setFocusPainted(false);
+        button.setFont(button.getFont().deriveFont(Font.BOLD, 18f));
+        button.setPreferredSize(new Dimension(280, 180));
+        button.addActionListener(e -> cardLayout.show(cardPanel, cardName));
+        return button;
+    }
+
+    private JPanel createScenePanel(String title, JComponent content) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(createSceneHeader(title), BorderLayout.NORTH);
+        panel.add(content, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel createPlaceholderScene(String title) {
+        JLabel label = new JLabel("В разработке", SwingConstants.CENTER);
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 22f));
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(label, BorderLayout.CENTER);
+        return createScenePanel(title, panel);
+    }
+
+    private JPanel createSceneHeader(String title) {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
+
+        JButton backButton = new JButton("Назад");
+        backButton.addActionListener(e -> cardLayout.show(cardPanel, CARD_HOME));
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
+
+        header.add(backButton, BorderLayout.WEST);
+        header.add(titleLabel, BorderLayout.CENTER);
+        return header;
     }
 
     // ===== Утилиты доступа к вкладкам =====
