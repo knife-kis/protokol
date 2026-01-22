@@ -5,6 +5,7 @@ import javax.swing.border.Border;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 
 public class ProtocolMapPanel extends JPanel {
@@ -18,17 +19,24 @@ public class ProtocolMapPanel extends JPanel {
         add(title, BorderLayout.NORTH);
 
         JPanel grid = new JPanel(new GridLayout(1, 3, 16, 0));
-        grid.add(new DropZonePanel("Шумы", "Перетащите Excel или Word файл"));
-        grid.add(new DropZonePanel("Физфакторы", "Перетащите Excel или Word файл"));
-        grid.add(new DropZonePanel("Звукоизоляция", "Перетащите Excel или Word файл"));
+        grid.add(new DropZonePanel("Шумы", "Перетащите Excel или Word файл", null));
+        grid.add(new DropZonePanel("Физфакторы", "Перетащите Excel или Word файл",
+                PhysicalFactorsMapExporter::generateMap));
+        grid.add(new DropZonePanel("Звукоизоляция", "Перетащите Excel или Word файл", null));
         add(grid, BorderLayout.CENTER);
+    }
+
+    private interface MapGenerator {
+        File generate(File sourceFile) throws IOException;
     }
 
     private static class DropZonePanel extends JPanel {
         private final DefaultListModel<String> listModel = new DefaultListModel<>();
+        private final MapGenerator generator;
 
-        DropZonePanel(String titleText, String hintText) {
+        DropZonePanel(String titleText, String hintText, MapGenerator generator) {
             super(new BorderLayout(8, 8));
+            this.generator = generator;
             setBorder(createDropBorder());
             setBackground(UIManager.getColor("Panel.background"));
 
@@ -62,10 +70,11 @@ public class ProtocolMapPanel extends JPanel {
             return BorderFactory.createCompoundBorder(line, padding);
         }
 
-        private void showGeneratedMap(File file) {
+        private void showGeneratedMap(File sourceFile, File generatedFile) {
             listModel.clear();
-            listModel.addElement("Исходный файл: " + file.getName());
-            listModel.addElement("Сформированная карта: " + buildMapName(file.getName()));
+            listModel.addElement("Исходный файл: " + sourceFile.getName());
+            String mapName = generatedFile != null ? generatedFile.getName() : buildMapName(sourceFile.getName());
+            listModel.addElement("Сформированная карта: " + mapName);
         }
 
         private String buildMapName(String originalName) {
@@ -92,7 +101,17 @@ public class ProtocolMapPanel extends JPanel {
                     if (files == null || files.isEmpty()) {
                         return false;
                     }
-                    showGeneratedMap(files.get(0));
+                    File source = files.get(0);
+                    File generated = null;
+                    if (generator != null) {
+                        try {
+                            generated = generator.generate(source);
+                        } catch (IOException ex) {
+                            JOptionPane.showMessageDialog(this, "Не удалось сформировать карту: " + ex.getMessage(),
+                                    "Ошибка", JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                    showGeneratedMap(source, generated);
                     return true;
                 } catch (Exception ex) {
                     return false;
