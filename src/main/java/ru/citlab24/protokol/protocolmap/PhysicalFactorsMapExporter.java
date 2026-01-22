@@ -152,24 +152,26 @@ public final class PhysicalFactorsMapExporter {
         sectionStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
         sectionStyle.setWrapText(true);
 
-        setMergedCellValue(sheet, 0, "«Центр исследовательских технологий»", titleStyle);
+        setMergedCellValue(sheet, 0, "Испытательная лаборатория Общества с ограниченной ответственностью", titleStyle);
 
-        Row spacerRow = sheet.createRow(1);
+        setMergedCellValue(sheet, 1, "«Центр исследовательских технологий»", titleStyle);
+
+        Row spacerRow = sheet.createRow(2);
         spacerRow.setHeightInPoints(pixelsToPoints(3));
 
-        setMergedCellValue(sheet, 2, "КАРТА ЗАМЕРОВ № " + registrationNumber, titleStyle);
+        setMergedCellValue(sheet, 3, "КАРТА ЗАМЕРОВ № " + registrationNumber, titleStyle);
 
-        sheet.createRow(3);
         sheet.createRow(4);
+        sheet.createRow(5);
 
         String customerText = "1. Заказчик: " + safe(headerData.customerNameAndContacts);
-        setMergedCellValue(sheet, 5, customerText, sectionStyle);
+        setMergedCellValue(sheet, 6, customerText, sectionStyle);
 
-        Row heightRow = sheet.createRow(6);
+        Row heightRow = sheet.createRow(7);
         heightRow.setHeightInPoints(pixelsToPoints(16));
 
         String datesText = "2. Дата замеров: " + safe(headerData.measurementDates);
-        setMergedCellValue(sheet, 7, datesText, sectionStyle);
+        setMergedCellValue(sheet, 8, datesText, sectionStyle);
     }
 
     private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
@@ -298,11 +300,15 @@ public final class PhysicalFactorsMapExporter {
         if (tail.isEmpty()) {
             return "";
         }
-        int end = tail.indexOf('.');
-        if (end >= 0) {
-            tail = tail.substring(0, end).trim();
+        java.util.LinkedHashSet<String> dates = new java.util.LinkedHashSet<>();
+        java.util.regex.Matcher matcher = DATE_PATTERN.matcher(tail);
+        while (matcher.find()) {
+            dates.add(matcher.group());
         }
-        return tail;
+        if (dates.isEmpty()) {
+            return "";
+        }
+        return String.join(", ", dates);
     }
 
     private static String readNextCellText(Row row, Cell cell, DataFormatter formatter) {
@@ -321,6 +327,8 @@ public final class PhysicalFactorsMapExporter {
     private static final String CUSTOMER_PREFIX =
             "Наименование и контактные данные заявителя (заказчика):";
     private static final String MEASUREMENT_DATES_PHRASE = "Измерения были проведены";
+    private static final java.util.regex.Pattern DATE_PATTERN =
+            java.util.regex.Pattern.compile("\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b");
 
     private static final class MapHeaderData {
         private final String customerNameAndContacts;
