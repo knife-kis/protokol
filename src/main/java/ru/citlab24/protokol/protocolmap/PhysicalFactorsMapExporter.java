@@ -22,6 +22,10 @@ import java.io.InputStream;
 public final class PhysicalFactorsMapExporter {
     private static final String REGISTRATION_PREFIX = "Регистрационный номер карты замеров:";
     private static final double COLUMN_WIDTH_SCALE = 0.9;
+    private static final double LEFT_MARGIN_CM = 0.8;
+    private static final double RIGHT_MARGIN_CM = 0.5;
+    private static final double TOP_MARGIN_CM = 3.3;
+    private static final double BOTTOM_MARGIN_CM = 1.9;
 
     private PhysicalFactorsMapExporter() {
     }
@@ -105,6 +109,11 @@ public final class PhysicalFactorsMapExporter {
 
         PrintSetup printSetup = sheet.getPrintSetup();
         printSetup.setLandscape(true);
+
+        sheet.setMargin(Sheet.LeftMargin, cmToInches(LEFT_MARGIN_CM));
+        sheet.setMargin(Sheet.RightMargin, cmToInches(RIGHT_MARGIN_CM));
+        sheet.setMargin(Sheet.TopMargin, cmToInches(TOP_MARGIN_CM));
+        sheet.setMargin(Sheet.BottomMargin, cmToInches(BOTTOM_MARGIN_CM));
     }
 
     private static void applyHeaders(Sheet sheet, String registrationNumber) {
@@ -170,5 +179,9 @@ public final class PhysicalFactorsMapExporter {
         final int[] offset = {0, 36, 73, 109, 146, 182, 219};
         units += offset[rem];
         return units;
+    }
+
+    private static double cmToInches(double centimeters) {
+        return centimeters / 2.54d;
     }
 }
