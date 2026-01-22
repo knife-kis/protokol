@@ -103,20 +103,28 @@ public class ProtocolMapPanel extends JPanel {
                     }
                     File source = files.get(0);
                     File generated = null;
+
                     if (generator != null) {
                         try {
                             generated = generator.generate(source);
                         } catch (IOException ex) {
-                            JOptionPane.showMessageDialog(this, "Не удалось сформировать карту: " + ex.getMessage(),
-                                    "Ошибка", JOptionPane.ERROR_MESSAGE);
+                            // ВАЖНО: показываем диалог относительно панели, а не TransferHandler
+                            JOptionPane.showMessageDialog(
+                                    DropZonePanel.this,
+                                    "Не удалось сформировать карту: " + ex.getMessage(),
+                                    "Ошибка",
+                                    JOptionPane.ERROR_MESSAGE
+                            );
                         }
                     }
+
                     showGeneratedMap(source, generated);
                     return true;
                 } catch (Exception ex) {
                     return false;
                 }
             }
+
         }
     }
 }
