@@ -10,6 +10,7 @@ import ru.citlab24.protokol.tabs.modules.noise.NoiseTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
+import ru.citlab24.protokol.protocolmap.ProtocolMapPanel;
 
 
 import com.formdev.flatlaf.FlatClientProperties;
@@ -86,7 +87,7 @@ public class MainFrame extends JFrame {
 
         cardPanel.add(createScenePanel(tabbedPane), CARD_PROTOCOL_HOME);
         cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_AREA);
-        cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_MAP);
+        cardPanel.add(createScenePanel(new ProtocolMapPanel()), CARD_PROTOCOL_MAP);
         cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_REQUEST);
 
         getContentPane().setLayout(new BorderLayout());
