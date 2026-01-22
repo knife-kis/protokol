@@ -318,15 +318,42 @@ final class TitlePageMeasurementTableWriter {
 
         int sectionHeaderRow = spacerRow + 1;
         setRowHeightPx(sheet, sectionHeaderRow, 40f);
-        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 0, 4,
-                "Измеряемый показатель");
-        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 5, 14,
-                "Документы, наименование НД, регламентирующих значения характеристик, показателей (к сведению)");
-        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 15, 25,
-                "Документы, устанавливающие правила и методы исследований (испытаний) и измерений");
+        writeSectionHeaderRow(sheet, sectionHeaderStyle, sectionHeaderRow);
+
+        double pageHeightPoints = printableHeightPoints(sheet);
+        double headerHeightPoints = heightPointsFromPx(40f);
+        double usedHeightPoints = sumRowHeightsPoints(sheet, 0, spacerRow);
+
+        boolean hasMicroclimateSheet = hasSheetWithPrefix(sheet.getWorkbook(), "Микроклимат");
+        boolean hasArtificialLightingSheet = sheet.getWorkbook().getSheet("Иск освещение") != null;
+        float firstSectionRowHeightPx = firstSectionRowHeightPx(hasMedSheet,
+                hasEroaSheet,
+                hasMicroclimateSheet,
+                hasArtificialLightingSheet,
+                hasVentilationSheet);
+        if (pageHeightPoints > 0 && firstSectionRowHeightPx > 0) {
+            double firstRowHeightPoints = heightPointsFromPx(firstSectionRowHeightPx);
+            if (usedHeightPoints + headerHeightPoints + firstRowHeightPoints > pageHeightPoints) {
+                if (sectionHeaderRow > 0) {
+                    sheet.setRowBreak(sectionHeaderRow - 1);
+                }
+                usedHeightPoints = headerHeightPoints;
+            } else {
+                usedHeightPoints += headerHeightPoints;
+            }
+        }
 
         int sectionRowIndex = sectionHeaderRow + 1;
+        boolean repeatedSectionHeader = false;
         if (hasMedSheet) {
+            double rowHeightPoints = heightPointsFromPx(96f);
+            if (pageHeightPoints > 0
+                    && !repeatedSectionHeader
+                    && usedHeightPoints + rowHeightPoints > pageHeightPoints) {
+                sectionRowIndex = insertSectionHeader(sheet, sectionHeaderStyle, sectionRowIndex, 40f);
+                repeatedSectionHeader = true;
+                usedHeightPoints = headerHeightPoints;
+            }
             setRowHeightPx(sheet, sectionRowIndex, 96f);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
                     "Мощность дозы гамма-излучения; минимальное значение МЭД гамма-излучения; " +
@@ -338,10 +365,19 @@ final class TitlePageMeasurementTableWriter {
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
                             "п. IV, V");
+            usedHeightPoints += rowHeightPoints;
             sectionRowIndex++;
         }
 
         if (hasEroaSheet) {
+            double rowHeightPoints = heightPointsFromPx(150f);
+            if (pageHeightPoints > 0
+                    && !repeatedSectionHeader
+                    && usedHeightPoints + rowHeightPoints > pageHeightPoints) {
+                sectionRowIndex = insertSectionHeader(sheet, sectionHeaderStyle, sectionRowIndex, 40f);
+                repeatedSectionHeader = true;
+                usedHeightPoints = headerHeightPoints;
+            }
             setRowHeightPx(sheet, sectionRowIndex, 150f);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
                     "Эквивалентная равновесная объемная активность (ЭРОА) радона; " +
@@ -354,11 +390,19 @@ final class TitlePageMeasurementTableWriter {
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
                             "п. IV, V");
+            usedHeightPoints += rowHeightPoints;
             sectionRowIndex++;
         }
 
-        boolean hasMicroclimateSheet = hasSheetWithPrefix(sheet.getWorkbook(), "Микроклимат");
         if (hasMicroclimateSheet) {
+            double rowHeightPoints = heightPointsFromPx(133f);
+            if (pageHeightPoints > 0
+                    && !repeatedSectionHeader
+                    && usedHeightPoints + rowHeightPoints > pageHeightPoints) {
+                sectionRowIndex = insertSectionHeader(sheet, sectionHeaderStyle, sectionRowIndex, 40f);
+                repeatedSectionHeader = true;
+                usedHeightPoints = headerHeightPoints;
+            }
             setRowHeightPx(sheet, sectionRowIndex, 133f);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
                     "Температура воздуха, скорость движения воздуха, " +
@@ -375,11 +419,19 @@ final class TitlePageMeasurementTableWriter {
                             "состава железнодорожного транспорта и метрополитена, в\n" +
                             "системах вентиляции промышленных, общественных и жилых\n" +
                             "зданий (сооружений), на открытом воздухе\" п.11.2");
+            usedHeightPoints += rowHeightPoints;
             sectionRowIndex++;
         }
 
-        boolean hasArtificialLightingSheet = sheet.getWorkbook().getSheet("Иск освещение") != null;
         if (hasArtificialLightingSheet) {
+            double rowHeightPoints = heightPointsFromPx(84f);
+            if (pageHeightPoints > 0
+                    && !repeatedSectionHeader
+                    && usedHeightPoints + rowHeightPoints > pageHeightPoints) {
+                sectionRowIndex = insertSectionHeader(sheet, sectionHeaderStyle, sectionRowIndex, 40f);
+                repeatedSectionHeader = true;
+                usedHeightPoints = headerHeightPoints;
+            }
             setRowHeightPx(sheet, sectionRowIndex, 84f);
             String lightingIndicatorText = buildLightingSectionIndicatorText(sheet.getWorkbook());
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
@@ -391,12 +443,21 @@ final class TitlePageMeasurementTableWriter {
                     "МИ СС.09\u22122021 \"Метод измерений показателей световой среды Методика измерений показателей " +
                             "световой среды\nна рабочих местах, в помещениях и оконных конструкциях жилых и общественных " +
                             "зданий (сооружений), селитебной территории\" п. 10.2");
+            usedHeightPoints += rowHeightPoints;
             sectionRowIndex++;
         }
 
         if (hasVentilationSheet) {
             VentilationIndicators ventilationIndicators = findVentilationIndicators(sheet.getWorkbook());
             String indicatorText = buildVentilationIndicatorText(ventilationIndicators);
+            double rowHeightPoints = heightPointsFromPx(133f);
+            if (pageHeightPoints > 0
+                    && !repeatedSectionHeader
+                    && usedHeightPoints + rowHeightPoints > pageHeightPoints) {
+                sectionRowIndex = insertSectionHeader(sheet, sectionHeaderStyle, sectionRowIndex, 40f);
+                repeatedSectionHeader = true;
+                usedHeightPoints = headerHeightPoints;
+            }
             setRowHeightPx(sheet, sectionRowIndex, 133f);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4, indicatorText);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
@@ -410,6 +471,7 @@ final class TitlePageMeasurementTableWriter {
                             "состава железнодорожного транспорта и метрополитена, в\n" +
                             "системах вентиляции промышленных, общественных и жилых\n" +
                             "зданий (сооружений), на открытом воздухе\" п.11.2");
+            usedHeightPoints += rowHeightPoints;
         }
     }
 
@@ -419,6 +481,31 @@ final class TitlePageMeasurementTableWriter {
         setMergedText(sheet, headerStyle, rowIndex, rowIndex, 10, 12, headers[2]);
         setMergedText(sheet, headerStyle, rowIndex, rowIndex, 13, 19, headers[3]);
         setMergedText(sheet, headerStyle, rowIndex, rowIndex, 20, 25, headers[4]);
+    }
+
+    private static void writeSectionHeaderRow(Sheet sheet, CellStyle headerStyle, int rowIndex) {
+        setMergedText(sheet, headerStyle, rowIndex, rowIndex, 0, 4,
+                "Измеряемый показатель");
+        setMergedText(sheet, headerStyle, rowIndex, rowIndex, 5, 14,
+                "Документы, наименование НД, регламентирующих значения характеристик, показателей (к сведению)");
+        setMergedText(sheet, headerStyle, rowIndex, rowIndex, 15, 25,
+                "Документы, устанавливающие правила и методы исследований (испытаний) и измерений");
+    }
+
+    private static int insertSectionHeader(Sheet sheet,
+                                           CellStyle headerStyle,
+                                           int rowIndex,
+                                           float headerHeightPx) {
+        int lastRow = sheet.getLastRowNum();
+        if (rowIndex <= lastRow) {
+            sheet.shiftRows(rowIndex, lastRow, 1, true, false);
+        }
+        if (rowIndex > 0) {
+            sheet.setRowBreak(rowIndex - 1);
+        }
+        setRowHeightPx(sheet, rowIndex, headerHeightPx);
+        writeSectionHeaderRow(sheet, headerStyle, rowIndex);
+        return rowIndex + 1;
     }
 
     private static void writeMeasurementRow(Sheet sheet,
@@ -612,6 +699,56 @@ final class TitlePageMeasurementTableWriter {
         Row row = sheet.getRow(rowIndex);
         if (row == null) row = sheet.createRow(rowIndex);
         row.setHeightInPoints(heightPx * 72f / 96f);
+    }
+
+    private static double heightPointsFromPx(float heightPx) {
+        return heightPx * 72f / 96f;
+    }
+
+    private static double sumRowHeightsPoints(Sheet sheet, int startRow, int endRow) {
+        if (sheet == null || endRow < startRow) {
+            return 0.0;
+        }
+        double sum = 0.0;
+        for (int i = startRow; i <= endRow; i++) {
+            sum += rowHeightPoints(sheet, i);
+        }
+        return sum;
+    }
+
+    private static double rowHeightPoints(Sheet sheet, int rowIndex) {
+        if (sheet == null) return 0.0;
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return sheet.getDefaultRowHeightInPoints();
+        }
+        return row.getHeightInPoints();
+    }
+
+    private static double printableHeightPoints(Sheet sheet) {
+        if (sheet == null) return 0.0;
+        PrintSetup ps = sheet.getPrintSetup();
+        double pageHeightCm = ps.getLandscape() ? 21.0 : 29.7;
+        double topCm = sheet.getMargin(Sheet.TopMargin) * 2.54;
+        double bottomCm = sheet.getMargin(Sheet.BottomMargin) * 2.54;
+        double printableCm = pageHeightCm - (topCm + bottomCm);
+        if (printableCm <= 0.1) {
+            printableCm = pageHeightCm;
+        }
+        return printableCm * 28.3464567;
+    }
+
+    private static float firstSectionRowHeightPx(boolean hasMedSheet,
+                                                 boolean hasEroaSheet,
+                                                 boolean hasMicroclimateSheet,
+                                                 boolean hasArtificialLightingSheet,
+                                                 boolean hasVentilationSheet) {
+        if (hasMedSheet) return 96f;
+        if (hasEroaSheet) return 150f;
+        if (hasMicroclimateSheet) return 133f;
+        if (hasArtificialLightingSheet) return 84f;
+        if (hasVentilationSheet) return 133f;
+        return 0f;
     }
 
     private static void setRowHeightPoints(Sheet sheet, int rowIndex, float heightPoints) {
