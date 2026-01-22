@@ -342,7 +342,7 @@ final class TitlePageMeasurementTableWriter {
         }
 
         if (hasEroaSheet) {
-            setRowHeightPx(sheet, sectionRowIndex, 96f);
+            setRowHeightPx(sheet, sectionRowIndex, 150f);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
                     "Эквивалентная равновесная объемная активность (ЭРОА) радона; " +
                             "Эквивалентная равновесная объемная активность (ЭРОА) торона; " +
