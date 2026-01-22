@@ -134,6 +134,7 @@ final class TitlePageMeasurementTableWriter {
                 || sheet.getWorkbook().getSheet("КЕО") != null;
         boolean hasLightingPowerSheet = sheet.getWorkbook().getSheet("Иск освещение") != null
                 || sheet.getWorkbook().getSheet("Иск освещение (2)") != null;
+        boolean hasVentilationSheet = hasSheetWithPrefix(sheet.getWorkbook(), "Вентиляция");
 
         int rowIndex = headerRow + 1;
         setRowHeightPx(sheet, rowIndex, 126f);
@@ -211,7 +212,7 @@ final class TitlePageMeasurementTableWriter {
         }
 
         int eroaRow = medRow + 1;
-        setRowHeightPx(sheet, eroaRow, 136f);
+        setRowHeightPx(sheet, eroaRow, 166f);
         if (hasEroaSheet) {
             writeMeasurementRow(sheet, measurementStyle, eroaRow,
                     "Эквивалентная равновесная объемная активность (ЭРОА) радона; " +
@@ -353,6 +354,25 @@ final class TitlePageMeasurementTableWriter {
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
                             "п. IV, V");
+            sectionRowIndex++;
+        }
+
+        if (hasVentilationSheet) {
+            VentilationIndicators ventilationIndicators = findVentilationIndicators(sheet.getWorkbook());
+            String indicatorText = buildVentilationIndicatorText(ventilationIndicators);
+            setRowHeightPx(sheet, sectionRowIndex, 133f);
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4, indicatorText);
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
+                    "СП 54.13330.2022 \"СНиП 31-01-2003 Здания жилые многоквартирные\"");
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
+                    "МИ М.08-2021 \"Методика измерений показателей микроклимата\n" +
+                            "на рабочих местах в помещениях (сооружениях, кабинах), в\n" +
+                            "помещениях жилых зданий (в том числе зданиях общежитий),\n" +
+                            "помещениях общественных, административных и бытовых\n" +
+                            "зданий (сооружений), помещениях специального подвижного\n" +
+                            "состава железнодорожного транспорта и метрополитена, в\n" +
+                            "системах вентиляции промышленных, общественных и жилых\n" +
+                            "зданий (сооружений), на открытом воздухе\" п.11.2");
         }
     }
 
@@ -442,6 +462,72 @@ final class TitlePageMeasurementTableWriter {
         return false;
     }
 
+    private static boolean hasSheetWithPrefix(Workbook workbook, String prefix) {
+        if (workbook == null || prefix == null) return false;
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            String name = workbook.getSheetName(i);
+            if (name != null && name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static VentilationIndicators findVentilationIndicators(Workbook workbook) {
+        VentilationIndicators indicators = new VentilationIndicators();
+        if (workbook == null) return indicators;
+        DataFormatter formatter = new DataFormatter();
+        FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            Sheet sheet = workbook.getSheetAt(i);
+            if (sheet == null) continue;
+            String name = sheet.getSheetName();
+            if (name == null || !name.startsWith("Вентиляция")) continue;
+
+            int lastRow = sheet.getLastRowNum();
+            for (int rowIndex = 4; rowIndex <= lastRow; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) continue;
+                String flowValue = formatter.formatCellValue(row.getCell(9), evaluator);
+                if (flowValue == null || flowValue.trim().isEmpty()) continue;
+
+                String placeText = formatter.formatCellValue(row.getCell(2), evaluator);
+                if (placeText == null) continue;
+                String normalized = placeText.trim().toLowerCase(java.util.Locale.ROOT);
+                if (normalized.endsWith("(вытяжка)")) {
+                    indicators.hasExhaustRate = true;
+                } else if (normalized.endsWith("(приток)")) {
+                    indicators.hasSupplyRate = true;
+                }
+                if (indicators.hasExhaustRate && indicators.hasSupplyRate) {
+                    return indicators;
+                }
+            }
+        }
+
+        return indicators;
+    }
+
+    private static String buildVentilationIndicatorText(VentilationIndicators indicators) {
+        if (indicators == null) {
+            return "Скорость воздушного потока, производительность вентсистем, площадь сечения";
+        }
+        if (indicators.hasExhaustRate && indicators.hasSupplyRate) {
+            return "Скорость воздушного потока, производительность вентсистем, " +
+                    "кратность воздухообмена по вытяжке, кратность воздухообмена по притоку, площадь сечения";
+        }
+        if (indicators.hasExhaustRate) {
+            return "Скорость воздушного потока, производительность вентсистем, " +
+                    "кратность воздухообмена по вытяжке, площадь сечения";
+        }
+        if (indicators.hasSupplyRate) {
+            return "Скорость воздушного потока, производительность вентсистем, " +
+                    "кратность воздухообмена по притоку, площадь сечения";
+        }
+        return "Скорость воздушного потока, производительность вентсистем, площадь сечения";
+    }
+
     private static void setRowHeightPx(Sheet sheet, int rowIndex, float heightPx) {
         if (sheet == null) return;
         Row row = sheet.getRow(rowIndex);
@@ -483,5 +569,10 @@ final class TitlePageMeasurementTableWriter {
                 }
             }
         }
+    }
+
+    private static final class VentilationIndicators {
+        private boolean hasExhaustRate;
+        private boolean hasSupplyRate;
     }
 }
