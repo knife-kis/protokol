@@ -344,7 +344,7 @@ public final class LightingExcelExporter {
                 S.textLeft);
 
         Row preparedSignRow = ensureRow(sh, footerRow++);
-        preparedSignRow.setHeightInPoints(pixelsToPoints(7));
+        preparedSignRow.setHeightInPoints(pixelsToPoints(20));
         mergeWithoutBorder(sh, "A" + (preparedSignRow.getRowNum() + 1) + ":G" + (preparedSignRow.getRowNum() + 1));
         put(sh, preparedSignRow.getRowNum(), 0, "(должность, подпись, Ф.И.О.)", S.center8);
 
