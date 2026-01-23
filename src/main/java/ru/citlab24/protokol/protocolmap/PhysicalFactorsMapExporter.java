@@ -308,6 +308,7 @@ public final class PhysicalFactorsMapExporter {
         String measurementMethodsText = "5.2. Методы измерения " + safe(measurementMethods);
         setMergedCellValue(sheet, rowIndex, measurementMethodsText, plainStyle);
         adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, measurementMethodsText);
+        addRowHeightPixels(sheet, rowIndex, 20);
         rowIndex++;
 
         setMergedCellValue(sheet, rowIndex,
@@ -1154,6 +1155,24 @@ public final class PhysicalFactorsMapExporter {
         }
 
         row.setHeightInPoints(pixelsToPoints((int) (baseHeightPx * lines)));
+    }
+
+    private static void addRowHeightPixels(Sheet sheet, int rowIndex, int extraPixels) {
+        if (sheet == null || extraPixels <= 0) {
+            return;
+        }
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        float currentHeightPx = pointsToPixels(row.getHeightInPoints());
+        if (currentHeightPx <= 0f) {
+            currentHeightPx = pointsToPixels(sheet.getDefaultRowHeightInPoints());
+        }
+
+        row.setHeightInPoints(pixelsToPoints((int) (currentHeightPx + extraPixels)));
     }
 
     private static double totalColumnChars(Sheet sheet, int firstCol, int lastCol) {
