@@ -16,12 +16,13 @@ final class PhysicalFactorsMapResultsTabBuilder {
     private static final double RIGHT_MARGIN_CM = 0.5;
     private static final double TOP_MARGIN_CM = 3.3;
     private static final double BOTTOM_MARGIN_CM = 1.9;
+    private static final float EXTRA_ROW_HEIGHT_POINTS = 15f;
 
     private PhysicalFactorsMapResultsTabBuilder() {
     }
 
     static void createResultsSheet(Workbook workbook, List<String> measurementDates) {
-        Sheet sheet = workbook.createSheet("карта замеров (2)");
+        Sheet sheet = workbook.createSheet("Микроклимат");
         applySheetDefaults(workbook, sheet);
         addResultsRows(sheet, measurementDates);
     }
@@ -64,23 +65,25 @@ final class PhysicalFactorsMapResultsTabBuilder {
         int rowIndex = 0;
         rowIndex = addMergedRow(sheet, rowIndex, "7. Результаты измерений на объекте: ");
 
+        int sectionIndex = 1;
         for (String date : dates) {
-            String textBlock = buildDateBlock(date);
+            String textBlock = buildDateBlock(date, sectionIndex);
             rowIndex = addMergedRowWithHeight(sheet, rowIndex, textBlock);
+            sectionIndex++;
         }
     }
 
-    private static String buildDateBlock(String date) {
+    private static String buildDateBlock(String date, int sectionIndex) {
         String normalizedDate = date == null ? "" : date.trim();
         StringBuilder builder = new StringBuilder();
-        builder.append("7.1.1 Метеорологические факторы атмосферного воздуха");
+        builder.append("7.1.").append(sectionIndex).append(" Метеорологические факторы атмосферного воздуха");
         if (!normalizedDate.isEmpty()) {
             builder.append(" ").append(normalizedDate);
         }
         builder.append("\n");
         builder.append("Температура помещения,˚С ").append(longUnderline()).append("\n");
         builder.append("Температура улица,˚С").append(longUnderline()).append("\n");
-        builder.append("относительная влажность  помещения, %").append(longUnderline()).append("\n");
+        builder.append("относительная влажность  помещения, %").append(shortUnderline()).append("\n");
         builder.append("относительная влажность  улица, %").append(longUnderline()).append("\n");
         builder.append("давление помещение, мм рт. ст.   %").append(longUnderline()).append("\n");
         builder.append("давление улица, мм рт. ст.   %").append(longUnderline());
@@ -91,11 +94,17 @@ final class PhysicalFactorsMapResultsTabBuilder {
         return "____________________________________________________________________________";
     }
 
+    private static String shortUnderline() {
+        String underline = longUnderline();
+        return underline.substring(0, underline.length() - 6);
+    }
+
     private static int addMergedRow(Sheet sheet, int rowIndex, String text) {
         Row row = sheet.createRow(rowIndex);
         Cell cell = row.createCell(0);
         cell.setCellValue(text);
         sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, 15));
+        row.setHeightInPoints(12f + EXTRA_ROW_HEIGHT_POINTS);
         return rowIndex + 1;
     }
 
@@ -106,7 +115,7 @@ final class PhysicalFactorsMapResultsTabBuilder {
         sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, 15));
 
         int lines = Math.max(1, text.split("\\r?\\n").length);
-        row.setHeightInPoints(12f * lines);
+        row.setHeightInPoints(12f * lines + EXTRA_ROW_HEIGHT_POINTS);
         return rowIndex + 1;
     }
 
