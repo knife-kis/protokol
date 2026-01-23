@@ -241,6 +241,9 @@ public final class PhysicalFactorsMapExporter {
         String controlDatePrefix = "Дата контроля: ";
         setMergedCellValueWithPrefix(sheet, 19, controlDatePrefix, controlDate,
                 sectionFont, sectionValueFont, sectionMixedStyle);
+
+        Row spacerAfterControlDate = sheet.createRow(20);
+        spacerAfterControlDate.setHeightInPoints(pixelsToPoints(16));
     }
 
     private static void createSecondPageRows(Workbook workbook,
@@ -248,7 +251,7 @@ public final class PhysicalFactorsMapExporter {
                                              String protocolNumber,
                                              String contractText,
                                              MapHeaderData headerData) {
-        int startRow = 20;
+        int startRow = 21;
         sheet.setRowBreak(startRow);
 
         Font plainFont = workbook.createFont();
