@@ -373,6 +373,8 @@ public final class PhysicalFactorsMapExporter {
         checkboxCell.setCellStyle(checkboxStyle);
         checkboxCell.setCellValue(safe(checkbox));
 
+        adjustRowHeightForInstrumentRow(sheet, rowIndex, safe(name), safe(serialNumber));
+
         rowIndex++;
         return rowIndex;
     }
@@ -853,6 +855,7 @@ public final class PhysicalFactorsMapExporter {
         }
 
         java.util.List<InstrumentData> instruments = new java.util.ArrayList<>();
+        java.util.Set<String> seenSerials = new java.util.HashSet<>();
         for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             String name = readMergedCellValue(sheet, rowIndex, nameColumn, formatter);
             String serial = readMergedCellValue(sheet, rowIndex, serialColumn, formatter);
@@ -862,6 +865,10 @@ public final class PhysicalFactorsMapExporter {
             }
             if (name.isBlank() && serial.isBlank()) {
                 break;
+            }
+            String serialKey = normalizeText(serial).toLowerCase(Locale.ROOT);
+            if (!serialKey.isBlank() && !seenSerials.add(serialKey)) {
+                continue;
             }
             instruments.add(new InstrumentData(name, serial));
         }
@@ -1120,6 +1127,33 @@ public final class PhysicalFactorsMapExporter {
         }
 
         row.setHeightInPoints(pixelsToPoints((int) (baseHeightPx * Math.max(1, lines))));
+    }
+
+    private static void adjustRowHeightForInstrumentRow(Sheet sheet,
+                                                        int rowIndex,
+                                                        String name,
+                                                        String serialNumber) {
+        if (sheet == null) {
+            return;
+        }
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        double nameChars = totalColumnChars(sheet, 1, 19);
+        double serialChars = totalColumnChars(sheet, 20, 29);
+        int nameLines = estimateWrappedLines(name, nameChars);
+        int serialLines = estimateWrappedLines(serialNumber, serialChars);
+        int lines = Math.max(1, Math.max(nameLines, serialLines));
+
+        float baseHeightPx = pointsToPixels(row.getHeightInPoints());
+        if (baseHeightPx <= 0f) {
+            baseHeightPx = pointsToPixels(sheet.getDefaultRowHeightInPoints());
+        }
+
+        row.setHeightInPoints(pixelsToPoints((int) (baseHeightPx * lines)));
     }
 
     private static double totalColumnChars(Sheet sheet, int firstCol, int lastCol) {
