@@ -11,6 +11,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.File;
@@ -40,6 +41,7 @@ public final class PhysicalFactorsMapExporter {
         String controlDate = resolveControlDate(sourceFile);
         String specialConditions = resolveSpecialConditions(sourceFile);
         String measurementMethods = resolveMeasurementMethods(sourceFile);
+        java.util.List<InstrumentData> instruments = resolveMeasurementInstruments(sourceFile);
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -48,7 +50,7 @@ public final class PhysicalFactorsMapExporter {
             applyHeaders(sheet, registrationNumber);
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
-                    specialConditions, measurementMethods);
+                    specialConditions, measurementMethods, instruments);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -255,7 +257,8 @@ public final class PhysicalFactorsMapExporter {
                                              String contractText,
                                              MapHeaderData headerData,
                                              String specialConditions,
-                                             String measurementMethods) {
+                                             String measurementMethods,
+                                             java.util.List<InstrumentData> instruments) {
         int startRow = 21;
         sheet.setRowBreak(startRow - 1);
 
@@ -305,6 +308,111 @@ public final class PhysicalFactorsMapExporter {
         String measurementMethodsText = "5.2. Методы измерения " + safe(measurementMethods);
         setMergedCellValue(sheet, rowIndex, measurementMethodsText, plainStyle);
         adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, measurementMethodsText);
+        rowIndex++;
+
+        setMergedCellValue(sheet, rowIndex,
+                "5.3. Приборы для измерения (используемое отметить):", plainStyle);
+        rowIndex++;
+
+        Font tableHeaderFont = workbook.createFont();
+        tableHeaderFont.setFontName("Arial");
+        tableHeaderFont.setFontHeightInPoints((short) 12);
+        tableHeaderFont.setBold(true);
+
+        CellStyle tableHeaderStyle = workbook.createCellStyle();
+        tableHeaderStyle.setFont(tableHeaderFont);
+        tableHeaderStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        tableHeaderStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        tableHeaderStyle.setWrapText(true);
+        setThinBorders(tableHeaderStyle);
+
+        CellStyle tableCellStyle = workbook.createCellStyle();
+        tableCellStyle.setFont(plainFont);
+        tableCellStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+        tableCellStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        tableCellStyle.setWrapText(true);
+        setThinBorders(tableCellStyle);
+
+        CellStyle checkboxStyle = workbook.createCellStyle();
+        checkboxStyle.setFont(plainFont);
+        checkboxStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        checkboxStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        setThinBorders(checkboxStyle);
+
+        rowIndex = addInstrumentRow(sheet, rowIndex, "Наименование", "зав. №", "☑",
+                tableHeaderStyle, tableHeaderStyle, checkboxStyle);
+
+        if (instruments != null) {
+            for (InstrumentData instrument : instruments) {
+                rowIndex = addInstrumentRow(sheet, rowIndex, instrument.name, instrument.serialNumber, "☑",
+                        tableCellStyle, tableCellStyle, checkboxStyle);
+            }
+        }
+    }
+
+    private static int addInstrumentRow(Sheet sheet,
+                                        int rowIndex,
+                                        String name,
+                                        String serialNumber,
+                                        String checkbox,
+                                        CellStyle nameStyle,
+                                        CellStyle serialStyle,
+                                        CellStyle checkboxStyle) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        mergeCellRangeWithStyle(sheet, rowIndex, 1, 9, nameStyle, safe(name));
+        mergeCellRangeWithStyle(sheet, rowIndex, 10, 14, serialStyle, safe(serialNumber));
+
+        Cell checkboxCell = row.getCell(15);
+        if (checkboxCell == null) {
+            checkboxCell = row.createCell(15);
+        }
+        checkboxCell.setCellStyle(checkboxStyle);
+        checkboxCell.setCellValue(safe(checkbox));
+
+        rowIndex++;
+        return rowIndex;
+    }
+
+    private static void mergeCellRangeWithStyle(Sheet sheet,
+                                                int rowIndex,
+                                                int firstCol,
+                                                int lastCol,
+                                                CellStyle style,
+                                                String value) {
+        CellRangeAddress region = new CellRangeAddress(rowIndex, rowIndex, firstCol, lastCol);
+        sheet.addMergedRegion(region);
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        for (int col = firstCol; col <= lastCol; col++) {
+            Cell cell = row.getCell(col);
+            if (cell == null) {
+                cell = row.createCell(col);
+            }
+            cell.setCellStyle(style);
+        }
+        Cell cell = row.getCell(firstCol);
+        if (cell == null) {
+            cell = row.createCell(firstCol);
+        }
+        cell.setCellStyle(style);
+        cell.setCellValue(value);
+        RegionUtil.setBorderTop(style.getBorderTopEnum(), region, sheet);
+        RegionUtil.setBorderBottom(style.getBorderBottomEnum(), region, sheet);
+        RegionUtil.setBorderLeft(style.getBorderLeftEnum(), region, sheet);
+        RegionUtil.setBorderRight(style.getBorderRightEnum(), region, sheet);
+    }
+
+    private static void setThinBorders(CellStyle style) {
+        style.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
     }
 
     private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
@@ -669,6 +777,96 @@ public final class PhysicalFactorsMapExporter {
         }
     }
 
+    private static java.util.List<InstrumentData> resolveMeasurementInstruments(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return java.util.Collections.emptyList();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return java.util.Collections.emptyList();
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findMeasurementInstruments(sheet);
+        } catch (Exception ex) {
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    private static java.util.List<InstrumentData> findMeasurementInstruments(Sheet sheet) {
+        if (sheet == null) {
+            return java.util.Collections.emptyList();
+        }
+        DataFormatter formatter = new DataFormatter();
+        int headerRowIndex = -1;
+        int nameColumn = -1;
+        int serialColumn = -1;
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String normalized = normalizeText(formatter.formatCellValue(cell)).toLowerCase(Locale.ROOT);
+                if (normalized.equals(INSTRUMENTS_SECTION_HEADER)) {
+                    headerRowIndex = row.getRowNum();
+                }
+                if (normalized.equals(INSTRUMENTS_NAME_HEADER)) {
+                    nameColumn = cell.getColumnIndex();
+                    headerRowIndex = row.getRowNum();
+                }
+            }
+        }
+
+        if (headerRowIndex < 0 || nameColumn < 0) {
+            return java.util.Collections.emptyList();
+        }
+
+        Row headerRow = sheet.getRow(headerRowIndex);
+        if (headerRow != null) {
+            for (Cell cell : headerRow) {
+                String normalized = normalizeText(formatter.formatCellValue(cell)).toLowerCase(Locale.ROOT);
+                if (normalized.contains("завод")) {
+                    serialColumn = cell.getColumnIndex();
+                    break;
+                }
+            }
+        }
+
+        if (serialColumn < 0) {
+            serialColumn = nameColumn + 6;
+        }
+
+        java.util.List<InstrumentData> instruments = new java.util.ArrayList<>();
+        for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            String name = readMergedCellValue(sheet, rowIndex, nameColumn, formatter);
+            String serial = readMergedCellValue(sheet, rowIndex, serialColumn, formatter);
+            if (name.isBlank() && serial.isBlank()) {
+                break;
+            }
+            instruments.add(new InstrumentData(name, serial));
+        }
+        return instruments;
+    }
+
+    private static String readMergedCellValue(Sheet sheet, int rowIndex, int colIndex, DataFormatter formatter) {
+        if (sheet == null) {
+            return "";
+        }
+        for (CellRangeAddress range : sheet.getMergedRegions()) {
+            if (range.isInRange(rowIndex, colIndex)) {
+                Row row = sheet.getRow(range.getFirstRow());
+                if (row == null) {
+                    return "";
+                }
+                Cell cell = row.getCell(range.getFirstColumn());
+                return normalizeText(cell == null ? "" : formatter.formatCellValue(cell));
+            }
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return "";
+        }
+        Cell cell = row.getCell(colIndex);
+        return normalizeText(cell == null ? "" : formatter.formatCellValue(cell));
+    }
+
     private static String findMeasurementMethods(Sheet sheet) {
         if (sheet == null) {
             return "";
@@ -934,6 +1132,8 @@ public final class PhysicalFactorsMapExporter {
     private static final String OBJECT_ADDRESS_PREFIX = "Адрес предприятия (объекта):";
     private static final String METHODS_HEADER =
             "Документы, устанавливающие правила и методы исследований (испытаний) и измерений";
+    private static final String INSTRUMENTS_SECTION_HEADER = "сведения о средствах измерения:";
+    private static final String INSTRUMENTS_NAME_HEADER = "наименование, тип средства измерения";
     private static final String PROTOCOL_PREFIX = "Протокол испытаний";
     private static final String BASIS_PREFIX = "Основание для измерений: договор";
     private static final java.util.regex.Pattern DATE_PATTERN =
@@ -962,6 +1162,16 @@ public final class PhysicalFactorsMapExporter {
             this.customerLegalAddress = customerLegalAddress;
             this.objectName = objectName;
             this.objectAddress = objectAddress;
+        }
+    }
+
+    private static final class InstrumentData {
+        private final String name;
+        private final String serialNumber;
+
+        private InstrumentData(String name, String serialNumber) {
+            this.name = safe(name);
+            this.serialNumber = safe(serialNumber);
         }
     }
 }
