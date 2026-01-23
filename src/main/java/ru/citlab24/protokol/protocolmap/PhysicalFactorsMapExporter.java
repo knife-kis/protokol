@@ -33,13 +33,14 @@ public final class PhysicalFactorsMapExporter {
     public static File generateMap(File sourceFile) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
+        String measurementPerformer = resolveMeasurementPerformer(sourceFile);
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("карта замеров");
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
-            createTitleRows(workbook, sheet, registrationNumber, headerData);
+            createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -129,8 +130,11 @@ public final class PhysicalFactorsMapExporter {
         header.setRight(font + "\nКоличество страниц: &[Страница] / &[Страниц] \n ");
     }
 
-    private static void createTitleRows(Workbook workbook, Sheet sheet, String registrationNumber,
-                                        MapHeaderData headerData) {
+    private static void createTitleRows(Workbook workbook,
+                                        Sheet sheet,
+                                        String registrationNumber,
+                                        MapHeaderData headerData,
+                                        String measurementPerformer) {
         Font titleFont = workbook.createFont();
         titleFont.setFontName("Arial");
         titleFont.setFontHeightInPoints((short) 16);
@@ -171,6 +175,39 @@ public final class PhysicalFactorsMapExporter {
 
         String datesText = "2. Дата замеров: " + safe(headerData.measurementDates);
         setMergedCellValue(sheet, 7, datesText, sectionStyle);
+
+        Row row8 = sheet.createRow(8);
+        row8.setHeightInPoints(pixelsToPoints(16));
+
+        String performerText = "3. Измерения провел, подпись: " + safe(measurementPerformer);
+        setMergedCellValue(sheet, 9, performerText, sectionStyle);
+
+        Row row10 = sheet.createRow(10);
+        row10.setHeightInPoints(pixelsToPoints(16));
+
+        String representativeText = "4. Измерения проведены в присутствии представителя: "
+                + safe(headerData.representative);
+        setMergedCellValue(sheet, 11, representativeText, sectionStyle);
+        adjustRowHeightForMergedTextDoubling(sheet, 11, 0, 31, representativeText);
+
+        Row row12 = sheet.createRow(12);
+        row12.setHeightInPoints(pixelsToPoints(16));
+
+        setMergedCellValue(sheet, 13, "Подпись:_______________________________", sectionStyle);
+
+        Row row14 = sheet.createRow(14);
+        row14.setHeightInPoints(pixelsToPoints(16));
+
+        String controlSuffix = resolveControlSuffix(measurementPerformer);
+        String controlText = "Контроль ведения записей осуществлен: " + controlSuffix;
+        setMergedCellValue(sheet, 15, controlText, sectionStyle);
+
+        Row row16 = sheet.createRow(16);
+        row16.setHeightInPoints(pixelsToPoints(16));
+
+        setMergedCellValue(sheet, 17,
+                "Результат контроля:____________________________________________",
+                sectionStyle);
     }
 
     private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
@@ -234,25 +271,30 @@ public final class PhysicalFactorsMapExporter {
         return pixels * 0.75f;
     }
 
+    private static float pointsToPixels(float points) {
+        return points / 0.75f;
+    }
+
     private static MapHeaderData resolveHeaderData(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
-            return new MapHeaderData("", "");
+            return new MapHeaderData("", "", "");
         }
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
             if (workbook.getNumberOfSheets() == 0) {
-                return new MapHeaderData("", "");
+                return new MapHeaderData("", "", "");
             }
             Sheet sheet = workbook.getSheetAt(0);
             return findHeaderData(sheet);
         } catch (Exception ex) {
-            return new MapHeaderData("", "");
+            return new MapHeaderData("", "", "");
         }
     }
 
     private static MapHeaderData findHeaderData(Sheet sheet) {
         String customer = "";
         String dates = "";
+        String representative = "";
         DataFormatter formatter = new DataFormatter();
         for (Row row : sheet) {
             for (Cell cell : row) {
@@ -266,12 +308,18 @@ public final class PhysicalFactorsMapExporter {
                 if (dates.isEmpty()) {
                     dates = extractMeasurementDates(text);
                 }
-                if (!customer.isEmpty() && !dates.isEmpty()) {
-                    return new MapHeaderData(customer, dates);
+                if (representative.isEmpty()) {
+                    representative = extractRepresentative(text);
+                    if (representative.isEmpty() && text.startsWith(REPRESENTATIVE_PREFIX)) {
+                        representative = readNextCellText(row, cell, formatter);
+                    }
+                }
+                if (!customer.isEmpty() && !dates.isEmpty() && !representative.isEmpty()) {
+                    return new MapHeaderData(customer, dates, representative);
                 }
             }
         }
-        return new MapHeaderData(customer, dates);
+        return new MapHeaderData(customer, dates, representative);
     }
 
     private static String extractCustomer(String text) {
@@ -310,6 +358,17 @@ public final class PhysicalFactorsMapExporter {
         return String.join(", ", dates);
     }
 
+    private static String extractRepresentative(String text) {
+        if (text == null) {
+            return "";
+        }
+        int index = text.indexOf(REPRESENTATIVE_PREFIX);
+        if (index < 0) {
+            return "";
+        }
+        return text.substring(index + REPRESENTATIVE_PREFIX.length()).trim();
+    }
+
     private static String readNextCellText(Row row, Cell cell, DataFormatter formatter) {
         Cell next = row.getCell(cell.getColumnIndex() + 1);
         if (next == null) {
@@ -319,23 +378,145 @@ public final class PhysicalFactorsMapExporter {
         return nextText;
     }
 
+    private static String resolveMeasurementPerformer(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            DataFormatter formatter = new DataFormatter();
+            for (int idx = workbook.getNumberOfSheets() - 1; idx >= 0; idx--) {
+                Sheet sheet = workbook.getSheetAt(idx);
+                if (sheet == null) {
+                    continue;
+                }
+                if (isGeneratorSheet(sheet.getSheetName())) {
+                    continue;
+                }
+                String performer = findMeasurementPerformer(sheet, formatter);
+                if (!performer.isEmpty()) {
+                    return performer;
+                }
+            }
+            return "";
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static boolean isGeneratorSheet(String sheetName) {
+        if (sheetName == null) {
+            return false;
+        }
+        return sheetName.equalsIgnoreCase("генератор")
+                || sheetName.equalsIgnoreCase("генератор (2.0.)");
+    }
+
+    private static String findMeasurementPerformer(Sheet sheet, DataFormatter formatter) {
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                if (text.contains("Измерения проводил:")) {
+                    if (text.contains("Тарновский")) {
+                        return "Тарновский М.О.";
+                    }
+                    if (text.contains("Белов")) {
+                        return "Белов Д.А.";
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String resolveControlSuffix(String measurementPerformer) {
+        if ("Тарновский М.О.".equals(measurementPerformer)) {
+            return "Инженер Белов Д.А.";
+        }
+        if ("Белов Д.А.".equals(measurementPerformer)) {
+            return "Заведующий лабораторией Тарновский М.О.";
+        }
+        return "";
+    }
+
     private static String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static void adjustRowHeightForMergedTextDoubling(Sheet sheet,
+                                                             int rowIndex,
+                                                             int firstCol,
+                                                             int lastCol,
+                                                             String text) {
+        if (sheet == null) {
+            return;
+        }
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        double totalChars = totalColumnChars(sheet, firstCol, lastCol);
+        int lines = estimateWrappedLines(text, totalChars);
+
+        float baseHeightPx = pointsToPixels(row.getHeightInPoints());
+        if (baseHeightPx <= 0f) {
+            baseHeightPx = pointsToPixels(sheet.getDefaultRowHeightInPoints());
+        }
+
+        int multiplier = 1;
+        while (multiplier < lines) {
+            multiplier *= 2;
+        }
+
+        row.setHeightInPoints(pixelsToPoints(baseHeightPx * multiplier));
+    }
+
+    private static double totalColumnChars(Sheet sheet, int firstCol, int lastCol) {
+        double totalChars = 0.0;
+        for (int c = firstCol; c <= lastCol; c++) {
+            totalChars += sheet.getColumnWidth(c) / 256.0;
+        }
+        return Math.max(1.0, totalChars);
+    }
+
+    private static int estimateWrappedLines(String text, double colChars) {
+        if (text == null || text.isBlank()) {
+            return 1;
+        }
+
+        int lines = 0;
+        String[] segments = text.split("\\r?\\n");
+        for (String seg : segments) {
+            int len = Math.max(1, seg.trim().length());
+            lines += (int) Math.ceil(len / Math.max(1.0, colChars));
+        }
+        return Math.max(1, lines);
     }
 
     private static final String CUSTOMER_PREFIX =
             "Наименование и контактные данные заявителя (заказчика):";
     private static final String MEASUREMENT_DATES_PHRASE = "Измерения были проведены";
+    private static final String REPRESENTATIVE_PREFIX =
+            "Измерения проводились в присутствии представителя заказчика:";
     private static final java.util.regex.Pattern DATE_PATTERN =
             java.util.regex.Pattern.compile("\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b");
 
     private static final class MapHeaderData {
         private final String customerNameAndContacts;
         private final String measurementDates;
+        private final String representative;
 
-        private MapHeaderData(String customerNameAndContacts, String measurementDates) {
+        private MapHeaderData(String customerNameAndContacts,
+                              String measurementDates,
+                              String representative) {
             this.customerNameAndContacts = customerNameAndContacts;
             this.measurementDates = measurementDates;
+            this.representative = representative;
         }
     }
 }
