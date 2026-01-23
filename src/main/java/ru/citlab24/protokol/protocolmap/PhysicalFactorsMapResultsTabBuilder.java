@@ -17,6 +17,8 @@ final class PhysicalFactorsMapResultsTabBuilder {
     private static final double TOP_MARGIN_CM = 3.3;
     private static final double BOTTOM_MARGIN_CM = 1.9;
     private static final float EXTRA_ROW_HEIGHT_POINTS = 15f;
+    private static final float HEADER_ROW_TOP_HEIGHT_POINTS = pixelsToPoints(48);
+    private static final float HEADER_ROW_BOTTOM_HEIGHT_POINTS = pixelsToPoints(120);
 
     private PhysicalFactorsMapResultsTabBuilder() {
     }
@@ -25,7 +27,10 @@ final class PhysicalFactorsMapResultsTabBuilder {
         Sheet sheet = workbook.createSheet("Микроклимат");
         applySheetDefaults(workbook, sheet);
         CellStyle microclimateHeaderStyle = createMicroclimateHeaderStyle(workbook);
-        addResultsRows(sheet, measurementDates, hasMicroclimateSheet, microclimateHeaderStyle);
+        CellStyle microclimateHeaderVerticalStyle = createMicroclimateHeaderVerticalStyle(workbook, microclimateHeaderStyle);
+        CellStyle microclimateHeaderNumberStyle = createMicroclimateHeaderNumberStyle(workbook, microclimateHeaderStyle);
+        addResultsRows(sheet, measurementDates, hasMicroclimateSheet,
+                microclimateHeaderStyle, microclimateHeaderVerticalStyle, microclimateHeaderNumberStyle);
     }
 
     private static void applySheetDefaults(Workbook workbook, Sheet sheet) {
@@ -61,7 +66,9 @@ final class PhysicalFactorsMapResultsTabBuilder {
     private static void addResultsRows(Sheet sheet,
                                        List<String> measurementDates,
                                        boolean hasMicroclimateSheet,
-                                       CellStyle microclimateHeaderStyle) {
+                                       CellStyle microclimateHeaderStyle,
+                                       CellStyle microclimateHeaderVerticalStyle,
+                                       CellStyle microclimateHeaderNumberStyle) {
         List<String> dates = measurementDates == null || measurementDates.isEmpty()
                 ? List.of("")
                 : measurementDates;
@@ -77,7 +84,8 @@ final class PhysicalFactorsMapResultsTabBuilder {
         }
 
         if (hasMicroclimateSheet) {
-            addMicroclimateHeaderTable(sheet, rowIndex, microclimateHeaderStyle);
+            addMicroclimateHeaderTable(sheet, rowIndex, microclimateHeaderStyle,
+                    microclimateHeaderVerticalStyle, microclimateHeaderNumberStyle);
         }
     }
 
@@ -127,42 +135,69 @@ final class PhysicalFactorsMapResultsTabBuilder {
         return rowIndex + 1;
     }
 
-    private static void addMicroclimateHeaderTable(Sheet sheet, int rowIndex, CellStyle headerStyle) {
+    private static void addMicroclimateHeaderTable(Sheet sheet,
+                                                   int rowIndex,
+                                                   CellStyle headerStyle,
+                                                   CellStyle headerVerticalStyle,
+                                                   CellStyle headerNumberStyle) {
         Row rowTop = sheet.createRow(rowIndex);
         Row rowBottom = sheet.createRow(rowIndex + 1);
+        Row rowNumbers = sheet.createRow(rowIndex + 2);
+
+        rowTop.setHeightInPoints(HEADER_ROW_TOP_HEIGHT_POINTS);
+        rowBottom.setHeightInPoints(HEADER_ROW_BOTTOM_HEIGHT_POINTS);
 
         setMergedCellValue(sheet, rowIndex, rowIndex + 1, 0, 0, "№ п/п", headerStyle);
         setMergedCellValue(sheet, rowIndex, rowIndex + 1, 1, 1,
                 "Рабочее место, место проведения измерений, цех, участок,\n" +
                         "наименование профессии или \n" +
                         "должности", headerStyle);
-        setMergedCellValue(sheet, rowIndex, rowIndex + 1, 2, 2, "Высота от пола, м", headerStyle);
+        setMergedCellValue(sheet, rowIndex, rowIndex + 1, 2, 2, "Высота от пола, м", headerVerticalStyle);
         setMergedCellValue(sheet, rowIndex, rowIndex, 3, 5, "Температура воздуха, ºС", headerStyle);
         setMergedCellValue(sheet, rowIndex + 1, rowIndex + 1, 3, 5,
-                "Измеренная (± расширенная неопределенность)", headerStyle);
+                "Измеренная (± расширенная неопределенность)", headerVerticalStyle);
         setMergedCellValue(sheet, rowIndex, rowIndex + 1, 6, 6,
-                "Температура поверхностей, ºС\nПол. Измеренная (± расширенная неопределенность)", headerStyle);
+                "Температура поверхностей, ºС\nПол. Измеренная (± расширенная неопределенность)", headerVerticalStyle);
         setMergedCellValue(sheet, rowIndex, rowIndex, 7, 9, "Результирующая температура,  ºС", headerStyle);
         setMergedCellValue(sheet, rowIndex + 1, rowIndex + 1, 7, 9,
-                "Измеренная (± расширенная неопределенность)", headerStyle);
+                "Измеренная (± расширенная неопределенность)", headerVerticalStyle);
         setMergedCellValue(sheet, rowIndex, rowIndex, 10, 12, "Относительная влажность воздуха, %", headerStyle);
         setMergedCellValue(sheet, rowIndex + 1, rowIndex + 1, 10, 12,
-                "Измеренная (± расширенная неопределенность)", headerStyle);
+                "Измеренная (± расширенная неопределенность)", headerVerticalStyle);
         setMergedCellValue(sheet, rowIndex, rowIndex, 13, 15, "Скорость движения воздуха,  м/с", headerStyle);
         setMergedCellValue(sheet, rowIndex + 1, rowIndex + 1, 13, 15,
-                "Измеренная (± расширенная неопределенность)", headerStyle);
+                "Измеренная (± расширенная неопределенность)", headerVerticalStyle);
+
+        setMergedCellValue(sheet, rowIndex + 2, rowIndex + 2, 3, 5, "4", headerNumberStyle);
+        setMergedCellValue(sheet, rowIndex + 2, rowIndex + 2, 7, 9, "6", headerNumberStyle);
+        setMergedCellValue(sheet, rowIndex + 2, rowIndex + 2, 10, 12, "7", headerNumberStyle);
+        setMergedCellValue(sheet, rowIndex + 2, rowIndex + 2, 13, 15, "8", headerNumberStyle);
+
+        setCellValue(rowNumbers, 0, "1", headerNumberStyle);
+        setCellValue(rowNumbers, 1, "2", headerNumberStyle);
+        setCellValue(rowNumbers, 2, "3", headerNumberStyle);
+        setCellValue(rowNumbers, 6, "5", headerNumberStyle);
 
         for (int col = 0; col <= 15; col++) {
             Cell cellTop = rowTop.getCell(col);
             if (cellTop == null) {
                 cellTop = rowTop.createCell(col);
             }
-            cellTop.setCellStyle(headerStyle);
+            if (cellTop.getCellStyle() == null || cellTop.getCellStyle().getIndex() == 0) {
+                cellTop.setCellStyle(headerStyle);
+            }
             Cell cellBottom = rowBottom.getCell(col);
             if (cellBottom == null) {
                 cellBottom = rowBottom.createCell(col);
             }
-            cellBottom.setCellStyle(headerStyle);
+            if (cellBottom.getCellStyle() == null || cellBottom.getCellStyle().getIndex() == 0) {
+                cellBottom.setCellStyle(headerStyle);
+            }
+            Cell cellNumber = rowNumbers.getCell(col);
+            if (cellNumber == null) {
+                cellNumber = rowNumbers.createCell(col);
+            }
+            cellNumber.setCellStyle(headerNumberStyle);
         }
     }
 
@@ -183,7 +218,9 @@ final class PhysicalFactorsMapResultsTabBuilder {
         }
         cell.setCellValue(value);
         cell.setCellStyle(style);
-        sheet.addMergedRegion(new CellRangeAddress(rowStart, rowEnd, colStart, colEnd));
+        CellRangeAddress region = new CellRangeAddress(rowStart, rowEnd, colStart, colEnd);
+        sheet.addMergedRegion(region);
+        applyRegionBorders(sheet, region);
     }
 
     private static CellStyle createMicroclimateHeaderStyle(Workbook workbook) {
@@ -196,7 +233,49 @@ final class PhysicalFactorsMapResultsTabBuilder {
         style.setWrapText(true);
         style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
         style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        setThinBorders(style);
         return style;
+    }
+
+    private static CellStyle createMicroclimateHeaderVerticalStyle(Workbook workbook, CellStyle baseStyle) {
+        CellStyle style = workbook.createCellStyle();
+        style.cloneStyleFrom(baseStyle);
+        style.setRotation((short) 90);
+        return style;
+    }
+
+    private static CellStyle createMicroclimateHeaderNumberStyle(Workbook workbook, CellStyle baseStyle) {
+        CellStyle style = workbook.createCellStyle();
+        style.cloneStyleFrom(baseStyle);
+        style.setWrapText(false);
+        return style;
+    }
+
+    private static void setCellValue(Row row, int colIndex, String value, CellStyle style) {
+        Cell cell = row.getCell(colIndex);
+        if (cell == null) {
+            cell = row.createCell(colIndex);
+        }
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+    }
+
+    private static void applyRegionBorders(Sheet sheet, CellRangeAddress region) {
+        org.apache.poi.ss.util.RegionUtil.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+        org.apache.poi.ss.util.RegionUtil.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+        org.apache.poi.ss.util.RegionUtil.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+        org.apache.poi.ss.util.RegionUtil.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+    }
+
+    private static void setThinBorders(CellStyle style) {
+        style.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+    }
+
+    private static float pixelsToPoints(float pixels) {
+        return pixels * 0.75f;
     }
 
     private static int[] buildColumnWidthsPx() {
