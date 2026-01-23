@@ -104,8 +104,8 @@ public final class MicroclimateExcelExporter {
         // ===== высота строк (в поинтах) =====
         ensureRow(sh, 0).setHeightInPoints(15);  // ~20 px
         ensureRow(sh, 1).setHeightInPoints(15);  // ~20 px
-        ensureRow(sh, 2).setHeightInPoints(48);  // 3-я
-        ensureRow(sh, 3).setHeightInPoints(121); // 4-я
+        ensureRow(sh, 2).setHeightInPoints(36);  // 3-я (48 px)
+        ensureRow(sh, 3).setHeightInPoints(90); // 4-я (120 px)
         ensureRow(sh, 4).setHeightInPoints(15);  // ~20 px (5-я)
 
         PageBreakHelper pageBreakHelper = new PageBreakHelper(sh, 5);
