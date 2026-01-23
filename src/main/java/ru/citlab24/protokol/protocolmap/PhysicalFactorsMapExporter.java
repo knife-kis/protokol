@@ -38,6 +38,8 @@ public final class PhysicalFactorsMapExporter {
         String contractText = resolveContractText(sourceFile);
         String measurementPerformer = resolveMeasurementPerformer(sourceFile);
         String controlDate = resolveControlDate(sourceFile);
+        String specialConditions = resolveSpecialConditions(sourceFile);
+        String measurementMethods = resolveMeasurementMethods(sourceFile);
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -45,7 +47,8 @@ public final class PhysicalFactorsMapExporter {
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
-            createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData);
+            createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
+                    specialConditions, measurementMethods);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -250,7 +253,9 @@ public final class PhysicalFactorsMapExporter {
                                              Sheet sheet,
                                              String protocolNumber,
                                              String contractText,
-                                             MapHeaderData headerData) {
+                                             MapHeaderData headerData,
+                                             String specialConditions,
+                                             String measurementMethods) {
         int startRow = 21;
         sheet.setRowBreak(startRow - 1);
 
@@ -265,17 +270,41 @@ public final class PhysicalFactorsMapExporter {
         plainStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
         plainStyle.setWrapText(true);
 
-        setMergedCellValue(sheet, startRow,
+        int rowIndex = startRow;
+        setMergedCellValue(sheet, rowIndex,
                 "1. Номер протокола " + safe(protocolNumber), plainStyle);
-        setMergedCellValue(sheet, startRow + 1,
+        rowIndex++;
+        setMergedCellValue(sheet, rowIndex,
                 "2. Договор " + safe(contractText), plainStyle);
-        setMergedCellValue(sheet, startRow + 2,
-                "3. Наименование и контактные данные Заказчика: " + safe(headerData.customerNameAndContacts), plainStyle);
-        setMergedCellValue(sheet, startRow + 3,
+        rowIndex++;
+        setMergedCellValue(sheet, rowIndex,
+                "3. Наименование и контактные данные Заказчика: " + safe(headerData.customerNameAndContacts),
+                plainStyle);
+        rowIndex++;
+        setMergedCellValue(sheet, rowIndex,
                 "Юридический адрес заказчика: " + safe(headerData.customerLegalAddress), plainStyle);
+        rowIndex++;
         String objectNameText = "4. Наименование объекта: " + safe(headerData.objectName);
-        setMergedCellValue(sheet, startRow + 4, objectNameText, plainStyle);
-        adjustRowHeightForMergedText(sheet, startRow + 4, 0, 31, objectNameText);
+        setMergedCellValue(sheet, rowIndex, objectNameText, plainStyle);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, objectNameText);
+        rowIndex++;
+
+        String objectAddressText = "Адрес объекта " + safe(headerData.objectAddress);
+        setMergedCellValue(sheet, rowIndex, objectAddressText, plainStyle);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, objectAddressText);
+        rowIndex++;
+
+        setMergedCellValue(sheet, rowIndex, "5. Дополнительные сведения", plainStyle);
+        rowIndex++;
+
+        String specialConditionsText = "5.1. Особые условия: " + safe(specialConditions);
+        setMergedCellValue(sheet, rowIndex, specialConditionsText, plainStyle);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, specialConditionsText);
+        rowIndex++;
+
+        String measurementMethodsText = "5.2. Методы измерения " + safe(measurementMethods);
+        setMergedCellValue(sheet, rowIndex, measurementMethodsText, plainStyle);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, measurementMethodsText);
     }
 
     private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
@@ -372,17 +401,17 @@ public final class PhysicalFactorsMapExporter {
 
     private static MapHeaderData resolveHeaderData(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
-            return new MapHeaderData("", "", "", "", "");
+            return new MapHeaderData("", "", "", "", "", "");
         }
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
             if (workbook.getNumberOfSheets() == 0) {
-                return new MapHeaderData("", "", "", "", "");
+                return new MapHeaderData("", "", "", "", "", "");
             }
             Sheet sheet = workbook.getSheetAt(0);
             return findHeaderData(sheet);
         } catch (Exception ex) {
-            return new MapHeaderData("", "", "", "", "");
+            return new MapHeaderData("", "", "", "", "", "");
         }
     }
 
@@ -393,6 +422,7 @@ public final class PhysicalFactorsMapExporter {
         String representative = "";
         String legalAddress = "";
         String objectName = "";
+        String objectAddress = "";
         DataFormatter formatter = new DataFormatter();
         for (Row row : sheet) {
             for (Cell cell : row) {
@@ -426,13 +456,19 @@ public final class PhysicalFactorsMapExporter {
                         objectName = readNextCellText(row, cell, formatter);
                     }
                 }
+                if (objectAddress.isEmpty()) {
+                    objectAddress = extractObjectAddress(normalized);
+                    if (objectAddress.isEmpty() && normalized.startsWith(OBJECT_ADDRESS_PREFIX)) {
+                        objectAddress = readNextCellText(row, cell, formatter);
+                    }
+                }
                 if (!customer.isEmpty() && !dates.isEmpty() && !representative.isEmpty()
-                        && !legalAddress.isEmpty() && !objectName.isEmpty()) {
-                    return new MapHeaderData(customer, dates, representative, legalAddress, objectName);
+                        && !legalAddress.isEmpty() && !objectName.isEmpty() && !objectAddress.isEmpty()) {
+                    return new MapHeaderData(customer, dates, representative, legalAddress, objectName, objectAddress);
                 }
             }
         }
-        return new MapHeaderData(customer, dates, representative, legalAddress, objectName);
+        return new MapHeaderData(customer, dates, representative, legalAddress, objectName, objectAddress);
     }
 
     private static String extractCustomer(String text) {
@@ -502,6 +538,17 @@ public final class PhysicalFactorsMapExporter {
             return "";
         }
         return text.substring(index + OBJECT_NAME_PREFIX.length()).trim();
+    }
+
+    private static String extractObjectAddress(String text) {
+        if (text == null) {
+            return "";
+        }
+        int index = text.indexOf(OBJECT_ADDRESS_PREFIX);
+        if (index < 0) {
+            return "";
+        }
+        return text.substring(index + OBJECT_ADDRESS_PREFIX.length()).trim();
     }
 
     private static String readNextCellText(Row row, Cell cell, DataFormatter formatter) {
@@ -578,6 +625,87 @@ public final class PhysicalFactorsMapExporter {
             }
         }
         return "";
+    }
+
+    private static String resolveSpecialConditions(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            for (int idx = 0; idx < workbook.getNumberOfSheets(); idx++) {
+                Sheet sheet = workbook.getSheetAt(idx);
+                if (sheet == null) {
+                    continue;
+                }
+                String normalized = normalizeText(sheet.getSheetName()).toLowerCase(Locale.ROOT);
+                if (normalized.equals("эроа радона")) {
+                    return "заказчик сообщил, что перед измерением ЭРОА радона " +
+                            "здание выдерженно в течении более 12 часов при закрытых дверях и окнах";
+                }
+            }
+            return "";
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String resolveMeasurementMethods(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findMeasurementMethods(sheet);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String findMeasurementMethods(Sheet sheet) {
+        if (sheet == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String rawText = formatter.formatCellValue(cell);
+                String normalized = normalizeText(rawText);
+                if (!normalized.equals(METHODS_HEADER)) {
+                    continue;
+                }
+                return collectMethodsBelow(sheet, row.getRowNum(), cell.getColumnIndex(), formatter);
+            }
+        }
+        return "";
+    }
+
+    private static String collectMethodsBelow(Sheet sheet, int headerRow, int columnIndex, DataFormatter formatter) {
+        java.util.List<String> methods = new java.util.ArrayList<>();
+        for (int rowIndex = headerRow + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                break;
+            }
+            Cell cell = row.getCell(columnIndex);
+            String raw = cell == null ? "" : formatter.formatCellValue(cell);
+            String normalized = normalizeText(raw);
+            if (normalized.isEmpty()) {
+                break;
+            }
+            if (normalized.equals(METHODS_HEADER)) {
+                continue;
+            }
+            methods.add(normalized);
+        }
+        return String.join("; ", methods);
     }
 
     private static boolean isGeneratorSheet(String sheetName) {
@@ -803,6 +931,9 @@ public final class PhysicalFactorsMapExporter {
     private static final String LEGAL_ADDRESS_PREFIX = "Юридический адрес заказчика:";
     private static final String OBJECT_NAME_PREFIX =
             "Наименование предприятия, организации, объекта, где производились измерения:";
+    private static final String OBJECT_ADDRESS_PREFIX = "Адрес предприятия (объекта):";
+    private static final String METHODS_HEADER =
+            "Документы, устанавливающие правила и методы исследований (испытаний) и измерений";
     private static final String PROTOCOL_PREFIX = "Протокол испытаний";
     private static final String BASIS_PREFIX = "Основание для измерений: договор";
     private static final java.util.regex.Pattern DATE_PATTERN =
@@ -817,17 +948,20 @@ public final class PhysicalFactorsMapExporter {
         private final String representative;
         private final String customerLegalAddress;
         private final String objectName;
+        private final String objectAddress;
 
         private MapHeaderData(String customerNameAndContacts,
                               String measurementDates,
                               String representative,
                               String customerLegalAddress,
-                              String objectName) {
+                              String objectName,
+                              String objectAddress) {
             this.customerNameAndContacts = customerNameAndContacts;
             this.measurementDates = measurementDates;
             this.representative = representative;
             this.customerLegalAddress = customerLegalAddress;
             this.objectName = objectName;
+            this.objectAddress = objectAddress;
         }
     }
 }
