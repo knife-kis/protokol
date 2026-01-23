@@ -385,27 +385,27 @@ public final class PhysicalFactorsMapExporter {
                                                 String value) {
         CellRangeAddress region = new CellRangeAddress(rowIndex, rowIndex, firstCol, lastCol);
         sheet.addMergedRegion(region);
+
         Row row = sheet.getRow(rowIndex);
         if (row == null) {
             row = sheet.createRow(rowIndex);
         }
+
+        // Проставляем стиль во всех ячейках диапазона, а значение — в первой
         for (int col = firstCol; col <= lastCol; col++) {
-            Cell cell = row.getCell(col);
-            if (cell == null) {
-                cell = row.createCell(col);
+            Cell c = row.getCell(col);
+            if (c == null) c = row.createCell(col);
+            c.setCellStyle(style);
+            if (col == firstCol) {
+                c.setCellValue(value);
             }
-            cell.setCellStyle(style);
         }
-        Cell cell = row.getCell(firstCol);
-        if (cell == null) {
-            cell = row.createCell(firstCol);
-        }
-        cell.setCellStyle(style);
-        cell.setCellValue(value);
-        RegionUtil.setBorderTop(style.getBorderTopEnum(), region, sheet);
-        RegionUtil.setBorderBottom(style.getBorderBottomEnum(), region, sheet);
-        RegionUtil.setBorderLeft(style.getBorderLeftEnum(), region, sheet);
-        RegionUtil.setBorderRight(style.getBorderRightEnum(), region, sheet);
+
+        // Для merged-регионов границы надёжнее “прожимать” через RegionUtil
+        RegionUtil.setBorderTop(style.getBorderTop(), region, sheet);
+        RegionUtil.setBorderBottom(style.getBorderBottom(), region, sheet);
+        RegionUtil.setBorderLeft(style.getBorderLeft(), region, sheet);
+        RegionUtil.setBorderRight(style.getBorderRight(), region, sheet);
     }
 
     private static void setThinBorders(CellStyle style) {
