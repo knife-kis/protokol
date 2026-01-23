@@ -156,6 +156,17 @@ public final class PhysicalFactorsMapExporter {
         sectionStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
         sectionStyle.setWrapText(true);
 
+        Font sectionValueFont = workbook.createFont();
+        sectionValueFont.setFontName("Arial");
+        sectionValueFont.setFontHeightInPoints((short) 12);
+        sectionValueFont.setBold(false);
+
+        CellStyle sectionMixedStyle = workbook.createCellStyle();
+        sectionMixedStyle.setFont(sectionValueFont);
+        sectionMixedStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+        sectionMixedStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        sectionMixedStyle.setWrapText(true);
+
         setMergedCellValue(sheet, 0, "Испытательная лаборатория Общества с ограниченной ответственностью", titleStyle);
 
         setMergedCellValue(sheet, 1, "«Центр исследовательских технологий»", titleStyle);
@@ -167,14 +178,18 @@ public final class PhysicalFactorsMapExporter {
 
         sheet.createRow(4);
 
-        String customerText = "1. Заказчик: " + safe(headerData.customerNameAndContacts);
-        setMergedCellValue(sheet, 5, customerText, sectionStyle);
+        String customerPrefix = "1. Заказчик: ";
+        String customerValue = safe(headerData.customerNameAndContacts);
+        setMergedCellValueWithPrefix(sheet, 5, customerPrefix, customerValue, sectionFont, sectionValueFont, sectionMixedStyle);
+        adjustRowHeightForMergedTextDoubling(sheet, 5, 0, 31, customerPrefix + customerValue);
 
         Row heightRow = sheet.createRow(6);
         heightRow.setHeightInPoints(pixelsToPoints(16));
 
-        String datesText = "2. Дата замеров: " + safe(headerData.measurementDates);
-        setMergedCellValue(sheet, 7, datesText, sectionStyle);
+        String datesPrefix = "2. Дата замеров: ";
+        String datesValue = safe(headerData.measurementDates);
+        setMergedCellValueWithPrefix(sheet, 7, datesPrefix, datesValue, sectionFont, sectionValueFont, sectionMixedStyle);
+        adjustRowHeightForMergedTextDoubling(sheet, 7, 0, 31, datesPrefix + datesValue);
 
         Row row8 = sheet.createRow(8);
         row8.setHeightInPoints(pixelsToPoints(16));
@@ -185,10 +200,11 @@ public final class PhysicalFactorsMapExporter {
         Row row10 = sheet.createRow(10);
         row10.setHeightInPoints(pixelsToPoints(16));
 
-        String representativeText = "4. Измерения проведены в присутствии представителя: "
-                + safe(headerData.representative);
-        setMergedCellValue(sheet, 11, representativeText, sectionStyle);
-        adjustRowHeightForMergedTextDoubling(sheet, 11, 0, 31, representativeText);
+        String representativePrefix = "4. Измерения проведены в присутствии представителя: ";
+        String representativeValue = safe(headerData.representative);
+        setMergedCellValueWithPrefix(sheet, 11, representativePrefix, representativeValue,
+                sectionFont, sectionValueFont, sectionMixedStyle);
+        adjustRowHeightForMergedTextDoubling(sheet, 11, 0, 31, representativePrefix + representativeValue);
 
         Row row12 = sheet.createRow(12);
         row12.setHeightInPoints(pixelsToPoints(16));
@@ -221,6 +237,33 @@ public final class PhysicalFactorsMapExporter {
         }
         cell.setCellStyle(style);
         cell.setCellValue(text);
+        sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, 31));
+    }
+
+    private static void setMergedCellValueWithPrefix(Sheet sheet,
+                                                     int rowIndex,
+                                                     String prefix,
+                                                     String value,
+                                                     Font prefixFont,
+                                                     Font valueFont,
+                                                     CellStyle style) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        Cell cell = row.getCell(0);
+        if (cell == null) {
+            cell = row.createCell(0);
+        }
+
+        String text = (prefix == null ? "" : prefix) + safe(value);
+        org.apache.poi.ss.usermodel.RichTextString richText =
+                cell.getSheet().getWorkbook().getCreationHelper().createRichTextString(text);
+        int prefixLength = prefix == null ? 0 : prefix.length();
+        richText.applyFont(0, prefixLength, prefixFont);
+        richText.applyFont(prefixLength, text.length(), valueFont);
+        cell.setCellStyle(style);
+        cell.setCellValue(richText);
         sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, 31));
     }
 
@@ -468,10 +511,7 @@ public final class PhysicalFactorsMapExporter {
             baseHeightPx = pointsToPixels(sheet.getDefaultRowHeightInPoints());
         }
 
-        int multiplier = 1;
-        while (multiplier < lines) {
-            multiplier *= 2;
-        }
+        int multiplier = lines > 1 ? 2 : 1;
 
         row.setHeightInPoints(pixelsToPoints((int) (baseHeightPx * multiplier)));
     }
