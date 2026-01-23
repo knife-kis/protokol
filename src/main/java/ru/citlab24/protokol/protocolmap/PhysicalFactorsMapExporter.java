@@ -18,6 +18,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Locale;
 
 public final class PhysicalFactorsMapExporter {
     private static final String REGISTRATION_PREFIX = "Регистрационный номер карты замеров:";
@@ -454,15 +455,21 @@ public final class PhysicalFactorsMapExporter {
         if (sheetName == null) {
             return false;
         }
-        return sheetName.equalsIgnoreCase("генератор")
-                || sheetName.equalsIgnoreCase("генератор (2.0.)");
+        String normalized = normalizeText(sheetName).toLowerCase(Locale.ROOT);
+        return normalized.equals("генератор")
+                || normalized.equals("генератор (2)")
+                || normalized.equals("генератор (2.0.)");
     }
 
     private static String findMeasurementPerformer(Sheet sheet, DataFormatter formatter) {
         for (Row row : sheet) {
             for (Cell cell : row) {
-                String text = formatter.formatCellValue(cell).trim();
-                if (text.contains("Измерения проводил:")) {
+                String rawText = formatter.formatCellValue(cell).trim();
+                if (rawText.isEmpty()) {
+                    continue;
+                }
+                String text = normalizeText(rawText);
+                if (text.contains("Измерения проводил")) {
                     if (text.contains("Тарновский")) {
                         return "Тарновский М.О.";
                     }
@@ -473,6 +480,13 @@ public final class PhysicalFactorsMapExporter {
             }
         }
         return "";
+    }
+
+    private static String normalizeText(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
     }
 
     private static String resolveControlSuffix(String measurementPerformer) {
