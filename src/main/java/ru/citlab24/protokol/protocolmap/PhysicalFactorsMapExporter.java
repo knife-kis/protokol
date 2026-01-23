@@ -29,6 +29,9 @@ public final class PhysicalFactorsMapExporter {
     private static final double TOP_MARGIN_CM = 3.3;
     private static final double BOTTOM_MARGIN_CM = 1.9;
     private static final double A4_LANDSCAPE_HEIGHT_CM = 21.0;
+    private static final int MICROCLIMATE_SOURCE_START_ROW = 5;
+    private static final int MICROCLIMATE_SOURCE_MERGED_LAST_COL = 21;
+    private static final int MICROCLIMATE_BLOCK_SIZE = 3;
 
     private PhysicalFactorsMapExporter() {
     }
@@ -54,7 +57,12 @@ public final class PhysicalFactorsMapExporter {
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
-            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDates, hasMicroclimateSheet);
+            int microclimateDataStartRow = PhysicalFactorsMapResultsTabBuilder.createResultsSheet(
+                    workbook, measurementDates, hasMicroclimateSheet);
+            if (hasMicroclimateSheet) {
+                Sheet resultsSheet = workbook.getSheet("Микроклимат");
+                fillMicroclimateResults(sourceFile, workbook, resultsSheet, microclimateDataStartRow);
+            }
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -127,6 +135,220 @@ public final class PhysicalFactorsMapExporter {
         int dotIndex = name.lastIndexOf('.');
         String baseName = dotIndex > 0 ? name.substring(0, dotIndex) : name;
         return new File(sourceFile.getParentFile(), baseName + "_карта.xlsx");
+    }
+
+    private static void fillMicroclimateResults(File sourceFile,
+                                                Workbook targetWorkbook,
+                                                Sheet targetSheet,
+                                                int targetStartRow) {
+        if (sourceFile == null || !sourceFile.exists() || targetSheet == null || targetStartRow < 0) {
+            return;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            Sheet sourceSheet = findSheetWithPrefix(sourceWorkbook, "Микроклимат");
+            if (sourceSheet == null) {
+                return;
+            }
+            DataFormatter formatter = new DataFormatter();
+            CellStyle centerStyle = createMicroclimateDataStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+            CellStyle leftStyle = createMicroclimateDataStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+
+            int sourceRowIndex = MICROCLIMATE_SOURCE_START_ROW;
+            int targetRowIndex = targetStartRow;
+            int lastRow = sourceSheet.getLastRowNum();
+
+            while (sourceRowIndex <= lastRow) {
+                CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
+                if (isMicroclimateMergedRow(mergedRow, sourceRowIndex)) {
+                    String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
+                    if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
+                        break;
+                    }
+                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex, 0, 15, text, leftStyle);
+                    targetRowIndex++;
+                    sourceRowIndex++;
+                    continue;
+                }
+
+                if (!hasMicroclimateBlockContent(sourceSheet, sourceRowIndex, formatter)) {
+                    break;
+                }
+
+                String blockLabel = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
+                String blockPlace = readMergedCellValue(sourceSheet, sourceRowIndex, 1, formatter);
+                int targetBlockStart = targetRowIndex;
+                int targetBlockEnd = targetRowIndex + MICROCLIMATE_BLOCK_SIZE - 1;
+
+                mergeCellRangeWithValue(targetSheet, targetBlockStart, targetBlockEnd, 0, 0, blockLabel, leftStyle);
+                mergeCellRangeWithValue(targetSheet, targetBlockStart, targetBlockEnd, 1, 1, blockPlace, leftStyle);
+                mergeCellRangeWithValue(targetSheet, targetBlockStart, targetBlockEnd, 6, 6, "-", centerStyle);
+
+                for (int offset = 0; offset < MICROCLIMATE_BLOCK_SIZE; offset++) {
+                    int sourceRow = sourceRowIndex + offset;
+                    int targetRow = targetRowIndex + offset;
+                    String heightValue = readCellValue(sourceSheet, sourceRow, 4, formatter);
+                    String temperatureValue = readCellValue(sourceSheet, sourceRow, 6, formatter);
+
+                    setCellValue(targetSheet, targetRow, 2, heightValue, centerStyle);
+                    setCellValue(targetSheet, targetRow, 4, temperatureValue, centerStyle);
+                    setCellValue(targetSheet, targetRow, 8, "+-", centerStyle);
+                    setCellValue(targetSheet, targetRow, 11, "+-", centerStyle);
+                }
+
+                targetRowIndex += MICROCLIMATE_BLOCK_SIZE;
+                sourceRowIndex += MICROCLIMATE_BLOCK_SIZE;
+            }
+        } catch (Exception ex) {
+            // ignore
+        }
+    }
+
+    private static boolean isMicroclimateMergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= MICROCLIMATE_SOURCE_MERGED_LAST_COL;
+    }
+
+    private static boolean hasMicroclimateBlockContent(Sheet sheet, int startRow, DataFormatter formatter) {
+        for (int offset = 0; offset < MICROCLIMATE_BLOCK_SIZE; offset++) {
+            int rowIndex = startRow + offset;
+            if (!readMergedCellValue(sheet, rowIndex, 0, formatter).isBlank()) {
+                return true;
+            }
+            if (!readMergedCellValue(sheet, rowIndex, 1, formatter).isBlank()) {
+                return true;
+            }
+            if (!readCellValue(sheet, rowIndex, 4, formatter).isBlank()) {
+                return true;
+            }
+            if (!readCellValue(sheet, rowIndex, 6, formatter).isBlank()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasRowContent(Sheet sheet, int rowIndex, DataFormatter formatter) {
+        if (sheet == null) {
+            return false;
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return false;
+        }
+        for (Cell cell : row) {
+            if (!normalizeText(formatter.formatCellValue(cell)).isBlank()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String readCellValue(Sheet sheet, int rowIndex, int colIndex, DataFormatter formatter) {
+        if (sheet == null) {
+            return "";
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return "";
+        }
+        Cell cell = row.getCell(colIndex);
+        return normalizeText(cell == null ? "" : formatter.formatCellValue(cell));
+    }
+
+    private static CellStyle createMicroclimateDataStyle(Workbook workbook,
+                                                         org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 10);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setWrapText(true);
+        style.setAlignment(alignment);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        style.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        return style;
+    }
+
+    private static void setCellValue(Sheet sheet, int rowIndex, int colIndex, String value, CellStyle style) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        Cell cell = row.getCell(colIndex);
+        if (cell == null) {
+            cell = row.createCell(colIndex);
+        }
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+    }
+
+    private static void mergeCellRangeWithValue(Sheet sheet,
+                                                int rowStart,
+                                                int rowEnd,
+                                                int colStart,
+                                                int colEnd,
+                                                String value,
+                                                CellStyle style) {
+        for (int r = rowStart; r <= rowEnd; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) {
+                row = sheet.createRow(r);
+            }
+            for (int c = colStart; c <= colEnd; c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null) {
+                    cell = row.createCell(c);
+                }
+                cell.setCellStyle(style);
+            }
+        }
+        setCellValue(sheet, rowStart, colStart, value, style);
+        CellRangeAddress region = new CellRangeAddress(rowStart, rowEnd, colStart, colEnd);
+        sheet.addMergedRegion(region);
+        applyThinBorders(sheet, region);
+    }
+
+    private static void applyThinBorders(Sheet sheet, CellRangeAddress region) {
+        RegionUtil.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+    }
+
+    private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {
+        if (sheet == null) {
+            return null;
+        }
+        for (CellRangeAddress region : sheet.getMergedRegions()) {
+            if (region.isInRange(rowIndex, colIndex)) {
+                return region;
+            }
+        }
+        return null;
+    }
+
+    private static Sheet findSheetWithPrefix(Workbook workbook, String prefix) {
+        if (workbook == null) {
+            return null;
+        }
+        int count = workbook.getNumberOfSheets();
+        for (int i = 0; i < count; i++) {
+            String name = workbook.getSheetName(i);
+            if (name != null && name.startsWith(prefix)) {
+                return workbook.getSheetAt(i);
+            }
+        }
+        return null;
     }
 
     private static void applySheetDefaults(Workbook workbook, Sheet sheet) {
