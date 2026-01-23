@@ -35,13 +35,14 @@ public final class PhysicalFactorsMapExporter {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
         String measurementPerformer = resolveMeasurementPerformer(sourceFile);
+        String controlDate = resolveControlDate(sourceFile);
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("карта замеров");
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
-            createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer);
+            createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -135,7 +136,8 @@ public final class PhysicalFactorsMapExporter {
                                         Sheet sheet,
                                         String registrationNumber,
                                         MapHeaderData headerData,
-                                        String measurementPerformer) {
+                                        String measurementPerformer,
+                                        String controlDate) {
         Font titleFont = workbook.createFont();
         titleFont.setFontName("Arial");
         titleFont.setFontHeightInPoints((short) 16);
@@ -228,6 +230,13 @@ public final class PhysicalFactorsMapExporter {
         String controlResultPrefix = "Результат контроля: ";
         String controlResultValue = "соответствует/не соответствует";
         setMergedCellValueWithPrefix(sheet, 17, controlResultPrefix, controlResultValue,
+                sectionFont, sectionValueFont, sectionMixedStyle);
+
+        Row row18 = sheet.createRow(18);
+        row18.setHeightInPoints(pixelsToPoints(16));
+
+        String controlDatePrefix = "Дата контроля: ";
+        setMergedCellValueWithPrefix(sheet, 19, controlDatePrefix, controlDate,
                 sectionFont, sectionValueFont, sectionMixedStyle);
     }
 
@@ -455,6 +464,44 @@ public final class PhysicalFactorsMapExporter {
         }
     }
 
+    private static String resolveControlDate(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findControlDate(sheet);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String findControlDate(Sheet sheet) {
+        if (sheet == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        Row row = sheet.getRow(6);
+        if (row == null) {
+            return "";
+        }
+        for (Cell cell : row) {
+            String text = formatter.formatCellValue(cell).trim();
+            if (text.isEmpty()) {
+                continue;
+            }
+            java.util.regex.Matcher matcher = CONTROL_DATE_PATTERN.matcher(text);
+            if (matcher.find()) {
+                return matcher.group();
+            }
+        }
+        return "";
+    }
+
     private static boolean isGeneratorSheet(String sheetName) {
         if (sheetName == null) {
             return false;
@@ -563,6 +610,9 @@ public final class PhysicalFactorsMapExporter {
             "Измерения проводились в присутствии представителя заказчика:";
     private static final java.util.regex.Pattern DATE_PATTERN =
             java.util.regex.Pattern.compile("\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b");
+    private static final java.util.regex.Pattern CONTROL_DATE_PATTERN =
+            java.util.regex.Pattern.compile("\\b\\d{1,2}\\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\\s+\\d{4}\\b",
+                    java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
 
     private static final class MapHeaderData {
         private final String customerNameAndContacts;
