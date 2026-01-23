@@ -36,6 +36,7 @@ public final class PhysicalFactorsMapExporter {
     public static File generateMap(File sourceFile) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
+        java.util.List<String> measurementDates = extractMeasurementDatesList(headerData.measurementDates);
         String protocolNumber = resolveProtocolNumber(sourceFile);
         String contractText = resolveContractText(sourceFile);
         String measurementPerformer = resolveMeasurementPerformer(sourceFile);
@@ -52,6 +53,7 @@ public final class PhysicalFactorsMapExporter {
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
+            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDates);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -626,6 +628,21 @@ public final class PhysicalFactorsMapExporter {
             return "";
         }
         return String.join(", ", dates);
+    }
+
+    private static java.util.List<String> extractMeasurementDatesList(String datesText) {
+        if (datesText == null || datesText.isBlank()) {
+            return java.util.List.of("");
+        }
+        java.util.LinkedHashSet<String> dates = new java.util.LinkedHashSet<>();
+        java.util.regex.Matcher matcher = DATE_PATTERN.matcher(datesText);
+        while (matcher.find()) {
+            dates.add(matcher.group());
+        }
+        if (dates.isEmpty()) {
+            return java.util.List.of(datesText.trim());
+        }
+        return new java.util.ArrayList<>(dates);
     }
 
     private static String extractRepresentative(String text) {
