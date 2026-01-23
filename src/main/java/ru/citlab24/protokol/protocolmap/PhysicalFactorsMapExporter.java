@@ -28,6 +28,7 @@ public final class PhysicalFactorsMapExporter {
     private static final double RIGHT_MARGIN_CM = 0.5;
     private static final double TOP_MARGIN_CM = 3.3;
     private static final double BOTTOM_MARGIN_CM = 1.9;
+    private static final double A4_LANDSCAPE_HEIGHT_CM = 21.0;
 
     private PhysicalFactorsMapExporter() {
     }
@@ -349,6 +350,21 @@ public final class PhysicalFactorsMapExporter {
                         tableCellStyle, tableCellStyle, checkboxStyle);
             }
         }
+
+        Row spacerAfterInstruments = sheet.createRow(rowIndex);
+        spacerAfterInstruments.setHeightInPoints(pixelsToPoints(16));
+        rowIndex++;
+
+        sheet.setRowBreak(rowIndex - 1);
+
+        int emptyPageRows = estimateRowsPerPage(sheet);
+        for (int i = 0; i < emptyPageRows; i++) {
+            sheet.createRow(rowIndex++);
+        }
+        sheet.setRowBreak(rowIndex - 1);
+
+        setMergedCellValue(sheet, rowIndex, "6. Эскиз", plainStyle);
+        rowIndex++;
     }
 
     private static int addInstrumentRow(Sheet sheet,
@@ -508,6 +524,14 @@ public final class PhysicalFactorsMapExporter {
 
     private static float pointsToPixels(float points) {
         return points / 0.75f;
+    }
+
+    private static int estimateRowsPerPage(Sheet sheet) {
+        float defaultRowHeightPoints = sheet.getDefaultRowHeightInPoints();
+        double rowHeightCm = defaultRowHeightPoints * 2.54d / 72d;
+        double usableHeightCm = A4_LANDSCAPE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM;
+        int rows = (int) Math.floor(usableHeightCm / rowHeightCm);
+        return Math.max(rows, 1);
     }
 
     private static MapHeaderData resolveHeaderData(File sourceFile) {
@@ -747,6 +771,8 @@ public final class PhysicalFactorsMapExporter {
             if (workbook.getNumberOfSheets() == 0) {
                 return "";
             }
+            boolean hasRadonSheet = false;
+            boolean hasArtificialLightingSheet = false;
             for (int idx = 0; idx < workbook.getNumberOfSheets(); idx++) {
                 Sheet sheet = workbook.getSheetAt(idx);
                 if (sheet == null) {
@@ -754,11 +780,21 @@ public final class PhysicalFactorsMapExporter {
                 }
                 String normalized = normalizeText(sheet.getSheetName()).toLowerCase(Locale.ROOT);
                 if (normalized.equals("эроа радона")) {
-                    return "заказчик сообщил, что перед измерением ЭРОА радона " +
-                            "здание выдерженно в течении более 12 часов при закрытых дверях и окнах";
+                    hasRadonSheet = true;
+                }
+                if (normalized.equals("иск освещение")) {
+                    hasArtificialLightingSheet = true;
                 }
             }
-            return "";
+            java.util.List<String> conditions = new java.util.ArrayList<>();
+            if (hasRadonSheet) {
+                conditions.add("заказчик сообщил, что перед измерением ЭРОА радона " +
+                        "здание выдерженно в течении более 12 часов при закрытых дверях и окнах");
+            }
+            if (hasArtificialLightingSheet) {
+                conditions.add("Отношение естественной освещенности к искусственной составляет");
+            }
+            return String.join(". ", conditions);
         } catch (Exception ex) {
             return "";
         }
