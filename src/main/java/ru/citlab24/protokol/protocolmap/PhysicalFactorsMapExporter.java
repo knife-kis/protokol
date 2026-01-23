@@ -252,7 +252,7 @@ public final class PhysicalFactorsMapExporter {
                                              String contractText,
                                              MapHeaderData headerData) {
         int startRow = 21;
-        sheet.setRowBreak(startRow);
+        sheet.setRowBreak(startRow - 1);
 
         Font plainFont = workbook.createFont();
         plainFont.setFontName("Arial");
