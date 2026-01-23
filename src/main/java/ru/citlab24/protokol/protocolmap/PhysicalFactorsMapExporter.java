@@ -44,7 +44,6 @@ public final class PhysicalFactorsMapExporter {
         String specialConditions = resolveSpecialConditions(sourceFile);
         String measurementMethods = resolveMeasurementMethods(sourceFile);
         java.util.List<InstrumentData> instruments = resolveMeasurementInstruments(sourceFile);
-        boolean hasMicroclimateSheet = hasSheetWithPrefix(sourceFile, "Микроклимат");
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -54,9 +53,7 @@ public final class PhysicalFactorsMapExporter {
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
-            if (hasMicroclimateSheet) {
-                PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDates);
-            }
+            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDates);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -66,23 +63,6 @@ public final class PhysicalFactorsMapExporter {
         return targetFile;
     }
 
-    private static boolean hasSheetWithPrefix(File sourceFile, String prefix) {
-        if (sourceFile == null || !sourceFile.exists() || prefix == null) {
-            return false;
-        }
-        try (InputStream in = new FileInputStream(sourceFile);
-             Workbook workbook = WorkbookFactory.create(in)) {
-            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
-                String name = workbook.getSheetName(i);
-                if (name != null && name.startsWith(prefix)) {
-                    return true;
-                }
-            }
-        } catch (Exception ignored) {
-            return false;
-        }
-        return false;
-    }
 
     private static String resolveRegistrationNumber(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
