@@ -473,7 +473,7 @@ public final class PhysicalFactorsMapExporter {
             multiplier *= 2;
         }
 
-        row.setHeightInPoints(pixelsToPoints(baseHeightPx * multiplier));
+        row.setHeightInPoints(pixelsToPoints((int) (baseHeightPx * multiplier)));
     }
 
     private static double totalColumnChars(Sheet sheet, int firstCol, int lastCol) {
