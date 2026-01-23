@@ -195,8 +195,10 @@ public final class PhysicalFactorsMapExporter {
         Row row8 = sheet.createRow(8);
         row8.setHeightInPoints(pixelsToPoints(16));
 
-        String performerText = "3. Измерения провел, подпись: " + safe(measurementPerformer);
-        setMergedCellValue(sheet, 9, performerText, sectionMixedStyle);
+        String performerPrefix = "3. Измерения провел, подпись: ";
+        String performerValue = safe(measurementPerformer);
+        setMergedCellValueWithPrefix(sheet, 9, performerPrefix, performerValue,
+                sectionFont, sectionValueFont, sectionMixedStyle);
 
         Row row10 = sheet.createRow(10);
         row10.setHeightInPoints(pixelsToPoints(16));
@@ -215,9 +217,10 @@ public final class PhysicalFactorsMapExporter {
         Row row14 = sheet.createRow(14);
         row14.setHeightInPoints(pixelsToPoints(16));
 
+        String controlPrefix = "5. Контроль ведения записей осуществлен: ";
         String controlSuffix = resolveControlSuffix(measurementPerformer);
-        String controlText = "5. Контроль ведения записей осуществлен: " + controlSuffix;
-        setMergedCellValue(sheet, 15, controlText, sectionMixedStyle);
+        setMergedCellValueWithPrefix(sheet, 15, controlPrefix, controlSuffix,
+                sectionFont, sectionValueFont, sectionMixedStyle);
 
         Row row16 = sheet.createRow(16);
         row16.setHeightInPoints(pixelsToPoints(16));
