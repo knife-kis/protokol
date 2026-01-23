@@ -85,8 +85,8 @@ final class PhysicalFactorsMapResultsTabBuilder {
         builder.append("Температура улица,˚С").append(longUnderline()).append("\n");
         builder.append("относительная влажность  помещения, %").append(shortUnderline()).append("\n");
         builder.append("относительная влажность  улица, %").append(longUnderline()).append("\n");
-        builder.append("давление помещение, мм рт. ст.   %").append(longUnderline()).append("\n");
-        builder.append("давление улица, мм рт. ст.   %").append(longUnderline());
+        builder.append("давление помещение, мм рт. ст. ").append(longUnderline()).append("\n");
+        builder.append("давление улица, мм рт. ст.").append(longUnderline());
         return builder.toString();
     }
 
