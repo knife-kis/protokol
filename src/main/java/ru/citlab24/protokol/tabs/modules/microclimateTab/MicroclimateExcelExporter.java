@@ -86,10 +86,12 @@ public final class MicroclimateExcelExporter {
         Styles S = new Styles(wb);
         Sheet sh = wb.createSheet(uniqueName(wb, "Микроклимат"));
 
+        String registrationNumber = resolveRegistrationNumber(building);
+        applyMapHeaders(sh, registrationNumber);
 
-        // Ориентация страницы: альбомная
+        // Ориентация страницы: книжная
         PrintSetup ps = sh.getPrintSetup();
-        ps.setLandscape(true);
+        ps.setLandscape(false);
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
         sh.setFitToPage(true);
         ps.setFitWidth((short) 1);
@@ -335,17 +337,17 @@ public final class MicroclimateExcelExporter {
         double[] baseFVals = genFTriplet(rng, isOffice);
         double[] fVals = applyAirTempOffset(baseFVals, mode);
         for (int i = 0; i < 3; i++) {
-            put(sh, start + i, 5, fVals[i], S.centerNoRightNum1); // F 0.0
+            put(sh, start + i, 5, fVals[i], S.centerNoLeftRightNum1); // F 0.0
             put(sh, start + i, 6, "±",      S.plusMinusTB);       // G
-            put(sh, start + i, 7, 0.2,      S.centerNoLeftNum1);  // H 0.0
+            put(sh, start + i, 7, 0.2,      S.centerNoLeftRightNum1);  // H 0.0
         }
 
         // --- K/L/M ---
         double[] kVals = genKFromF(rng, baseFVals); // ≥ 19.7; шаги ≤ 0.2
         for (int i = 0; i < 3; i++) {
-            put(sh, start + i, 10, kVals[i], S.centerNoRightNum1); // K 0.0
+            put(sh, start + i, 10, kVals[i], S.centerNoLeftRightNum1); // K 0.0
             put(sh, start + i, 11, "±",       S.plusMinusTB);      // L
-            put(sh, start + i, 12, 0.6,       S.centerNoLeftNum1); // M 0.0
+            put(sh, start + i, 12, 0.6,       S.centerNoLeftRightNum1); // M 0.0
         }
 
         // --- O/P/Q ---
@@ -356,9 +358,9 @@ public final class MicroclimateExcelExporter {
                 round1(clamp(rnd(rng, roomBase - 0.1, roomBase + 0.1), 34.0, 42.0))
         };
         for (int i = 0; i < 3; i++) {
-            put(sh, start + i, 14, oVals[i], S.centerNoRightNum1); // O 0.0
+            put(sh, start + i, 14, oVals[i], S.centerNoLeftRightNum1); // O 0.0
             put(sh, start + i, 15, "±",       S.plusMinusTB);      // P
-            put(sh, start + i, 16, 3.5,       S.centerNoLeftNum1); // Q 0.0
+            put(sh, start + i, 16, 3.5,       S.centerNoLeftRightNum1); // Q 0.0
         }
 
         // R — влажность допустимая
@@ -395,8 +397,33 @@ public final class MicroclimateExcelExporter {
             }
             ensureRow(sh, start + r).setHeightInPoints(15);
         }
+        addRegionBorders(sh, start, start + 2, 13, 15); // N-P: замкнуть границы блока
 
         return start + 3;
+    }
+
+    private static void applyMapHeaders(Sheet sheet, String registrationNumber) {
+        String font = "&\"Arial\"&12";
+        Header header = sheet.getHeader();
+        header.setLeft(font + "Испытательная лаборатория\nООО «ЦИТ»");
+        header.setCenter(font + "Карта замеров № " + registrationNumber + "\nФ8 РИ ИЛ 2-2023");
+        header.setRight(font + "\nКоличество страниц: &[Страница] / &[Страниц] \n ");
+    }
+
+    private static String resolveRegistrationNumber(Building building) {
+        if (building == null) {
+            return "_____";
+        }
+        TitlePageData data = building.getTitlePageData();
+        String base = data != null ? safeText(data.getApplicationNumber()) : "";
+        if (base.isEmpty()) {
+            base = "_____";
+        }
+        return base + "-1К";
+    }
+
+    private static String safeText(String value) {
+        return value == null ? "" : value.trim();
     }
     private static String floorTitleForExcel(Floor f) {
         if (f == null) return "";
@@ -698,6 +725,7 @@ public final class MicroclimateExcelExporter {
         final CellStyle plusMinusTB;       // «±» только верх/низ
         final CellStyle centerNoLeft, centerNoRight;
         final CellStyle centerNoLeftNum1, centerNoRightNum1;
+        final CellStyle centerNoLeftRightNum1;
 
         Styles(Workbook wb) {
             DataFormat fmt = wb.createDataFormat();
@@ -773,6 +801,12 @@ public final class MicroclimateExcelExporter {
             centerNoRightNum1 = wb.createCellStyle();
             centerNoRightNum1.cloneStyleFrom(centerNoRight);
             centerNoRightNum1.setDataFormat(fmt.getFormat("0.0"));
+
+            centerNoLeftRightNum1 = wb.createCellStyle();
+            centerNoLeftRightNum1.cloneStyleFrom(centerBorder);
+            centerNoLeftRightNum1.setBorderLeft(BorderStyle.NONE);
+            centerNoLeftRightNum1.setBorderRight(BorderStyle.NONE);
+            centerNoLeftRightNum1.setDataFormat(fmt.getFormat("0.0"));
         }
 
         private static void setAllBorders(CellStyle s) {

@@ -155,6 +155,8 @@ public final class PhysicalFactorsMapExporter {
                     org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
             CellStyle leftStyle = createMicroclimateDataStyle(targetWorkbook,
                     org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+            CellStyle mergedRowStyle = createMicroclimateDataStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
 
             int sourceRowIndex = MICROCLIMATE_SOURCE_START_ROW;
             int targetRowIndex = targetStartRow;
@@ -167,7 +169,7 @@ public final class PhysicalFactorsMapExporter {
                     if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
                         break;
                     }
-                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex, 0, 15, text, leftStyle);
+                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex, 0, 15, text, mergedRowStyle);
                     targetRowIndex++;
                     sourceRowIndex++;
                     continue;
@@ -194,8 +196,8 @@ public final class PhysicalFactorsMapExporter {
 
                     setCellValue(targetSheet, targetRow, 2, heightValue, centerStyle);
                     setCellValue(targetSheet, targetRow, 4, temperatureValue, centerStyle);
-                    setCellValue(targetSheet, targetRow, 8, "+-", centerStyle);
-                    setCellValue(targetSheet, targetRow, 11, "+-", centerStyle);
+                    setCellValue(targetSheet, targetRow, 8, "±", centerStyle);
+                    setCellValue(targetSheet, targetRow, 11, "±", centerStyle);
                 }
 
                 targetRowIndex += MICROCLIMATE_BLOCK_SIZE;
