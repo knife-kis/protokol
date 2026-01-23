@@ -34,6 +34,8 @@ public final class PhysicalFactorsMapExporter {
     public static File generateMap(File sourceFile) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
+        String protocolNumber = resolveProtocolNumber(sourceFile);
+        String contractText = resolveContractText(sourceFile);
         String measurementPerformer = resolveMeasurementPerformer(sourceFile);
         String controlDate = resolveControlDate(sourceFile);
         File targetFile = buildTargetFile(sourceFile);
@@ -43,6 +45,7 @@ public final class PhysicalFactorsMapExporter {
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
+            createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData.customerNameAndContacts);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -238,6 +241,33 @@ public final class PhysicalFactorsMapExporter {
         String controlDatePrefix = "Дата контроля: ";
         setMergedCellValueWithPrefix(sheet, 19, controlDatePrefix, controlDate,
                 sectionFont, sectionValueFont, sectionMixedStyle);
+    }
+
+    private static void createSecondPageRows(Workbook workbook,
+                                             Sheet sheet,
+                                             String protocolNumber,
+                                             String contractText,
+                                             String customerValue) {
+        int startRow = 21;
+        sheet.setRowBreak(startRow);
+
+        Font plainFont = workbook.createFont();
+        plainFont.setFontName("Arial");
+        plainFont.setFontHeightInPoints((short) 12);
+        plainFont.setBold(false);
+
+        CellStyle plainStyle = workbook.createCellStyle();
+        plainStyle.setFont(plainFont);
+        plainStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+        plainStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        plainStyle.setWrapText(true);
+
+        setMergedCellValue(sheet, startRow,
+                "1. Номер протокола " + safe(protocolNumber), plainStyle);
+        setMergedCellValue(sheet, startRow + 1,
+                "2. Договор " + safe(contractText), plainStyle);
+        setMergedCellValue(sheet, startRow + 2,
+                "3. Наименование и юридический адрес Заказчика: " + safe(customerValue), plainStyle);
     }
 
     private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
@@ -533,6 +563,84 @@ public final class PhysicalFactorsMapExporter {
         return "";
     }
 
+    private static String resolveProtocolNumber(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findProtocolNumber(sheet);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String findProtocolNumber(Sheet sheet) {
+        if (sheet == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                int index = text.indexOf(PROTOCOL_PREFIX);
+                if (index < 0) {
+                    continue;
+                }
+                String tail = text.substring(index + PROTOCOL_PREFIX.length()).trim();
+                tail = stripLeadingNumberMarker(tail);
+                if (!tail.isEmpty()) {
+                    return tail;
+                }
+                String nextText = readNextCellText(row, cell, formatter);
+                return stripLeadingNumberMarker(nextText);
+            }
+        }
+        return "";
+    }
+
+    private static String resolveContractText(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findContractText(sheet);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String findContractText(Sheet sheet) {
+        if (sheet == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                int index = text.indexOf(BASIS_PREFIX);
+                if (index < 0) {
+                    continue;
+                }
+                String tail = text.substring(index + BASIS_PREFIX.length()).trim();
+                if (!tail.isEmpty()) {
+                    return tail;
+                }
+                return readNextCellText(row, cell, formatter);
+            }
+        }
+        return "";
+    }
+
     private static String normalizeText(String text) {
         if (text == null) {
             return "";
@@ -552,6 +660,17 @@ public final class PhysicalFactorsMapExporter {
 
     private static String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static String stripLeadingNumberMarker(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.startsWith("№")) {
+            return trimmed.substring(1).trim();
+        }
+        return trimmed;
     }
 
     private static void adjustRowHeightForMergedTextDoubling(Sheet sheet,
@@ -608,6 +727,8 @@ public final class PhysicalFactorsMapExporter {
     private static final String MEASUREMENT_DATES_PHRASE = "Измерения были проведены";
     private static final String REPRESENTATIVE_PREFIX =
             "Измерения проводились в присутствии представителя заказчика:";
+    private static final String PROTOCOL_PREFIX = "Протокол испытаний";
+    private static final String BASIS_PREFIX = "Основание для измерений: договор";
     private static final java.util.regex.Pattern DATE_PATTERN =
             java.util.regex.Pattern.compile("\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b");
     private static final java.util.regex.Pattern CONTROL_DATE_PATTERN =
