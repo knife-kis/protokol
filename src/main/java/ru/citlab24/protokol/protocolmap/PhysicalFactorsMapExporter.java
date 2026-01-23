@@ -45,7 +45,7 @@ public final class PhysicalFactorsMapExporter {
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
-            createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData.customerNameAndContacts);
+            createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -247,8 +247,8 @@ public final class PhysicalFactorsMapExporter {
                                              Sheet sheet,
                                              String protocolNumber,
                                              String contractText,
-                                             String customerValue) {
-        int startRow = 21;
+                                             MapHeaderData headerData) {
+        int startRow = 20;
         sheet.setRowBreak(startRow);
 
         Font plainFont = workbook.createFont();
@@ -267,7 +267,12 @@ public final class PhysicalFactorsMapExporter {
         setMergedCellValue(sheet, startRow + 1,
                 "2. Договор " + safe(contractText), plainStyle);
         setMergedCellValue(sheet, startRow + 2,
-                "3. Наименование и юридический адрес Заказчика: " + safe(customerValue), plainStyle);
+                "3. Наименование и контактные данные Заказчика: " + safe(headerData.customerNameAndContacts), plainStyle);
+        setMergedCellValue(sheet, startRow + 3,
+                "Юридический адрес заказчика: " + safe(headerData.customerLegalAddress), plainStyle);
+        String objectNameText = "4. Наименование объекта: " + safe(headerData.objectName);
+        setMergedCellValue(sheet, startRow + 4, objectNameText, plainStyle);
+        adjustRowHeightForMergedText(sheet, startRow + 4, 0, 31, objectNameText);
     }
 
     private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
@@ -364,17 +369,17 @@ public final class PhysicalFactorsMapExporter {
 
     private static MapHeaderData resolveHeaderData(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
-            return new MapHeaderData("", "", "");
+            return new MapHeaderData("", "", "", "");
         }
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
             if (workbook.getNumberOfSheets() == 0) {
-                return new MapHeaderData("", "", "");
+                return new MapHeaderData("", "", "", "");
             }
             Sheet sheet = workbook.getSheetAt(0);
             return findHeaderData(sheet);
         } catch (Exception ex) {
-            return new MapHeaderData("", "", "");
+            return new MapHeaderData("", "", "", "");
         }
     }
 
@@ -382,10 +387,14 @@ public final class PhysicalFactorsMapExporter {
         String customer = "";
         String dates = "";
         String representative = "";
+        String legalAddress = "";
+        String objectName = "";
         DataFormatter formatter = new DataFormatter();
         for (Row row : sheet) {
             for (Cell cell : row) {
-                String text = formatter.formatCellValue(cell).trim();
+                String rawText = formatter.formatCellValue(cell);
+                String text = rawText.trim();
+                String normalized = normalizeText(rawText);
                 if (customer.isEmpty()) {
                     customer = extractCustomer(text);
                     if (customer.isEmpty() && text.startsWith(CUSTOMER_PREFIX)) {
@@ -401,12 +410,25 @@ public final class PhysicalFactorsMapExporter {
                         representative = readNextCellText(row, cell, formatter);
                     }
                 }
-                if (!customer.isEmpty() && !dates.isEmpty() && !representative.isEmpty()) {
-                    return new MapHeaderData(customer, dates, representative);
+                if (legalAddress.isEmpty()) {
+                    legalAddress = extractLegalAddress(normalized);
+                    if (legalAddress.isEmpty() && normalized.startsWith(LEGAL_ADDRESS_PREFIX)) {
+                        legalAddress = readNextCellText(row, cell, formatter);
+                    }
+                }
+                if (objectName.isEmpty()) {
+                    objectName = extractObjectName(normalized);
+                    if (objectName.isEmpty() && normalized.startsWith(OBJECT_NAME_PREFIX)) {
+                        objectName = readNextCellText(row, cell, formatter);
+                    }
+                }
+                if (!customer.isEmpty() && !dates.isEmpty() && !representative.isEmpty()
+                        && !legalAddress.isEmpty() && !objectName.isEmpty()) {
+                    return new MapHeaderData(customer, dates, representative, legalAddress, objectName);
                 }
             }
         }
-        return new MapHeaderData(customer, dates, representative);
+        return new MapHeaderData(customer, dates, representative, legalAddress, objectName);
     }
 
     private static String extractCustomer(String text) {
@@ -454,6 +476,28 @@ public final class PhysicalFactorsMapExporter {
             return "";
         }
         return text.substring(index + REPRESENTATIVE_PREFIX.length()).trim();
+    }
+
+    private static String extractLegalAddress(String text) {
+        if (text == null) {
+            return "";
+        }
+        int index = text.indexOf(LEGAL_ADDRESS_PREFIX);
+        if (index < 0) {
+            return "";
+        }
+        return text.substring(index + LEGAL_ADDRESS_PREFIX.length()).trim();
+    }
+
+    private static String extractObjectName(String text) {
+        if (text == null) {
+            return "";
+        }
+        int index = text.indexOf(OBJECT_NAME_PREFIX);
+        if (index < 0) {
+            return "";
+        }
+        return text.substring(index + OBJECT_NAME_PREFIX.length()).trim();
     }
 
     private static String readNextCellText(Row row, Cell cell, DataFormatter formatter) {
@@ -700,6 +744,31 @@ public final class PhysicalFactorsMapExporter {
         row.setHeightInPoints(pixelsToPoints((int) (baseHeightPx * multiplier)));
     }
 
+    private static void adjustRowHeightForMergedText(Sheet sheet,
+                                                     int rowIndex,
+                                                     int firstCol,
+                                                     int lastCol,
+                                                     String text) {
+        if (sheet == null) {
+            return;
+        }
+
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+
+        double totalChars = totalColumnChars(sheet, firstCol, lastCol);
+        int lines = estimateWrappedLines(text, totalChars);
+
+        float baseHeightPx = pointsToPixels(row.getHeightInPoints());
+        if (baseHeightPx <= 0f) {
+            baseHeightPx = pointsToPixels(sheet.getDefaultRowHeightInPoints());
+        }
+
+        row.setHeightInPoints(pixelsToPoints((int) (baseHeightPx * Math.max(1, lines))));
+    }
+
     private static double totalColumnChars(Sheet sheet, int firstCol, int lastCol) {
         double totalChars = 0.0;
         for (int c = firstCol; c <= lastCol; c++) {
@@ -727,6 +796,9 @@ public final class PhysicalFactorsMapExporter {
     private static final String MEASUREMENT_DATES_PHRASE = "Измерения были проведены";
     private static final String REPRESENTATIVE_PREFIX =
             "Измерения проводились в присутствии представителя заказчика:";
+    private static final String LEGAL_ADDRESS_PREFIX = "Юридический адрес заказчика:";
+    private static final String OBJECT_NAME_PREFIX =
+            "Наименование предприятия, организации, объекта, где производились измерения:";
     private static final String PROTOCOL_PREFIX = "Протокол испытаний";
     private static final String BASIS_PREFIX = "Основание для измерений: договор";
     private static final java.util.regex.Pattern DATE_PATTERN =
@@ -739,13 +811,19 @@ public final class PhysicalFactorsMapExporter {
         private final String customerNameAndContacts;
         private final String measurementDates;
         private final String representative;
+        private final String customerLegalAddress;
+        private final String objectName;
 
         private MapHeaderData(String customerNameAndContacts,
                               String measurementDates,
-                              String representative) {
+                              String representative,
+                              String customerLegalAddress,
+                              String objectName) {
             this.customerNameAndContacts = customerNameAndContacts;
             this.measurementDates = measurementDates;
             this.representative = representative;
+            this.customerLegalAddress = customerLegalAddress;
+            this.objectName = objectName;
         }
     }
 }
