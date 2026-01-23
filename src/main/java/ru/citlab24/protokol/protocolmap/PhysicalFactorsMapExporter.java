@@ -160,6 +160,7 @@ public final class PhysicalFactorsMapExporter {
 
             int sourceRowIndex = MICROCLIMATE_SOURCE_START_ROW;
             int targetRowIndex = targetStartRow;
+            int targetDataStartRow = targetStartRow;
             int lastRow = sourceSheet.getLastRowNum();
 
             while (sourceRowIndex <= lastRow) {
@@ -202,6 +203,10 @@ public final class PhysicalFactorsMapExporter {
 
                 targetRowIndex += MICROCLIMATE_BLOCK_SIZE;
                 sourceRowIndex += MICROCLIMATE_BLOCK_SIZE;
+            }
+
+            if (targetRowIndex > targetDataStartRow) {
+                applyPlusAdjacentBorders(targetSheet, targetWorkbook, targetDataStartRow, targetRowIndex - 1);
             }
         } catch (Exception ex) {
             // ignore
@@ -281,6 +286,21 @@ public final class PhysicalFactorsMapExporter {
         return style;
     }
 
+    private static CellStyle createMicroclimateAdjacentBorderStyle(Workbook workbook) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 10);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setWrapText(true);
+        style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        style.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        return style;
+    }
+
     private static void setCellValue(Sheet sheet, int rowIndex, int colIndex, String value, CellStyle style) {
         Row row = sheet.getRow(rowIndex);
         if (row == null) {
@@ -325,6 +345,52 @@ public final class PhysicalFactorsMapExporter {
         RegionUtil.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
         RegionUtil.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
         RegionUtil.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+    }
+
+    private static void applyPlusAdjacentBorders(Sheet sheet,
+                                                 Workbook workbook,
+                                                 int startRow,
+                                                 int endRow) {
+        DataFormatter formatter = new DataFormatter();
+        CellStyle adjacentStyle = createMicroclimateAdjacentBorderStyle(workbook);
+        for (int rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+            if (isPlusCell(sheet, rowIndex, 8, formatter)) {
+                applyTopBottomBorder(sheet, rowIndex, 7, adjacentStyle);
+                applyTopBottomBorder(sheet, rowIndex, 9, adjacentStyle);
+            }
+            if (isPlusCell(sheet, rowIndex, 11, formatter)) {
+                applyTopBottomBorder(sheet, rowIndex, 10, adjacentStyle);
+                applyTopBottomBorder(sheet, rowIndex, 12, adjacentStyle);
+            }
+        }
+    }
+
+    private static boolean isPlusCell(Sheet sheet, int rowIndex, int colIndex, DataFormatter formatter) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return false;
+        }
+        Cell cell = row.getCell(colIndex);
+        if (cell == null) {
+            return false;
+        }
+        String value = normalizeText(formatter.formatCellValue(cell));
+        return "±".equals(value);
+    }
+
+    private static void applyTopBottomBorder(Sheet sheet, int rowIndex, int colIndex, CellStyle borderStyle) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        Cell cell = row.getCell(colIndex);
+        if (cell == null) {
+            cell = row.createCell(colIndex);
+        }
+        CellStyle currentStyle = cell.getCellStyle();
+        if (currentStyle == null || currentStyle.getIndex() == 0) {
+            cell.setCellStyle(borderStyle);
+        }
     }
 
     private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {

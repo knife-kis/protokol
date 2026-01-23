@@ -52,10 +52,10 @@ final class PhysicalFactorsMapResultsTabBuilder {
 
         PrintSetup printSetup = sheet.getPrintSetup();
         printSetup.setLandscape(true);
-        printSetup.setFitWidth((short) 1);
-        printSetup.setFitHeight((short) 1);
-        sheet.setFitToPage(true);
-        sheet.setAutobreaks(true);
+        printSetup.setFitWidth((short) 0);
+        printSetup.setFitHeight((short) 0);
+        sheet.setFitToPage(false);
+        sheet.setAutobreaks(false);
 
         sheet.setMargin(Sheet.LeftMargin, cmToInches(LEFT_MARGIN_CM));
         sheet.setMargin(Sheet.RightMargin, cmToInches(RIGHT_MARGIN_CM));
