@@ -1,0 +1,131 @@
+package ru.citlab24.protokol.protocolmap;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.PrintSetup;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
+
+import java.util.List;
+
+final class PhysicalFactorsMapResultsTabBuilder {
+    private static final double LEFT_MARGIN_CM = 0.8;
+    private static final double RIGHT_MARGIN_CM = 0.5;
+    private static final double TOP_MARGIN_CM = 3.3;
+    private static final double BOTTOM_MARGIN_CM = 1.9;
+
+    private PhysicalFactorsMapResultsTabBuilder() {
+    }
+
+    static void createResultsSheet(Workbook workbook, List<String> measurementDates) {
+        Sheet sheet = workbook.createSheet("карта замеров (2)");
+        applySheetDefaults(workbook, sheet);
+        addResultsRows(sheet, measurementDates);
+    }
+
+    private static void applySheetDefaults(Workbook workbook, Sheet sheet) {
+        Font baseFont = workbook.createFont();
+        baseFont.setFontName("Arial");
+        baseFont.setFontHeightInPoints((short) 10);
+
+        CellStyle baseStyle = workbook.createCellStyle();
+        baseStyle.setFont(baseFont);
+        baseStyle.setWrapText(true);
+        baseStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+        baseStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.TOP);
+
+        int[] widthsPx = buildColumnWidthsPx();
+        for (int col = 0; col < widthsPx.length; col++) {
+            sheet.setColumnWidth(col, pixel2WidthUnits(widthsPx[col]));
+            sheet.setDefaultColumnStyle(col, baseStyle);
+        }
+
+        PrintSetup printSetup = sheet.getPrintSetup();
+        printSetup.setLandscape(true);
+        printSetup.setFitWidth((short) 1);
+        printSetup.setFitHeight((short) 1);
+        sheet.setFitToPage(true);
+        sheet.setAutobreaks(true);
+
+        sheet.setMargin(Sheet.LeftMargin, cmToInches(LEFT_MARGIN_CM));
+        sheet.setMargin(Sheet.RightMargin, cmToInches(RIGHT_MARGIN_CM));
+        sheet.setMargin(Sheet.TopMargin, cmToInches(TOP_MARGIN_CM));
+        sheet.setMargin(Sheet.BottomMargin, cmToInches(BOTTOM_MARGIN_CM));
+    }
+
+    private static void addResultsRows(Sheet sheet, List<String> measurementDates) {
+        List<String> dates = measurementDates == null || measurementDates.isEmpty()
+                ? List.of("")
+                : measurementDates;
+
+        int rowIndex = 0;
+        rowIndex = addMergedRow(sheet, rowIndex, "7. Результаты измерений на объекте: ");
+
+        for (String date : dates) {
+            String textBlock = buildDateBlock(date);
+            rowIndex = addMergedRowWithHeight(sheet, rowIndex, textBlock);
+        }
+    }
+
+    private static String buildDateBlock(String date) {
+        String normalizedDate = date == null ? "" : date.trim();
+        StringBuilder builder = new StringBuilder();
+        builder.append("7.1.1 Метеорологические факторы атмосферного воздуха");
+        if (!normalizedDate.isEmpty()) {
+            builder.append(" ").append(normalizedDate);
+        }
+        builder.append("\n");
+        builder.append("Температура помещения,˚С ").append(longUnderline()).append("\n");
+        builder.append("Температура улица,˚С").append(longUnderline()).append("\n");
+        builder.append("относительная влажность  помещения, %").append(longUnderline()).append("\n");
+        builder.append("относительная влажность  улица, %").append(longUnderline()).append("\n");
+        builder.append("давление помещение, мм рт. ст.   %").append(longUnderline()).append("\n");
+        builder.append("давление улица, мм рт. ст.   %").append(longUnderline());
+        return builder.toString();
+    }
+
+    private static String longUnderline() {
+        return "____________________________________________________________________________";
+    }
+
+    private static int addMergedRow(Sheet sheet, int rowIndex, String text) {
+        Row row = sheet.createRow(rowIndex);
+        Cell cell = row.createCell(0);
+        cell.setCellValue(text);
+        sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, 15));
+        return rowIndex + 1;
+    }
+
+    private static int addMergedRowWithHeight(Sheet sheet, int rowIndex, String text) {
+        Row row = sheet.createRow(rowIndex);
+        Cell cell = row.createCell(0);
+        cell.setCellValue(text);
+        sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, 15));
+
+        int lines = Math.max(1, text.split("\\r?\\n").length);
+        row.setHeightInPoints(12f * lines);
+        return rowIndex + 1;
+    }
+
+    private static int[] buildColumnWidthsPx() {
+        return new int[]{
+                31, 247, 45, 35, 19, 41, 51, 39,
+                19, 39, 35, 29, 32, 32, 32, 32
+        };
+    }
+
+    private static int pixel2WidthUnits(int px) {
+        int units = (px / 7) * 256;
+        int rem = px % 7;
+        final int[] offset = {0, 36, 73, 109, 146, 182, 219};
+        units += offset[rem];
+        return units;
+    }
+
+    private static double cmToInches(double centimeters) {
+        return centimeters / 2.54d;
+    }
+}
