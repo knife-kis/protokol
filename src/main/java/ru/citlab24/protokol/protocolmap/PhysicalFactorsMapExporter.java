@@ -196,7 +196,7 @@ public final class PhysicalFactorsMapExporter {
         row8.setHeightInPoints(pixelsToPoints(16));
 
         String performerText = "3. Измерения провел, подпись: " + safe(measurementPerformer);
-        setMergedCellValue(sheet, 9, performerText, sectionStyle);
+        setMergedCellValue(sheet, 9, performerText, sectionMixedStyle);
 
         Row row10 = sheet.createRow(10);
         row10.setHeightInPoints(pixelsToPoints(16));
@@ -216,15 +216,16 @@ public final class PhysicalFactorsMapExporter {
         row14.setHeightInPoints(pixelsToPoints(16));
 
         String controlSuffix = resolveControlSuffix(measurementPerformer);
-        String controlText = "Контроль ведения записей осуществлен: " + controlSuffix;
-        setMergedCellValue(sheet, 15, controlText, sectionStyle);
+        String controlText = "5. Контроль ведения записей осуществлен: " + controlSuffix;
+        setMergedCellValue(sheet, 15, controlText, sectionMixedStyle);
 
         Row row16 = sheet.createRow(16);
         row16.setHeightInPoints(pixelsToPoints(16));
 
-        setMergedCellValue(sheet, 17,
-                "Результат контроля:____________________________________________",
-                sectionStyle);
+        String controlResultPrefix = "Результат контроля: ";
+        String controlResultValue = "соответствует/не соответствует";
+        setMergedCellValueWithPrefix(sheet, 17, controlResultPrefix, controlResultValue,
+                sectionFont, sectionValueFont, sectionMixedStyle);
     }
 
     private static void setMergedCellValue(Sheet sheet, int rowIndex, String text, CellStyle style) {
