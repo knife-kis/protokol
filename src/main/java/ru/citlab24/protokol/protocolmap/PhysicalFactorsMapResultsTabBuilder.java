@@ -23,13 +23,13 @@ final class PhysicalFactorsMapResultsTabBuilder {
     private PhysicalFactorsMapResultsTabBuilder() {
     }
 
-    static void createResultsSheet(Workbook workbook, List<String> measurementDates, boolean hasMicroclimateSheet) {
+    static int createResultsSheet(Workbook workbook, List<String> measurementDates, boolean hasMicroclimateSheet) {
         Sheet sheet = workbook.createSheet("Микроклимат");
         applySheetDefaults(workbook, sheet);
         CellStyle microclimateHeaderStyle = createMicroclimateHeaderStyle(workbook);
         CellStyle microclimateHeaderVerticalStyle = createMicroclimateHeaderVerticalStyle(workbook, microclimateHeaderStyle);
         CellStyle microclimateHeaderNumberStyle = createMicroclimateHeaderNumberStyle(workbook, microclimateHeaderStyle);
-        addResultsRows(sheet, measurementDates, hasMicroclimateSheet,
+        return addResultsRows(sheet, measurementDates, hasMicroclimateSheet,
                 microclimateHeaderStyle, microclimateHeaderVerticalStyle, microclimateHeaderNumberStyle);
     }
 
@@ -63,12 +63,12 @@ final class PhysicalFactorsMapResultsTabBuilder {
         sheet.setMargin(Sheet.BottomMargin, cmToInches(BOTTOM_MARGIN_CM));
     }
 
-    private static void addResultsRows(Sheet sheet,
-                                       List<String> measurementDates,
-                                       boolean hasMicroclimateSheet,
-                                       CellStyle microclimateHeaderStyle,
-                                       CellStyle microclimateHeaderVerticalStyle,
-                                       CellStyle microclimateHeaderNumberStyle) {
+    private static int addResultsRows(Sheet sheet,
+                                      List<String> measurementDates,
+                                      boolean hasMicroclimateSheet,
+                                      CellStyle microclimateHeaderStyle,
+                                      CellStyle microclimateHeaderVerticalStyle,
+                                      CellStyle microclimateHeaderNumberStyle) {
         List<String> dates = measurementDates == null || measurementDates.isEmpty()
                 ? List.of("")
                 : measurementDates;
@@ -86,7 +86,9 @@ final class PhysicalFactorsMapResultsTabBuilder {
         if (hasMicroclimateSheet) {
             addMicroclimateHeaderTable(sheet, rowIndex, microclimateHeaderStyle,
                     microclimateHeaderVerticalStyle, microclimateHeaderNumberStyle);
+            return rowIndex + 3;
         }
+        return rowIndex;
     }
 
     private static String buildDateBlock(String date, int sectionIndex) {
