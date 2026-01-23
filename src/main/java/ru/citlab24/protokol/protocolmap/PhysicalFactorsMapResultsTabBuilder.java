@@ -71,8 +71,6 @@ final class PhysicalFactorsMapResultsTabBuilder {
             rowIndex = addMergedRowWithHeight(sheet, rowIndex, textBlock);
             sectionIndex++;
         }
-
-        addMicroclimateHeaderTable(sheet, rowIndex);
     }
 
     private static String buildDateBlock(String date, int sectionIndex) {
@@ -119,88 +117,6 @@ final class PhysicalFactorsMapResultsTabBuilder {
         int lines = Math.max(1, text.split("\\r?\\n").length);
         row.setHeightInPoints(12f * lines + EXTRA_ROW_HEIGHT_POINTS);
         return rowIndex + 1;
-    }
-
-    private static void addMicroclimateHeaderTable(Sheet sheet, int startRowIndex) {
-        Workbook workbook = sheet.getWorkbook();
-        Font headerFont = workbook.createFont();
-        headerFont.setFontName("Arial");
-        headerFont.setFontHeightInPoints((short) 8);
-
-        CellStyle headerStyle = workbook.createCellStyle();
-        headerStyle.setFont(headerFont);
-        headerStyle.setWrapText(true);
-        headerStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
-        headerStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
-
-        Row row1 = sheet.createRow(startRowIndex);
-        Row row2 = sheet.createRow(startRowIndex + 1);
-        Row row3 = sheet.createRow(startRowIndex + 2);
-
-        mergeAndSet(sheet, startRowIndex, startRowIndex + 1, 0, 0, "№ п/п", headerStyle);
-        mergeAndSet(sheet, startRowIndex, startRowIndex + 1, 1, 1,
-                "Рабочее место, место проведения измерений, цех, участок,\nнаименование профессии или \nдолжности",
-                headerStyle);
-        mergeAndSet(sheet, startRowIndex, startRowIndex + 1, 2, 2, "Высота от пола, м", headerStyle);
-        mergeAndSet(sheet, startRowIndex, startRowIndex, 3, 5, "Температура воздуха, ºС", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 1, startRowIndex + 1, 3, 5,
-                "Измеренная (± расширенная неопределенность)", headerStyle);
-        mergeAndSet(sheet, startRowIndex, startRowIndex + 1, 6, 6,
-                "Температура поверхностей, ºС\nПол. Измеренная (± расширенная неопределенность)", headerStyle);
-        mergeAndSet(sheet, startRowIndex, startRowIndex, 7, 9, "Результирующая температура,  ºС", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 1, startRowIndex + 1, 7, 9,
-                "Измеренная (± расширенная неопределенность)", headerStyle);
-        mergeAndSet(sheet, startRowIndex, startRowIndex, 10, 12, "Относительная влажность воздуха, %", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 1, startRowIndex + 1, 10, 12,
-                "Измеренная (± расширенная неопределенность)", headerStyle);
-        mergeAndSet(sheet, startRowIndex, startRowIndex, 13, 15, "Скорость движения воздуха,  м/с", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 1, startRowIndex + 1, 13, 15,
-                "Измеренная (± расширенная неопределенность)", headerStyle);
-
-        mergeAndSet(sheet, startRowIndex + 2, startRowIndex + 2, 0, 0, "1", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 2, startRowIndex + 2, 1, 1, "2", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 2, startRowIndex + 2, 2, 2, "3", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 2, startRowIndex + 2, 3, 5, "4", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 2, startRowIndex + 2, 6, 6, "5", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 2, startRowIndex + 2, 7, 9, "6", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 2, startRowIndex + 2, 10, 12, "7", headerStyle);
-        mergeAndSet(sheet, startRowIndex + 2, startRowIndex + 2, 13, 15, "8", headerStyle);
-
-        applyRowStyle(row1, headerStyle, 0, 15);
-        applyRowStyle(row2, headerStyle, 0, 15);
-        applyRowStyle(row3, headerStyle, 0, 15);
-    }
-
-    private static void mergeAndSet(Sheet sheet,
-                                    int firstRow,
-                                    int lastRow,
-                                    int firstCol,
-                                    int lastCol,
-                                    String value,
-                                    CellStyle style) {
-        sheet.addMergedRegion(new CellRangeAddress(firstRow, lastRow, firstCol, lastCol));
-        Row row = ensureRow(sheet, firstRow);
-        Cell cell = row.createCell(firstCol);
-        cell.setCellValue(value);
-        cell.setCellStyle(style);
-    }
-
-    private static void applyRowStyle(Row row, CellStyle style, int firstCol, int lastCol) {
-        for (int col = firstCol; col <= lastCol; col++) {
-            Cell cell = row.getCell(col);
-            if (cell == null) {
-                cell = row.createCell(col);
-            }
-            cell.setCellStyle(style);
-        }
-    }
-
-    private static Row ensureRow(Sheet sheet, int rowIndex) {
-        Row row = sheet.getRow(rowIndex);
-        if (row == null) {
-            row = sheet.createRow(rowIndex);
-        }
-        return row;
     }
 
     private static int[] buildColumnWidthsPx() {

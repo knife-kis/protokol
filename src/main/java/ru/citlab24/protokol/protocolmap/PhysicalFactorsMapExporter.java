@@ -63,7 +63,6 @@ public final class PhysicalFactorsMapExporter {
         return targetFile;
     }
 
-
     private static String resolveRegistrationNumber(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return "";
