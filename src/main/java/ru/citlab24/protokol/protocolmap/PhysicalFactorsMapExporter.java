@@ -44,6 +44,7 @@ public final class PhysicalFactorsMapExporter {
         String specialConditions = resolveSpecialConditions(sourceFile);
         String measurementMethods = resolveMeasurementMethods(sourceFile);
         java.util.List<InstrumentData> instruments = resolveMeasurementInstruments(sourceFile);
+        boolean hasMicroclimateSheet = hasSheetWithPrefix(sourceFile, "Микроклимат");
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -53,7 +54,7 @@ public final class PhysicalFactorsMapExporter {
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
-            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDates);
+            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDates, hasMicroclimateSheet);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -100,6 +101,25 @@ public final class PhysicalFactorsMapExporter {
             }
         }
         return "";
+    }
+
+    private static boolean hasSheetWithPrefix(File sourceFile, String prefix) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return false;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            int count = workbook.getNumberOfSheets();
+            for (int i = 0; i < count; i++) {
+                String name = workbook.getSheetName(i);
+                if (name != null && name.startsWith(prefix)) {
+                    return true;
+                }
+            }
+        } catch (Exception ex) {
+            return false;
+        }
+        return false;
     }
 
     private static File buildTargetFile(File sourceFile) {

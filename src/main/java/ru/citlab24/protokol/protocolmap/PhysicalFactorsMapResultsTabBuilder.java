@@ -21,10 +21,11 @@ final class PhysicalFactorsMapResultsTabBuilder {
     private PhysicalFactorsMapResultsTabBuilder() {
     }
 
-    static void createResultsSheet(Workbook workbook, List<String> measurementDates) {
+    static void createResultsSheet(Workbook workbook, List<String> measurementDates, boolean hasMicroclimateSheet) {
         Sheet sheet = workbook.createSheet("Микроклимат");
         applySheetDefaults(workbook, sheet);
-        addResultsRows(sheet, measurementDates);
+        CellStyle microclimateHeaderStyle = createMicroclimateHeaderStyle(workbook);
+        addResultsRows(sheet, measurementDates, hasMicroclimateSheet, microclimateHeaderStyle);
     }
 
     private static void applySheetDefaults(Workbook workbook, Sheet sheet) {
@@ -57,7 +58,10 @@ final class PhysicalFactorsMapResultsTabBuilder {
         sheet.setMargin(Sheet.BottomMargin, cmToInches(BOTTOM_MARGIN_CM));
     }
 
-    private static void addResultsRows(Sheet sheet, List<String> measurementDates) {
+    private static void addResultsRows(Sheet sheet,
+                                       List<String> measurementDates,
+                                       boolean hasMicroclimateSheet,
+                                       CellStyle microclimateHeaderStyle) {
         List<String> dates = measurementDates == null || measurementDates.isEmpty()
                 ? List.of("")
                 : measurementDates;
@@ -70,6 +74,10 @@ final class PhysicalFactorsMapResultsTabBuilder {
             String textBlock = buildDateBlock(date, sectionIndex);
             rowIndex = addMergedRowWithHeight(sheet, rowIndex, textBlock);
             sectionIndex++;
+        }
+
+        if (hasMicroclimateSheet) {
+            addMicroclimateHeaderTable(sheet, rowIndex, microclimateHeaderStyle);
         }
     }
 
@@ -117,6 +125,78 @@ final class PhysicalFactorsMapResultsTabBuilder {
         int lines = Math.max(1, text.split("\\r?\\n").length);
         row.setHeightInPoints(12f * lines + EXTRA_ROW_HEIGHT_POINTS);
         return rowIndex + 1;
+    }
+
+    private static void addMicroclimateHeaderTable(Sheet sheet, int rowIndex, CellStyle headerStyle) {
+        Row rowTop = sheet.createRow(rowIndex);
+        Row rowBottom = sheet.createRow(rowIndex + 1);
+
+        setMergedCellValue(sheet, rowIndex, rowIndex + 1, 0, 0, "№ п/п", headerStyle);
+        setMergedCellValue(sheet, rowIndex, rowIndex + 1, 1, 1,
+                "Рабочее место, место проведения измерений, цех, участок,\n" +
+                        "наименование профессии или \n" +
+                        "должности", headerStyle);
+        setMergedCellValue(sheet, rowIndex, rowIndex + 1, 2, 2, "Высота от пола, м", headerStyle);
+        setMergedCellValue(sheet, rowIndex, rowIndex, 3, 5, "Температура воздуха, ºС", headerStyle);
+        setMergedCellValue(sheet, rowIndex + 1, rowIndex + 1, 3, 5,
+                "Измеренная (± расширенная неопределенность)", headerStyle);
+        setMergedCellValue(sheet, rowIndex, rowIndex + 1, 6, 6,
+                "Температура поверхностей, ºС\nПол. Измеренная (± расширенная неопределенность)", headerStyle);
+        setMergedCellValue(sheet, rowIndex, rowIndex, 7, 9, "Результирующая температура,  ºС", headerStyle);
+        setMergedCellValue(sheet, rowIndex + 1, rowIndex + 1, 7, 9,
+                "Измеренная (± расширенная неопределенность)", headerStyle);
+        setMergedCellValue(sheet, rowIndex, rowIndex, 10, 12, "Относительная влажность воздуха, %", headerStyle);
+        setMergedCellValue(sheet, rowIndex + 1, rowIndex + 1, 10, 12,
+                "Измеренная (± расширенная неопределенность)", headerStyle);
+        setMergedCellValue(sheet, rowIndex, rowIndex, 13, 15, "Скорость движения воздуха,  м/с", headerStyle);
+        setMergedCellValue(sheet, rowIndex + 1, rowIndex + 1, 13, 15,
+                "Измеренная (± расширенная неопределенность)", headerStyle);
+
+        for (int col = 0; col <= 15; col++) {
+            Cell cellTop = rowTop.getCell(col);
+            if (cellTop == null) {
+                cellTop = rowTop.createCell(col);
+            }
+            cellTop.setCellStyle(headerStyle);
+            Cell cellBottom = rowBottom.getCell(col);
+            if (cellBottom == null) {
+                cellBottom = rowBottom.createCell(col);
+            }
+            cellBottom.setCellStyle(headerStyle);
+        }
+    }
+
+    private static void setMergedCellValue(Sheet sheet,
+                                           int rowStart,
+                                           int rowEnd,
+                                           int colStart,
+                                           int colEnd,
+                                           String value,
+                                           CellStyle style) {
+        Row row = sheet.getRow(rowStart);
+        if (row == null) {
+            row = sheet.createRow(rowStart);
+        }
+        Cell cell = row.getCell(colStart);
+        if (cell == null) {
+            cell = row.createCell(colStart);
+        }
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+        sheet.addMergedRegion(new CellRangeAddress(rowStart, rowEnd, colStart, colEnd));
+    }
+
+    private static CellStyle createMicroclimateHeaderStyle(Workbook workbook) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 8);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setWrapText(true);
+        style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        return style;
     }
 
     private static int[] buildColumnWidthsPx() {
