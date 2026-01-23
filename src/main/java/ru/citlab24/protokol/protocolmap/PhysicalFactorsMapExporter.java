@@ -369,19 +369,20 @@ public final class PhysicalFactorsMapExporter {
 
     private static MapHeaderData resolveHeaderData(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
-            return new MapHeaderData("", "", "", "");
+            return new MapHeaderData("", "", "", "", "");
         }
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
             if (workbook.getNumberOfSheets() == 0) {
-                return new MapHeaderData("", "", "", "");
+                return new MapHeaderData("", "", "", "", "");
             }
             Sheet sheet = workbook.getSheetAt(0);
             return findHeaderData(sheet);
         } catch (Exception ex) {
-            return new MapHeaderData("", "", "", "");
+            return new MapHeaderData("", "", "", "", "");
         }
     }
+
 
     private static MapHeaderData findHeaderData(Sheet sheet) {
         String customer = "";
