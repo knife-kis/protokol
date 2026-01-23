@@ -357,12 +357,6 @@ public final class PhysicalFactorsMapExporter {
 
         sheet.setRowBreak(rowIndex - 1);
 
-        int emptyPageRows = estimateRowsPerPage(sheet);
-        for (int i = 0; i < emptyPageRows; i++) {
-            sheet.createRow(rowIndex++);
-        }
-        sheet.setRowBreak(rowIndex - 1);
-
         setMergedCellValue(sheet, rowIndex, "6. Эскиз", plainStyle);
         rowIndex++;
     }
@@ -524,14 +518,6 @@ public final class PhysicalFactorsMapExporter {
 
     private static float pointsToPixels(float points) {
         return points / 0.75f;
-    }
-
-    private static int estimateRowsPerPage(Sheet sheet) {
-        float defaultRowHeightPoints = sheet.getDefaultRowHeightInPoints();
-        double rowHeightCm = defaultRowHeightPoints * 2.54d / 72d;
-        double usableHeightCm = A4_LANDSCAPE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM;
-        int rows = (int) Math.floor(usableHeightCm / rowHeightCm);
-        return Math.max(rows, 1);
     }
 
     private static MapHeaderData resolveHeaderData(File sourceFile) {
