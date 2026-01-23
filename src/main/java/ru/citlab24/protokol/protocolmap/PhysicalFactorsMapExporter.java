@@ -363,12 +363,12 @@ public final class PhysicalFactorsMapExporter {
             row = sheet.createRow(rowIndex);
         }
 
-        mergeCellRangeWithStyle(sheet, rowIndex, 1, 9, nameStyle, safe(name));
-        mergeCellRangeWithStyle(sheet, rowIndex, 10, 14, serialStyle, safe(serialNumber));
+        mergeCellRangeWithStyle(sheet, rowIndex, 1, 19, nameStyle, safe(name));
+        mergeCellRangeWithStyle(sheet, rowIndex, 20, 29, serialStyle, safe(serialNumber));
 
-        Cell checkboxCell = row.getCell(15);
+        Cell checkboxCell = row.getCell(30);
         if (checkboxCell == null) {
-            checkboxCell = row.createCell(15);
+            checkboxCell = row.createCell(30);
         }
         checkboxCell.setCellStyle(checkboxStyle);
         checkboxCell.setCellValue(safe(checkbox));
@@ -798,6 +798,7 @@ public final class PhysicalFactorsMapExporter {
             return java.util.Collections.emptyList();
         }
         DataFormatter formatter = new DataFormatter();
+        int sectionRowIndex = -1;
         int headerRowIndex = -1;
         int nameColumn = -1;
         int serialColumn = -1;
@@ -805,11 +806,29 @@ public final class PhysicalFactorsMapExporter {
             for (Cell cell : row) {
                 String normalized = normalizeText(formatter.formatCellValue(cell)).toLowerCase(Locale.ROOT);
                 if (normalized.equals(INSTRUMENTS_SECTION_HEADER)) {
-                    headerRowIndex = row.getRowNum();
+                    if (sectionRowIndex < 0) {
+                        sectionRowIndex = row.getRowNum();
+                    }
                 }
-                if (normalized.equals(INSTRUMENTS_NAME_HEADER)) {
-                    nameColumn = cell.getColumnIndex();
-                    headerRowIndex = row.getRowNum();
+            }
+        }
+
+        if (sectionRowIndex >= 0) {
+            for (int rowIndex = sectionRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    continue;
+                }
+                for (Cell cell : row) {
+                    String normalized = normalizeText(formatter.formatCellValue(cell)).toLowerCase(Locale.ROOT);
+                    if (normalized.equals(INSTRUMENTS_NAME_HEADER)) {
+                        nameColumn = cell.getColumnIndex();
+                        headerRowIndex = rowIndex;
+                        break;
+                    }
+                }
+                if (headerRowIndex >= 0) {
+                    break;
                 }
             }
         }
@@ -830,13 +849,17 @@ public final class PhysicalFactorsMapExporter {
         }
 
         if (serialColumn < 0) {
-            serialColumn = nameColumn + 6;
+            serialColumn = nameColumn + 19;
         }
 
         java.util.List<InstrumentData> instruments = new java.util.ArrayList<>();
         for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             String name = readMergedCellValue(sheet, rowIndex, nameColumn, formatter);
             String serial = readMergedCellValue(sheet, rowIndex, serialColumn, formatter);
+            String normalizedName = normalizeText(name).toLowerCase(Locale.ROOT);
+            if (normalizedName.equals(INSTRUMENTS_NAME_HEADER)) {
+                continue;
+            }
             if (name.isBlank() && serial.isBlank()) {
                 break;
             }
