@@ -32,6 +32,7 @@ public final class PhysicalFactorsMapExporter {
     private static final int MICROCLIMATE_SOURCE_START_ROW = 5;
     private static final int MICROCLIMATE_SOURCE_MERGED_LAST_COL = 21;
     private static final int MICROCLIMATE_BLOCK_SIZE = 3;
+    private static final int[] MICROCLIMATE_TOP_BOTTOM_COLUMNS = {3, 5, 7, 9, 10, 12, 13, 14, 15};
 
     private PhysicalFactorsMapExporter() {
     }
@@ -162,6 +163,7 @@ public final class PhysicalFactorsMapExporter {
             int targetRowIndex = targetStartRow;
             int targetDataStartRow = targetStartRow;
             int lastRow = sourceSheet.getLastRowNum();
+            PageBreakHelper pageBreakHelper = new PageBreakHelper(targetSheet, targetDataStartRow);
 
             while (sourceRowIndex <= lastRow) {
                 CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
@@ -170,7 +172,9 @@ public final class PhysicalFactorsMapExporter {
                     if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
                         break;
                     }
+                    pageBreakHelper.ensureSpace(targetRowIndex, 1);
                     mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex, 0, 15, text, mergedRowStyle);
+                    pageBreakHelper.consume(1);
                     targetRowIndex++;
                     sourceRowIndex++;
                     continue;
@@ -179,6 +183,7 @@ public final class PhysicalFactorsMapExporter {
                 if (!hasMicroclimateBlockContent(sourceSheet, sourceRowIndex, formatter)) {
                     break;
                 }
+                pageBreakHelper.ensureSpace(targetRowIndex, MICROCLIMATE_BLOCK_SIZE);
 
                 String blockLabel = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
                 String blockPlace = readMergedCellValue(sourceSheet, sourceRowIndex, 1, formatter);
@@ -201,12 +206,14 @@ public final class PhysicalFactorsMapExporter {
                     setCellValue(targetSheet, targetRow, 11, "±", centerStyle);
                 }
 
+                pageBreakHelper.consume(MICROCLIMATE_BLOCK_SIZE);
                 targetRowIndex += MICROCLIMATE_BLOCK_SIZE;
                 sourceRowIndex += MICROCLIMATE_BLOCK_SIZE;
             }
 
             if (targetRowIndex > targetDataStartRow) {
                 applyPlusAdjacentBorders(targetSheet, targetWorkbook, targetDataStartRow, targetRowIndex - 1);
+                applyMicroclimateDataBorders(targetSheet, targetWorkbook, targetDataStartRow, targetRowIndex - 1);
             }
         } catch (Exception ex) {
             // ignore
@@ -314,6 +321,11 @@ public final class PhysicalFactorsMapExporter {
         cell.setCellStyle(style);
     }
 
+    private static Row ensureRow(Sheet sheet, int rowIndex) {
+        Row row = sheet.getRow(rowIndex);
+        return row != null ? row : sheet.createRow(rowIndex);
+    }
+
     private static void mergeCellRangeWithValue(Sheet sheet,
                                                 int rowStart,
                                                 int rowEnd,
@@ -393,6 +405,64 @@ public final class PhysicalFactorsMapExporter {
         }
     }
 
+    private static void applyMicroclimateDataBorders(Sheet sheet,
+                                                     Workbook workbook,
+                                                     int startRow,
+                                                     int endRow) {
+        java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
+        for (int rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
+            for (int colIndex : MICROCLIMATE_TOP_BOTTOM_COLUMNS) {
+                boolean needsLeft = colIndex == 10 || (colIndex >= 13 && colIndex <= 15);
+                boolean needsRight = colIndex >= 13 && colIndex <= 15;
+                applyBorderToCell(sheet, workbook, styleCache, rowIndex, colIndex,
+                        true, true, needsLeft, needsRight);
+            }
+        }
+    }
+
+    private static void applyBorderToCell(Sheet sheet,
+                                          Workbook workbook,
+                                          java.util.Map<BorderKey, CellStyle> styleCache,
+                                          int rowIndex,
+                                          int colIndex,
+                                          boolean top,
+                                          boolean bottom,
+                                          boolean left,
+                                          boolean right) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        Cell cell = row.getCell(colIndex);
+        if (cell == null) {
+            cell = row.createCell(colIndex);
+        }
+        CellStyle baseStyle = cell.getCellStyle();
+        short baseIndex = baseStyle == null ? 0 : baseStyle.getIndex();
+        BorderKey key = new BorderKey(baseIndex, top, bottom, left, right);
+        CellStyle mergedStyle = styleCache.get(key);
+        if (mergedStyle == null) {
+            mergedStyle = workbook.createCellStyle();
+            if (baseStyle != null && baseStyle.getIndex() != 0) {
+                mergedStyle.cloneStyleFrom(baseStyle);
+            }
+            if (top) {
+                mergedStyle.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+            }
+            if (bottom) {
+                mergedStyle.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+            }
+            if (left) {
+                mergedStyle.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+            }
+            if (right) {
+                mergedStyle.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+            }
+            styleCache.put(key, mergedStyle);
+        }
+        cell.setCellStyle(mergedStyle);
+    }
+
     private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {
         if (sheet == null) {
             return null;
@@ -403,6 +473,136 @@ public final class PhysicalFactorsMapExporter {
             }
         }
         return null;
+    }
+
+    private static final class BorderKey {
+        private final short baseStyleIndex;
+        private final boolean top;
+        private final boolean bottom;
+        private final boolean left;
+        private final boolean right;
+
+        private BorderKey(short baseStyleIndex, boolean top, boolean bottom, boolean left, boolean right) {
+            this.baseStyleIndex = baseStyleIndex;
+            this.top = top;
+            this.bottom = bottom;
+            this.left = left;
+            this.right = right;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null || getClass() != obj.getClass()) {
+                return false;
+            }
+            BorderKey other = (BorderKey) obj;
+            return baseStyleIndex == other.baseStyleIndex
+                    && top == other.top
+                    && bottom == other.bottom
+                    && left == other.left
+                    && right == other.right;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = baseStyleIndex;
+            result = 31 * result + (top ? 1 : 0);
+            result = 31 * result + (bottom ? 1 : 0);
+            result = 31 * result + (left ? 1 : 0);
+            result = 31 * result + (right ? 1 : 0);
+            return result;
+        }
+    }
+
+    private static final class PageBreakHelper {
+        private static final double POINTS_PER_INCH = 72.0;
+        private static final double A4_HEIGHT_POINTS = 842.0;
+        private static final double A4_WIDTH_POINTS = 595.0;
+
+        private final Sheet sheet;
+        private final int dataStartRow;
+        private final int firstPageRowsPerPage;
+        private final int nextPageRowsPerPage;
+        private int rowsOnPage = 0;
+        private boolean firstPage = true;
+
+        private PageBreakHelper(Sheet sheet, int dataStartRow) {
+            this.sheet = sheet;
+            this.dataStartRow = dataStartRow;
+            this.firstPageRowsPerPage = calculateRowsPerPage(firstPageHeaderHeight());
+            this.nextPageRowsPerPage = calculateRowsPerPage(repeatingHeaderHeight());
+        }
+
+        void ensureSpace(int rowIndex, int neededRows) {
+            int rowsPerPage = rowsPerPage();
+            if (rowIndex < dataStartRow || rowsPerPage <= 0 || neededRows > rowsPerPage) {
+                return;
+            }
+            if (rowsOnPage + neededRows > rowsPerPage) {
+                sheet.setRowBreak(rowIndex - 1);
+                rowsOnPage = 0;
+                firstPage = false;
+            }
+        }
+
+        void consume(int rows) {
+            if (rowsPerPage() <= 0) {
+                return;
+            }
+            rowsOnPage += rows;
+        }
+
+        private int rowsPerPage() {
+            int rowsPerPage = firstPage ? firstPageRowsPerPage : nextPageRowsPerPage;
+            if (rowsPerPage <= 0 && firstPageRowsPerPage > 0) {
+                return firstPageRowsPerPage;
+            }
+            return rowsPerPage;
+        }
+
+        private int calculateRowsPerPage(double headerHeight) {
+            double rowHeight = 15.0;
+            double marginPoints = (sheet.getMargin(Sheet.TopMargin) + sheet.getMargin(Sheet.BottomMargin)) * POINTS_PER_INCH;
+            double pageHeight = pageHeightPoints();
+            double available = pageHeight - marginPoints - headerHeight;
+            if (available <= 0) {
+                return 0;
+            }
+            return (int) Math.floor(available / rowHeight);
+        }
+
+        private double firstPageHeaderHeight() {
+            double headerHeight = 0.0;
+            for (int i = 0; i < dataStartRow; i++) {
+                headerHeight += ensureRow(sheet, i).getHeightInPoints();
+            }
+            return headerHeight;
+        }
+
+        private double repeatingHeaderHeight() {
+            CellRangeAddress repeating = sheet.getRepeatingRows();
+            if (repeating == null) {
+                return 0.0;
+            }
+            int start = Math.max(0, repeating.getFirstRow());
+            int end = Math.max(start, repeating.getLastRow());
+            double headerHeight = 0.0;
+            for (int i = start; i <= end; i++) {
+                headerHeight += ensureRow(sheet, i).getHeightInPoints();
+            }
+            return headerHeight;
+        }
+
+        private double pageHeightPoints() {
+            PrintSetup ps = sheet.getPrintSetup();
+            if (ps != null && ps.getPaperSize() == PrintSetup.A4_PAPERSIZE) {
+                return ps.getLandscape() ? A4_WIDTH_POINTS : A4_HEIGHT_POINTS;
+            }
+            return A4_WIDTH_POINTS;
+        }
     }
 
     private static Sheet findSheetWithPrefix(Workbook workbook, String prefix) {
