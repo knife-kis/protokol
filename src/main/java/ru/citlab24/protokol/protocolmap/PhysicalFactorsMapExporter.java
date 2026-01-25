@@ -63,8 +63,12 @@ public final class PhysicalFactorsMapExporter {
             int microclimateDataStartRow = PhysicalFactorsMapResultsTabBuilder.createResultsSheet(
                     workbook, measurementDates, hasMicroclimateSheet);
             Sheet resultsSheet = workbook.getSheet("Микроклимат");
+            Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
             if (resultsSheet != null) {
                 applyHeaders(resultsSheet, registrationNumber);
+            }
+            if (ventilationSheet != null) {
+                applyHeaders(ventilationSheet, registrationNumber);
             }
             if (hasMicroclimateSheet) {
                 fillMicroclimateResults(sourceFile, workbook, resultsSheet, microclimateDataStartRow);
