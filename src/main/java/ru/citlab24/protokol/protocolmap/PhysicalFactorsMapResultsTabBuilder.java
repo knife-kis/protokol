@@ -84,6 +84,9 @@ final class PhysicalFactorsMapResultsTabBuilder {
         }
 
         if (hasMicroclimateSheet) {
+            if (rowIndex > 0) {
+                sheet.setRowBreak(rowIndex - 1);
+            }
             addMicroclimateHeaderTable(sheet, rowIndex, microclimateHeaderStyle,
                     microclimateHeaderVerticalStyle, microclimateHeaderNumberStyle);
             return rowIndex + 3;
