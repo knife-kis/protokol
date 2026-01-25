@@ -49,6 +49,7 @@ final class PhysicalFactorsMapResultsTabBuilder {
             sheet.setColumnWidth(col, pixel2WidthUnits(widthsPx[col]));
             sheet.setDefaultColumnStyle(col, baseStyle);
         }
+        sheet.setDefaultRowHeightInPoints(pixelsToPoints(17));
 
         PrintSetup printSetup = sheet.getPrintSetup();
         printSetup.setLandscape(true);
