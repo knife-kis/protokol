@@ -32,7 +32,9 @@ public final class PhysicalFactorsMapExporter {
     private static final int MICROCLIMATE_SOURCE_START_ROW = 5;
     private static final int MICROCLIMATE_SOURCE_MERGED_LAST_COL = 21;
     private static final int MICROCLIMATE_BLOCK_SIZE = 3;
-    private static final int[] MICROCLIMATE_TOP_BOTTOM_COLUMNS = {3, 5, 7, 9, 10, 12, 13, 14, 15};
+    private static final int[] MICROCLIMATE_TOP_BOTTOM_COLUMNS = {3, 5, 7, 9, 10, 12};
+    private static final int MICROCLIMATE_AIR_SPEED_START_COL = 13;
+    private static final int MICROCLIMATE_AIR_SPEED_END_COL = 15;
 
     private PhysicalFactorsMapExporter() {
     }
@@ -204,6 +206,7 @@ public final class PhysicalFactorsMapExporter {
                     setCellValue(targetSheet, targetRow, 4, temperatureValue, centerStyle);
                     setCellValue(targetSheet, targetRow, 8, "±", centerStyle);
                     setCellValue(targetSheet, targetRow, 11, "±", centerStyle);
+                    mergeAirSpeedCells(targetSheet, targetRow, centerStyle);
                 }
 
                 pageBreakHelper.consume(MICROCLIMATE_BLOCK_SIZE);
@@ -412,12 +415,25 @@ public final class PhysicalFactorsMapExporter {
         java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
         for (int rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
             for (int colIndex : MICROCLIMATE_TOP_BOTTOM_COLUMNS) {
-                boolean needsLeft = colIndex == 10 || (colIndex >= 13 && colIndex <= 15);
-                boolean needsRight = colIndex >= 13 && colIndex <= 15;
+                boolean needsLeft = colIndex == 10;
+                boolean needsRight = false;
                 applyBorderToCell(sheet, workbook, styleCache, rowIndex, colIndex,
                         true, true, needsLeft, needsRight);
             }
         }
+    }
+
+    private static void mergeAirSpeedCells(Sheet sheet, int rowIndex, CellStyle style) {
+        CellRangeAddress existing = findMergedRegion(sheet, rowIndex, MICROCLIMATE_AIR_SPEED_START_COL);
+        if (existing != null
+                && existing.getFirstRow() == rowIndex
+                && existing.getLastRow() == rowIndex
+                && existing.getFirstColumn() <= MICROCLIMATE_AIR_SPEED_START_COL
+                && existing.getLastColumn() >= MICROCLIMATE_AIR_SPEED_END_COL) {
+            return;
+        }
+        mergeCellRangeWithValue(sheet, rowIndex, rowIndex,
+                MICROCLIMATE_AIR_SPEED_START_COL, MICROCLIMATE_AIR_SPEED_END_COL, "", style);
     }
 
     private static void applyBorderToCell(Sheet sheet,
