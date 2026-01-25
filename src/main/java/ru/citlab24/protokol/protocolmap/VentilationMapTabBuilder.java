@@ -7,6 +7,9 @@ import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.util.CellRangeAddress;
 
 final class VentilationMapTabBuilder {
@@ -22,9 +25,10 @@ final class VentilationMapTabBuilder {
     static Sheet createSheet(Workbook workbook) {
         Sheet sheet = workbook.createSheet("Вентиляция");
         CellStyle baseStyle = applySheetDefaults(workbook, sheet);
-        addMergedRow(sheet, 0, 9,
+        int rowIndex = addMergedRow(sheet, 0, 9,
                 "7.3. Скорость движения воздуха в рабочих проемах систем вентиляции, кратность воздухообмена",
                 baseStyle);
+        addTableHeader(sheet, rowIndex, baseStyle);
         return sheet;
     }
 
@@ -70,6 +74,55 @@ final class VentilationMapTabBuilder {
         sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, lastCol));
         row.setHeightInPoints(12f + EXTRA_ROW_HEIGHT_POINTS);
         return rowIndex + 1;
+    }
+
+    private static void addTableHeader(Sheet sheet, int rowIndex, CellStyle baseStyle) {
+        Workbook workbook = sheet.getWorkbook();
+        CellStyle headerStyle = workbook.createCellStyle();
+        headerStyle.cloneStyleFrom(baseStyle);
+        headerStyle.setAlignment(HorizontalAlignment.CENTER);
+        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        headerStyle.setBorderTop(BorderStyle.THIN);
+        headerStyle.setBorderBottom(BorderStyle.THIN);
+        headerStyle.setBorderLeft(BorderStyle.THIN);
+        headerStyle.setBorderRight(BorderStyle.THIN);
+
+        CellStyle numberStyle = workbook.createCellStyle();
+        numberStyle.cloneStyleFrom(headerStyle);
+
+        Row headerRow = sheet.createRow(rowIndex);
+        headerRow.setHeightInPoints(pixelsToPoints(152));
+        createCell(headerRow, 0, "№ п/п", headerStyle);
+        createCell(headerRow, 1, "№ точки измерения", headerStyle);
+        createCell(headerRow, 2, "Рабочее место, место проведения измерений (Приток/вытяжка)", headerStyle);
+        createCell(headerRow, 3, "Измеренные значения скорости воздушного потока (± расширенная неопределенность) м/с",
+                headerStyle);
+        createCell(headerRow, 4, "", headerStyle);
+        createCell(headerRow, 5, "", headerStyle);
+        createCell(headerRow, 6, "Площадь сечения\nпроема, м^2", headerStyle);
+        createCell(headerRow, 7, "Производительность\nвент системы (канал или общая), м^3/ч", headerStyle);
+        createCell(headerRow, 8, "Объем помещения, м^3", headerStyle);
+        createCell(headerRow, 9, "Кратность воздухообмена по притоку или вытяжке, ч^-1", headerStyle);
+        sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 3, 5));
+
+        Row numberRow = sheet.createRow(rowIndex + 1);
+        createCell(numberRow, 0, "1", numberStyle);
+        createCell(numberRow, 1, "2", numberStyle);
+        createCell(numberRow, 2, "3", numberStyle);
+        createCell(numberRow, 3, "4", numberStyle);
+        createCell(numberRow, 4, "", numberStyle);
+        createCell(numberRow, 5, "", numberStyle);
+        createCell(numberRow, 6, "5", numberStyle);
+        createCell(numberRow, 7, "6", numberStyle);
+        createCell(numberRow, 8, "7", numberStyle);
+        createCell(numberRow, 9, "8", numberStyle);
+        sheet.addMergedRegion(new CellRangeAddress(rowIndex + 1, rowIndex + 1, 3, 5));
+    }
+
+    private static void createCell(Row row, int columnIndex, String text, CellStyle style) {
+        Cell cell = row.createCell(columnIndex);
+        cell.setCellValue(text);
+        cell.setCellStyle(style);
     }
 
     private static int[] buildColumnWidthsPx() {
