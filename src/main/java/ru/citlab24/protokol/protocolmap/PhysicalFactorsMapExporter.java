@@ -524,6 +524,7 @@ public final class PhysicalFactorsMapExporter {
 
         private final Sheet sheet;
         private final int dataStartRow;
+        private final double rowHeightPoints;
         private final int firstPageRowsPerPage;
         private final int nextPageRowsPerPage;
         private int rowsOnPage = 0;
@@ -532,6 +533,8 @@ public final class PhysicalFactorsMapExporter {
         private PageBreakHelper(Sheet sheet, int dataStartRow) {
             this.sheet = sheet;
             this.dataStartRow = dataStartRow;
+            double defaultHeight = sheet.getDefaultRowHeightInPoints();
+            this.rowHeightPoints = defaultHeight > 0 ? defaultHeight : 15.0;
             this.firstPageRowsPerPage = calculateRowsPerPage(firstPageHeaderHeight());
             this.nextPageRowsPerPage = calculateRowsPerPage(repeatingHeaderHeight());
         }
@@ -564,14 +567,13 @@ public final class PhysicalFactorsMapExporter {
         }
 
         private int calculateRowsPerPage(double headerHeight) {
-            double rowHeight = 15.0;
             double marginPoints = (sheet.getMargin(Sheet.TopMargin) + sheet.getMargin(Sheet.BottomMargin)) * POINTS_PER_INCH;
             double pageHeight = pageHeightPoints();
             double available = pageHeight - marginPoints - headerHeight;
             if (available <= 0) {
                 return 0;
             }
-            return (int) Math.floor(available / rowHeight);
+            return (int) Math.floor(available / rowHeightPoints);
         }
 
         private double firstPageHeaderHeight() {
