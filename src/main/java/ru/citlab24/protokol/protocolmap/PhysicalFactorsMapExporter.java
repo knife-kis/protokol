@@ -45,6 +45,7 @@ public final class PhysicalFactorsMapExporter {
         String measurementMethods = resolveMeasurementMethods(sourceFile);
         java.util.List<InstrumentData> instruments = resolveMeasurementInstruments(sourceFile);
         boolean hasMicroclimateSheet = hasSheetWithPrefix(sourceFile, "Микроклимат");
+        boolean hasMedSheet = hasSheetWithName(sourceFile, "МЭД");
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -57,15 +58,27 @@ public final class PhysicalFactorsMapExporter {
             int microclimateDataStartRow = PhysicalFactorsMapResultsTabBuilder.createResultsSheet(
                     workbook, measurementDates, hasMicroclimateSheet);
             Sheet resultsSheet = workbook.getSheet("Микроклимат");
+            int medDataStartRow = -1;
+            Sheet medSheet = null;
+            if (hasMedSheet) {
+                medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
+                medSheet = workbook.getSheet("МЭД");
+            }
             Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
             if (resultsSheet != null) {
                 applyHeaders(resultsSheet, registrationNumber);
+            }
+            if (medSheet != null) {
+                applyHeaders(medSheet, registrationNumber);
             }
             if (ventilationSheet != null) {
                 applyHeaders(ventilationSheet, registrationNumber);
             }
             if (hasMicroclimateSheet) {
                 fillMicroclimateResults(sourceFile, workbook, resultsSheet, microclimateDataStartRow);
+            }
+            if (hasMedSheet) {
+                fillMedResults(sourceFile, workbook, medSheet, medDataStartRow);
             }
             fillVentilationResults(sourceFile, workbook, ventilationSheet);
 
@@ -133,6 +146,18 @@ public final class PhysicalFactorsMapExporter {
             return false;
         }
         return false;
+    }
+
+    private static boolean hasSheetWithName(File sourceFile, String name) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return false;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            return workbook.getSheet(name) != null;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private static File buildTargetFile(File sourceFile) {
@@ -357,6 +382,61 @@ public final class PhysicalFactorsMapExporter {
         }
     }
 
+    private static void fillMedResults(File sourceFile,
+                                       Workbook targetWorkbook,
+                                       Sheet targetSheet,
+                                       int targetStartRow) {
+        if (sourceFile == null || !sourceFile.exists() || targetSheet == null || targetStartRow < 0) {
+            return;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            Sheet sourceSheet = findSheetWithName(sourceWorkbook, "МЭД");
+            if (sourceSheet == null) {
+                return;
+            }
+
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
+
+            CellStyle centerStyle = createMedDataStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+            CellStyle leftStyle = createMedDataStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+
+            int sourceRowIndex = 7;
+            int targetRowIndex = targetStartRow;
+            int lastRow = sourceSheet.getLastRowNum();
+            int emptyAStreak = 0;
+            boolean started = false;
+
+            while (sourceRowIndex <= lastRow) {
+                String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 1, formatter, evaluator);
+
+                if (normalizeText(aValue).isBlank()) {
+                    emptyAStreak++;
+                    if (started && emptyAStreak >= 10) {
+                        break;
+                    }
+                    sourceRowIndex++;
+                    continue;
+                }
+                emptyAStreak = 0;
+                started = true;
+
+                setCellValue(targetSheet, targetRowIndex, 0, aValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 1, bValue, leftStyle);
+                setCellValue(targetSheet, targetRowIndex, 2, "", centerStyle);
+
+                targetRowIndex++;
+                sourceRowIndex++;
+            }
+        } catch (Exception ex) {
+            // ignore
+        }
+    }
+
 
     private static boolean isVentilationMergedRow(CellRangeAddress region, int rowIndex) {
         return region != null
@@ -424,6 +504,24 @@ public final class PhysicalFactorsMapExporter {
 
     private static CellStyle createMicroclimateDataStyle(Workbook workbook,
                                                          org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 10);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setWrapText(true);
+        style.setAlignment(alignment);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        style.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        return style;
+    }
+
+    private static CellStyle createMedDataStyle(Workbook workbook,
+                                                org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
         Font font = workbook.createFont();
         font.setFontName("Arial");
         font.setFontHeightInPoints((short) 10);
@@ -1665,6 +1763,13 @@ public final class PhysicalFactorsMapExporter {
         }
         Cell cell = row.getCell(colIndex);
         return formatCellValue(cell, formatter, evaluator);
+    }
+
+    private static Sheet findSheetWithName(Workbook workbook, String name) {
+        if (workbook == null || name == null) {
+            return null;
+        }
+        return workbook.getSheet(name);
     }
 
     private static String formatCellValue(Cell cell,
