@@ -1,15 +1,6 @@
 package ru.citlab24.protokol.protocolmap;
 
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.Header;
-import org.apache.poi.ss.usermodel.PrintSetup;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -250,94 +241,122 @@ public final class PhysicalFactorsMapExporter {
         }
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+
             Sheet sourceSheet = findSheetWithKeyword(sourceWorkbook, "вентиляция");
             if (sourceSheet == null) {
                 return;
             }
+
             DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
+
             CellStyle centerStyle = createVentilationDataStyle(targetWorkbook,
                     org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
             CellStyle leftStyle = createVentilationDataStyle(targetWorkbook,
                     org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
             CellStyle mergedRowStyle = createVentilationDataStyle(targetWorkbook,
                     org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+
             java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
 
+            // ВАЖНО: у тебя VENTILATION_SOURCE_START_ROW = 4 => это POI-индекс строки (0-based),
+            // то есть Excel-строка 5. (Excel-строка 4 — оглавление — пропускаем)
             int sourceRowIndex = VENTILATION_SOURCE_START_ROW;
             int targetRowIndex = VENTILATION_TARGET_START_ROW;
             int lastRow = sourceSheet.getLastRowNum();
 
+            boolean started = false;
+            int emptyAStreak = 0;
+
             while (sourceRowIndex <= lastRow) {
-                CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
-                if (isVentilationMergedRow(mergedRow, sourceRowIndex)) {
-                    String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
-                    if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
+
+                String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+
+                // условие завершения: после того как начали, если подряд много пустых A — таблица закончилась
+                if (normalizeText(aValue).isBlank()) {
+                    emptyAStreak++;
+                    if (started && emptyAStreak >= 20) {
                         break;
                     }
-                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex,
-                            0, VENTILATION_LAST_COL, text, mergedRowStyle);
-                    targetRowIndex++;
+                } else {
+                    emptyAStreak = 0;
+                }
+
+                // 1) merged-строка (этаж) — переносим целиком
+                CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
+                if (isVentilationMergedRow(mergedRow, sourceRowIndex)) {
+                    String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                    if (!text.isBlank()) {
+                        mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex,
+                                0, VENTILATION_LAST_COL, text, mergedRowStyle);
+                        targetRowIndex++;
+                        started = true;
+                    }
                     sourceRowIndex++;
                     continue;
                 }
 
-                if (!hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
-                    break;
-                }
-
-                String firstValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
-                if (!startsWithDigit(firstValue)) {
+                // 2) обычная строка: число в A
+                if (!startsWithDigit(aValue)) {
                     sourceRowIndex++;
                     continue;
                 }
 
-                String placeValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter);
-                String volumeValue = readMergedCellValue(sourceSheet, sourceRowIndex, 8, formatter);
+                // C (карта) = C (протокол)
+                String placeValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter, evaluator);
+
+                // I (карта) = I (протокол), если пусто => "-"
+                String volumeValue = readMergedCellValue(sourceSheet, sourceRowIndex, 8, formatter, evaluator);
                 String normalizedVolume = normalizeText(volumeValue);
                 if (normalizedVolume.isBlank() || "-".equals(normalizedVolume)) {
                     volumeValue = "-";
                 }
+
+                // J (карта): если I="-", то J="-", иначе J пусто
                 String exchangeValue = "-".equals(volumeValue) ? "-" : "";
 
-                setCellValue(targetSheet, targetRowIndex, 0, firstValue, centerStyle);
-                setCellValue(targetSheet, targetRowIndex, 1, "-", centerStyle);
-                setCellValue(targetSheet, targetRowIndex, 2, placeValue, leftStyle);
-                setCellValue(targetSheet, targetRowIndex, 3, "", centerStyle);
-                setCellValue(targetSheet, targetRowIndex, 4, "±", centerStyle);
-                setCellValue(targetSheet, targetRowIndex, 5, "", centerStyle);
-                setCellValue(targetSheet, targetRowIndex, 6, "", centerStyle);
-                setCellValue(targetSheet, targetRowIndex, 7, "", centerStyle);
-                setCellValue(targetSheet, targetRowIndex, 8, volumeValue, centerStyle);
-                setCellValue(targetSheet, targetRowIndex, 9, exchangeValue, centerStyle);
+                // A..J по твоей логике
+                setCellValue(targetSheet, targetRowIndex, 0, aValue, centerStyle);         // A
+                setCellValue(targetSheet, targetRowIndex, 1, "-", centerStyle);           // B
+                setCellValue(targetSheet, targetRowIndex, 2, placeValue, leftStyle);      // C
+                setCellValue(targetSheet, targetRowIndex, 3, "", centerStyle);            // D
+                setCellValue(targetSheet, targetRowIndex, 4, "±", centerStyle);           // E
+                setCellValue(targetSheet, targetRowIndex, 5, "", centerStyle);            // F
+                setCellValue(targetSheet, targetRowIndex, 6, "", centerStyle);            // G
+                setCellValue(targetSheet, targetRowIndex, 7, "", centerStyle);            // H
+                setCellValue(targetSheet, targetRowIndex, 8, volumeValue, centerStyle);   // I
+                setCellValue(targetSheet, targetRowIndex, 9, exchangeValue, centerStyle); // J
 
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 0,
-                        true, true, true, true);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 1,
-                        true, true, true, true);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 2,
-                        true, true, true, true);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 3,
-                        true, true, true, false);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 4,
-                        true, true, false, false);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 5,
-                        true, true, false, true);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 6,
-                        true, true, true, true);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 7,
-                        true, true, true, true);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 8,
-                        true, true, true, true);
-                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 9,
-                        true, true, true, true);
+                // Грани:
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 0, true, true, true, true); // A
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 1, true, true, true, true); // B
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 2, true, true, true, true); // C
+
+                // D: слева/сверху/снизу, справа НЕТ
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 3, true, true, true, false);
+
+                // E: только сверху/снизу
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 4, true, true, false, false);
+
+                // F: сверху/снизу/справа, слева НЕТ
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 5, true, true, false, true);
+
+                // G/H/I/J: со всех сторон
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 6, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 7, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 8, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 9, true, true, true, true);
 
                 targetRowIndex++;
                 sourceRowIndex++;
+                started = true;
             }
+
         } catch (Exception ex) {
             // ignore
         }
     }
+
 
     private static boolean isVentilationMergedRow(CellRangeAddress region, int rowIndex) {
         return region != null
@@ -389,6 +408,7 @@ public final class PhysicalFactorsMapExporter {
         }
         return false;
     }
+
 
     private static String readCellValue(Sheet sheet, int rowIndex, int colIndex, DataFormatter formatter) {
         if (sheet == null) {
@@ -1621,6 +1641,47 @@ public final class PhysicalFactorsMapExporter {
         Cell cell = row.getCell(colIndex);
         return normalizeText(cell == null ? "" : formatter.formatCellValue(cell));
     }
+    private static String readMergedCellValue(Sheet sheet,
+                                              int rowIndex,
+                                              int colIndex,
+                                              DataFormatter formatter,
+                                              FormulaEvaluator evaluator) {
+        if (sheet == null) {
+            return "";
+        }
+        for (CellRangeAddress range : sheet.getMergedRegions()) {
+            if (range.isInRange(rowIndex, colIndex)) {
+                Row row = sheet.getRow(range.getFirstRow());
+                if (row == null) {
+                    return "";
+                }
+                Cell cell = row.getCell(range.getFirstColumn());
+                return formatCellValue(cell, formatter, evaluator);
+            }
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return "";
+        }
+        Cell cell = row.getCell(colIndex);
+        return formatCellValue(cell, formatter, evaluator);
+    }
+
+    private static String formatCellValue(Cell cell,
+                                          DataFormatter formatter,
+                                          FormulaEvaluator evaluator) {
+        if (cell == null) {
+            return "";
+        }
+        try {
+            String raw = (evaluator == null)
+                    ? formatter.formatCellValue(cell)
+                    : formatter.formatCellValue(cell, evaluator);
+            return normalizeText(raw);
+        } catch (Exception ex) {
+            return normalizeText(formatter.formatCellValue(cell));
+        }
+    }
 
     private static String findMeasurementMethods(Sheet sheet) {
         if (sheet == null) {
@@ -1974,4 +2035,21 @@ public final class PhysicalFactorsMapExporter {
             this.serialNumber = safe(serialNumber);
         }
     }
+    private static boolean hasRowContentIncludingMerged(Sheet sheet,
+                                                        int rowIndex,
+                                                        int firstCol,
+                                                        int lastCol,
+                                                        DataFormatter formatter) {
+        if (sheet == null) {
+            return false;
+        }
+        for (int c = firstCol; c <= lastCol; c++) {
+            String v = readMergedCellValue(sheet, rowIndex, c, formatter);
+            if (!normalizeText(v).isBlank()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 }
