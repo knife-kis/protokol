@@ -93,6 +93,8 @@ final class ProtocolIssuanceSheetExporter {
             setTableCellText(table.getRow(1).getCell(3), customerName);
             setTableCellText(table.getRow(1).getCell(4), applicationNumber);
 
+            addIssuanceNotes(document);
+
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 document.write(out);
             }
@@ -133,6 +135,24 @@ final class ProtocolIssuanceSheetExporter {
         XWPFParagraph paragraph = cell.addParagraph();
         XWPFRun run = paragraph.createRun();
         run.setText(text != null ? text : "");
+        run.setFontFamily(FONT_NAME);
+        run.setFontSize(FONT_SIZE);
+    }
+
+    private static void addIssuanceNotes(XWPFDocument document) {
+        document.createParagraph();
+
+        addParagraphText(document, "Отметка о выдаче Заказчику: на руки");
+        addParagraphText(document, "Подпись Заказчика о получении и дата подписи:");
+        addParagraphText(document, "_______________________________________________________________________________");
+        document.createParagraph();
+        addParagraphText(document, "Примечание: ___________________________________________________________________");
+    }
+
+    private static void addParagraphText(XWPFDocument document, String text) {
+        XWPFParagraph paragraph = document.createParagraph();
+        XWPFRun run = paragraph.createRun();
+        run.setText(text);
         run.setFontFamily(FONT_NAME);
         run.setFontSize(FONT_SIZE);
     }
