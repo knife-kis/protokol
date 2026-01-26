@@ -283,7 +283,7 @@ final class EquipmentIssuanceSheetExporter {
 
         CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
         tblW.setType(STTblWidth.DXA);
-        tblW.setW(BigInteger.valueOf(9000));
+        tblW.setW(BigInteger.valueOf(9900));
 
         CTTblLayoutType layout = pr.isSetTblLayout() ? pr.getTblLayout() : pr.addNewTblLayout();
         layout.setType(STTblLayoutType.FIXED);
@@ -297,7 +297,7 @@ final class EquipmentIssuanceSheetExporter {
             }
         }
 
-        int[] widths = {1800, 900, 2700, 2700, 900};
+        int[] widths = {1800, 1800, 2700, 2700, 900};
         for (int width : widths) {
             grid.addNewGridCol().setW(BigInteger.valueOf(width));
         }
