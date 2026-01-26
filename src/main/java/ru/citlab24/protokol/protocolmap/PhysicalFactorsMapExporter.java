@@ -409,6 +409,7 @@ public final class PhysicalFactorsMapExporter {
             int lastRow = sourceSheet.getLastRowNum();
             int emptyAStreak = 0;
             boolean started = false;
+            float dataRowHeight = targetSheet.getDefaultRowHeightInPoints() * 3f;
 
             while (sourceRowIndex <= lastRow) {
                 String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
@@ -425,6 +426,7 @@ public final class PhysicalFactorsMapExporter {
                 emptyAStreak = 0;
                 started = true;
 
+                ensureRow(targetSheet, targetRowIndex).setHeightInPoints(dataRowHeight);
                 setCellValue(targetSheet, targetRowIndex, 0, aValue, centerStyle);
                 setCellValue(targetSheet, targetRowIndex, 1, bValue, leftStyle);
                 setCellValue(targetSheet, targetRowIndex, 2, "", centerStyle);
