@@ -26,6 +26,7 @@ public final class PhysicalFactorsMapExporter {
     private static final int[] MICROCLIMATE_TOP_BOTTOM_COLUMNS = {3, 5, 7, 9, 10, 12};
     private static final int MICROCLIMATE_AIR_SPEED_START_COL = 13;
     private static final int MICROCLIMATE_AIR_SPEED_END_COL = 15;
+    private static final int MED2_SOURCE_START_ROW = 5;
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int VENTILATION_TARGET_START_ROW = 3;
     private static final int VENTILATION_LAST_COL = 9;
@@ -46,6 +47,7 @@ public final class PhysicalFactorsMapExporter {
         java.util.List<InstrumentData> instruments = resolveMeasurementInstruments(sourceFile);
         boolean hasMicroclimateSheet = hasSheetWithPrefix(sourceFile, "Микроклимат");
         boolean hasMedSheet = hasSheetWithName(sourceFile, "МЭД");
+        boolean hasMed2Sheet = hasSheetWithName(sourceFile, "МЭД (2)");
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -60,16 +62,25 @@ public final class PhysicalFactorsMapExporter {
             Sheet resultsSheet = workbook.getSheet("Микроклимат");
             int medDataStartRow = -1;
             Sheet medSheet = null;
+            int med2DataStartRow = -1;
+            Sheet med2Sheet = null;
             Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
             if (hasMedSheet) {
                 medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
                 medSheet = workbook.getSheet("МЭД");
+            }
+            if (hasMed2Sheet) {
+                med2DataStartRow = Med2MapTabBuilder.createMed2ResultsSheet(workbook);
+                med2Sheet = workbook.getSheet("МЭД (2)");
             }
             if (resultsSheet != null) {
                 applyHeaders(resultsSheet, registrationNumber);
             }
             if (medSheet != null) {
                 applyHeaders(medSheet, registrationNumber);
+            }
+            if (med2Sheet != null) {
+                applyHeaders(med2Sheet, registrationNumber);
             }
             if (ventilationSheet != null) {
                 applyHeaders(ventilationSheet, registrationNumber);
@@ -79,6 +90,9 @@ public final class PhysicalFactorsMapExporter {
             }
             if (hasMedSheet) {
                 fillMedResults(sourceFile, workbook, medSheet, medDataStartRow);
+            }
+            if (hasMed2Sheet) {
+                fillMed2Results(sourceFile, workbook, med2Sheet, med2DataStartRow);
             }
             fillVentilationResults(sourceFile, workbook, ventilationSheet);
 
@@ -439,6 +453,89 @@ public final class PhysicalFactorsMapExporter {
         }
     }
 
+    private static void fillMed2Results(File sourceFile,
+                                        Workbook targetWorkbook,
+                                        Sheet targetSheet,
+                                        int targetStartRow) {
+        if (sourceFile == null || !sourceFile.exists() || targetSheet == null || targetStartRow < 0) {
+            return;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            Sheet sourceSheet = findSheetWithName(sourceWorkbook, "МЭД (2)");
+            if (sourceSheet == null) {
+                return;
+            }
+
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
+
+            CellStyle centerStyle = createMed2BaseStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+            CellStyle leftStyle = createMed2BaseStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+
+            java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
+
+            int sourceRowIndex = MED2_SOURCE_START_ROW;
+            int targetRowIndex = targetStartRow;
+            int lastRow = sourceSheet.getLastRowNum();
+            int emptyAStreak = 0;
+            boolean started = false;
+
+            while (sourceRowIndex <= lastRow) {
+                CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
+                if (isMed2MergedRow(mergedRow, sourceRowIndex)) {
+                    String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                    if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
+                        if (started) {
+                            break;
+                        }
+                        sourceRowIndex++;
+                        continue;
+                    }
+                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex, 0, 4, text, centerStyle);
+                    targetRowIndex++;
+                    sourceRowIndex++;
+                    started = true;
+                    emptyAStreak = 0;
+                    continue;
+                }
+
+                String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                if (normalizeText(aValue).isBlank()) {
+                    emptyAStreak++;
+                    if (started && emptyAStreak >= 10) {
+                        break;
+                    }
+                    sourceRowIndex++;
+                    continue;
+                }
+                emptyAStreak = 0;
+                started = true;
+
+                String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 1, formatter, evaluator);
+
+                setCellValue(targetSheet, targetRowIndex, 0, aValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 1, bValue, leftStyle);
+                setCellValue(targetSheet, targetRowIndex, 2, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 3, "±", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 4, "", centerStyle);
+
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 0, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 1, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 2, true, true, true, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 3, true, true, false, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 4, true, true, false, true);
+
+                targetRowIndex++;
+                sourceRowIndex++;
+            }
+        } catch (Exception ex) {
+            // ignore
+        }
+    }
+
 
     private static boolean isVentilationMergedRow(CellRangeAddress region, int rowIndex) {
         return region != null
@@ -446,6 +543,14 @@ public final class PhysicalFactorsMapExporter {
                 && region.getLastRow() == rowIndex
                 && region.getFirstColumn() == 0
                 && region.getLastColumn() >= VENTILATION_LAST_COL;
+    }
+
+    private static boolean isMed2MergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= 4;
     }
 
     private static boolean startsWithDigit(String value) {
@@ -542,6 +647,20 @@ public final class PhysicalFactorsMapExporter {
 
     private static CellStyle createVentilationDataStyle(Workbook workbook,
                                                         org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 10);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setWrapText(true);
+        style.setAlignment(alignment);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        return style;
+    }
+
+    private static CellStyle createMed2BaseStyle(Workbook workbook,
+                                                 org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
         Font font = workbook.createFont();
         font.setFontName("Arial");
         font.setFontHeightInPoints((short) 10);
