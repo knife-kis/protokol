@@ -6,6 +6,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -15,6 +16,25 @@ import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
+import org.apache.poi.xwpf.usermodel.XWPFHeader;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJcTable;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblWidth;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STFldCharType;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STJcTable;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
+import org.apache.xmlbeans.impl.xb.xmlschema.SpaceAttribute;
+
+import java.math.BigInteger;
+
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -46,6 +66,10 @@ final class ProtocolIssuanceSheetExporter {
 
         try (XWPFDocument document = new XWPFDocument()) {
             setLandscapeOrientation(document);
+
+            // НОВОЕ: колонтитул как в шаблоне
+            applyStandardHeader(document);
+
             XWPFParagraph title = document.createParagraph();
             title.setAlignment(ParagraphAlignment.CENTER);
             XWPFRun titleRun = title.createRun();
@@ -87,7 +111,7 @@ final class ProtocolIssuanceSheetExporter {
         }
         pageSize.setOrient(STPageOrientation.LANDSCAPE);
         if (pageSize.isSetW() && pageSize.isSetH()) {
-            java.math.BigInteger width = pageSize.getW();
+            java.math.BigInteger width = (java.math.BigInteger) pageSize.getW();
             pageSize.setW(pageSize.getH());
             pageSize.setH(width);
         } else {
@@ -224,4 +248,162 @@ final class ProtocolIssuanceSheetExporter {
         }
         return normalized.replace(":", "").trim();
     }
+    private static void applyStandardHeader(XWPFDocument document) {
+        // Гарантируем секцию
+        CTSectPr sectPr = document.getDocument().getBody().getSectPr();
+        if (sectPr == null) {
+            sectPr = document.getDocument().getBody().addNewSectPr();
+        }
+
+        XWPFHeaderFooterPolicy policy = new XWPFHeaderFooterPolicy(document, sectPr);
+        XWPFHeader header = policy.createHeader(XWPFHeaderFooterPolicy.DEFAULT);
+
+        // В Word у header обычно есть 1 пустой параграф — оставляем его, как в шаблоне.
+        XWPFTable tbl = header.createTable(3, 3);
+        configureHeaderTableLikeTemplate(tbl);
+
+        // Тексты как в файле-шаблоне :contentReference[oaicite:1]{index=1}
+        String left = "Испытательная лаборатория ООО «ЦИТ»";
+        String center = "Лист выдачи протоколов Ф17 ДП ИЛ 2-2023";
+
+        setHeaderCellText(tbl.getRow(0).getCell(0), left);
+        setHeaderCellText(tbl.getRow(1).getCell(0), left);
+        setHeaderCellText(tbl.getRow(2).getCell(0), left);
+
+        setHeaderCellText(tbl.getRow(0).getCell(1), center);
+        setHeaderCellText(tbl.getRow(1).getCell(1), center);
+        setHeaderCellText(tbl.getRow(2).getCell(1), center);
+
+        setHeaderCellText(tbl.getRow(0).getCell(2), "Дата утверждения бланка формуляра: 01.01.2023г.");
+        setHeaderCellText(tbl.getRow(1).getCell(2), "Редакция № 1");
+        setHeaderCellPageCount(tbl.getRow(2).getCell(2));
+    }
+
+    private static void configureHeaderTableLikeTemplate(XWPFTable table) {
+        // Таблица 3×3, fixed layout, centered, borders single sz=4,
+        // ширина 9639 и gridCol: 2951 / 3140 / 3548.
+        CTTbl ct = table.getCTTbl();
+        CTTblPr pr = ct.getTblPr() != null ? ct.getTblPr() : ct.addNewTblPr();
+
+        CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
+        tblW.setType(STTblWidth.DXA);
+        tblW.setW(BigInteger.valueOf(9639));
+
+        // ВАЖНО: для таблицы это CTJcTable, НЕ CTJc
+        CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
+        jc.setVal(STJcTable.CENTER);
+
+        CTTblLayoutType layout = pr.isSetTblLayout() ? pr.getTblLayout() : pr.addNewTblLayout();
+        layout.setType(STTblLayoutType.FIXED);
+
+        CTTblBorders borders = pr.isSetTblBorders() ? pr.getTblBorders() : pr.addNewTblBorders();
+        setBorder(borders.isSetTop() ? borders.getTop() : borders.addNewTop());
+        setBorder(borders.isSetLeft() ? borders.getLeft() : borders.addNewLeft());
+        setBorder(borders.isSetBottom() ? borders.getBottom() : borders.addNewBottom());
+        setBorder(borders.isSetRight() ? borders.getRight() : borders.addNewRight());
+        setBorder(borders.isSetInsideH() ? borders.getInsideH() : borders.addNewInsideH());
+        setBorder(borders.isSetInsideV() ? borders.getInsideV() : borders.addNewInsideV());
+
+        // grid (без unsetTblGrid — его может не быть)
+        CTTblGrid grid = ct.getTblGrid();
+        if (grid == null) {
+            grid = ct.addNewTblGrid();
+        } else {
+            while (grid.sizeOfGridColArray() > 0) {
+                grid.removeGridCol(0);
+            }
+        }
+        grid.addNewGridCol().setW(BigInteger.valueOf(2951));
+        grid.addNewGridCol().setW(BigInteger.valueOf(3140));
+        grid.addNewGridCol().setW(BigInteger.valueOf(3548));
+
+        // ширины ячеек (для fixed layout)
+        setCellWidth(table, 0, 0, 2951);
+        setCellWidth(table, 1, 0, 2951);
+        setCellWidth(table, 2, 0, 2951);
+
+        setCellWidth(table, 0, 1, 3140);
+        setCellWidth(table, 1, 1, 3140);
+        setCellWidth(table, 2, 1, 3140);
+
+        setCellWidth(table, 0, 2, 3548);
+        setCellWidth(table, 1, 2, 3548);
+        setCellWidth(table, 2, 2, 3548);
+    }
+
+    private static void setBorder(CTBorder b) {
+        b.setVal(STBorder.SINGLE);
+        b.setSz(BigInteger.valueOf(4));
+        b.setSpace(BigInteger.ZERO);
+        b.setColor("auto");
+    }
+
+    private static void setCellWidth(XWPFTable table, int row, int col, int widthDxa) {
+        XWPFTableCell cell = table.getRow(row).getCell(col);
+        CTTcPr tcPr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
+        CTTblWidth w = tcPr.isSetTcW() ? tcPr.getTcW() : tcPr.addNewTcW();
+        w.setType(STTblWidth.DXA);
+        w.setW(BigInteger.valueOf(widthDxa));
+    }
+
+    private static void setHeaderCellText(XWPFTableCell cell, String text) {
+        cell.removeParagraph(0);
+        XWPFParagraph p = cell.addParagraph();
+        p.setAlignment(ParagraphAlignment.CENTER);
+
+        XWPFRun r = p.createRun();
+        r.setText(text != null ? text : "");
+        r.setFontFamily(FONT_NAME);
+        r.setFontSize(FONT_SIZE);
+    }
+
+    private static void setHeaderCellPageCount(XWPFTableCell cell) {
+        cell.removeParagraph(0);
+        XWPFParagraph p = cell.addParagraph();
+        p.setAlignment(ParagraphAlignment.CENTER);
+
+        XWPFRun r0 = p.createRun();
+        r0.setText("Количество страниц: ");
+        r0.setFontFamily(FONT_NAME);
+        r0.setFontSize(FONT_SIZE);
+
+        appendField(p, "PAGE");
+        XWPFRun rSep = p.createRun();
+        rSep.setText(" / ");
+        rSep.setFontFamily(FONT_NAME);
+        rSep.setFontSize(FONT_SIZE);
+
+        appendField(p, "NUMPAGES");
+    }
+
+    private static void appendField(XWPFParagraph p, String instr) {
+        XWPFRun rBegin = p.createRun();
+        rBegin.setFontFamily(FONT_NAME);
+        rBegin.setFontSize(FONT_SIZE);
+        rBegin.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
+
+        XWPFRun rInstr = p.createRun();
+        rInstr.setFontFamily(FONT_NAME);
+        rInstr.setFontSize(FONT_SIZE);
+        var ctText = rInstr.getCTR().addNewInstrText();
+        ctText.setStringValue(instr);
+        ctText.setSpace(SpaceAttribute.Space.PRESERVE);
+
+        XWPFRun rSep = p.createRun();
+        rSep.setFontFamily(FONT_NAME);
+        rSep.setFontSize(FONT_SIZE);
+        rSep.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
+
+        // плейсхолдер — Word при открытии обновит поле
+        XWPFRun rText = p.createRun();
+        rText.setFontFamily(FONT_NAME);
+        rText.setFontSize(FONT_SIZE);
+        rText.setText("1");
+
+        XWPFRun rEnd = p.createRun();
+        rEnd.setFontFamily(FONT_NAME);
+        rEnd.setFontSize(FONT_SIZE);
+        rEnd.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
+    }
+
 }
