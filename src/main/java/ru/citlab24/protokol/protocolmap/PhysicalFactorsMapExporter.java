@@ -32,6 +32,8 @@ public final class PhysicalFactorsMapExporter {
     private static final int EROA_RADON_LAST_COL = 5;
     private static final int ARTIFICIAL_LIGHTING_SOURCE_START_ROW = 7;
     private static final int ARTIFICIAL_LIGHTING_LAST_COL = 12;
+    private static final int STREET_LIGHTING_SOURCE_START_ROW = 7;
+    private static final int STREET_LIGHTING_LAST_COL = 5;
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int VENTILATION_TARGET_START_ROW = 3;
     private static final int VENTILATION_LAST_COL = 9;
@@ -56,6 +58,7 @@ public final class PhysicalFactorsMapExporter {
         boolean hasMed3Sheet = hasSheetWithName(sourceFile, "МЭД (3)");
         boolean hasEroaRadonSheet = hasSheetWithName(sourceFile, "ЭРОА радона");
         boolean hasArtificialLightingSheet = hasSheetWithName(sourceFile, "Иск освещение");
+        boolean hasStreetLightingSheet = hasSheetWithName(sourceFile, "Иск освещение (2)");
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -78,6 +81,8 @@ public final class PhysicalFactorsMapExporter {
             Sheet eroaRadonSheet = null;
             int artificialLightingDataStartRow = -1;
             Sheet artificialLightingSheet = null;
+            int streetLightingDataStartRow = -1;
+            Sheet streetLightingSheet = null;
             Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
             if (hasMedSheet) {
                 medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
@@ -100,6 +105,10 @@ public final class PhysicalFactorsMapExporter {
                         workbook);
                 artificialLightingSheet = workbook.getSheet("Иск освещение");
             }
+            if (hasStreetLightingSheet) {
+                streetLightingDataStartRow = StreetLightingMapTabBuilder.createStreetLightingResultsSheet(workbook);
+                streetLightingSheet = workbook.getSheet("Иск освещение (2)");
+            }
             if (resultsSheet != null) {
                 applyHeaders(resultsSheet, registrationNumber);
             }
@@ -117,6 +126,9 @@ public final class PhysicalFactorsMapExporter {
             }
             if (artificialLightingSheet != null) {
                 applyHeaders(artificialLightingSheet, registrationNumber);
+            }
+            if (streetLightingSheet != null) {
+                applyHeaders(streetLightingSheet, registrationNumber);
             }
             if (ventilationSheet != null) {
                 applyHeaders(ventilationSheet, registrationNumber);
@@ -139,6 +151,9 @@ public final class PhysicalFactorsMapExporter {
             if (hasArtificialLightingSheet) {
                 fillArtificialLightingResults(sourceFile, workbook, artificialLightingSheet,
                         artificialLightingDataStartRow);
+            }
+            if (hasStreetLightingSheet) {
+                fillStreetLightingResults(sourceFile, workbook, streetLightingSheet, streetLightingDataStartRow);
             }
             fillVentilationResults(sourceFile, workbook, ventilationSheet);
 
@@ -864,6 +879,83 @@ public final class PhysicalFactorsMapExporter {
             String rowInfo = sourceRowIndex >= 0 ? String.valueOf(sourceRowIndex + 1) : "неизвестно";
             String fileName = sourceFile != null ? sourceFile.getName() : "неизвестный файл";
             throw new IOException("Не удалось заполнить лист \"Иск освещение\" для файла "
+                    + fileName + " (строка " + rowInfo + ").", ex);
+        }
+    }
+
+    private static void fillStreetLightingResults(File sourceFile,
+                                                  Workbook targetWorkbook,
+                                                  Sheet targetSheet,
+                                                  int targetStartRow) throws IOException {
+        if (sourceFile == null || !sourceFile.exists() || targetSheet == null || targetStartRow < 0) {
+            return;
+        }
+        int sourceRowIndex = -1;
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            String sheetName = "Иск освещение (2)";
+            Sheet sourceSheet = findSheetWithName(sourceWorkbook, sheetName);
+            if (sourceSheet == null) {
+                return;
+            }
+
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
+
+            CellStyle centerStyle = createArtificialLightingBaseStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+            CellStyle leftStyle = createArtificialLightingBaseStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+
+            java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
+
+            sourceRowIndex = STREET_LIGHTING_SOURCE_START_ROW;
+            int targetRowIndex = targetStartRow;
+            int lastRow = sourceSheet.getLastRowNum();
+            int emptyAStreak = 0;
+            boolean started = false;
+
+            while (sourceRowIndex <= lastRow) {
+                String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                if (normalizeText(aValue).isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
+                    emptyAStreak++;
+                    if (started && emptyAStreak >= 10) {
+                        break;
+                    }
+                    sourceRowIndex++;
+                    continue;
+                }
+                if (normalizeText(aValue).isBlank()) {
+                    sourceRowIndex++;
+                    continue;
+                }
+                emptyAStreak = 0;
+                started = true;
+
+                String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter, evaluator);
+                String cValue = readMergedCellValue(sourceSheet, sourceRowIndex, 3, formatter, evaluator);
+
+                setCellValue(targetSheet, targetRowIndex, 0, aValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 1, bValue, leftStyle);
+                setCellValue(targetSheet, targetRowIndex, 2, cValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 3, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 4, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 5, "", centerStyle);
+
+                for (int col = 0; col <= STREET_LIGHTING_LAST_COL; col++) {
+                    applyBorderToCell(targetSheet, targetWorkbook, styleCache,
+                            targetRowIndex, col, true, true, true, true);
+                }
+
+                targetRowIndex++;
+                sourceRowIndex++;
+            }
+        } catch (IOException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            String rowInfo = sourceRowIndex >= 0 ? String.valueOf(sourceRowIndex + 1) : "неизвестно";
+            String fileName = sourceFile != null ? sourceFile.getName() : "неизвестный файл";
+            throw new IOException("Не удалось заполнить лист \"Иск освещение (2)\" для файла "
                     + fileName + " (строка " + rowInfo + ").", ex);
         }
     }
