@@ -140,17 +140,18 @@ public class ProtocolMapPanel extends JPanel {
                     if (files == null || files.isEmpty()) {
                         return false;
                     }
+
                     File source = files.get(0);
                     File generated = null;
 
                     if (generator != null) {
                         try {
                             generated = generator.generate(source);
-                        } catch (IOException ex) {
-                            // ВАЖНО: показываем диалог относительно панели, а не TransferHandler
+                        } catch (Exception ex) { // ВАЖНО: ловим ВСЁ, не только IOException
+                            ex.printStackTrace();
                             JOptionPane.showMessageDialog(
                                     DropZonePanel.this,
-                                    "Не удалось сформировать карту: " + ex.getMessage(),
+                                    "Не удалось сформировать карту:\n" + ex.getClass().getSimpleName() + ": " + ex.getMessage(),
                                     "Ошибка",
                                     JOptionPane.ERROR_MESSAGE
                             );
@@ -159,11 +160,18 @@ public class ProtocolMapPanel extends JPanel {
 
                     showGeneratedMap(source, generated);
                     return true;
+
                 } catch (Exception ex) {
+                    ex.printStackTrace();
+                    JOptionPane.showMessageDialog(
+                            DropZonePanel.this,
+                            "Ошибка при обработке файла:\n" + ex.getClass().getSimpleName() + ": " + ex.getMessage(),
+                            "Ошибка",
+                            JOptionPane.ERROR_MESSAGE
+                    );
                     return false;
                 }
             }
-
         }
     }
 }

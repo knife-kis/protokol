@@ -142,6 +142,12 @@ final class ArtificialLightingMapTabBuilder {
     }
 
     private static void mergeRegion(Sheet sheet, int rowStart, int rowEnd, int colStart, int colEnd) {
+        // POI запрещает merged-region из одной ячейки (например A7).
+        // Для 1×1 просто НЕ делаем merge. Стили/границы уже проставлены выше.
+        if (rowStart == rowEnd && colStart == colEnd) {
+            return;
+        }
+
         CellRangeAddress region = new CellRangeAddress(rowStart, rowEnd, colStart, colEnd);
         sheet.addMergedRegion(region);
         RegionUtil.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
@@ -150,14 +156,20 @@ final class ArtificialLightingMapTabBuilder {
         RegionUtil.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
     }
 
+
     private static void mergeRegionWithoutBorders(Sheet sheet,
                                                   int rowStart,
                                                   int rowEnd,
                                                   int colStart,
                                                   int colEnd) {
+        // На всякий случай тоже не мерджим 1×1.
+        if (rowStart == rowEnd && colStart == colEnd) {
+            return;
+        }
         CellRangeAddress region = new CellRangeAddress(rowStart, rowEnd, colStart, colEnd);
         sheet.addMergedRegion(region);
     }
+
 
     private static void applyBorderToCell(Row row, int colIndex, CellStyle style) {
         Cell cell = row.getCell(colIndex);
