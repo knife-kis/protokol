@@ -15,6 +15,7 @@ import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
 import org.apache.poi.xwpf.usermodel.XWPFHeader;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
@@ -58,7 +59,7 @@ final class ProtocolIssuanceSheetExporter {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
-        File targetFile = new File(mapFile.getParentFile(), ISSUANCE_SHEET_NAME);
+        File targetFile = resolveIssuanceSheetFile(mapFile);
         String protocolNumber = resolveProtocolNumberFromMap(mapFile);
         String protocolDate = resolveProtocolDateFromSource(sourceFile);
         String customerName = resolveCustomerNameFromMap(mapFile);
@@ -77,7 +78,7 @@ final class ProtocolIssuanceSheetExporter {
             titleRun.setFontFamily(FONT_NAME);
             titleRun.setFontSize(FONT_SIZE);
 
-            XWPFTable table = document.createTable(2, 5);
+            XWPFTable table = document.createTable(4, 5);
             setTableCellText(table.getRow(0).getCell(0), "№ п/п");
             setTableCellText(table.getRow(0).getCell(1), "Номер протокола");
             setTableCellText(table.getRow(0).getCell(2), "Дата протокола");
@@ -91,6 +92,15 @@ final class ProtocolIssuanceSheetExporter {
             setTableCellText(table.getRow(1).getCell(2), protocolDate);
             setTableCellText(table.getRow(1).getCell(3), customerName);
             setTableCellText(table.getRow(1).getCell(4), applicationNumber);
+            setTableCellText(table.getRow(2).getCell(2), "");
+            setTableCellText(table.getRow(2).getCell(3), "");
+            setTableCellText(table.getRow(2).getCell(4), "");
+            setTableCellText(table.getRow(3).getCell(2), "");
+            setTableCellText(table.getRow(3).getCell(3), "");
+            setTableCellText(table.getRow(3).getCell(4), "");
+
+            mergeCellsVertically(table, 0, 1, 3);
+            mergeCellsVertically(table, 1, 1, 3);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 document.write(out);
@@ -120,6 +130,13 @@ final class ProtocolIssuanceSheetExporter {
         }
     }
 
+    static File resolveIssuanceSheetFile(File mapFile) {
+        if (mapFile == null) {
+            return null;
+        }
+        return new File(mapFile.getParentFile(), ISSUANCE_SHEET_NAME);
+    }
+
     private static void setTableCellText(XWPFTableCell cell, String text) {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
@@ -127,6 +144,23 @@ final class ProtocolIssuanceSheetExporter {
         run.setText(text != null ? text : "");
         run.setFontFamily(FONT_NAME);
         run.setFontSize(FONT_SIZE);
+    }
+
+    private static void mergeCellsVertically(XWPFTable table, int col, int fromRow, int toRow) {
+        for (int rowIndex = fromRow; rowIndex <= toRow; rowIndex++) {
+            XWPFTableCell cell = table.getRow(rowIndex).getCell(col);
+            if (cell == null) {
+                continue;
+            }
+            if (cell.getCTTc().getTcPr() == null) {
+                cell.getCTTc().addNewTcPr();
+            }
+            if (rowIndex == fromRow) {
+                cell.getCTTc().getTcPr().addNewVMerge().setVal(STMerge.RESTART);
+            } else {
+                cell.getCTTc().getTcPr().addNewVMerge().setVal(STMerge.CONTINUE);
+            }
+        }
     }
 
     private static String resolveProtocolNumberFromMap(File mapFile) {

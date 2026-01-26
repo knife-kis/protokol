@@ -88,6 +88,10 @@ public class ProtocolMapPanel extends JPanel {
             listModel.addElement("Исходный файл: " + sourceFile.getName());
             String mapName = generatedFile != null ? generatedFile.getName() : buildMapName(sourceFile.getName());
             listModel.addElement("Сформированная карта: " + mapName);
+            File issuanceSheet = ProtocolIssuanceSheetExporter.resolveIssuanceSheetFile(generatedFile);
+            if (issuanceSheet != null && issuanceSheet.exists()) {
+                listModel.addElement("Сформирован лист выдачи протоколов: " + issuanceSheet.getName());
+            }
             generatedMapFile = generatedFile;
             downloadButton.setEnabled(generatedMapFile != null && generatedMapFile.exists());
         }
