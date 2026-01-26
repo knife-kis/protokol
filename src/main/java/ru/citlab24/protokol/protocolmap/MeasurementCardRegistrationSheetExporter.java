@@ -113,7 +113,7 @@ final class MeasurementCardRegistrationSheetExporter {
         }
         pageSize.setOrient(STPageOrientation.LANDSCAPE);
         if (pageSize.isSetW() && pageSize.isSetH()) {
-            BigInteger width = pageSize.getW();
+            BigInteger width = (BigInteger) pageSize.getW();
             pageSize.setW(pageSize.getH());
             pageSize.setH(width);
         } else {
