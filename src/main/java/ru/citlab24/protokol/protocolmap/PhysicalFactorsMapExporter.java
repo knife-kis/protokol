@@ -4,7 +4,6 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -38,6 +37,7 @@ public final class PhysicalFactorsMapExporter {
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int VENTILATION_TARGET_START_ROW = 3;
     private static final int VENTILATION_LAST_COL = 9;
+    private static final String PRIMARY_FOLDER_NAME = "первичка";
 
     private PhysicalFactorsMapExporter() {
     }
@@ -176,6 +176,8 @@ public final class PhysicalFactorsMapExporter {
             }
         }
 
+        ProtocolIssuanceSheetExporter.generate(sourceFile, targetFile);
+
         return targetFile;
     }
 
@@ -253,7 +255,20 @@ public final class PhysicalFactorsMapExporter {
         String name = sourceFile.getName();
         int dotIndex = name.lastIndexOf('.');
         String baseName = dotIndex > 0 ? name.substring(0, dotIndex) : name;
-        return new File(sourceFile.getParentFile(), baseName + "_карта.xlsx");
+        File primaryFolder = ensurePrimaryFolder(sourceFile);
+        return new File(primaryFolder, baseName + "_карта.xlsx");
+    }
+
+    private static File ensurePrimaryFolder(File sourceFile) {
+        File parent = sourceFile != null ? sourceFile.getParentFile() : null;
+        if (parent == null) {
+            parent = new File(".");
+        }
+        File primaryFolder = new File(parent, PRIMARY_FOLDER_NAME);
+        if (!primaryFolder.exists()) {
+            primaryFolder.mkdirs();
+        }
+        return primaryFolder;
     }
 
     private static void fillMicroclimateResults(File sourceFile,
