@@ -407,7 +407,7 @@ public final class MicroclimateExcelExporter {
         Header header = sheet.getHeader();
         header.setLeft(font + "Испытательная лаборатория\nООО «ЦИТ»");
         header.setCenter(font + "Карта замеров № " + registrationNumber + "\nФ8 РИ ИЛ 2-2023");
-        header.setRight(font + "\nКоличество страниц: &[Страница] / &[Страниц] \n ");
+        header.setRight(font + "\nКоличество страниц: &P / &N\n ");
     }
 
     private static String resolveRegistrationNumber(Building building) {
