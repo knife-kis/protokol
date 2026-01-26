@@ -92,6 +92,10 @@ public class ProtocolMapPanel extends JPanel {
             if (issuanceSheet != null && issuanceSheet.exists()) {
                 listModel.addElement("Сформирован лист выдачи протоколов: " + issuanceSheet.getName());
             }
+            File registrationSheet = MeasurementCardRegistrationSheetExporter.resolveRegistrationSheetFile(generatedFile);
+            if (registrationSheet != null && registrationSheet.exists()) {
+                listModel.addElement("Сформирован лист регистрации карт замеров: " + registrationSheet.getName());
+            }
             generatedMapFile = generatedFile;
             downloadButton.setEnabled(generatedMapFile != null && generatedMapFile.exists());
         }

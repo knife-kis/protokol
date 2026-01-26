@@ -177,6 +177,7 @@ public final class PhysicalFactorsMapExporter {
         }
 
         ProtocolIssuanceSheetExporter.generate(sourceFile, targetFile);
+        MeasurementCardRegistrationSheetExporter.generate(sourceFile, targetFile);
 
         return targetFile;
     }
