@@ -34,6 +34,7 @@ public final class PhysicalFactorsMapExporter {
     private static final int ARTIFICIAL_LIGHTING_LAST_COL = 12;
     private static final int STREET_LIGHTING_SOURCE_START_ROW = 7;
     private static final int STREET_LIGHTING_LAST_COL = 5;
+    private static final int KEO_SOURCE_START_ROW = 5;
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int VENTILATION_TARGET_START_ROW = 3;
     private static final int VENTILATION_LAST_COL = 9;
@@ -59,6 +60,7 @@ public final class PhysicalFactorsMapExporter {
         boolean hasEroaRadonSheet = hasSheetWithName(sourceFile, "ЭРОА радона");
         boolean hasArtificialLightingSheet = hasSheetWithName(sourceFile, "Иск освещение");
         boolean hasStreetLightingSheet = hasSheetWithName(sourceFile, "Иск освещение (2)");
+        boolean hasKeoSheet = hasSheetWithName(sourceFile, "КЕО");
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -83,6 +85,8 @@ public final class PhysicalFactorsMapExporter {
             Sheet artificialLightingSheet = null;
             int streetLightingDataStartRow = -1;
             Sheet streetLightingSheet = null;
+            int keoDataStartRow = -1;
+            Sheet keoSheet = null;
             Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
             if (hasMedSheet) {
                 medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
@@ -109,6 +113,10 @@ public final class PhysicalFactorsMapExporter {
                 streetLightingDataStartRow = StreetLightingMapTabBuilder.createStreetLightingResultsSheet(workbook);
                 streetLightingSheet = workbook.getSheet("Иск освещение (2)");
             }
+            if (hasKeoSheet) {
+                keoDataStartRow = KeoMapTabBuilder.createKeoResultsSheet(workbook);
+                keoSheet = workbook.getSheet("КЕО");
+            }
             if (resultsSheet != null) {
                 applyHeaders(resultsSheet, registrationNumber);
             }
@@ -129,6 +137,9 @@ public final class PhysicalFactorsMapExporter {
             }
             if (streetLightingSheet != null) {
                 applyHeaders(streetLightingSheet, registrationNumber);
+            }
+            if (keoSheet != null) {
+                applyHeaders(keoSheet, registrationNumber);
             }
             if (ventilationSheet != null) {
                 applyHeaders(ventilationSheet, registrationNumber);
@@ -154,6 +165,9 @@ public final class PhysicalFactorsMapExporter {
             }
             if (hasStreetLightingSheet) {
                 fillStreetLightingResults(sourceFile, workbook, streetLightingSheet, streetLightingDataStartRow);
+            }
+            if (hasKeoSheet) {
+                fillKeoResults(sourceFile, workbook, keoSheet, keoDataStartRow);
             }
             fillVentilationResults(sourceFile, workbook, ventilationSheet);
 
@@ -960,6 +974,119 @@ public final class PhysicalFactorsMapExporter {
         }
     }
 
+    private static void fillKeoResults(File sourceFile,
+                                       Workbook targetWorkbook,
+                                       Sheet targetSheet,
+                                       int targetStartRow) throws IOException {
+        if (sourceFile == null || !sourceFile.exists() || targetSheet == null || targetStartRow < 0) {
+            return;
+        }
+        int sourceRowIndex = -1;
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            String sheetName = "КЕО";
+            Sheet sourceSheet = findSheetWithName(sourceWorkbook, sheetName);
+            if (sourceSheet == null) {
+                return;
+            }
+
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
+
+            CellStyle centerStyle = createArtificialLightingBaseStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+            CellStyle leftStyle = createArtificialLightingBaseStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+
+            java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
+
+            sourceRowIndex = KEO_SOURCE_START_ROW;
+            int targetRowIndex = targetStartRow;
+            int lastRow = sourceSheet.getLastRowNum();
+            int emptyAStreak = 0;
+            boolean started = false;
+            int blockOffset = 0;
+
+            while (sourceRowIndex <= lastRow) {
+                String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                if (normalizeText(aValue).isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
+                    emptyAStreak++;
+                    if (started && emptyAStreak >= 10) {
+                        break;
+                    }
+                    sourceRowIndex++;
+                    continue;
+                }
+                if (normalizeText(aValue).isBlank()) {
+                    sourceRowIndex++;
+                    continue;
+                }
+                if (startsWithLetter(aValue)) {
+                    break;
+                }
+                emptyAStreak = 0;
+                started = true;
+
+                String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 1, formatter, evaluator);
+                String cValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter, evaluator);
+                String rValue = readMergedCellValue(sourceSheet, sourceRowIndex, 17, formatter, evaluator);
+
+                setCellValue(targetSheet, targetRowIndex, 0, aValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 2, cValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 3, "-", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 4, "-", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 5, "-", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 6, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 7, "±", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 8, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 9, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 10, "±", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 11, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 12, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 13, "±", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 14, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 15, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 16,
+                        "±".equals(normalizeText(rValue)) ? "±" : "-", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 17, "", centerStyle);
+
+                if (blockOffset == 0) {
+                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex + 4,
+                            1, 1, bValue, leftStyle);
+                }
+
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 0, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 2, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 3, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 4, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 5, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 6, true, true, true, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 7, true, true, false, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 8, true, true, false, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 9, true, true, true, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 10, true, true, false, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 11, true, true, false, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 12, true, true, true, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 13, true, true, false, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 14, true, true, false, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 15, true, true, true, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 16, true, true, false, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 17, true, true, false, true);
+
+                targetRowIndex++;
+                sourceRowIndex++;
+                blockOffset = (blockOffset + 1) % 5;
+            }
+        } catch (IOException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            String rowInfo = sourceRowIndex >= 0 ? String.valueOf(sourceRowIndex + 1) : "неизвестно";
+            String fileName = sourceFile != null ? sourceFile.getName() : "неизвестный файл";
+            throw new IOException("Не удалось заполнить лист \"КЕО\" для файла "
+                    + fileName + " (строка " + rowInfo + ").", ex);
+        }
+    }
+
 
     private static boolean isVentilationMergedRow(CellRangeAddress region, int rowIndex) {
         return region != null
@@ -999,6 +1126,14 @@ public final class PhysicalFactorsMapExporter {
         }
         String trimmed = value.trim();
         return !trimmed.isEmpty() && Character.isDigit(trimmed.charAt(0));
+    }
+
+    private static boolean startsWithLetter(String value) {
+        if (value == null) {
+            return false;
+        }
+        String trimmed = value.trim();
+        return !trimmed.isEmpty() && Character.isLetter(trimmed.charAt(0));
     }
 
     private static boolean hasMicroclimateBlockContent(Sheet sheet, int startRow, DataFormatter formatter) {
