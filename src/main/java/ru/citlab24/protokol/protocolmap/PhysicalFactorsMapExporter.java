@@ -299,7 +299,7 @@ public final class PhysicalFactorsMapExporter {
                 }
                 String exchangeValue = "-".equals(volumeValue) ? "-" : "";
 
-                setCellValue(targetSheet, targetRowIndex, 0, "1", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 0, firstValue, centerStyle);
                 setCellValue(targetSheet, targetRowIndex, 1, "-", centerStyle);
                 setCellValue(targetSheet, targetRowIndex, 2, placeValue, leftStyle);
                 setCellValue(targetSheet, targetRowIndex, 3, "", centerStyle);
