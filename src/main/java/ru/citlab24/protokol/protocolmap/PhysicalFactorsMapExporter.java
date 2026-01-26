@@ -61,7 +61,7 @@ public final class PhysicalFactorsMapExporter {
             int medDataStartRow = -1;
             Sheet medSheet = null;
             if (hasMedSheet) {
-                medDataStartRow = PhysicalFactorsMapResultsTabBuilder.createMedResultsSheet(workbook);
+                medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
                 medSheet = workbook.getSheet("МЭД");
             }
             Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);

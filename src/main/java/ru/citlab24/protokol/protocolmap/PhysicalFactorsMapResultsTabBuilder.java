@@ -19,7 +19,6 @@ final class PhysicalFactorsMapResultsTabBuilder {
     private static final float EXTRA_ROW_HEIGHT_POINTS = 15f;
     private static final float HEADER_ROW_TOP_HEIGHT_POINTS = pixelsToPoints(48);
     private static final float HEADER_ROW_BOTTOM_HEIGHT_POINTS = pixelsToPoints(120);
-    private static final float MED_HEADER_ROW_HEIGHT_POINTS = pixelsToPoints(58);
 
     private PhysicalFactorsMapResultsTabBuilder() {
     }
@@ -32,38 +31,6 @@ final class PhysicalFactorsMapResultsTabBuilder {
         CellStyle microclimateHeaderNumberStyle = createMicroclimateHeaderNumberStyle(workbook, microclimateHeaderStyle);
         return addResultsRows(sheet, measurementDates, hasMicroclimateSheet,
                 microclimateHeaderStyle, microclimateHeaderVerticalStyle, microclimateHeaderNumberStyle);
-    }
-
-    static int createMedResultsSheet(Workbook workbook) {
-        Sheet sheet = workbook.createSheet("МЭД");
-        applyMedSheetDefaults(workbook, sheet);
-
-        CellStyle titleStyle = createMedTitleStyle(workbook);
-        CellStyle borderLeftStyle = createMedBorderStyle(workbook, org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
-        CellStyle borderCenterStyle = createMedBorderStyle(workbook, org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
-        CellStyle borderCenterNoWrapStyle = createMedBorderNoWrapStyle(workbook, borderCenterStyle);
-
-        int rowIndex = 0;
-        rowIndex = addMedMergedRowWithoutBorders(sheet, rowIndex,
-                "7.4. Результаты измерений мощности дозы гамма-излучений ",
-                titleStyle);
-        rowIndex = addMedMergedRow(sheet, rowIndex,
-                "Мощность дозы гамма-излучения на открытой местности в пяти точках составила: " +
-                        "______________________________________ (мкЗв/ч)",
-                borderLeftStyle);
-
-        Row headerRow = sheet.createRow(rowIndex);
-        headerRow.setHeightInPoints(MED_HEADER_ROW_HEIGHT_POINTS);
-        setMedCellValue(headerRow, 0, "№ п/п", borderCenterStyle);
-        setMedCellValue(headerRow, 1, "Наименование места\nпроведения измерений", borderCenterStyle);
-        setMedCellValue(headerRow, 2, "Результат измерения (1 этап) мкЗв/ч", borderCenterStyle);
-        rowIndex++;
-
-        Row numberRow = sheet.createRow(rowIndex);
-        setMedCellValue(numberRow, 0, "1", borderCenterNoWrapStyle);
-        setMedCellValue(numberRow, 1, "2", borderCenterNoWrapStyle);
-        setMedCellValue(numberRow, 2, "3", borderCenterNoWrapStyle);
-        return rowIndex + 1;
     }
 
     private static void applySheetDefaults(Workbook workbook, Sheet sheet) {
@@ -90,37 +57,6 @@ final class PhysicalFactorsMapResultsTabBuilder {
         printSetup.setFitHeight((short) 0);
         sheet.setFitToPage(false);
         sheet.setAutobreaks(false);
-
-        sheet.setMargin(Sheet.LeftMargin, cmToInches(LEFT_MARGIN_CM));
-        sheet.setMargin(Sheet.RightMargin, cmToInches(RIGHT_MARGIN_CM));
-        sheet.setMargin(Sheet.TopMargin, cmToInches(TOP_MARGIN_CM));
-        sheet.setMargin(Sheet.BottomMargin, cmToInches(BOTTOM_MARGIN_CM));
-    }
-
-    private static void applyMedSheetDefaults(Workbook workbook, Sheet sheet) {
-        Font baseFont = workbook.createFont();
-        baseFont.setFontName("Arial");
-        baseFont.setFontHeightInPoints((short) 10);
-
-        CellStyle baseStyle = workbook.createCellStyle();
-        baseStyle.setFont(baseFont);
-        baseStyle.setWrapText(true);
-        baseStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
-        baseStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.TOP);
-
-        int[] widthsPx = buildMedColumnWidthsPx();
-        for (int col = 0; col < widthsPx.length; col++) {
-            sheet.setColumnWidth(col, pixel2WidthUnits(widthsPx[col]));
-            sheet.setDefaultColumnStyle(col, baseStyle);
-        }
-        sheet.setDefaultRowHeightInPoints(pixelsToPoints(17));
-
-        PrintSetup printSetup = sheet.getPrintSetup();
-        printSetup.setLandscape(true);
-        printSetup.setFitWidth((short) 1);
-        printSetup.setFitHeight((short) 0);
-        sheet.setFitToPage(true);
-        sheet.setAutobreaks(true);
 
         sheet.setMargin(Sheet.LeftMargin, cmToInches(LEFT_MARGIN_CM));
         sheet.setMargin(Sheet.RightMargin, cmToInches(RIGHT_MARGIN_CM));
@@ -293,26 +229,6 @@ final class PhysicalFactorsMapResultsTabBuilder {
         applyRegionBorders(sheet, region);
     }
 
-    private static int addMedMergedRowWithoutBorders(Sheet sheet, int rowIndex, String text, CellStyle style) {
-        Row row = sheet.createRow(rowIndex);
-        Cell cell = row.createCell(0);
-        cell.setCellValue(text);
-        cell.setCellStyle(style);
-        sheet.addMergedRegion(new CellRangeAddress(rowIndex, rowIndex, 0, 2));
-        return rowIndex + 1;
-    }
-
-    private static int addMedMergedRow(Sheet sheet, int rowIndex, String text, CellStyle style) {
-        Row row = sheet.createRow(rowIndex);
-        Cell cell = row.createCell(0);
-        cell.setCellValue(text);
-        cell.setCellStyle(style);
-        CellRangeAddress region = new CellRangeAddress(rowIndex, rowIndex, 0, 2);
-        sheet.addMergedRegion(region);
-        applyRegionBorders(sheet, region);
-        return rowIndex + 1;
-    }
-
     private static CellStyle createMicroclimateHeaderStyle(Workbook workbook) {
         Font font = workbook.createFont();
         font.setFontName("Arial");
@@ -341,51 +257,7 @@ final class PhysicalFactorsMapResultsTabBuilder {
         return style;
     }
 
-    private static CellStyle createMedTitleStyle(Workbook workbook) {
-        Font font = workbook.createFont();
-        font.setFontName("Arial");
-        font.setFontHeightInPoints((short) 10);
-
-        CellStyle style = workbook.createCellStyle();
-        style.setFont(font);
-        style.setWrapText(true);
-        style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
-        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
-        return style;
-    }
-
-    private static CellStyle createMedBorderStyle(Workbook workbook,
-                                                  org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
-        Font font = workbook.createFont();
-        font.setFontName("Arial");
-        font.setFontHeightInPoints((short) 10);
-
-        CellStyle style = workbook.createCellStyle();
-        style.setFont(font);
-        style.setWrapText(true);
-        style.setAlignment(alignment);
-        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
-        setThinBorders(style);
-        return style;
-    }
-
-    private static CellStyle createMedBorderNoWrapStyle(Workbook workbook, CellStyle baseStyle) {
-        CellStyle style = workbook.createCellStyle();
-        style.cloneStyleFrom(baseStyle);
-        style.setWrapText(false);
-        return style;
-    }
-
     private static void setCellValue(Row row, int colIndex, String value, CellStyle style) {
-        Cell cell = row.getCell(colIndex);
-        if (cell == null) {
-            cell = row.createCell(colIndex);
-        }
-        cell.setCellValue(value);
-        cell.setCellStyle(style);
-    }
-
-    private static void setMedCellValue(Row row, int colIndex, String value, CellStyle style) {
         Cell cell = row.getCell(colIndex);
         if (cell == null) {
             cell = row.createCell(colIndex);
@@ -417,10 +289,6 @@ final class PhysicalFactorsMapResultsTabBuilder {
                 31, 247, 45, 35, 19, 41, 51, 39,
                 19, 39, 35, 29, 32, 32, 32, 32
         };
-    }
-
-    private static int[] buildMedColumnWidthsPx() {
-        return new int[]{33, 168, 780};
     }
 
     private static int pixel2WidthUnits(int px) {
