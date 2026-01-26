@@ -78,7 +78,7 @@ final class ProtocolIssuanceSheetExporter {
             titleRun.setFontFamily(FONT_NAME);
             titleRun.setFontSize(FONT_SIZE);
 
-            XWPFTable table = document.createTable(4, 5);
+            XWPFTable table = document.createTable(2, 5);
             setTableCellText(table.getRow(0).getCell(0), "№ п/п");
             setTableCellText(table.getRow(0).getCell(1), "Номер протокола");
             setTableCellText(table.getRow(0).getCell(2), "Дата протокола");
@@ -92,15 +92,6 @@ final class ProtocolIssuanceSheetExporter {
             setTableCellText(table.getRow(1).getCell(2), protocolDate);
             setTableCellText(table.getRow(1).getCell(3), customerName);
             setTableCellText(table.getRow(1).getCell(4), applicationNumber);
-            setTableCellText(table.getRow(2).getCell(2), "");
-            setTableCellText(table.getRow(2).getCell(3), "");
-            setTableCellText(table.getRow(2).getCell(4), "");
-            setTableCellText(table.getRow(3).getCell(2), "");
-            setTableCellText(table.getRow(3).getCell(3), "");
-            setTableCellText(table.getRow(3).getCell(4), "");
-
-            mergeCellsVertically(table, 0, 1, 3);
-            mergeCellsVertically(table, 1, 1, 3);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 document.write(out);
@@ -301,16 +292,14 @@ final class ProtocolIssuanceSheetExporter {
         String center = "Лист выдачи протоколов Ф17 ДП ИЛ 2-2023";
 
         setHeaderCellText(tbl.getRow(0).getCell(0), left);
-        setHeaderCellText(tbl.getRow(1).getCell(0), left);
-        setHeaderCellText(tbl.getRow(2).getCell(0), left);
-
         setHeaderCellText(tbl.getRow(0).getCell(1), center);
-        setHeaderCellText(tbl.getRow(1).getCell(1), center);
-        setHeaderCellText(tbl.getRow(2).getCell(1), center);
 
         setHeaderCellText(tbl.getRow(0).getCell(2), "Дата утверждения бланка формуляра: 01.01.2023г.");
         setHeaderCellText(tbl.getRow(1).getCell(2), "Редакция № 1");
         setHeaderCellPageCount(tbl.getRow(2).getCell(2));
+
+        mergeCellsVertically(tbl, 0, 0, 2);
+        mergeCellsVertically(tbl, 1, 0, 2);
     }
 
     private static void configureHeaderTableLikeTemplate(XWPFTable table) {
