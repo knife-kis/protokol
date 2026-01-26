@@ -818,6 +818,11 @@ public final class PhysicalFactorsMapExporter {
                 emptyAStreak = 0;
                 started = true;
 
+                if (aValue != null && aValue.contains("*")) {
+                    sourceRowIndex++;
+                    continue;
+                }
+
                 String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter, evaluator);
                 String dValue = readMergedCellValue(sourceSheet, sourceRowIndex, 4, formatter, evaluator);
                 String mValue = readMergedCellValue(sourceSheet, sourceRowIndex, 12, formatter, evaluator);
