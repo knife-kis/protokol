@@ -24,7 +24,6 @@ final class MedMapTabBuilder {
         applyMedSheetDefaults(workbook, sheet);
 
         CellStyle titleStyle = createMedTitleStyle(workbook);
-        CellStyle borderLeftStyle = createMedBorderStyle(workbook, org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
         CellStyle borderCenterStyle = createMedBorderStyle(workbook, org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
         CellStyle borderCenterNoWrapStyle = createMedBorderNoWrapStyle(workbook, borderCenterStyle);
 
@@ -32,10 +31,10 @@ final class MedMapTabBuilder {
         rowIndex = addMedMergedRowWithoutBorders(sheet, rowIndex,
                 "7.4. Результаты измерений мощности дозы гамма-излучений ",
                 titleStyle);
-        rowIndex = addMedMergedRow(sheet, rowIndex,
+        rowIndex = addMedMergedRowWithBottomBorder(sheet, rowIndex,
                 "Мощность дозы гамма-излучения на открытой местности в пяти точках составила: " +
                         "______________________________________ (мкЗв/ч)",
-                borderLeftStyle);
+                titleStyle);
 
         Row headerRow = sheet.createRow(rowIndex);
         headerRow.setHeightInPoints(MED_HEADER_ROW_HEIGHT_POINTS);
@@ -102,6 +101,23 @@ final class MedMapTabBuilder {
         return rowIndex + 1;
     }
 
+    private static int addMedMergedRowWithBottomBorder(Sheet sheet, int rowIndex, String text, CellStyle style) {
+        Row row = sheet.createRow(rowIndex);
+        for (int col = 0; col <= 2; col++) {
+            Cell cell = row.createCell(col);
+            if (col == 0) {
+                cell.setCellValue(text);
+            }
+            if (style != null) {
+                cell.setCellStyle(style);
+            }
+        }
+        CellRangeAddress region = new CellRangeAddress(rowIndex, rowIndex, 0, 2);
+        sheet.addMergedRegion(region);
+        applyRegionBottomBorder(sheet, region);
+        return rowIndex + 1;
+    }
+
     private static CellStyle createMedTitleStyle(Workbook workbook) {
         Font font = workbook.createFont();
         font.setFontName("Arial");
@@ -151,6 +167,13 @@ final class MedMapTabBuilder {
         org.apache.poi.ss.util.RegionUtil.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
         org.apache.poi.ss.util.RegionUtil.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
         org.apache.poi.ss.util.RegionUtil.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+    }
+
+    private static void applyRegionBottomBorder(Sheet sheet, CellRangeAddress region) {
+        org.apache.poi.ss.util.RegionUtil.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.NONE, region, sheet);
+        org.apache.poi.ss.util.RegionUtil.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN, region, sheet);
+        org.apache.poi.ss.util.RegionUtil.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.NONE, region, sheet);
+        org.apache.poi.ss.util.RegionUtil.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.NONE, region, sheet);
     }
 
     private static void setThinBorders(CellStyle style) {

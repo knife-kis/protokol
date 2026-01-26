@@ -60,11 +60,11 @@ public final class PhysicalFactorsMapExporter {
             Sheet resultsSheet = workbook.getSheet("Микроклимат");
             int medDataStartRow = -1;
             Sheet medSheet = null;
+            Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
             if (hasMedSheet) {
                 medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
                 medSheet = workbook.getSheet("МЭД");
             }
-            Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
             if (resultsSheet != null) {
                 applyHeaders(resultsSheet, registrationNumber);
             }
