@@ -12,13 +12,15 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.Locale;
 
 final class ProtocolIssuanceSheetExporter {
@@ -43,6 +45,7 @@ final class ProtocolIssuanceSheetExporter {
         String applicationNumber = resolveApplicationNumberFromMap(mapFile);
 
         try (XWPFDocument document = new XWPFDocument()) {
+            setLandscapeOrientation(document);
             XWPFParagraph title = document.createParagraph();
             title.setAlignment(ParagraphAlignment.CENTER);
             XWPFRun titleRun = title.createRun();
@@ -70,6 +73,26 @@ final class ProtocolIssuanceSheetExporter {
             }
         } catch (IOException ignored) {
             // пропускаем создание листа, если не удалось сформировать документ
+        }
+    }
+
+    private static void setLandscapeOrientation(XWPFDocument document) {
+        CTSectPr sectPr = document.getDocument().getBody().getSectPr();
+        if (sectPr == null) {
+            sectPr = document.getDocument().getBody().addNewSectPr();
+        }
+        CTPageSz pageSize = sectPr.getPgSz();
+        if (pageSize == null) {
+            pageSize = sectPr.addNewPgSz();
+        }
+        pageSize.setOrient(STPageOrientation.LANDSCAPE);
+        if (pageSize.isSetW() && pageSize.isSetH()) {
+            java.math.BigInteger width = pageSize.getW();
+            pageSize.setW(pageSize.getH());
+            pageSize.setH(width);
+        } else {
+            pageSize.setW(java.math.BigInteger.valueOf(16840));
+            pageSize.setH(java.math.BigInteger.valueOf(11900));
         }
     }
 
@@ -130,62 +153,27 @@ final class ProtocolIssuanceSheetExporter {
         if (sourceFile == null || !sourceFile.exists()) {
             return "";
         }
-        String name = sourceFile.getName().toLowerCase(Locale.ROOT);
-        if (!name.endsWith(".docx")) {
-            return "";
-        }
         try (InputStream in = new FileInputStream(sourceFile);
-             XWPFDocument document = new XWPFDocument(in)) {
-            java.util.List<String> lines = extractDocLines(document);
-            java.util.List<String> meaningfulLines = new ArrayList<>();
-            for (String line : lines) {
-                if (line != null && !line.isBlank()) {
-                    meaningfulLines.add(line.trim());
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            Row row = sheet.getRow(6);
+            if (row == null) {
+                return "";
+            }
+            DataFormatter formatter = new DataFormatter();
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                if (!text.isEmpty()) {
+                    return text;
                 }
             }
-            if (meaningfulLines.size() >= 7) {
-                return meaningfulLines.get(6);
-            }
-        } catch (IOException ignored) {
+        } catch (Exception ignored) {
             return "";
         }
         return "";
-    }
-
-    private static java.util.List<String> extractDocLines(XWPFDocument document) {
-        java.util.List<String> lines = new ArrayList<>();
-        for (org.apache.poi.xwpf.usermodel.IBodyElement element : document.getBodyElements()) {
-            if (element instanceof org.apache.poi.xwpf.usermodel.XWPFParagraph paragraph) {
-                addDocLine(lines, paragraph.getText());
-            } else if (element instanceof org.apache.poi.xwpf.usermodel.XWPFTable table) {
-                for (org.apache.poi.xwpf.usermodel.XWPFTableRow row : table.getRows()) {
-                    StringBuilder builder = new StringBuilder();
-                    for (XWPFTableCell cell : row.getTableCells()) {
-                        String cellText = cell.getText();
-                        if (cellText != null && !cellText.isBlank()) {
-                            if (builder.length() > 0) {
-                                builder.append(' ');
-                            }
-                            builder.append(cellText.trim());
-                        }
-                    }
-                    if (builder.length() > 0) {
-                        addDocLine(lines, builder.toString());
-                    }
-                }
-            }
-        }
-        return lines;
-    }
-
-    private static void addDocLine(java.util.List<String> lines, String text) {
-        if (text == null) {
-            return;
-        }
-        String[] split = text.split("\\R");
-        for (String line : split) {
-            lines.add(line);
-        }
     }
 
     private static String readMapRowText(File mapFile, int rowIndex) {
