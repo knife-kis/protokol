@@ -188,7 +188,7 @@ final class MedMapTabBuilder {
     }
 
     private static int[] buildMedColumnWidthsPx() {
-        return new int[]{33, 168, 780};
+        return new int[]{33, 168, 750};
     }
 
     private static int pixel2WidthUnits(int px) {
