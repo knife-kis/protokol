@@ -35,6 +35,9 @@ public final class PhysicalFactorsMapExporter {
     private static final int[] MICROCLIMATE_TOP_BOTTOM_COLUMNS = {3, 5, 7, 9, 10, 12};
     private static final int MICROCLIMATE_AIR_SPEED_START_COL = 13;
     private static final int MICROCLIMATE_AIR_SPEED_END_COL = 15;
+    private static final int VENTILATION_SOURCE_START_ROW = 4;
+    private static final int VENTILATION_TARGET_START_ROW = 3;
+    private static final int VENTILATION_LAST_COL = 9;
 
     private PhysicalFactorsMapExporter() {
     }
@@ -73,6 +76,7 @@ public final class PhysicalFactorsMapExporter {
             if (hasMicroclimateSheet) {
                 fillMicroclimateResults(sourceFile, workbook, resultsSheet, microclimateDataStartRow);
             }
+            fillVentilationResults(sourceFile, workbook, ventilationSheet);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -238,6 +242,119 @@ public final class PhysicalFactorsMapExporter {
                 && region.getLastColumn() >= MICROCLIMATE_SOURCE_MERGED_LAST_COL;
     }
 
+    private static void fillVentilationResults(File sourceFile,
+                                               Workbook targetWorkbook,
+                                               Sheet targetSheet) {
+        if (sourceFile == null || !sourceFile.exists() || targetSheet == null) {
+            return;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            Sheet sourceSheet = findSheetWithKeyword(sourceWorkbook, "вентиляция");
+            if (sourceSheet == null) {
+                return;
+            }
+            DataFormatter formatter = new DataFormatter();
+            CellStyle centerStyle = createVentilationDataStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+            CellStyle leftStyle = createVentilationDataStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+            CellStyle mergedRowStyle = createVentilationDataStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+            java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
+
+            int sourceRowIndex = VENTILATION_SOURCE_START_ROW;
+            int targetRowIndex = VENTILATION_TARGET_START_ROW;
+            int lastRow = sourceSheet.getLastRowNum();
+
+            while (sourceRowIndex <= lastRow) {
+                CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
+                if (isVentilationMergedRow(mergedRow, sourceRowIndex)) {
+                    String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
+                    if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
+                        break;
+                    }
+                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex,
+                            0, VENTILATION_LAST_COL, text, mergedRowStyle);
+                    targetRowIndex++;
+                    sourceRowIndex++;
+                    continue;
+                }
+
+                if (!hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
+                    break;
+                }
+
+                String firstValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
+                if (!startsWithDigit(firstValue)) {
+                    sourceRowIndex++;
+                    continue;
+                }
+
+                String placeValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter);
+                String volumeValue = readMergedCellValue(sourceSheet, sourceRowIndex, 8, formatter);
+                String normalizedVolume = normalizeText(volumeValue);
+                if (normalizedVolume.isBlank() || "-".equals(normalizedVolume)) {
+                    volumeValue = "-";
+                }
+                String exchangeValue = "-".equals(volumeValue) ? "-" : "";
+
+                setCellValue(targetSheet, targetRowIndex, 0, "1", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 1, "-", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 2, placeValue, leftStyle);
+                setCellValue(targetSheet, targetRowIndex, 3, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 4, "±", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 5, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 6, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 7, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 8, volumeValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 9, exchangeValue, centerStyle);
+
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 0,
+                        true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 1,
+                        true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 2,
+                        true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 3,
+                        true, true, true, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 4,
+                        true, true, false, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 5,
+                        true, true, false, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 6,
+                        true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 7,
+                        true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 8,
+                        true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 9,
+                        true, true, true, true);
+
+                targetRowIndex++;
+                sourceRowIndex++;
+            }
+        } catch (Exception ex) {
+            // ignore
+        }
+    }
+
+    private static boolean isVentilationMergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= VENTILATION_LAST_COL;
+    }
+
+    private static boolean startsWithDigit(String value) {
+        if (value == null) {
+            return false;
+        }
+        String trimmed = value.trim();
+        return !trimmed.isEmpty() && Character.isDigit(trimmed.charAt(0));
+    }
+
     private static boolean hasMicroclimateBlockContent(Sheet sheet, int startRow, DataFormatter formatter) {
         for (int offset = 0; offset < MICROCLIMATE_BLOCK_SIZE; offset++) {
             int rowIndex = startRow + offset;
@@ -300,6 +417,20 @@ public final class PhysicalFactorsMapExporter {
         style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
         style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
         style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+        return style;
+    }
+
+    private static CellStyle createVentilationDataStyle(Workbook workbook,
+                                                        org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 10);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setWrapText(true);
+        style.setAlignment(alignment);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
         return style;
     }
 
@@ -638,6 +769,25 @@ public final class PhysicalFactorsMapExporter {
         for (int i = 0; i < count; i++) {
             String name = workbook.getSheetName(i);
             if (name != null && name.startsWith(prefix)) {
+                return workbook.getSheetAt(i);
+            }
+        }
+        return null;
+    }
+
+    private static Sheet findSheetWithKeyword(Workbook workbook, String keyword) {
+        if (workbook == null || keyword == null) {
+            return null;
+        }
+        String needle = keyword.toLowerCase(Locale.ROOT);
+        int count = workbook.getNumberOfSheets();
+        for (int i = 0; i < count; i++) {
+            String name = workbook.getSheetName(i);
+            if (name == null) {
+                continue;
+            }
+            String normalized = normalizeText(name).toLowerCase(Locale.ROOT);
+            if (normalized.contains(needle)) {
                 return workbook.getSheetAt(i);
             }
         }
