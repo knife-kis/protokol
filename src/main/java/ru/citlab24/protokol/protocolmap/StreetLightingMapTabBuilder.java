@@ -38,10 +38,11 @@ final class StreetLightingMapTabBuilder {
         spacerRow.setHeightInPoints(pixelsToPoints(10));
 
         Row headerTop = sheet.createRow(2);
-        headerTop.setHeightInPoints(pixelsToPoints(45));
+        headerTop.setHeightInPoints(pixelsToPoints(63));
         Row headerMid = sheet.createRow(3);
+        headerMid.setHeightInPoints(pixelsToPoints(63));
         Row headerBottom = sheet.createRow(4);
-        headerBottom.setHeightInPoints(pixelsToPoints(58));
+        headerBottom.setHeightInPoints(pixelsToPoints(63));
 
         applyMergedHeader(sheet, 2, 4, 0, 0, "№ п/п", headerStyle);
         applyMergedHeader(sheet, 2, 4, 1, 1, "Наименование места\nпроведения измерений", headerStyle);
@@ -62,7 +63,7 @@ final class StreetLightingMapTabBuilder {
         applyBorderToCell(headerBottom, 5, headerStyle);
 
         Row numbersRow = sheet.createRow(5);
-        numbersRow.setHeightInPoints(pixelsToPoints(112));
+        numbersRow.setHeightInPoints(pixelsToPoints(20));
         applyMergedHeader(sheet, 5, 5, 0, 0, "1", headerNumberStyle);
         applyMergedHeader(sheet, 5, 5, 1, 1, "2", headerNumberStyle);
         applyMergedHeader(sheet, 5, 5, 2, 2, "3", headerNumberStyle);
