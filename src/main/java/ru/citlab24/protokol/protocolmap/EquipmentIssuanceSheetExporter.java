@@ -221,7 +221,7 @@ final class EquipmentIssuanceSheetExporter {
         configureHeaderTableLikeTemplate(table);
 
         setHeaderCellText(table.getRow(0).getCell(0), "Испытательная лаборатория ООО «ЦИТ»");
-        setHeaderCellText(table.getRow(0).getCell(1), "Лист выдачи приборов Ф17 ДП ИЛ 2-2023");
+        setHeaderCellText(table.getRow(0).getCell(1), "Лист выдачи приборов Ф39 ДП ИЛ 2-2023");
         setHeaderCellText(table.getRow(0).getCell(2), "Дата утверждения бланка формуляра: 01.01.2023г.");
         setHeaderCellText(table.getRow(1).getCell(2), "Редакция № 1");
         setHeaderCellPageCount(table.getRow(2).getCell(2));
