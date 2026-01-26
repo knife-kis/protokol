@@ -30,6 +30,8 @@ public final class PhysicalFactorsMapExporter {
     private static final int MED3_SOURCE_START_ROW = 5;
     private static final int EROA_RADON_SOURCE_START_ROW = 5;
     private static final int EROA_RADON_LAST_COL = 5;
+    private static final int ARTIFICIAL_LIGHTING_SOURCE_START_ROW = 7;
+    private static final int ARTIFICIAL_LIGHTING_LAST_COL = 12;
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int VENTILATION_TARGET_START_ROW = 3;
     private static final int VENTILATION_LAST_COL = 9;
@@ -53,6 +55,7 @@ public final class PhysicalFactorsMapExporter {
         boolean hasMed2Sheet = hasSheetWithName(sourceFile, "МЭД (2)");
         boolean hasMed3Sheet = hasSheetWithName(sourceFile, "МЭД (3)");
         boolean hasEroaRadonSheet = hasSheetWithName(sourceFile, "ЭРОА радона");
+        boolean hasArtificialLightingSheet = hasSheetWithName(sourceFile, "Иск освещение");
         File targetFile = buildTargetFile(sourceFile);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -73,6 +76,8 @@ public final class PhysicalFactorsMapExporter {
             Sheet med3Sheet = null;
             int eroaRadonDataStartRow = -1;
             Sheet eroaRadonSheet = null;
+            int artificialLightingDataStartRow = -1;
+            Sheet artificialLightingSheet = null;
             Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
             if (hasMedSheet) {
                 medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
@@ -90,6 +95,11 @@ public final class PhysicalFactorsMapExporter {
                 eroaRadonDataStartRow = EroaRadonMapTabBuilder.createEroaRadonResultsSheet(workbook);
                 eroaRadonSheet = workbook.getSheet("ЭРОА Радона");
             }
+            if (hasArtificialLightingSheet) {
+                artificialLightingDataStartRow = ArtificialLightingMapTabBuilder.createArtificialLightingResultsSheet(
+                        workbook);
+                artificialLightingSheet = workbook.getSheet("Иск освещение");
+            }
             if (resultsSheet != null) {
                 applyHeaders(resultsSheet, registrationNumber);
             }
@@ -104,6 +114,9 @@ public final class PhysicalFactorsMapExporter {
             }
             if (eroaRadonSheet != null) {
                 applyHeaders(eroaRadonSheet, registrationNumber);
+            }
+            if (artificialLightingSheet != null) {
+                applyHeaders(artificialLightingSheet, registrationNumber);
             }
             if (ventilationSheet != null) {
                 applyHeaders(ventilationSheet, registrationNumber);
@@ -122,6 +135,10 @@ public final class PhysicalFactorsMapExporter {
             }
             if (hasEroaRadonSheet) {
                 fillEroaRadonResults(sourceFile, workbook, eroaRadonSheet, eroaRadonDataStartRow);
+            }
+            if (hasArtificialLightingSheet) {
+                fillArtificialLightingResults(sourceFile, workbook, artificialLightingSheet,
+                        artificialLightingDataStartRow);
             }
             fillVentilationResults(sourceFile, workbook, ventilationSheet);
 
@@ -732,6 +749,108 @@ public final class PhysicalFactorsMapExporter {
         }
     }
 
+    private static void fillArtificialLightingResults(File sourceFile,
+                                                      Workbook targetWorkbook,
+                                                      Sheet targetSheet,
+                                                      int targetStartRow) {
+        if (sourceFile == null || !sourceFile.exists() || targetSheet == null || targetStartRow < 0) {
+            return;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            Sheet sourceSheet = findSheetWithName(sourceWorkbook, "Иск освещение");
+            if (sourceSheet == null) {
+                return;
+            }
+
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
+
+            CellStyle centerStyle = createArtificialLightingBaseStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+            CellStyle leftStyle = createArtificialLightingBaseStyle(targetWorkbook,
+                    org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+
+            java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
+
+            int sourceRowIndex = ARTIFICIAL_LIGHTING_SOURCE_START_ROW;
+            int targetRowIndex = targetStartRow;
+            int lastRow = sourceSheet.getLastRowNum();
+            int emptyAStreak = 0;
+            boolean started = false;
+
+            while (sourceRowIndex <= lastRow) {
+                CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
+                if (isArtificialLightingMergedRow(mergedRow, sourceRowIndex)) {
+                    String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                    if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
+                        if (started) {
+                            break;
+                        }
+                        sourceRowIndex++;
+                        continue;
+                    }
+                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex, 0,
+                            ARTIFICIAL_LIGHTING_LAST_COL, text, centerStyle);
+                    targetRowIndex++;
+                    sourceRowIndex++;
+                    started = true;
+                    emptyAStreak = 0;
+                    continue;
+                }
+
+                String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                if (normalizeText(aValue).isBlank()) {
+                    emptyAStreak++;
+                    if (started && emptyAStreak >= 10) {
+                        break;
+                    }
+                    sourceRowIndex++;
+                    continue;
+                }
+                emptyAStreak = 0;
+                started = true;
+
+                String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter, evaluator);
+                String dValue = readMergedCellValue(sourceSheet, sourceRowIndex, 4, formatter, evaluator);
+                String mValue = readMergedCellValue(sourceSheet, sourceRowIndex, 12, formatter, evaluator);
+
+                setCellValue(targetSheet, targetRowIndex, 0, aValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 1, bValue, leftStyle);
+                setCellValue(targetSheet, targetRowIndex, 2, "-", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 3, dValue, centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 4, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 5, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 6, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 7, "±", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 8, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 9, "-", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 10, "", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 11, startsWithDigit(mValue) ? "±" : "-", centerStyle);
+                setCellValue(targetSheet, targetRowIndex, 12, "", centerStyle);
+
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 0, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 1, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 2, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 3, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 4, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 5, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 6, true, true, true, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 7, true, true, false, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 8, true, true, false, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 9, true, true, true, true);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 10, true, true, true, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 11, true, true, false, false);
+                applyBorderToCell(targetSheet, targetWorkbook, styleCache, targetRowIndex, 12, true, true, false, true);
+
+                targetRowIndex++;
+                sourceRowIndex++;
+            }
+        } catch (Exception ex) {
+            // ignore
+        }
+    }
+
 
     private static boolean isVentilationMergedRow(CellRangeAddress region, int rowIndex) {
         return region != null
@@ -755,6 +874,14 @@ public final class PhysicalFactorsMapExporter {
                 && region.getLastRow() == rowIndex
                 && region.getFirstColumn() == 0
                 && region.getLastColumn() >= EROA_RADON_LAST_COL;
+    }
+
+    private static boolean isArtificialLightingMergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= ARTIFICIAL_LIGHTING_LAST_COL;
     }
 
     private static boolean startsWithDigit(String value) {
@@ -879,6 +1006,20 @@ public final class PhysicalFactorsMapExporter {
 
     private static CellStyle createEroaRadonBaseStyle(Workbook workbook,
                                                       org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 10);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setWrapText(true);
+        style.setAlignment(alignment);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        return style;
+    }
+
+    private static CellStyle createArtificialLightingBaseStyle(Workbook workbook,
+                                                               org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
         Font font = workbook.createFont();
         font.setFontName("Arial");
         font.setFontHeightInPoints((short) 10);
