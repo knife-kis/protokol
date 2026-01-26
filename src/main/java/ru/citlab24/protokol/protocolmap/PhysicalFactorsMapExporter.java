@@ -752,13 +752,15 @@ public final class PhysicalFactorsMapExporter {
     private static void fillArtificialLightingResults(File sourceFile,
                                                       Workbook targetWorkbook,
                                                       Sheet targetSheet,
-                                                      int targetStartRow) {
+                                                      int targetStartRow) throws IOException {
         if (sourceFile == null || !sourceFile.exists() || targetSheet == null || targetStartRow < 0) {
             return;
         }
+        int sourceRowIndex = -1;
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook sourceWorkbook = WorkbookFactory.create(in)) {
-            Sheet sourceSheet = findSheetWithName(sourceWorkbook, "Иск освещение");
+            String sheetName = "Иск освещение";
+            Sheet sourceSheet = findSheetWithName(sourceWorkbook, sheetName);
             if (sourceSheet == null) {
                 return;
             }
@@ -773,7 +775,7 @@ public final class PhysicalFactorsMapExporter {
 
             java.util.Map<BorderKey, CellStyle> styleCache = new java.util.HashMap<>();
 
-            int sourceRowIndex = ARTIFICIAL_LIGHTING_SOURCE_START_ROW;
+            sourceRowIndex = ARTIFICIAL_LIGHTING_SOURCE_START_ROW;
             int targetRowIndex = targetStartRow;
             int lastRow = sourceSheet.getLastRowNum();
             int emptyAStreak = 0;
@@ -790,8 +792,13 @@ public final class PhysicalFactorsMapExporter {
                         sourceRowIndex++;
                         continue;
                     }
-                    mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex, 0,
-                            ARTIFICIAL_LIGHTING_LAST_COL, text, centerStyle);
+                    try {
+                        mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex, 0,
+                                ARTIFICIAL_LIGHTING_LAST_COL, text, centerStyle);
+                    } catch (Exception ex) {
+                        throw new IOException("Не удалось добавить merge-область на листе \""
+                                + sheetName + "\" (строка " + (sourceRowIndex + 1) + ").", ex);
+                    }
                     targetRowIndex++;
                     sourceRowIndex++;
                     started = true;
@@ -846,8 +853,13 @@ public final class PhysicalFactorsMapExporter {
                 targetRowIndex++;
                 sourceRowIndex++;
             }
+        } catch (IOException ex) {
+            throw ex;
         } catch (Exception ex) {
-            // ignore
+            String rowInfo = sourceRowIndex >= 0 ? String.valueOf(sourceRowIndex + 1) : "неизвестно";
+            String fileName = sourceFile != null ? sourceFile.getName() : "неизвестный файл";
+            throw new IOException("Не удалось заполнить лист \"Иск освещение\" для файла "
+                    + fileName + " (строка " + rowInfo + ").", ex);
         }
     }
 
