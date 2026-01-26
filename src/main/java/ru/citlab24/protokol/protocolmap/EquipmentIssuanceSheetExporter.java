@@ -98,13 +98,14 @@ final class EquipmentIssuanceSheetExporter {
         try (XWPFDocument document = new XWPFDocument()) {
             applyStandardHeader(document);
 
-            addCenteredParagraph(document, "Место использования прибора: " + safe(objectName));
-            addCenteredParagraph(document, "Фамилия, инициалы лица, получившего приборы: ");
-            addCenteredParagraph(document, safe(performer));
-            addCenteredParagraph(document, "Лист выдачи приборов");
+            addCenteredParagraph(document, "Место использования прибора: " + safe(objectName), true);
+            addCenteredParagraph(document, "Фамилия, инициалы лица, получившего приборы: ", true);
+            addCenteredParagraph(document, safe(performer), false);
+            addCenteredParagraph(document, "Лист выдачи приборов", true);
 
             int rows = 1 + instruments.size() + 2;
             XWPFTable table = document.createTable(rows, 5);
+            configureIssuanceTableLayout(table);
 
             setTableCellText(table.getRow(0).getCell(0), "Наименование\nоборудования", TABLE_FONT_SIZE);
             setTableCellText(table.getRow(0).getCell(1), "Зав. №", TABLE_FONT_SIZE);
@@ -159,17 +160,22 @@ final class EquipmentIssuanceSheetExporter {
         }
     }
 
-    private static void addCenteredParagraph(XWPFDocument document, String text) {
+    private static void addCenteredParagraph(XWPFDocument document, String text, boolean bold) {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setAlignment(ParagraphAlignment.CENTER);
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBefore(0);
         XWPFRun run = paragraph.createRun();
         run.setText(text != null ? text : "");
         run.setFontFamily(FONT_NAME);
         run.setFontSize(FONT_SIZE);
+        run.setBold(bold);
     }
 
     private static void addParagraphWithBreaks(XWPFDocument document, String text) {
         XWPFParagraph paragraph = document.createParagraph();
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBefore(0);
         XWPFRun run = paragraph.createRun();
         run.setFontFamily(FONT_NAME);
         run.setFontSize(TABLE_FONT_SIZE);
@@ -186,6 +192,9 @@ final class EquipmentIssuanceSheetExporter {
     private static void setTableCellText(XWPFTableCell cell, String text, int fontSize) {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
+        paragraph.setAlignment(ParagraphAlignment.CENTER);
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBefore(0);
         XWPFRun run = paragraph.createRun();
         run.setFontFamily(FONT_NAME);
         run.setFontSize(fontSize);
@@ -268,6 +277,38 @@ final class EquipmentIssuanceSheetExporter {
         setCellWidth(table, 2, 2, 3548);
     }
 
+    private static void configureIssuanceTableLayout(XWPFTable table) {
+        CTTbl ct = table.getCTTbl();
+        CTTblPr pr = ct.getTblPr() != null ? ct.getTblPr() : ct.addNewTblPr();
+
+        CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
+        tblW.setType(STTblWidth.DXA);
+        tblW.setW(BigInteger.valueOf(9000));
+
+        CTTblLayoutType layout = pr.isSetTblLayout() ? pr.getTblLayout() : pr.addNewTblLayout();
+        layout.setType(STTblLayoutType.FIXED);
+
+        CTTblGrid grid = ct.getTblGrid();
+        if (grid == null) {
+            grid = ct.addNewTblGrid();
+        } else {
+            while (grid.sizeOfGridColArray() > 0) {
+                grid.removeGridCol(0);
+            }
+        }
+
+        int[] widths = {1800, 900, 2700, 2700, 900};
+        for (int width : widths) {
+            grid.addNewGridCol().setW(BigInteger.valueOf(width));
+        }
+
+        for (int rowIndex = 0; rowIndex < table.getNumberOfRows(); rowIndex++) {
+            for (int colIndex = 0; colIndex < widths.length; colIndex++) {
+                setCellWidth(table, rowIndex, colIndex, widths[colIndex]);
+            }
+        }
+    }
+
     private static void setBorder(CTBorder border) {
         border.setVal(STBorder.SINGLE);
         border.setSz(BigInteger.valueOf(4));
@@ -287,6 +328,8 @@ final class EquipmentIssuanceSheetExporter {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
         paragraph.setAlignment(ParagraphAlignment.CENTER);
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBefore(0);
 
         XWPFRun run = paragraph.createRun();
         run.setText(text != null ? text : "");
@@ -298,6 +341,8 @@ final class EquipmentIssuanceSheetExporter {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
         paragraph.setAlignment(ParagraphAlignment.CENTER);
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBefore(0);
 
         XWPFRun run = paragraph.createRun();
         run.setText("Количество страниц: ");
