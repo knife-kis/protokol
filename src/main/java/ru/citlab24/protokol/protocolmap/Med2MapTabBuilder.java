@@ -91,6 +91,7 @@ final class Med2MapTabBuilder {
 
     private static int addMed2MergedRowWithBottomBorder(Sheet sheet, int rowIndex, String text, CellStyle style) {
         Row row = sheet.createRow(rowIndex);
+        row.setHeightInPoints(sheet.getDefaultRowHeightInPoints() * 2f);
         for (int col = 0; col <= 4; col++) {
             Cell cell = row.createCell(col);
             if (col == 0) {
