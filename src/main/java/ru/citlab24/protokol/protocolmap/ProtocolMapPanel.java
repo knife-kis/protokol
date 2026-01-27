@@ -102,6 +102,10 @@ public class ProtocolMapPanel extends JPanel {
                     listModel.addElement("Сформирован лист выдачи приборов: " + equipmentSheet.getName());
                 }
             }
+            File measurementPlan = MeasurementPlanExporter.resolveMeasurementPlanFile(generatedFile);
+            if (measurementPlan != null && measurementPlan.exists()) {
+                listModel.addElement("Сформирован план измерений: " + measurementPlan.getName());
+            }
             generatedMapFile = generatedFile;
             downloadButton.setEnabled(generatedMapFile != null && generatedMapFile.exists());
         }
