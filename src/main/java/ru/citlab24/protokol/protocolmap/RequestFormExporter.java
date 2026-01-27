@@ -48,6 +48,7 @@ final class RequestFormExporter {
     private static final int FONT_SIZE = 12;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
+    private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
 
     private RequestFormExporter() {
     }
@@ -343,7 +344,7 @@ final class RequestFormExporter {
 
         CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
         tblW.setType(STTblWidth.DXA);
-        tblW.setW(BigInteger.valueOf(12560));
+        tblW.setW(BigInteger.valueOf(scaleWidth(12560)));
 
         CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
         jc.setVal(STJcTable.CENTER);
@@ -359,15 +360,28 @@ final class RequestFormExporter {
                 grid.removeGridCol(0);
             }
         }
-        for (int width : columnWidths) {
+        int[] scaledWidths = scaleColumnWidths(columnWidths);
+        for (int width : scaledWidths) {
             grid.addNewGridCol().setW(BigInteger.valueOf(width));
         }
 
         for (int rowIndex = 0; rowIndex < table.getNumberOfRows(); rowIndex++) {
-            for (int colIndex = 0; colIndex < columnWidths.length; colIndex++) {
-                setCellWidth(table, rowIndex, colIndex, columnWidths[colIndex]);
+            for (int colIndex = 0; colIndex < scaledWidths.length; colIndex++) {
+                setCellWidth(table, rowIndex, colIndex, scaledWidths[colIndex]);
             }
         }
+    }
+
+    private static int[] scaleColumnWidths(int[] columnWidths) {
+        int[] scaled = new int[columnWidths.length];
+        for (int i = 0; i < columnWidths.length; i++) {
+            scaled[i] = scaleWidth(columnWidths[i]);
+        }
+        return scaled;
+    }
+
+    private static int scaleWidth(int width) {
+        return Math.max(1, (int) Math.round(width * REQUEST_TABLE_WIDTH_SCALE));
     }
 
     private static void setTableCellText(XWPFTableCell cell, String text, boolean bold,
