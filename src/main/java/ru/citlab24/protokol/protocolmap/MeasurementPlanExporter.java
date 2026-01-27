@@ -60,7 +60,7 @@ final class MeasurementPlanExporter {
     private MeasurementPlanExporter() {
     }
 
-    static void generate(File sourceFile, File mapFile) {
+    static void generate(File sourceFile, File mapFile, String workDeadline) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
@@ -77,6 +77,8 @@ final class MeasurementPlanExporter {
             normativeRows.add(new NormativeRow("", ""));
         }
         String protocolDate = resolveProtocolDateFromSource(sourceFile);
+        String deadlineText = workDeadline == null ? "" : workDeadline.trim();
+        boolean hasWorkDeadline = !deadlineText.isEmpty();
         String planCreatorRole = isTarnovsky
                 ? "Заместитель заведующий лабораторией"
                 : "Заведующий лабораторией";
@@ -134,7 +136,8 @@ final class MeasurementPlanExporter {
                     setTableCellText(mainTable.getRow(rowIndex).getCell(0), objectName, TABLE_FONT_SIZE, false);
                     setTableCellText(mainTable.getRow(rowIndex).getCell(1), objectAddress, TABLE_FONT_SIZE, false);
                     setTableCellText(mainTable.getRow(rowIndex).getCell(2), responsibleText, TABLE_FONT_SIZE, false);
-                    setTableCellText(mainTable.getRow(rowIndex).getCell(5), protocolDate, TABLE_FONT_SIZE, false);
+                    String deadlineValue = hasWorkDeadline ? deadlineText : protocolDate;
+                    setTableCellText(mainTable.getRow(rowIndex).getCell(5), deadlineValue, TABLE_FONT_SIZE, false);
                 } else {
                     setTableCellText(mainTable.getRow(rowIndex).getCell(0), "", TABLE_FONT_SIZE, false);
                     setTableCellText(mainTable.getRow(rowIndex).getCell(1), "", TABLE_FONT_SIZE, false);
@@ -149,8 +152,10 @@ final class MeasurementPlanExporter {
                 mergeCellsVertically(mainTable, 2, 1, dataRowsCount);
                 mergeCellsVertically(mainTable, 5, 1, dataRowsCount);
             }
-            for (int rowIndex = 1; rowIndex <= dataRowsCount; rowIndex++) {
-                highlightCell(mainTable.getRow(rowIndex).getCell(5));
+            if (!hasWorkDeadline) {
+                for (int rowIndex = 1; rowIndex <= dataRowsCount; rowIndex++) {
+                    highlightCell(mainTable.getRow(rowIndex).getCell(5));
+                }
             }
 
             addParagraphText(document, "План измерений сформировал:");
@@ -251,14 +256,14 @@ final class MeasurementPlanExporter {
     }
 
     private static void configureMainTableLayout(XWPFTable table) {
-        int[] columnWidths = {1600, 2000, 2000, 2000, 2800, 1600};
+        int[] columnWidths = {1600, 2000, 2000, 2000, 3360, 1600};
 
         CTTbl ct = table.getCTTbl();
         CTTblPr pr = ct.getTblPr() != null ? ct.getTblPr() : ct.addNewTblPr();
 
         CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
         tblW.setType(STTblWidth.DXA);
-        tblW.setW(BigInteger.valueOf(12000));
+        tblW.setW(BigInteger.valueOf(12560));
 
         CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
         jc.setVal(STJcTable.CENTER);

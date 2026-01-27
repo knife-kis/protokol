@@ -29,7 +29,7 @@ public class ProtocolMapPanel extends JPanel {
     }
 
     private interface MapGenerator {
-        File generate(File sourceFile) throws IOException;
+        File generate(File sourceFile, String workDeadline) throws IOException;
     }
 
     private static class DropZonePanel extends JPanel {
@@ -163,8 +163,17 @@ public class ProtocolMapPanel extends JPanel {
                     File generated = null;
 
                     if (generator != null) {
+                        String workDeadline = JOptionPane.showInputDialog(
+                                DropZonePanel.this,
+                                "Какой срок выполнения работ?",
+                                "Срок выполнения работ",
+                                JOptionPane.QUESTION_MESSAGE
+                        );
+                        if (workDeadline == null) {
+                            workDeadline = "";
+                        }
                         try {
-                            generated = generator.generate(source);
+                            generated = generator.generate(source, workDeadline.trim());
                         } catch (Exception ex) { // ВАЖНО: ловим ВСЁ, не только IOException
                             ex.printStackTrace();
                             JOptionPane.showMessageDialog(
