@@ -29,7 +29,7 @@ public class ProtocolMapPanel extends JPanel {
     }
 
     private interface MapGenerator {
-        File generate(File sourceFile, String workDeadline) throws IOException;
+        File generate(File sourceFile, String workDeadline, String customerInn) throws IOException;
     }
 
     private static class DropZonePanel extends JPanel {
@@ -106,6 +106,10 @@ public class ProtocolMapPanel extends JPanel {
             if (measurementPlan != null && measurementPlan.exists()) {
                 listModel.addElement("Сформирован план измерений: " + measurementPlan.getName());
             }
+            File requestForm = RequestFormExporter.resolveRequestFormFile(generatedFile);
+            if (requestForm != null && requestForm.exists()) {
+                listModel.addElement("Сформирована заявка: " + requestForm.getName());
+            }
             generatedMapFile = generatedFile;
             downloadButton.setEnabled(generatedMapFile != null && generatedMapFile.exists());
         }
@@ -172,8 +176,17 @@ public class ProtocolMapPanel extends JPanel {
                         if (workDeadline == null) {
                             workDeadline = "";
                         }
+                        String customerInn = JOptionPane.showInputDialog(
+                                DropZonePanel.this,
+                                "ИНН заказчика?",
+                                "ИНН заказчика",
+                                JOptionPane.QUESTION_MESSAGE
+                        );
+                        if (customerInn == null) {
+                            customerInn = "";
+                        }
                         try {
-                            generated = generator.generate(source, workDeadline.trim());
+                            generated = generator.generate(source, workDeadline.trim(), customerInn.trim());
                         } catch (Exception ex) { // ВАЖНО: ловим ВСЁ, не только IOException
                             ex.printStackTrace();
                             JOptionPane.showMessageDialog(
