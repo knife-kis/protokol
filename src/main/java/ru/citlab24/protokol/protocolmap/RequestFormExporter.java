@@ -1,0 +1,634 @@
+package ru.citlab24.protokol.protocolmap;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
+import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFHeader;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJcTable;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblWidth;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STFldCharType;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STJcTable;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
+import org.apache.xmlbeans.impl.xb.xmlschema.SpaceAttribute;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+final class RequestFormExporter {
+    private static final String REQUEST_FORM_NAME = "заявка.docx";
+    private static final String FONT_NAME = "Arial";
+    private static final int FONT_SIZE = 12;
+    private static final int MAP_APPLICATION_ROW_INDEX = 22;
+    private static final int MAP_CUSTOMER_ROW_INDEX = 5;
+
+    private RequestFormExporter() {
+    }
+
+    static void generate(File mapFile, String workDeadline, String customerInn) {
+        if (mapFile == null || !mapFile.exists()) {
+            return;
+        }
+        File targetFile = resolveRequestFormFile(mapFile);
+        String applicationNumber = resolveApplicationNumberFromMap(mapFile);
+        CustomerInfo customerInfo = resolveCustomerInfo(mapFile);
+        String deadlineText = workDeadline == null ? "" : workDeadline.trim();
+        String innText = customerInn == null ? "" : customerInn.trim();
+
+        try (XWPFDocument document = new XWPFDocument()) {
+            applyStandardHeader(document);
+
+            XWPFParagraph title = document.createParagraph();
+            title.setAlignment(ParagraphAlignment.CENTER);
+            setParagraphSpacing(title);
+            XWPFRun titleRun = title.createRun();
+            titleRun.setText("Заявка № " + applicationNumber);
+            titleRun.setFontFamily(FONT_NAME);
+            titleRun.setFontSize(FONT_SIZE);
+            titleRun.setBold(true);
+
+            XWPFParagraph spacerAfterTitle = document.createParagraph();
+            setParagraphSpacing(spacerAfterTitle);
+
+            XWPFParagraph requestText = document.createParagraph();
+            setParagraphSpacing(requestText);
+            XWPFRun requestRun = requestText.createRun();
+            requestRun.setText("Прошу провести работы по проведению измерений в целях:");
+            requestRun.setFontFamily(FONT_NAME);
+            requestRun.setFontSize(FONT_SIZE);
+            requestRun.setBold(true);
+
+            XWPFTable purposeTable = document.createTable(2, 2);
+            configureTableLayout(purposeTable, new int[]{6280, 6280});
+            setTableCellText(purposeTable.getRow(0).getCell(0), "Поставить отметку", false, ParagraphAlignment.LEFT);
+            setTableCellText(purposeTable.getRow(0).getCell(1), "Цель", false, ParagraphAlignment.LEFT);
+            setTableCellText(purposeTable.getRow(1).getCell(0), "Χ", false, ParagraphAlignment.LEFT);
+            setTableCellText(purposeTable.getRow(1).getCell(1),
+                    "Иная цель:\nВвод здания в эксплуатацию", false, ParagraphAlignment.LEFT);
+
+            XWPFParagraph spacerAfterPurpose = document.createParagraph();
+            setParagraphSpacing(spacerAfterPurpose);
+
+            XWPFTable optionsTable = document.createTable(16, 3);
+            configureTableLayout(optionsTable, new int[]{5652, 5652, 1256});
+            setTableCellText(optionsTable.getRow(0).getCell(0), "Протоколы измерений", false,
+                    ParagraphAlignment.CENTER);
+            setTableCellText(optionsTable.getRow(0).getCell(1), "выдать на руки", false,
+                    ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(0).getCell(2), "Х", false, ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(1).getCell(1), "направить электронной почтой", false,
+                    ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(2).getCell(1),
+                    "направить почтовой/курьерской службой (оплата услуг по доставке осуществляется Заказчиком)",
+                    false, ParagraphAlignment.LEFT);
+
+            setTableCellText(optionsTable.getRow(3).getCell(0),
+                    "Заявитель оставляет право выбора оптимального метода (методики) измерений по заявке, " +
+                            "а также факторов, объектов, точек и сроков исследований (испытаний), измерений",
+                    false, ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(3).getCell(1), "ДА", false, ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(4).getCell(0), "Выдать результат:", false,
+                    ParagraphAlignment.LEFT);
+
+            setTableCellText(optionsTable.getRow(5).getCell(0), "Без указания неопределенности/погрешности",
+                    false, ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(5).getCell(1), "на усмотрение ИЛ", false,
+                    ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(6).getCell(0),
+                    "В соответствии с показателями качества, установленными в методике (погрешность или " +
+                            "неопределенность в зависимости от методики, по которой проводится измерение)",
+                    false, ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(6).getCell(1), "на усмотрение ИЛ", false,
+                    ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(7).getCell(0), "С указанием неопределенности", false,
+                    ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(7).getCell(1), "на усмотрение ИЛ", false,
+                    ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(8).getCell(0), "С указанием погрешности", false,
+                    ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(8).getCell(1), "на усмотрение ИЛ", false,
+                    ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(9).getCell(0),
+                    "Необходимость указания требований к объекту измерений в протоколе измерений:",
+                    true, ParagraphAlignment.LEFT);
+
+            setTableCellText(optionsTable.getRow(10).getCell(0),
+                    "Документы, устанавливающие требования к объекту измерений (при необходимости):",
+                    false, ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(10).getCell(1), "ДА", false, ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(11).getCell(0),
+                    "Особые указания от Заказчика для проведения работ",
+                    false, ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(11).getCell(1), "НЕТ", false, ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(12).getCell(0),
+                    "Заказчик согласен на передачу отчетов во ФГИС Росаккредитация",
+                    false, ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(12).getCell(1), "ДА", false, ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(13).getCell(0),
+                    "Необходимо предоставление доступа для наблюдения за лабораторной деятельностью " +
+                            "Заказчику в местах временных работ на объектах Заказчика",
+                    false, ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(13).getCell(1), "ДА", false, ParagraphAlignment.CENTER);
+
+            setTableCellText(optionsTable.getRow(14).getCell(0),
+                    "Данные, предоставленные Заказчиком, за которые он несет ответственность",
+                    false, ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(14).getCell(1), "Приложение к заявке", false,
+                    ParagraphAlignment.LEFT);
+
+            setTableCellText(optionsTable.getRow(15).getCell(0), "Сроки выполнения работ", false,
+                    ParagraphAlignment.LEFT);
+            setTableCellText(optionsTable.getRow(15).getCell(1), deadlineText, false,
+                    ParagraphAlignment.LEFT);
+
+            mergeCellsVertically(optionsTable, 0, 0, 2);
+            mergeCellsHorizontally(optionsTable, 3, 1, 2);
+            mergeCellsHorizontally(optionsTable, 4, 0, 2);
+            mergeCellsHorizontally(optionsTable, 5, 1, 2);
+            mergeCellsHorizontally(optionsTable, 6, 1, 2);
+            mergeCellsHorizontally(optionsTable, 7, 1, 2);
+            mergeCellsHorizontally(optionsTable, 8, 1, 2);
+            mergeCellsHorizontally(optionsTable, 9, 0, 2);
+            mergeCellsHorizontally(optionsTable, 10, 1, 2);
+            mergeCellsHorizontally(optionsTable, 11, 1, 2);
+            mergeCellsHorizontally(optionsTable, 12, 1, 2);
+            mergeCellsHorizontally(optionsTable, 13, 1, 2);
+            mergeCellsHorizontally(optionsTable, 14, 1, 2);
+            mergeCellsHorizontally(optionsTable, 15, 1, 2);
+
+            XWPFParagraph spacerBeforeCustomer = document.createParagraph();
+            setParagraphSpacing(spacerBeforeCustomer);
+
+            XWPFParagraph customerTitle = document.createParagraph();
+            setParagraphSpacing(customerTitle);
+            XWPFRun customerRun = customerTitle.createRun();
+            customerRun.setText("Сведения о заказчике:");
+            customerRun.setFontFamily(FONT_NAME);
+            customerRun.setFontSize(FONT_SIZE);
+
+            XWPFTable customerTable = document.createTable(4, 2);
+            configureTableLayout(customerTable, new int[]{3770, 8790});
+            setTableCellText(customerTable.getRow(0).getCell(0), "Наименование", false, ParagraphAlignment.LEFT);
+            setTableCellText(customerTable.getRow(0).getCell(1), customerInfo.name, false, ParagraphAlignment.LEFT);
+            setTableCellText(customerTable.getRow(1).getCell(0), "ИНН", false, ParagraphAlignment.LEFT);
+            setTableCellText(customerTable.getRow(1).getCell(1), innText, false, ParagraphAlignment.LEFT);
+            setTableCellText(customerTable.getRow(2).getCell(0), "Электронная почта", false,
+                    ParagraphAlignment.LEFT);
+            setTableCellText(customerTable.getRow(2).getCell(1), customerInfo.email, false,
+                    ParagraphAlignment.LEFT);
+            setTableCellText(customerTable.getRow(3).getCell(0), "Контактный телефон", false,
+                    ParagraphAlignment.LEFT);
+            setTableCellText(customerTable.getRow(3).getCell(1), customerInfo.phone, false,
+                    ParagraphAlignment.LEFT);
+
+            XWPFParagraph spacerAfterCustomer = document.createParagraph();
+            setParagraphSpacing(spacerAfterCustomer);
+
+            addParagraphWithLineBreaks(document,
+                    "Заявитель ознакомлен с методами и методиками, используемыми испытательной лабораторией.\n\n" +
+                            "Заказчик согласен на отклонение от методов (методик) измерений с учетом выполненного " +
+                            "ИЛ технического обоснования отклонений, если такое отклонение потребуется при " +
+                            "выполнении заявки.\n\n" +
+                            "Заявитель ознакомлен с тем, что ИЛ не использует в своей работе методов, не изложенных " +
+                            "в нормативных документах (домашних методов): нестандартных методик; методик, " +
+                            "разработанных ИЛ; стандартных методик, используемых за пределами целевой области их " +
+                            "применений; расширений и модификаций стандартных методик.\n\n" +
+                            "Заявитель обязуется:\n" +
+                            "- обеспечить доступ на объект для проведения исследований, испытаний, измерений;\n" +
+                            "- предоставить всю необходимую информацию для проведения работ по заявке.\n\n" +
+                            "Заявитель: ");
+
+            XWPFParagraph spacerBeforeSignature = document.createParagraph();
+            setParagraphSpacing(spacerBeforeSignature);
+
+            XWPFTable signatureTable = document.createTable(2, 3);
+            configureTableLayout(signatureTable, new int[]{4187, 4187, 4186});
+            setTableCellText(signatureTable.getRow(0).getCell(0), "______________________", false,
+                    ParagraphAlignment.CENTER);
+            setTableCellText(signatureTable.getRow(0).getCell(1), "______________________", false,
+                    ParagraphAlignment.CENTER);
+            setTableCellText(signatureTable.getRow(0).getCell(2), "______________________", false,
+                    ParagraphAlignment.CENTER);
+
+            setTableCellText(signatureTable.getRow(1).getCell(0), "должность", false,
+                    ParagraphAlignment.CENTER);
+            setTableCellText(signatureTable.getRow(1).getCell(1), "подпись", false,
+                    ParagraphAlignment.CENTER);
+            setTableCellText(signatureTable.getRow(1).getCell(2), "инициалы, фамилия", false,
+                    ParagraphAlignment.CENTER);
+
+            try (FileOutputStream out = new FileOutputStream(targetFile)) {
+                document.write(out);
+            }
+        } catch (Exception ignored) {
+            // пропускаем создание листа, если не удалось сформировать документ
+        }
+    }
+
+    static File resolveRequestFormFile(File mapFile) {
+        if (mapFile == null) {
+            return null;
+        }
+        return new File(mapFile.getParentFile(), REQUEST_FORM_NAME);
+    }
+
+    private static void applyStandardHeader(XWPFDocument document) {
+        CTSectPr sectPr = document.getDocument().getBody().getSectPr();
+        if (sectPr == null) {
+            sectPr = document.getDocument().getBody().addNewSectPr();
+        }
+
+        XWPFHeaderFooterPolicy policy = new XWPFHeaderFooterPolicy(document, sectPr);
+        XWPFHeader header = policy.createHeader(XWPFHeaderFooterPolicy.DEFAULT);
+
+        XWPFTable table = header.createTable(3, 3);
+        configureHeaderTableLikeTemplate(table);
+
+        setHeaderCellText(table.getRow(0).getCell(0), "Испытательная лаборатория ООО «ЦИТ»");
+        setHeaderCellText(table.getRow(0).getCell(1), "Форма заявки Ф46 ДП ИЛ 2-2023");
+        setHeaderCellText(table.getRow(0).getCell(2), "Дата утверждения бланка формуляра: 01.01.2023г.");
+        setHeaderCellText(table.getRow(1).getCell(2), "Редакция № 1");
+        setHeaderCellPageCount(table.getRow(2).getCell(2));
+
+        mergeCellsVertically(table, 0, 0, 2);
+        mergeCellsVertically(table, 1, 0, 2);
+    }
+
+    private static void configureHeaderTableLikeTemplate(XWPFTable table) {
+        CTTbl ct = table.getCTTbl();
+        CTTblPr pr = ct.getTblPr() != null ? ct.getTblPr() : ct.addNewTblPr();
+
+        CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
+        tblW.setType(STTblWidth.DXA);
+        tblW.setW(BigInteger.valueOf(9639));
+
+        CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
+        jc.setVal(STJcTable.CENTER);
+
+        CTTblLayoutType layout = pr.isSetTblLayout() ? pr.getTblLayout() : pr.addNewTblLayout();
+        layout.setType(STTblLayoutType.FIXED);
+
+        CTTblBorders borders = pr.isSetTblBorders() ? pr.getTblBorders() : pr.addNewTblBorders();
+        setBorder(borders.isSetTop() ? borders.getTop() : borders.addNewTop());
+        setBorder(borders.isSetLeft() ? borders.getLeft() : borders.addNewLeft());
+        setBorder(borders.isSetBottom() ? borders.getBottom() : borders.addNewBottom());
+        setBorder(borders.isSetRight() ? borders.getRight() : borders.addNewRight());
+        setBorder(borders.isSetInsideH() ? borders.getInsideH() : borders.addNewInsideH());
+        setBorder(borders.isSetInsideV() ? borders.getInsideV() : borders.addNewInsideV());
+
+        CTTblGrid grid = ct.getTblGrid();
+        if (grid == null) {
+            grid = ct.addNewTblGrid();
+        } else {
+            while (grid.sizeOfGridColArray() > 0) {
+                grid.removeGridCol(0);
+            }
+        }
+        grid.addNewGridCol().setW(BigInteger.valueOf(2951));
+        grid.addNewGridCol().setW(BigInteger.valueOf(3140));
+        grid.addNewGridCol().setW(BigInteger.valueOf(3548));
+
+        setCellWidth(table, 0, 0, 2951);
+        setCellWidth(table, 1, 0, 2951);
+        setCellWidth(table, 2, 0, 2951);
+
+        setCellWidth(table, 0, 1, 3140);
+        setCellWidth(table, 1, 1, 3140);
+        setCellWidth(table, 2, 1, 3140);
+
+        setCellWidth(table, 0, 2, 3548);
+        setCellWidth(table, 1, 2, 3548);
+        setCellWidth(table, 2, 2, 3548);
+    }
+
+    private static void configureTableLayout(XWPFTable table, int[] columnWidths) {
+        CTTbl ct = table.getCTTbl();
+        CTTblPr pr = ct.getTblPr() != null ? ct.getTblPr() : ct.addNewTblPr();
+
+        CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
+        tblW.setType(STTblWidth.DXA);
+        tblW.setW(BigInteger.valueOf(12560));
+
+        CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
+        jc.setVal(STJcTable.CENTER);
+
+        CTTblLayoutType layout = pr.isSetTblLayout() ? pr.getTblLayout() : pr.addNewTblLayout();
+        layout.setType(STTblLayoutType.FIXED);
+
+        CTTblGrid grid = ct.getTblGrid();
+        if (grid == null) {
+            grid = ct.addNewTblGrid();
+        } else {
+            while (grid.sizeOfGridColArray() > 0) {
+                grid.removeGridCol(0);
+            }
+        }
+        for (int width : columnWidths) {
+            grid.addNewGridCol().setW(BigInteger.valueOf(width));
+        }
+
+        for (int rowIndex = 0; rowIndex < table.getNumberOfRows(); rowIndex++) {
+            for (int colIndex = 0; colIndex < columnWidths.length; colIndex++) {
+                setCellWidth(table, rowIndex, colIndex, columnWidths[colIndex]);
+            }
+        }
+    }
+
+    private static void setTableCellText(XWPFTableCell cell, String text, boolean bold,
+                                         ParagraphAlignment alignment) {
+        cell.removeParagraph(0);
+        XWPFParagraph paragraph = cell.addParagraph();
+        paragraph.setAlignment(alignment);
+        setParagraphSpacing(paragraph);
+        XWPFRun run = paragraph.createRun();
+        setRunTextWithBreaks(run, text);
+        run.setFontFamily(FONT_NAME);
+        run.setFontSize(FONT_SIZE);
+        run.setBold(bold);
+    }
+
+    private static void setRunTextWithBreaks(XWPFRun run, String text) {
+        if (text == null) {
+            return;
+        }
+        String[] parts = text.split("\\n", -1);
+        int textPos = 0;
+        for (int index = 0; index < parts.length; index++) {
+            if (index > 0) {
+                run.addBreak();
+            }
+            run.setText(parts[index], textPos++);
+        }
+    }
+
+    private static void setParagraphSpacing(XWPFParagraph paragraph) {
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBefore(0);
+    }
+
+    private static void addParagraphWithLineBreaks(XWPFDocument document, String text) {
+        XWPFParagraph paragraph = document.createParagraph();
+        setParagraphSpacing(paragraph);
+        XWPFRun run = paragraph.createRun();
+        run.setFontFamily(FONT_NAME);
+        run.setFontSize(FONT_SIZE);
+        setRunTextWithBreaks(run, text);
+    }
+
+    private static void mergeCellsVertically(XWPFTable table, int col, int fromRow, int toRow) {
+        for (int rowIndex = fromRow; rowIndex <= toRow; rowIndex++) {
+            XWPFTableCell cell = table.getRow(rowIndex).getCell(col);
+            if (cell == null) {
+                continue;
+            }
+            if (cell.getCTTc().getTcPr() == null) {
+                cell.getCTTc().addNewTcPr();
+            }
+            if (rowIndex == fromRow) {
+                cell.getCTTc().getTcPr().addNewVMerge().setVal(STMerge.RESTART);
+            } else {
+                cell.getCTTc().getTcPr().addNewVMerge().setVal(STMerge.CONTINUE);
+            }
+        }
+    }
+
+    private static void mergeCellsHorizontally(XWPFTable table, int row, int fromCol, int toCol) {
+        if (fromCol >= toCol) {
+            return;
+        }
+        XWPFTableRow tableRow = table.getRow(row);
+        if (tableRow == null) {
+            return;
+        }
+        XWPFTableCell cell = tableRow.getCell(fromCol);
+        if (cell == null) {
+            return;
+        }
+        CTTcPr tcPr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
+        tcPr.addNewGridSpan().setVal(BigInteger.valueOf(toCol - fromCol + 1));
+
+        for (int colIndex = toCol; colIndex > fromCol; colIndex--) {
+            tableRow.removeCell(colIndex);
+        }
+    }
+
+    private static void setHeaderCellText(XWPFTableCell cell, String text) {
+        cell.removeParagraph(0);
+        XWPFParagraph p = cell.addParagraph();
+        p.setAlignment(ParagraphAlignment.CENTER);
+
+        XWPFRun r = p.createRun();
+        r.setText(text != null ? text : "");
+        r.setFontFamily(FONT_NAME);
+        r.setFontSize(FONT_SIZE);
+    }
+
+    private static void setHeaderCellPageCount(XWPFTableCell cell) {
+        cell.removeParagraph(0);
+        XWPFParagraph p = cell.addParagraph();
+        p.setAlignment(ParagraphAlignment.CENTER);
+
+        XWPFRun r0 = p.createRun();
+        r0.setText("Количество страниц: ");
+        r0.setFontFamily(FONT_NAME);
+        r0.setFontSize(FONT_SIZE);
+
+        appendField(p, "PAGE");
+        XWPFRun rSep = p.createRun();
+        rSep.setText(" / ");
+        rSep.setFontFamily(FONT_NAME);
+        rSep.setFontSize(FONT_SIZE);
+
+        appendField(p, "NUMPAGES");
+    }
+
+    private static void appendField(XWPFParagraph p, String instr) {
+        XWPFRun rBegin = p.createRun();
+        rBegin.setFontFamily(FONT_NAME);
+        rBegin.setFontSize(FONT_SIZE);
+        rBegin.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
+
+        XWPFRun rInstr = p.createRun();
+        rInstr.setFontFamily(FONT_NAME);
+        rInstr.setFontSize(FONT_SIZE);
+        var ctText = rInstr.getCTR().addNewInstrText();
+        ctText.setStringValue(instr);
+        ctText.setSpace(SpaceAttribute.Space.PRESERVE);
+
+        XWPFRun rSep = p.createRun();
+        rSep.setFontFamily(FONT_NAME);
+        rSep.setFontSize(FONT_SIZE);
+        rSep.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
+
+        XWPFRun rText = p.createRun();
+        rText.setFontFamily(FONT_NAME);
+        rText.setFontSize(FONT_SIZE);
+        rText.setText("1");
+
+        XWPFRun rEnd = p.createRun();
+        rEnd.setFontFamily(FONT_NAME);
+        rEnd.setFontSize(FONT_SIZE);
+        rEnd.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
+    }
+
+    private static void setBorder(CTBorder border) {
+        border.setVal(STBorder.SINGLE);
+        border.setSz(BigInteger.valueOf(4));
+        border.setSpace(BigInteger.ZERO);
+        border.setColor("auto");
+    }
+
+    private static void setCellWidth(XWPFTable table, int row, int col, int widthDxa) {
+        XWPFTableCell cell = table.getRow(row).getCell(col);
+        CTTcPr tcPr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
+        CTTblWidth width = tcPr.isSetTcW() ? tcPr.getTcW() : tcPr.addNewTcW();
+        width.setType(STTblWidth.DXA);
+        width.setW(BigInteger.valueOf(widthDxa));
+    }
+
+    private static String resolveApplicationNumberFromMap(File mapFile) {
+        String line = readMapRowText(mapFile, MAP_APPLICATION_ROW_INDEX);
+        String lowerLine = line.toLowerCase(Locale.ROOT);
+        int applicationIndex = lowerLine.indexOf("заявка");
+        if (applicationIndex >= 0) {
+            String value = line.substring(applicationIndex + "заявка".length()).trim();
+            return trimLeadingPunctuation(value);
+        }
+        int commaIndex = line.indexOf(',');
+        if (commaIndex >= 0 && commaIndex + 1 < line.length()) {
+            return line.substring(commaIndex + 1).trim();
+        }
+        return line.trim();
+    }
+
+    private static CustomerInfo resolveCustomerInfo(File mapFile) {
+        String line = readMapRowText(mapFile, MAP_CUSTOMER_ROW_INDEX);
+        String value = extractValueAfterPrefix(line, "1. Заказчик");
+        if (value.isBlank()) {
+            value = extractValueAfterPrefix(line, "Заказчик");
+        }
+        List<String> parts = splitCommaParts(value);
+        String name = parts.isEmpty() ? "" : parts.get(0);
+        String email = parts.size() > 1 ? parts.get(1) : "";
+        String phone = "";
+        if (parts.size() > 3) {
+            phone = parts.get(3);
+        } else if (parts.size() > 2) {
+            phone = parts.get(2);
+        }
+        return new CustomerInfo(name, email, phone);
+    }
+
+    private static List<String> splitCommaParts(String value) {
+        List<String> parts = new ArrayList<>();
+        if (value == null || value.isBlank()) {
+            return parts;
+        }
+        for (String part : value.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                parts.add(trimmed);
+            }
+        }
+        return parts;
+    }
+
+    private static String readMapRowText(File mapFile, int rowIndex) {
+        if (mapFile == null || !mapFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(mapFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                return "";
+            }
+            DataFormatter formatter = new DataFormatter();
+            String firstValue = "";
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                if (text.isEmpty()) {
+                    continue;
+                }
+                if (firstValue.isEmpty()) {
+                    firstValue = text;
+                }
+                if (text.contains("Номер протокола")
+                        || text.contains("Заказчик")
+                        || text.toLowerCase(Locale.ROOT).contains("договор")
+                        || text.toLowerCase(Locale.ROOT).contains("заявка")) {
+                    return text;
+                }
+            }
+            return firstValue;
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String extractValueAfterPrefix(String line, String prefix) {
+        if (line == null) {
+            return "";
+        }
+        String normalized = line.trim();
+        int index = normalized.indexOf(prefix);
+        if (index >= 0) {
+            return normalized.substring(index + prefix.length()).replace(":", "").trim();
+        }
+        return normalized.replace(":", "").trim();
+    }
+
+    private static String trimLeadingPunctuation(String value) {
+        if (value == null) {
+            return "";
+        }
+        int index = 0;
+        while (index < value.length() && !Character.isLetterOrDigit(value.charAt(index))) {
+            index++;
+        }
+        return value.substring(index).trim();
+    }
+
+    private record CustomerInfo(String name, String email, String phone) {
+    }
+}
