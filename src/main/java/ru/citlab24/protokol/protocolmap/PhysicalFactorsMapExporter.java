@@ -42,7 +42,7 @@ public final class PhysicalFactorsMapExporter {
     private PhysicalFactorsMapExporter() {
     }
 
-    public static File generateMap(File sourceFile) throws IOException {
+    public static File generateMap(File sourceFile, String workDeadline) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
         java.util.List<String> measurementDates = extractMeasurementDatesList(headerData.measurementDates);
@@ -179,7 +179,7 @@ public final class PhysicalFactorsMapExporter {
         ProtocolIssuanceSheetExporter.generate(sourceFile, targetFile);
         MeasurementCardRegistrationSheetExporter.generate(sourceFile, targetFile);
         EquipmentIssuanceSheetExporter.generate(targetFile);
-        MeasurementPlanExporter.generate(sourceFile, targetFile);
+        MeasurementPlanExporter.generate(sourceFile, targetFile, workDeadline);
 
         return targetFile;
     }
