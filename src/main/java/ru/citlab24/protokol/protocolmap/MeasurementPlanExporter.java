@@ -81,7 +81,7 @@ final class MeasurementPlanExporter {
                 ? "Заместитель заведующий лабораторией"
                 : "Заведующий лабораторией";
         String planCreatorName = isTarnovsky ? "Гаврилова М.Е." : "Тарновский М.О.";
-        String planCreatorDate = lastCharacters(applicationNumber, 8);
+        String planCreatorDate = lastCharacters(applicationNumber, 10);
         String copyRecipientRole = planCreatorRole.equals("Заместитель заведующий лабораторией")
                 ? "Заведующий лабораторией"
                 : "Инженер";
@@ -111,6 +111,7 @@ final class MeasurementPlanExporter {
 
             int dataRowsCount = normativeRows.size();
             XWPFTable mainTable = document.createTable(1 + dataRowsCount, 6);
+            configureMainTableLayout(mainTable);
             setTableCellText(mainTable.getRow(0).getCell(0), "Наименование объекта измерений", TABLE_FONT_SIZE, true);
             setTableCellText(mainTable.getRow(0).getCell(1), "Адрес объекта измерений", TABLE_FONT_SIZE, true);
             setTableCellText(mainTable.getRow(0).getCell(2),
@@ -155,6 +156,7 @@ final class MeasurementPlanExporter {
             addParagraphText(document, "План измерений сформировал:");
 
             XWPFTable creatorTable = document.createTable(2, 4);
+            stretchTableToFullWidth(creatorTable);
             setTableCellText(creatorTable.getRow(0).getCell(0), planCreatorRole, TABLE_FONT_SIZE, false);
             setTableCellText(creatorTable.getRow(0).getCell(1), "", TABLE_FONT_SIZE, false);
             setTableCellText(creatorTable.getRow(0).getCell(2), planCreatorName, TABLE_FONT_SIZE, false);
@@ -168,6 +170,7 @@ final class MeasurementPlanExporter {
             addParagraphText(document, "Копию плана получил:");
 
             XWPFTable recipientTable = document.createTable(2, 4);
+            stretchTableToFullWidth(recipientTable);
             setTableCellText(recipientTable.getRow(0).getCell(0), copyRecipientRole, TABLE_FONT_SIZE, false);
             setTableCellText(recipientTable.getRow(0).getCell(1), "", TABLE_FONT_SIZE, false);
             setTableCellText(recipientTable.getRow(0).getCell(2), copyRecipientName, TABLE_FONT_SIZE, false);
@@ -245,6 +248,49 @@ final class MeasurementPlanExporter {
 
         mergeCellsVertically(table, 0, 0, 2);
         mergeCellsVertically(table, 1, 0, 2);
+    }
+
+    private static void configureMainTableLayout(XWPFTable table) {
+        int[] columnWidths = {1600, 2000, 2000, 2000, 2800, 1600};
+
+        CTTbl ct = table.getCTTbl();
+        CTTblPr pr = ct.getTblPr() != null ? ct.getTblPr() : ct.addNewTblPr();
+
+        CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
+        tblW.setType(STTblWidth.DXA);
+        tblW.setW(BigInteger.valueOf(12000));
+
+        CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
+        jc.setVal(STJcTable.CENTER);
+
+        CTTblLayoutType layout = pr.isSetTblLayout() ? pr.getTblLayout() : pr.addNewTblLayout();
+        layout.setType(STTblLayoutType.FIXED);
+
+        CTTblGrid grid = ct.getTblGrid();
+        if (grid == null) {
+            grid = ct.addNewTblGrid();
+        } else {
+            while (grid.sizeOfGridColArray() > 0) {
+                grid.removeGridCol(0);
+            }
+        }
+        for (int width : columnWidths) {
+            grid.addNewGridCol().setW(BigInteger.valueOf(width));
+        }
+
+        for (int rowIndex = 0; rowIndex < table.getNumberOfRows(); rowIndex++) {
+            for (int colIndex = 0; colIndex < columnWidths.length; colIndex++) {
+                setCellWidth(table, rowIndex, colIndex, columnWidths[colIndex]);
+            }
+        }
+    }
+
+    private static void stretchTableToFullWidth(XWPFTable table) {
+        CTTbl ct = table.getCTTbl();
+        CTTblPr pr = ct.getTblPr() != null ? ct.getTblPr() : ct.addNewTblPr();
+        CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
+        tblW.setType(STTblWidth.PCT);
+        tblW.setW(BigInteger.valueOf(5000));
     }
 
     private static void configureHeaderTableLikeTemplate(XWPFTable table) {
