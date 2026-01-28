@@ -82,8 +82,10 @@ final class RequestFormExporter {
         List<VentilationRow> ventilationRows = resolveVentilationRows(sourceFile);
         String ventilationMethod = resolveVentilationNormativeMethod(sourceFile);
         List<String> medRows = resolveMedRows(sourceFile);
+        List<String> med3Rows = resolveMed3Rows(sourceFile);
         String medNormativeMethod = resolveMedNormativeMethod(sourceFile);
         boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
+        boolean hasMed3Sheet = hasSheetByName(sourceFile, "МЭД (3)");
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -535,6 +537,35 @@ final class RequestFormExporter {
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                     }
                     sectionIndex++;
+                }
+
+                if (hasMed3Sheet) {
+                    XWPFParagraph spacerBeforeMed3 = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeMed3);
+
+                    XWPFParagraph med3Title = document.createParagraph();
+                    setParagraphSpacing(med3Title);
+                    XWPFRun med3TitleRun = med3Title.createRun();
+                    med3TitleRun.setFontFamily(FONT_NAME);
+                    med3TitleRun.setFontSize(FONT_SIZE);
+                    med3TitleRun.setText("Указание места проведения измерений:");
+
+                    if (med3Rows.isEmpty()) {
+                        med3Rows.add("");
+                    }
+                    int med3RowsCount = med3Rows.size();
+                    XWPFTable med3Table = document.createTable(1 + med3RowsCount, 1);
+                    configureTableLayout(med3Table, new int[]{12560});
+                    setTableCellText(med3Table.getRow(0).getCell(0),
+                            "Наименование места\nпроведения измерений",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    for (int index = 0; index < med3RowsCount; index++) {
+                        int rowIndex = index + 1;
+                        String row = med3Rows.get(index);
+                        setTableCellText(med3Table.getRow(rowIndex).getCell(0), row,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    }
                 }
             }
 
@@ -1214,6 +1245,58 @@ final class RequestFormExporter {
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
             Sheet sheet = findSheetByName(workbook, "МЭД (2)");
+            if (sheet == null) {
+                return new ArrayList<>();
+            }
+            List<String> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int lastRow = sheet.getLastRowNum();
+            int emptyStreak = 0;
+            boolean started = false;
+
+            for (int rowIndex = MED_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
+                if (isMedMergedRow(mergedRow, rowIndex)) {
+                    String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator, 0, 5)) {
+                        if (started) {
+                            break;
+                        }
+                        continue;
+                    }
+                    rows.add(text);
+                    started = true;
+                    emptyStreak = 0;
+                    continue;
+                }
+
+                String place = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator).trim();
+                if (place.isEmpty()) {
+                    emptyStreak++;
+                    if (started && emptyStreak >= 10) {
+                        break;
+                    }
+                    continue;
+                }
+                emptyStreak = 0;
+                started = true;
+                rows.add(place);
+            }
+
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static List<String> resolveMed3Rows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = findSheetByName(workbook, "МЭД (3)");
             if (sheet == null) {
                 return new ArrayList<>();
             }
