@@ -1194,7 +1194,7 @@ final class RequestFormExporter {
                 }
                 String normalized = indicator.toLowerCase(Locale.ROOT);
                 if (normalized.contains("скорость воздушного потока")) {
-                    return findFirstValueInRange(row, formatter, 15, 25);
+                    return resolveNormativeMethodValue(row, formatter);
                 }
             }
             return "";
@@ -1281,7 +1281,7 @@ final class RequestFormExporter {
                 }
                 String normalized = indicator.toLowerCase(Locale.ROOT);
                 if (normalized.contains("мощность дозы гамма-излучения")) {
-                    return findFirstValueInRange(row, formatter, 15, 25);
+                    return resolveNormativeMethodValue(row, formatter);
                 }
             }
             return "";
@@ -1399,6 +1399,14 @@ final class RequestFormExporter {
             }
         }
         return "";
+    }
+
+    private static String resolveNormativeMethodValue(Row row, DataFormatter formatter) {
+        String method = findFirstValueInRange(row, formatter, 5, 14);
+        if (!method.isEmpty()) {
+            return method;
+        }
+        return findFirstValueInRange(row, formatter, 15, 25);
     }
 
     private static boolean isVentilationMergedRow(CellRangeAddress region, int rowIndex) {
