@@ -39,6 +39,7 @@ public final class NoiseMapExporter {
         String protocolNumber = resolveProtocolNumber(sourceFile);
         String contractText = resolveContractText(sourceFile);
         String measurementPerformer = resolveMeasurementPerformer(sourceFile);
+        String measurementDates = resolveMeasurementDates(sourceFile);
         String controlDate = resolveControlDate(sourceFile);
         String specialConditions = resolveSpecialConditions(sourceFile);
         String measurementMethods = resolveMeasurementMethods(sourceFile);
@@ -49,7 +50,7 @@ public final class NoiseMapExporter {
             Sheet sheet = workbook.createSheet("карта замеров");
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
-            createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
+            createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, measurementDates, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
 
@@ -166,6 +167,7 @@ public final class NoiseMapExporter {
                                         String registrationNumber,
                                         MapHeaderData headerData,
                                         String measurementPerformer,
+                                        String measurementDates,
                                         String controlDate) {
         Font titleFont = workbook.createFont();
         titleFont.setFontName("Arial");
@@ -219,7 +221,7 @@ public final class NoiseMapExporter {
         heightRow.setHeightInPoints(pixelsToPoints(16));
 
         String datesPrefix = "2. Дата замеров: ";
-        String datesValue = safe(headerData.measurementDates);
+        String datesValue = safe(measurementDates);
         setMergedCellValueWithPrefix(sheet, 7, datesPrefix, datesValue, sectionFont, sectionValueFont, sectionMixedStyle);
         adjustRowHeightForMergedTextDoubling(sheet, 7, 0, 31, datesPrefix + datesValue);
 
@@ -715,6 +717,9 @@ public final class NoiseMapExporter {
             }
             DataFormatter formatter = new DataFormatter();
             for (int idx = workbook.getNumberOfSheets() - 1; idx >= 0; idx--) {
+                if (idx == 0) {
+                    continue;
+                }
                 Sheet sheet = workbook.getSheetAt(idx);
                 if (sheet == null) {
                     continue;
@@ -744,6 +749,33 @@ public final class NoiseMapExporter {
             }
             Sheet sheet = workbook.getSheetAt(0);
             return findControlDate(sheet);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String resolveMeasurementDates(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() <= 1) {
+                return "";
+            }
+            DataFormatter formatter = new DataFormatter();
+            java.util.Map<String, String> dates = new java.util.LinkedHashMap<>();
+            for (int idx = 1; idx < workbook.getNumberOfSheets(); idx++) {
+                Sheet sheet = workbook.getSheetAt(idx);
+                if (sheet == null) {
+                    continue;
+                }
+                if (isGeneratorSheet(sheet.getSheetName())) {
+                    continue;
+                }
+                collectMeasurementDates(sheet, formatter, dates);
+            }
+            return String.join(", ", dates.values());
         } catch (Exception ex) {
             return "";
         }
@@ -993,24 +1025,83 @@ public final class NoiseMapExporter {
     }
 
     private static String findMeasurementPerformer(Sheet sheet, DataFormatter formatter) {
+        if (sheet == null) {
+            return "";
+        }
         for (Row row : sheet) {
+            boolean hasProtocolPrepared = false;
             for (Cell cell : row) {
-                String rawText = formatter.formatCellValue(cell).trim();
-                if (rawText.isEmpty()) {
-                    continue;
+                String text = normalizeText(formatter.formatCellValue(cell));
+                if (text.contains("Протокол подготовил")) {
+                    hasProtocolPrepared = true;
+                    break;
                 }
-                String text = normalizeText(rawText);
-                if (text.contains("Измерения проводил")) {
-                    if (text.contains("Тарновский")) {
-                        return "Тарновский М.О.";
-                    }
-                    if (text.contains("Белов")) {
-                        return "Белов Д.А.";
-                    }
-                }
+            }
+            if (!hasProtocolPrepared) {
+                continue;
+            }
+            String performer = resolvePerformerFromRow(row, formatter);
+            if (!performer.isEmpty()) {
+                return performer;
             }
         }
         return "";
+    }
+
+    private static String resolvePerformerFromRow(Row row, DataFormatter formatter) {
+        if (row == null) {
+            return "";
+        }
+        String rowText = collectRowText(row, formatter).toLowerCase(Locale.ROOT);
+        if (rowText.contains("белов")) {
+            return "Белов Д.А.";
+        }
+        if (rowText.contains("тарновский")) {
+            return "Тарновский М.О.";
+        }
+        return "";
+    }
+
+    private static String collectRowText(Row row, DataFormatter formatter) {
+        StringBuilder builder = new StringBuilder();
+        for (Cell cell : row) {
+            String text = normalizeText(formatter.formatCellValue(cell));
+            if (!text.isEmpty()) {
+                if (builder.length() > 0) {
+                    builder.append(' ');
+                }
+                builder.append(text);
+            }
+        }
+        return builder.toString();
+    }
+
+    private static void collectMeasurementDates(Sheet sheet,
+                                                DataFormatter formatter,
+                                                java.util.Map<String, String> dates) {
+        if (sheet == null) {
+            return;
+        }
+        for (CellRangeAddress range : sheet.getMergedRegions()) {
+            if (range.getFirstColumn() > 23 || range.getLastColumn() > 23) {
+                continue;
+            }
+            Row row = sheet.getRow(range.getFirstRow());
+            if (row == null) {
+                continue;
+            }
+            Cell cell = row.getCell(range.getFirstColumn());
+            String text = normalizeText(cell == null ? "" : formatter.formatCellValue(cell));
+            if (text.isEmpty()) {
+                continue;
+            }
+            java.util.regex.Matcher matcher = MEASUREMENT_DATE_PATTERN.matcher(text);
+            while (matcher.find()) {
+                String rawDate = matcher.group();
+                String key = normalizeText(rawDate).toLowerCase(Locale.ROOT);
+                dates.putIfAbsent(key, rawDate);
+            }
+        }
     }
 
     private static String resolveProtocolNumber(File sourceFile) {
@@ -1261,6 +1352,12 @@ public final class NoiseMapExporter {
             java.util.regex.Pattern.compile("\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b");
     private static final java.util.regex.Pattern CONTROL_DATE_PATTERN =
             java.util.regex.Pattern.compile("\\b\\d{1,2}\\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\\s+\\d{4}\\b",
+                    java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+    private static final java.util.regex.Pattern MEASUREMENT_DATE_PATTERN =
+            java.util.regex.Pattern.compile(
+                    "\\b\\d{2}\\.\\d{2}\\.(?:\\d{2}|\\d{4})\\b|\\b\\d{1,2}\\s+"
+                            + "(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+                            + "\\s+\\d{4}\\b",
                     java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
 
     private static final class MapHeaderData {
