@@ -1706,7 +1706,7 @@ final class RequestFormExporter {
 
                 String fieldNumber = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator).trim();
                 String place = readMergedCellValue(sheet, rowIndex, 2, formatter, evaluator).trim();
-                String normalizedLight = readMergedCellValue(sheet, rowIndex, 14, formatter, evaluator).trim();
+                String normalizedLight = readMergedCellValue(sheet, rowIndex, 9, formatter, evaluator).trim();
 
                 if (fieldNumber.isEmpty() && place.isEmpty() && normalizedLight.isEmpty()) {
                     emptyStreak++;
