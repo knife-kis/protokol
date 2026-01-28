@@ -181,6 +181,7 @@ public final class PhysicalFactorsMapExporter {
         EquipmentIssuanceSheetExporter.generate(targetFile);
         MeasurementPlanExporter.generate(sourceFile, targetFile, workDeadline);
         RequestFormExporter.generate(sourceFile, targetFile, workDeadline, customerInn);
+        RequestAnalysisSheetExporter.generate(targetFile);
 
         return targetFile;
     }
