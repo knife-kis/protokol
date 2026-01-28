@@ -70,6 +70,7 @@ final class RequestFormExporter {
         String objectName = resolveObjectName(mapFile);
         String objectAddress = resolveObjectAddress(mapFile);
         List<NormativeRow> normativeRows = resolveNormativeRows(sourceFile);
+        List<MicroclimateRow> microclimateRows = resolveMicroclimateRows(sourceFile);
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -342,6 +343,84 @@ final class RequestFormExporter {
             addParagraphWithLineBreaks(document,
                     "Представитель заказчика _______________________________________________\n" +
                             "                                                 (Должность, ФИО, контактные данные) ");
+
+            if (!microclimateRows.isEmpty()) {
+                XWPFParagraph appendixBreak = document.createParagraph();
+                setParagraphSpacing(appendixBreak);
+                appendixBreak.createRun().addBreak(BreakType.PAGE);
+
+                XWPFParagraph customerAppendixHeader = document.createParagraph();
+                customerAppendixHeader.setAlignment(ParagraphAlignment.RIGHT);
+                setParagraphSpacing(customerAppendixHeader);
+                XWPFRun customerAppendixHeaderRun = customerAppendixHeader.createRun();
+                customerAppendixHeaderRun.setFontFamily(FONT_NAME);
+                customerAppendixHeaderRun.setFontSize(FONT_SIZE);
+                setRunTextWithBreaks(customerAppendixHeaderRun,
+                        "Приложения к заявке № " + applicationNumber + "\n" +
+                                "Приложение – Данные, предоставлены Заказчиком");
+
+                XWPFParagraph customerAppendixTitle = document.createParagraph();
+                customerAppendixTitle.setAlignment(ParagraphAlignment.CENTER);
+                setParagraphSpacing(customerAppendixTitle);
+                XWPFRun customerAppendixTitleRun = customerAppendixTitle.createRun();
+                customerAppendixTitleRun.setText("Данные, предоставленные Заказчиком, за которые он несет ответственность");
+                customerAppendixTitleRun.setFontFamily(FONT_NAME);
+                customerAppendixTitleRun.setFontSize(FONT_SIZE);
+                customerAppendixTitleRun.setBold(true);
+
+                XWPFParagraph spacerBeforeMicroclimate = document.createParagraph();
+                setParagraphSpacing(spacerBeforeMicroclimate);
+
+                XWPFParagraph microclimateTitle = document.createParagraph();
+                setParagraphSpacing(microclimateTitle);
+                XWPFRun microclimateTitleRun = microclimateTitle.createRun();
+                microclimateTitleRun.setFontFamily(FONT_NAME);
+                microclimateTitleRun.setFontSize(FONT_SIZE);
+                microclimateTitleRun.setText("1.\tДопустимые уровни параметров микроклимата в соответствии с СанПиН " +
+                        "1.2.3685-21 \"Гигиенические нормативы и требования к обеспечению безопасности и (или) " +
+                        "безвредности для человека факторов среды обитания\" с указанием места проведения измерений:");
+
+                int microclimateRowsCount = microclimateRows.size();
+                XWPFTable microclimateTable = document.createTable(1 + microclimateRowsCount, 5);
+                configureTableLayout(microclimateTable, new int[]{6280, 1570, 1570, 1570, 1570});
+                setTableCellText(microclimateTable.getRow(0).getCell(0),
+                        "Рабочее место, место проведения измерений, цех, участок,\n" +
+                                "наименование профессии или \nдолжности",
+                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                setTableCellText(microclimateTable.getRow(0).getCell(1),
+                        "Допустимый уровень температуры воздуха, ºС",
+                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                setTableCellText(microclimateTable.getRow(0).getCell(2),
+                        "Допустимый уровень результирующей температуры, ºС",
+                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                setTableCellText(microclimateTable.getRow(0).getCell(3),
+                        "Допустимый уровень влажности воздуха, %",
+                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                setTableCellText(microclimateTable.getRow(0).getCell(4),
+                        "Допустимый уровень скорости движения воздуха, м/с",
+                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                for (int index = 0; index < microclimateRowsCount; index++) {
+                    int rowIndex = index + 1;
+                    MicroclimateRow row = microclimateRows.get(index);
+                    if (row.isSection) {
+                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(0), row.workplace,
+                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        mergeCellsHorizontally(microclimateTable, rowIndex, 0, 4);
+                    } else {
+                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(0), row.workplace,
+                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(1), row.airTemperature,
+                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(2), row.resultTemperature,
+                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(3), row.humidity,
+                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(4), row.airSpeed,
+                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    }
+                }
+            }
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 document.write(out);
@@ -836,6 +915,106 @@ final class RequestFormExporter {
         }
     }
 
+    private static List<MicroclimateRow> resolveMicroclimateRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = findSheetByName(workbook, "Микроклимат");
+            if (sheet == null) {
+                return new ArrayList<>();
+            }
+            List<MicroclimateRow> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            int lastRow = sheet.getLastRowNum();
+            for (int rowIndex = 5; rowIndex <= lastRow; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    continue;
+                }
+                String sectionText = formatter.formatCellValue(row.getCell(0)).trim();
+                String workplace = formatter.formatCellValue(row.getCell(1)).trim();
+                String airTemperature = formatter.formatCellValue(row.getCell(8)).trim();
+                String resultTemperature = formatter.formatCellValue(row.getCell(13)).trim();
+                String humidity = formatter.formatCellValue(row.getCell(17)).trim();
+                String airSpeed = formatter.formatCellValue(row.getCell(21)).trim();
+
+                boolean isSection = !sectionText.isEmpty()
+                        && workplace.isEmpty()
+                        && airTemperature.isEmpty()
+                        && resultTemperature.isEmpty()
+                        && humidity.isEmpty()
+                        && airSpeed.isEmpty();
+                if (isSection) {
+                    rows.add(MicroclimateRow.section(sectionText));
+                    continue;
+                }
+
+                if (workplace.isEmpty()) {
+                    continue;
+                }
+
+                int scanIndex = rowIndex + 1;
+                while (scanIndex <= lastRow
+                        && (airTemperature.isEmpty() || resultTemperature.isEmpty()
+                        || humidity.isEmpty() || airSpeed.isEmpty())) {
+                    Row scanRow = sheet.getRow(scanIndex);
+                    if (scanRow == null) {
+                        scanIndex++;
+                        continue;
+                    }
+                    String nextSection = formatter.formatCellValue(scanRow.getCell(0)).trim();
+                    String nextWorkplace = formatter.formatCellValue(scanRow.getCell(1)).trim();
+                    boolean nextIsSection = !nextSection.isEmpty()
+                            && nextWorkplace.isEmpty()
+                            && formatter.formatCellValue(scanRow.getCell(8)).trim().isEmpty()
+                            && formatter.formatCellValue(scanRow.getCell(13)).trim().isEmpty()
+                            && formatter.formatCellValue(scanRow.getCell(17)).trim().isEmpty()
+                            && formatter.formatCellValue(scanRow.getCell(21)).trim().isEmpty();
+                    if (!nextWorkplace.isEmpty() || nextIsSection) {
+                        break;
+                    }
+                    if (airTemperature.isEmpty()) {
+                        airTemperature = formatter.formatCellValue(scanRow.getCell(8)).trim();
+                    }
+                    if (resultTemperature.isEmpty()) {
+                        resultTemperature = formatter.formatCellValue(scanRow.getCell(13)).trim();
+                    }
+                    if (humidity.isEmpty()) {
+                        humidity = formatter.formatCellValue(scanRow.getCell(17)).trim();
+                    }
+                    if (airSpeed.isEmpty()) {
+                        airSpeed = formatter.formatCellValue(scanRow.getCell(21)).trim();
+                    }
+                    scanIndex++;
+                }
+
+                rows.add(new MicroclimateRow(workplace, airTemperature, resultTemperature, humidity, airSpeed));
+            }
+            if (rows.isEmpty()) {
+                rows.add(new MicroclimateRow("", "", "", "", ""));
+            }
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static Sheet findSheetByName(Workbook workbook, String sheetName) {
+        if (workbook == null) {
+            return null;
+        }
+        int sheetCount = workbook.getNumberOfSheets();
+        for (int index = 0; index < sheetCount; index++) {
+            Sheet sheet = workbook.getSheetAt(index);
+            if (sheet != null && sheet.getSheetName().equalsIgnoreCase(sheetName)) {
+                return sheet;
+            }
+        }
+        return null;
+    }
+
     private static List<NormativeRow> resolveNormativeRows(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return new ArrayList<>();
@@ -913,6 +1092,38 @@ final class RequestFormExporter {
         private NormativeRow(String indicator, String method) {
             this.indicator = indicator == null ? "" : indicator;
             this.method = method == null ? "" : method;
+        }
+    }
+
+    private static final class MicroclimateRow {
+        private final String workplace;
+        private final String airTemperature;
+        private final String resultTemperature;
+        private final String humidity;
+        private final String airSpeed;
+        private final boolean isSection;
+
+        private MicroclimateRow(String workplace, String airTemperature, String resultTemperature, String humidity,
+                                String airSpeed) {
+            this.workplace = workplace == null ? "" : workplace;
+            this.airTemperature = airTemperature == null ? "" : airTemperature;
+            this.resultTemperature = resultTemperature == null ? "" : resultTemperature;
+            this.humidity = humidity == null ? "" : humidity;
+            this.airSpeed = airSpeed == null ? "" : airSpeed;
+            this.isSection = false;
+        }
+
+        private MicroclimateRow(String section) {
+            this.workplace = section == null ? "" : section;
+            this.airTemperature = "";
+            this.resultTemperature = "";
+            this.humidity = "";
+            this.airSpeed = "";
+            this.isSection = true;
+        }
+
+        private static MicroclimateRow section(String section) {
+            return new MicroclimateRow(section);
         }
     }
 }
