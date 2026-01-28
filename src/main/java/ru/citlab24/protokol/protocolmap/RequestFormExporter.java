@@ -2,10 +2,12 @@ package ru.citlab24.protokol.protocolmap;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
 import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
@@ -51,6 +53,8 @@ final class RequestFormExporter {
     private static final int PLAN_TABLE_FONT_SIZE = 10;
     private static final int MICROCLIMATE_HEADER_MAIN_FONT_SIZE = 10;
     private static final int MICROCLIMATE_TABLE_FONT_SIZE = 9;
+    private static final int VENTILATION_TABLE_FONT_SIZE = 9;
+    private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
@@ -73,6 +77,8 @@ final class RequestFormExporter {
         String objectAddress = resolveObjectAddress(mapFile);
         List<NormativeRow> normativeRows = resolveNormativeRows(sourceFile);
         List<MicroclimateRow> microclimateRows = resolveMicroclimateRows(sourceFile);
+        List<VentilationRow> ventilationRows = resolveVentilationRows(sourceFile);
+        String ventilationMethod = resolveVentilationNormativeMethod(sourceFile);
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -346,7 +352,7 @@ final class RequestFormExporter {
                     "Представитель заказчика _______________________________________________\n" +
                             "                                                 (Должность, ФИО, контактные данные) ");
 
-            if (!microclimateRows.isEmpty()) {
+            if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty()) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -373,53 +379,114 @@ final class RequestFormExporter {
                 XWPFParagraph spacerBeforeMicroclimate = document.createParagraph();
                 setParagraphSpacing(spacerBeforeMicroclimate);
 
-                XWPFParagraph microclimateTitle = document.createParagraph();
-                setParagraphSpacing(microclimateTitle);
-                XWPFRun microclimateTitleRun = microclimateTitle.createRun();
-                microclimateTitleRun.setFontFamily(FONT_NAME);
-                microclimateTitleRun.setFontSize(FONT_SIZE);
-                microclimateTitleRun.setText("1.\tДопустимые уровни параметров микроклимата в соответствии с СанПиН " +
-                        "1.2.3685-21 \"Гигиенические нормативы и требования к обеспечению безопасности и (или) " +
-                        "безвредности для человека факторов среды обитания\" с указанием места проведения измерений:");
+                int sectionIndex = 1;
 
-                int microclimateRowsCount = microclimateRows.size();
-                XWPFTable microclimateTable = document.createTable(1 + microclimateRowsCount, 5);
-                configureTableLayout(microclimateTable, new int[]{6280, 1570, 1570, 1570, 1570});
-                setTableCellText(microclimateTable.getRow(0).getCell(0),
-                        "Рабочее место, место проведения измерений, цех, участок,\n" +
-                                "наименование профессии или \nдолжности",
-                        MICROCLIMATE_HEADER_MAIN_FONT_SIZE, true, ParagraphAlignment.CENTER);
-                setTableCellText(microclimateTable.getRow(0).getCell(1),
-                        "Допустимый уровень температуры воздуха, ºС",
-                        MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
-                setTableCellText(microclimateTable.getRow(0).getCell(2),
-                        "Допустимый уровень результирующей температуры, ºС",
-                        MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
-                setTableCellText(microclimateTable.getRow(0).getCell(3),
-                        "Допустимый уровень влажности воздуха, %",
-                        MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
-                setTableCellText(microclimateTable.getRow(0).getCell(4),
-                        "Допустимый уровень скорости движения воздуха, м/с",
-                        MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                if (!microclimateRows.isEmpty()) {
+                    XWPFParagraph microclimateTitle = document.createParagraph();
+                    setParagraphSpacing(microclimateTitle);
+                    XWPFRun microclimateTitleRun = microclimateTitle.createRun();
+                    microclimateTitleRun.setFontFamily(FONT_NAME);
+                    microclimateTitleRun.setFontSize(FONT_SIZE);
+                    microclimateTitleRun.setText(sectionIndex + ".\tДопустимые уровни параметров микроклимата " +
+                            "в соответствии с СанПиН 1.2.3685-21 \"Гигиенические нормативы и требования к " +
+                            "обеспечению безопасности и (или) безвредности для человека факторов среды обитания\" " +
+                            "с указанием места проведения измерений:");
 
-                for (int index = 0; index < microclimateRowsCount; index++) {
-                    int rowIndex = index + 1;
-                    MicroclimateRow row = microclimateRows.get(index);
-                    if (row.isSection) {
-                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(0), row.workplace,
-                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
-                        mergeCellsHorizontally(microclimateTable, rowIndex, 0, 4);
-                    } else {
-                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(0), row.workplace,
-                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
-                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(1), row.airTemperature,
-                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
-                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(2), row.resultTemperature,
-                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
-                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(3), row.humidity,
-                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
-                        setTableCellText(microclimateTable.getRow(rowIndex).getCell(4), row.airSpeed,
-                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    int microclimateRowsCount = microclimateRows.size();
+                    XWPFTable microclimateTable = document.createTable(1 + microclimateRowsCount, 5);
+                    configureTableLayout(microclimateTable, new int[]{6280, 1570, 1570, 1570, 1570});
+                    setTableCellText(microclimateTable.getRow(0).getCell(0),
+                            "Рабочее место, место проведения измерений, цех, участок,\n" +
+                                    "наименование профессии или \nдолжности",
+                            MICROCLIMATE_HEADER_MAIN_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(microclimateTable.getRow(0).getCell(1),
+                            "Допустимый уровень температуры воздуха, ºС",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(microclimateTable.getRow(0).getCell(2),
+                            "Допустимый уровень результирующей температуры, ºС",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(microclimateTable.getRow(0).getCell(3),
+                            "Допустимый уровень влажности воздуха, %",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(microclimateTable.getRow(0).getCell(4),
+                            "Допустимый уровень скорости движения воздуха, м/с",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    for (int index = 0; index < microclimateRowsCount; index++) {
+                        int rowIndex = index + 1;
+                        MicroclimateRow row = microclimateRows.get(index);
+                        if (row.isSection) {
+                            setTableCellText(microclimateTable.getRow(rowIndex).getCell(0), row.workplace,
+                                    MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            mergeCellsHorizontally(microclimateTable, rowIndex, 0, 4);
+                        } else {
+                            setTableCellText(microclimateTable.getRow(rowIndex).getCell(0), row.workplace,
+                                    MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(microclimateTable.getRow(rowIndex).getCell(1), row.airTemperature,
+                                    MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(microclimateTable.getRow(rowIndex).getCell(2), row.resultTemperature,
+                                    MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(microclimateTable.getRow(rowIndex).getCell(3), row.humidity,
+                                    MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(microclimateTable.getRow(rowIndex).getCell(4), row.airSpeed,
+                                    MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        }
+                    }
+                    sectionIndex++;
+                }
+
+                if (!ventilationRows.isEmpty()) {
+                    XWPFParagraph spacerBeforeVentilation = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeVentilation);
+
+                    XWPFParagraph ventilationTitle = document.createParagraph();
+                    setParagraphSpacing(ventilationTitle);
+                    XWPFRun ventilationTitleRun = ventilationTitle.createRun();
+                    ventilationTitleRun.setFontFamily(FONT_NAME);
+                    ventilationTitleRun.setFontSize(FONT_SIZE);
+                    String ventilationMethodText = ventilationMethod == null ? "" : ventilationMethod.trim();
+                    String ventilationMethodClause = ventilationMethodText.isBlank()
+                            ? ""
+                            : "в соответствии с " + ventilationMethodText + " ";
+                    String ventilationTitleText = sectionIndex + ".\tДопустимые уровни скорости движения воздуха, " +
+                            "скорости воздушного потока, производительности вентсистем, кратности воздухообмена " +
+                            "по притоку и вытяжке " + ventilationMethodClause +
+                            "с указанием места проведения измерений:";
+                    ventilationTitleRun.setText(ventilationTitleText.trim());
+
+                    int ventilationRowsCount = ventilationRows.size();
+                    XWPFTable ventilationTable = document.createTable(1 + ventilationRowsCount, 4);
+                    configureTableLayout(ventilationTable, new int[]{6280, 1570, 1570, 1570});
+                    setTableCellText(ventilationTable.getRow(0).getCell(0),
+                            "Рабочее место, место проведения измерений (Приток/вытяжка)",
+                            VENTILATION_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(ventilationTable.getRow(0).getCell(1),
+                            "Объем помещения, м^3",
+                            VENTILATION_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(ventilationTable.getRow(0).getCell(2),
+                            "Допустимый уровень производительности венсистем, м^3/ч",
+                            VENTILATION_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(ventilationTable.getRow(0).getCell(3),
+                            "Допустимый уровень кратности воздухообмена, ч^-1",
+                            VENTILATION_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    for (int index = 0; index < ventilationRowsCount; index++) {
+                        int rowIndex = index + 1;
+                        VentilationRow row = ventilationRows.get(index);
+                        if (row.isSection) {
+                            setTableCellText(ventilationTable.getRow(rowIndex).getCell(0), row.workplace,
+                                    VENTILATION_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            mergeCellsHorizontally(ventilationTable, rowIndex, 0, 3);
+                        } else {
+                            setTableCellText(ventilationTable.getRow(rowIndex).getCell(0), row.workplace,
+                                    VENTILATION_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(ventilationTable.getRow(rowIndex).getCell(1), row.volume,
+                                    VENTILATION_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(ventilationTable.getRow(rowIndex).getCell(2), row.performance,
+                                    VENTILATION_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(ventilationTable.getRow(rowIndex).getCell(3), row.airExchange,
+                                    VENTILATION_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        }
                     }
                 }
             }
@@ -1003,6 +1070,96 @@ final class RequestFormExporter {
         }
     }
 
+    private static List<VentilationRow> resolveVentilationRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = findSheetByKeyword(workbook, "вентиляция");
+            if (sheet == null) {
+                return new ArrayList<>();
+            }
+            List<VentilationRow> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int lastRow = sheet.getLastRowNum();
+            int emptyStreak = 0;
+            boolean started = false;
+
+            for (int rowIndex = VENTILATION_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
+                if (isVentilationMergedRow(mergedRow, rowIndex)) {
+                    String sectionText = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (!sectionText.isEmpty()) {
+                        rows.add(VentilationRow.section(sectionText));
+                        started = true;
+                    }
+                    emptyStreak = 0;
+                    continue;
+                }
+
+                String workplace = readMergedCellValue(sheet, rowIndex, 2, formatter, evaluator).trim();
+                String volume = readMergedCellValue(sheet, rowIndex, 8, formatter, evaluator).trim();
+                String performance = readMergedCellValue(sheet, rowIndex, 10, formatter, evaluator).trim();
+                String airExchange = readMergedCellValue(sheet, rowIndex, 11, formatter, evaluator).trim();
+
+                if (workplace.isEmpty() && volume.isEmpty() && performance.isEmpty() && airExchange.isEmpty()) {
+                    emptyStreak++;
+                    if (started && emptyStreak >= 20) {
+                        break;
+                    }
+                    continue;
+                }
+                emptyStreak = 0;
+                started = true;
+                rows.add(new VentilationRow(workplace, volume, performance, airExchange));
+            }
+
+            if (rows.isEmpty()) {
+                rows.add(new VentilationRow("", "", "", ""));
+            }
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static String resolveVentilationNormativeMethod(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            DataFormatter formatter = new DataFormatter();
+            int headerRowIndex = findNormativeHeaderRow(sheet, formatter);
+            if (headerRowIndex < 0) {
+                return "";
+            }
+            for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    break;
+                }
+                String indicator = findFirstValueInRange(row, formatter, 0, 4);
+                if (indicator.isEmpty()) {
+                    continue;
+                }
+                String normalized = indicator.toLowerCase(Locale.ROOT);
+                if (normalized.contains("скорость воздушного потока")) {
+                    return findFirstValueInRange(row, formatter, 15, 25);
+                }
+            }
+            return "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
     private static Sheet findSheetByName(Workbook workbook, String sheetName) {
         if (workbook == null) {
             return null;
@@ -1011,6 +1168,24 @@ final class RequestFormExporter {
         for (int index = 0; index < sheetCount; index++) {
             Sheet sheet = workbook.getSheetAt(index);
             if (sheet != null && sheet.getSheetName().equalsIgnoreCase(sheetName)) {
+                return sheet;
+            }
+        }
+        return null;
+    }
+
+    private static Sheet findSheetByKeyword(Workbook workbook, String keyword) {
+        if (workbook == null || keyword == null) {
+            return null;
+        }
+        int sheetCount = workbook.getNumberOfSheets();
+        for (int index = 0; index < sheetCount; index++) {
+            Sheet sheet = workbook.getSheetAt(index);
+            if (sheet == null) {
+                continue;
+            }
+            String name = sheet.getSheetName();
+            if (name != null && name.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT))) {
                 return sheet;
             }
         }
@@ -1084,6 +1259,53 @@ final class RequestFormExporter {
         return "";
     }
 
+    private static boolean isVentilationMergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= 11;
+    }
+
+    private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {
+        if (sheet == null) {
+            return null;
+        }
+        for (CellRangeAddress region : sheet.getMergedRegions()) {
+            if (region != null && region.isInRange(rowIndex, colIndex)) {
+                return region;
+            }
+        }
+        return null;
+    }
+
+    private static String readMergedCellValue(Sheet sheet,
+                                              int rowIndex,
+                                              int colIndex,
+                                              DataFormatter formatter,
+                                              FormulaEvaluator evaluator) {
+        if (sheet == null) {
+            return "";
+        }
+        CellRangeAddress merged = findMergedRegion(sheet, rowIndex, colIndex);
+        int targetRow = rowIndex;
+        int targetCol = colIndex;
+        if (merged != null) {
+            targetRow = merged.getFirstRow();
+            targetCol = merged.getFirstColumn();
+        }
+        Row row = sheet.getRow(targetRow);
+        if (row == null) {
+            return "";
+        }
+        Cell cell = row.getCell(targetCol);
+        if (cell == null) {
+            return "";
+        }
+        String value = formatter.formatCellValue(cell, evaluator);
+        return value == null ? "" : value.trim();
+    }
+
     private record CustomerInfo(String name, String email, String phone) {
     }
 
@@ -1126,6 +1348,34 @@ final class RequestFormExporter {
 
         private static MicroclimateRow section(String section) {
             return new MicroclimateRow(section);
+        }
+    }
+
+    private static final class VentilationRow {
+        private final String workplace;
+        private final String volume;
+        private final String performance;
+        private final String airExchange;
+        private final boolean isSection;
+
+        private VentilationRow(String workplace, String volume, String performance, String airExchange) {
+            this.workplace = workplace == null ? "" : workplace;
+            this.volume = volume == null ? "" : volume;
+            this.performance = performance == null ? "" : performance;
+            this.airExchange = airExchange == null ? "" : airExchange;
+            this.isSection = false;
+        }
+
+        private VentilationRow(String section) {
+            this.workplace = section == null ? "" : section;
+            this.volume = "";
+            this.performance = "";
+            this.airExchange = "";
+            this.isSection = true;
+        }
+
+        private static VentilationRow section(String section) {
+            return new VentilationRow(section);
         }
     }
 }
