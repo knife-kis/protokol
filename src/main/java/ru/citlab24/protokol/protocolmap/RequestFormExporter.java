@@ -54,7 +54,9 @@ final class RequestFormExporter {
     private static final int MICROCLIMATE_HEADER_MAIN_FONT_SIZE = 10;
     private static final int MICROCLIMATE_TABLE_FONT_SIZE = 9;
     private static final int VENTILATION_TABLE_FONT_SIZE = 9;
+    private static final int MED_TABLE_FONT_SIZE = 9;
     private static final int VENTILATION_SOURCE_START_ROW = 4;
+    private static final int MED_SOURCE_START_ROW = 5;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
@@ -79,6 +81,9 @@ final class RequestFormExporter {
         List<MicroclimateRow> microclimateRows = resolveMicroclimateRows(sourceFile);
         List<VentilationRow> ventilationRows = resolveVentilationRows(sourceFile);
         String ventilationMethod = resolveVentilationNormativeMethod(sourceFile);
+        List<String> medRows = resolveMedRows(sourceFile);
+        String medNormativeMethod = resolveMedNormativeMethod(sourceFile);
+        boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -352,7 +357,7 @@ final class RequestFormExporter {
                     "Представитель заказчика _______________________________________________\n" +
                             "                                                 (Должность, ФИО, контактные данные) ");
 
-            if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty()) {
+            if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -488,6 +493,44 @@ final class RequestFormExporter {
                                     VENTILATION_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         }
                     }
+                    sectionIndex++;
+                }
+
+                if (hasMedSheet) {
+                    XWPFParagraph spacerBeforeMed = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeMed);
+
+                    XWPFParagraph medTitle = document.createParagraph();
+                    setParagraphSpacing(medTitle);
+                    XWPFRun medTitleRun = medTitle.createRun();
+                    medTitleRun.setFontFamily(FONT_NAME);
+                    medTitleRun.setFontSize(FONT_SIZE);
+                    String medMethodText = medNormativeMethod == null ? "" : medNormativeMethod.trim();
+                    String medMethodClause = medMethodText.isBlank()
+                            ? ""
+                            : "в соответствии с " + medMethodText + " ";
+                    String medTitleText = sectionIndex + ".\tДопустимый уровень мощности дозы гамма-излучения "
+                            + medMethodClause
+                            + "Превышение мощности дозы, измеренной на открытой местности, не более чем на 0,3 мкЗв/ч";
+                    medTitleRun.setText(medTitleText.trim());
+
+                    if (medRows.isEmpty()) {
+                        medRows.add("");
+                    }
+                    int medRowsCount = medRows.size();
+                    XWPFTable medTable = document.createTable(1 + medRowsCount, 1);
+                    configureTableLayout(medTable, new int[]{12560});
+                    setTableCellText(medTable.getRow(0).getCell(0),
+                            "Наименование места проведения измерений",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    for (int index = 0; index < medRowsCount; index++) {
+                        int rowIndex = index + 1;
+                        String row = medRows.get(index);
+                        setTableCellText(medTable.getRow(rowIndex).getCell(0), row,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    }
+                    sectionIndex++;
                 }
             }
 
@@ -1160,6 +1203,93 @@ final class RequestFormExporter {
         }
     }
 
+    private static List<String> resolveMedRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = findSheetByName(workbook, "МЭД (2)");
+            if (sheet == null) {
+                return new ArrayList<>();
+            }
+            List<String> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int lastRow = sheet.getLastRowNum();
+            int emptyStreak = 0;
+            boolean started = false;
+
+            for (int rowIndex = MED_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
+                if (isMedMergedRow(mergedRow, rowIndex)) {
+                    String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator, 0, 5)) {
+                        if (started) {
+                            break;
+                        }
+                        continue;
+                    }
+                    rows.add(text);
+                    started = true;
+                    emptyStreak = 0;
+                    continue;
+                }
+
+                String place = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator).trim();
+                if (place.isEmpty()) {
+                    emptyStreak++;
+                    if (started && emptyStreak >= 10) {
+                        break;
+                    }
+                    continue;
+                }
+                emptyStreak = 0;
+                started = true;
+                rows.add(place);
+            }
+
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static String resolveMedNormativeMethod(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            DataFormatter formatter = new DataFormatter();
+            int headerRowIndex = findNormativeHeaderRow(sheet, formatter);
+            if (headerRowIndex < 0) {
+                return "";
+            }
+            for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    break;
+                }
+                String indicator = findFirstValueInRange(row, formatter, 0, 4);
+                if (indicator.isEmpty()) {
+                    continue;
+                }
+                String normalized = indicator.toLowerCase(Locale.ROOT);
+                if (normalized.contains("мощность дозы гамма-излучения")) {
+                    return findFirstValueInRange(row, formatter, 15, 25);
+                }
+            }
+            return "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
     private static Sheet findSheetByName(Workbook workbook, String sheetName) {
         if (workbook == null) {
             return null;
@@ -1172,6 +1302,18 @@ final class RequestFormExporter {
             }
         }
         return null;
+    }
+
+    private static boolean hasSheetByName(File sourceFile, String sheetName) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return false;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            return findSheetByName(workbook, sheetName) != null;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private static Sheet findSheetByKeyword(Workbook workbook, String keyword) {
@@ -1267,6 +1409,14 @@ final class RequestFormExporter {
                 && region.getLastColumn() >= 11;
     }
 
+    private static boolean isMedMergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= 5;
+    }
+
     private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {
         if (sheet == null) {
             return null;
@@ -1304,6 +1454,32 @@ final class RequestFormExporter {
         }
         String value = formatter.formatCellValue(cell, evaluator);
         return value == null ? "" : value.trim();
+    }
+
+    private static boolean hasRowContentInRange(Sheet sheet,
+                                                int rowIndex,
+                                                DataFormatter formatter,
+                                                FormulaEvaluator evaluator,
+                                                int startCol,
+                                                int endCol) {
+        if (sheet == null) {
+            return false;
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return false;
+        }
+        for (int col = startCol; col <= endCol; col++) {
+            Cell cell = row.getCell(col);
+            if (cell == null) {
+                continue;
+            }
+            String text = formatter.formatCellValue(cell, evaluator);
+            if (text != null && !text.trim().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private record CustomerInfo(String name, String email, String phone) {
