@@ -21,7 +21,8 @@ public class ProtocolMapPanel extends JPanel {
         add(title, BorderLayout.NORTH);
 
         JPanel grid = new JPanel(new GridLayout(1, 3, 16, 0));
-        grid.add(new DropZonePanel("Шумы", "Перетащите Excel или Word файл", null));
+        grid.add(new DropZonePanel("Шумы", "Перетащите Excel или Word файл",
+                NoiseMapExporter::generateMap));
         grid.add(new DropZonePanel("Физфакторы", "Перетащите Excel или Word файл",
                 PhysicalFactorsMapExporter::generateMap));
         grid.add(new DropZonePanel("Звукоизоляция", "Перетащите Excel или Word файл", null));
