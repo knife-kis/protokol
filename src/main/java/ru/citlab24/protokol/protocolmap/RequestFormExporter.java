@@ -58,6 +58,8 @@ final class RequestFormExporter {
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int MED_SOURCE_START_ROW = 5;
     private static final int EROA_RADON_SOURCE_START_ROW = 5;
+    private static final int ARTIFICIAL_LIGHTING_SOURCE_START_ROW = 7;
+    private static final int ARTIFICIAL_LIGHTING_LAST_COL = 15;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
@@ -87,9 +89,12 @@ final class RequestFormExporter {
         String medNormativeMethod = resolveMedNormativeMethod(sourceFile);
         List<String> eroaRadonRows = resolveEroaRadonRows(sourceFile);
         String eroaRadonNormativeMethod = resolveEroaRadonNormativeMethod(sourceFile);
+        List<LightingRow> lightingRows = resolveArtificialLightingRows(sourceFile);
+        String lightingNormativeMethod = resolveArtificialLightingNormativeMethod(sourceFile);
         boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
         boolean hasMed3Sheet = hasSheetByName(sourceFile, "МЭД (3)");
         boolean hasEroaRadonSheet = hasSheetByName(sourceFile, "ЭРОА радона");
+        boolean hasArtificialLightingSheet = hasSheetByName(sourceFile, "Иск освещение");
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -363,7 +368,8 @@ final class RequestFormExporter {
                     "Представитель заказчика _______________________________________________\n" +
                             "                                                 (Должность, ФИО, контактные данные) ");
 
-            if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet) {
+            if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet
+                    || hasArtificialLightingSheet) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -605,6 +611,59 @@ final class RequestFormExporter {
                         String row = eroaRadonRows.get(index);
                         setTableCellText(eroaTable.getRow(rowIndex).getCell(0), row,
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    }
+                    sectionIndex++;
+                }
+
+                if (hasArtificialLightingSheet) {
+                    XWPFParagraph spacerBeforeLighting = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeLighting);
+
+                    XWPFParagraph lightingTitle = document.createParagraph();
+                    setParagraphSpacing(lightingTitle);
+                    XWPFRun lightingTitleRun = lightingTitle.createRun();
+                    lightingTitleRun.setFontFamily(FONT_NAME);
+                    lightingTitleRun.setFontSize(FONT_SIZE);
+                    String lightingMethodText = lightingNormativeMethod == null ? "" : lightingNormativeMethod.trim();
+                    String lightingMethodClause = lightingMethodText.isBlank()
+                            ? ""
+                            : "в соответствии с " + lightingMethodText + " ";
+                    String lightingTitleText = sectionIndex + ".\tНормируемые значения освещенности "
+                            + lightingMethodClause
+                            + "с указанием места проведения измерений:";
+                    lightingTitleRun.setText(lightingTitleText.trim());
+
+                    if (lightingRows.isEmpty()) {
+                        lightingRows.add(new LightingRow("", "", ""));
+                    }
+                    int lightingRowsCount = lightingRows.size();
+                    XWPFTable lightingTable = document.createTable(1 + lightingRowsCount, 3);
+                    configureTableLayout(lightingTable, new int[]{6280, 3140, 3140});
+                    setTableCellText(lightingTable.getRow(0).getCell(0),
+                            "Наименование места\nпроведения измерений",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(lightingTable.getRow(0).getCell(1),
+                            "Нормируемая освещенность, лк",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(lightingTable.getRow(0).getCell(2),
+                            "нормируемый коэффициент пульсации,%",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    for (int index = 0; index < lightingRowsCount; index++) {
+                        int rowIndex = index + 1;
+                        LightingRow row = lightingRows.get(index);
+                        if (row.isSection) {
+                            setTableCellText(lightingTable.getRow(rowIndex).getCell(0), row.place,
+                                    MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            mergeCellsHorizontally(lightingTable, rowIndex, 0, 2);
+                        } else {
+                            setTableCellText(lightingTable.getRow(rowIndex).getCell(0), row.place,
+                                    MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(lightingTable.getRow(rowIndex).getCell(1), row.normalizedLight,
+                                    MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(lightingTable.getRow(rowIndex).getCell(2), row.normalizedPulsation,
+                                    MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        }
                     }
                     sectionIndex++;
                 }
@@ -1501,6 +1560,93 @@ final class RequestFormExporter {
         }
     }
 
+    private static List<LightingRow> resolveArtificialLightingRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = findSheetByName(workbook, "Иск освещение");
+            if (sheet == null) {
+                return new ArrayList<>();
+            }
+            List<LightingRow> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int lastRow = sheet.getLastRowNum();
+            int emptyStreak = 0;
+            boolean started = false;
+
+            for (int rowIndex = ARTIFICIAL_LIGHTING_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
+                if (isArtificialLightingMergedRow(mergedRow, rowIndex)) {
+                    String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator,
+                            0, ARTIFICIAL_LIGHTING_LAST_COL)) {
+                        if (started) {
+                            break;
+                        }
+                        continue;
+                    }
+                    rows.add(LightingRow.section(text));
+                    started = true;
+                    emptyStreak = 0;
+                    continue;
+                }
+
+                String place = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator).trim();
+                String normalizedLight = readMergedCellValue(sheet, rowIndex, 11, formatter, evaluator).trim();
+                String normalizedPulsation = readMergedCellValue(sheet, rowIndex, 15, formatter, evaluator).trim();
+
+                if (place.isEmpty() && normalizedLight.isEmpty() && normalizedPulsation.isEmpty()) {
+                    emptyStreak++;
+                    if (started && emptyStreak >= 10) {
+                        break;
+                    }
+                    continue;
+                }
+                emptyStreak = 0;
+                started = true;
+                rows.add(new LightingRow(place, normalizedLight, normalizedPulsation));
+            }
+
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static String resolveArtificialLightingNormativeMethod(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            DataFormatter formatter = new DataFormatter();
+            int headerRowIndex = findNormativeHeaderRow(sheet, formatter);
+            if (headerRowIndex < 0) {
+                return "";
+            }
+            for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    break;
+                }
+                String method = findLightingNormativeMethodInRow(row, formatter);
+                if (!method.isEmpty()) {
+                    return method;
+                }
+            }
+            return "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
     private static Sheet findSheetByName(Workbook workbook, String sheetName) {
         if (workbook == null) {
             return null;
@@ -1644,6 +1790,14 @@ final class RequestFormExporter {
                 && region.getLastColumn() >= 6;
     }
 
+    private static boolean isArtificialLightingMergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= ARTIFICIAL_LIGHTING_LAST_COL;
+    }
+
     private static String findEroaNormativeMethodInRow(Row row, DataFormatter formatter) {
         if (row == null) {
             return "";
@@ -1664,6 +1818,44 @@ final class RequestFormExporter {
             }
             if (text.toLowerCase(Locale.ROOT).contains(indicatorKey)) {
                 for (int valueIndex = colIndex + 1; valueIndex < lastCell; valueIndex++) {
+                    Cell valueCell = row.getCell(valueIndex);
+                    if (valueCell == null) {
+                        continue;
+                    }
+                    String value = formatter.formatCellValue(valueCell).trim();
+                    if (!value.isEmpty()) {
+                        return value;
+                    }
+                }
+                return "";
+            }
+        }
+        return "";
+    }
+
+    private static String findLightingNormativeMethodInRow(Row row, DataFormatter formatter) {
+        if (row == null) {
+            return "";
+        }
+        int lastCell = row.getLastCellNum();
+        if (lastCell < 0) {
+            return "";
+        }
+        Sheet sheet = row.getSheet();
+        for (int colIndex = 0; colIndex < lastCell; colIndex++) {
+            Cell cell = row.getCell(colIndex);
+            if (cell == null) {
+                continue;
+            }
+            String text = formatter.formatCellValue(cell).trim();
+            if (text.isEmpty()) {
+                continue;
+            }
+            String normalized = text.toLowerCase(Locale.ROOT);
+            if (normalized.contains("освещен")) {
+                CellRangeAddress merged = findMergedRegion(sheet, row.getRowNum(), colIndex);
+                int startCol = merged == null ? colIndex + 1 : merged.getLastColumn() + 1;
+                for (int valueIndex = startCol; valueIndex < lastCell; valueIndex++) {
                     Cell valueCell = row.getCell(valueIndex);
                     if (valueCell == null) {
                         continue;
@@ -1786,6 +1978,28 @@ final class RequestFormExporter {
 
         private static MicroclimateRow section(String section) {
             return new MicroclimateRow(section);
+        }
+    }
+
+    private static final class LightingRow {
+        private final String place;
+        private final String normalizedLight;
+        private final String normalizedPulsation;
+        private final boolean isSection;
+
+        private LightingRow(String place, String normalizedLight, String normalizedPulsation) {
+            this(place, normalizedLight, normalizedPulsation, false);
+        }
+
+        private LightingRow(String place, String normalizedLight, String normalizedPulsation, boolean isSection) {
+            this.place = place == null ? "" : place;
+            this.normalizedLight = normalizedLight == null ? "" : normalizedLight;
+            this.normalizedPulsation = normalizedPulsation == null ? "" : normalizedPulsation;
+            this.isSection = isSection;
+        }
+
+        private static LightingRow section(String text) {
+            return new LightingRow(text, "", "", true);
         }
     }
 
