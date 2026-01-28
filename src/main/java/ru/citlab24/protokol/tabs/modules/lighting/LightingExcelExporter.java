@@ -699,12 +699,12 @@ public final class LightingExcelExporter {
         final Font arial10Italic;
         final Font arial10Bold;
 
-        // Шапка (Arial 9)
+        // Шапка (Arial 10)
         final CellStyle headCenterBorder;
         final CellStyle headCenterBorderWrap;
         final CellStyle headVertical;
 
-        // Данные (Arial 10)
+        // Данные (Arial 9)
         final CellStyle title;
         final CellStyle center;
         final CellStyle center8;
@@ -732,8 +732,8 @@ public final class LightingExcelExporter {
             arial10 = wb.createFont(); arial10.setFontName("Arial"); arial10.setFontHeightInPoints((short)10);
             arial9  = wb.createFont();  arial9.setFontName("Arial");  arial9.setFontHeightInPoints((short)9);
             arial8  = wb.createFont();  arial8.setFontName("Arial");  arial8.setFontHeightInPoints((short)8);
-            arial10Italic = wb.createFont(); arial10Italic.setFontName("Arial"); arial10Italic.setFontHeightInPoints((short)10); arial10Italic.setItalic(true);
-            arial10Bold = wb.createFont(); arial10Bold.setFontName("Arial"); arial10Bold.setFontHeightInPoints((short)10); arial10Bold.setBold(true);
+            arial10Italic = wb.createFont(); arial10Italic.setFontName("Arial"); arial10Italic.setFontHeightInPoints((short)9); arial10Italic.setItalic(true);
+            arial10Bold = wb.createFont(); arial10Bold.setFontName("Arial"); arial10Bold.setFontHeightInPoints((short)9); arial10Bold.setBold(true);
 
             title = wb.createCellStyle();
             title.setAlignment(HorizontalAlignment.LEFT);
@@ -744,12 +744,12 @@ public final class LightingExcelExporter {
             headCenterBorder.setAlignment(HorizontalAlignment.CENTER);
             headCenterBorder.setVerticalAlignment(VerticalAlignment.CENTER);
             setAllBorders(headCenterBorder);
-            headCenterBorder.setFont(arial9);
+            headCenterBorder.setFont(arial10);
 
             headCenterBorderWrap = wb.createCellStyle();
             headCenterBorderWrap.cloneStyleFrom(headCenterBorder);
             headCenterBorderWrap.setWrapText(true);
-            headCenterBorderWrap.setFont(arial9);
+            headCenterBorderWrap.setFont(arial10);
 
             headVertical = wb.createCellStyle();
             headVertical.setAlignment(HorizontalAlignment.CENTER);
@@ -757,12 +757,12 @@ public final class LightingExcelExporter {
             headVertical.setWrapText(true);
             headVertical.setRotation((short) 90);
             setAllBorders(headVertical);
-            headVertical.setFont(arial9);
+            headVertical.setFont(arial10);
 
             center = wb.createCellStyle();
             center.setAlignment(HorizontalAlignment.CENTER);
             center.setVerticalAlignment(VerticalAlignment.CENTER);
-            center.setFont(arial10);
+            center.setFont(arial9);
 
             center8 = wb.createCellStyle();
             center8.setAlignment(HorizontalAlignment.CENTER);
@@ -777,32 +777,32 @@ public final class LightingExcelExporter {
             centerBorder = wb.createCellStyle();
             centerBorder.cloneStyleFrom(center);
             setAllBorders(centerBorder);
-            centerBorder.setFont(arial10);
+            centerBorder.setFont(arial9);
 
             centerBorderWrap = wb.createCellStyle();
             centerBorderWrap.setAlignment(HorizontalAlignment.CENTER);
             centerBorderWrap.setVerticalAlignment(VerticalAlignment.CENTER);
             centerBorderWrap.setWrapText(true);
             setAllBorders(centerBorderWrap);
-            centerBorderWrap.setFont(arial10);
+            centerBorderWrap.setFont(arial9);
 
             centerWrap = wb.createCellStyle();
             centerWrap.setAlignment(HorizontalAlignment.CENTER);
             centerWrap.setVerticalAlignment(VerticalAlignment.CENTER);
             centerWrap.setWrapText(true);
-            centerWrap.setFont(arial10);
+            centerWrap.setFont(arial9);
 
             textLeft = wb.createCellStyle();
             textLeft.setAlignment(HorizontalAlignment.LEFT);
             textLeft.setVerticalAlignment(VerticalAlignment.CENTER);
-            textLeft.setFont(arial10);
+            textLeft.setFont(arial9);
 
             textLeftBorderWrap = wb.createCellStyle();
             textLeftBorderWrap.setAlignment(HorizontalAlignment.LEFT);
             textLeftBorderWrap.setVerticalAlignment(VerticalAlignment.CENTER);
             textLeftBorderWrap.setWrapText(true);
             setAllBorders(textLeftBorderWrap);
-            textLeftBorderWrap.setFont(arial10);
+            textLeftBorderWrap.setFont(arial9);
 
             textLeftItalicTopBorderWrap = wb.createCellStyle();
             textLeftItalicTopBorderWrap.setAlignment(HorizontalAlignment.LEFT);
@@ -814,7 +814,7 @@ public final class LightingExcelExporter {
             textLeftItalicTopBorderWrap.setBorderRight(BorderStyle.NONE);
             textLeftItalicTopBorderWrap.setFont(arial10Italic);
 
-            box = wb.createCellStyle(); setAllBorders(box); box.setFont(arial10);
+            box = wb.createCellStyle(); setAllBorders(box); box.setFont(arial9);
 
             num0 = wb.createCellStyle();
             num0.cloneStyleFrom(centerBorder);
