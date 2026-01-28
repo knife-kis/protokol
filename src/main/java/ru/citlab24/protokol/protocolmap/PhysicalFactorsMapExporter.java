@@ -19,6 +19,7 @@ public final class PhysicalFactorsMapExporter {
     private static final double TOP_MARGIN_CM = 3.3;
     private static final double BOTTOM_MARGIN_CM = 1.9;
     private static final double A4_LANDSCAPE_HEIGHT_CM = 21.0;
+    private static final int TITLE_MEASUREMENT_DATES_ROW = 7;
     private static final int MICROCLIMATE_SOURCE_START_ROW = 5;
     private static final int MICROCLIMATE_SOURCE_MERGED_LAST_COL = 21;
     private static final int MICROCLIMATE_BLOCK_SIZE = 3;
@@ -45,7 +46,11 @@ public final class PhysicalFactorsMapExporter {
     public static File generateMap(File sourceFile, String workDeadline, String customerInn) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
-        java.util.List<String> measurementDates = extractMeasurementDatesList(headerData.measurementDates);
+        String titleMeasurementDates = resolveTitleMeasurementDates(sourceFile);
+        String measurementDatesText = titleMeasurementDates.isBlank()
+                ? headerData.measurementDates
+                : titleMeasurementDates;
+        java.util.List<String> measurementDates = extractMeasurementDatesList(measurementDatesText);
         String protocolNumber = resolveProtocolNumber(sourceFile);
         String contractText = resolveContractText(sourceFile);
         String measurementPerformer = resolveMeasurementPerformer(sourceFile);
@@ -67,7 +72,8 @@ public final class PhysicalFactorsMapExporter {
             Sheet sheet = workbook.createSheet("карта замеров");
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
-            createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, controlDate);
+            createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer,
+                    measurementDatesText, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
             int microclimateDataStartRow = PhysicalFactorsMapResultsTabBuilder.createResultsSheet(
@@ -1695,6 +1701,7 @@ public final class PhysicalFactorsMapExporter {
                                         String registrationNumber,
                                         MapHeaderData headerData,
                                         String measurementPerformer,
+                                        String measurementDates,
                                         String controlDate) {
         Font titleFont = workbook.createFont();
         titleFont.setFontName("Arial");
@@ -1748,7 +1755,7 @@ public final class PhysicalFactorsMapExporter {
         heightRow.setHeightInPoints(pixelsToPoints(16));
 
         String datesPrefix = "2. Дата замеров: ";
-        String datesValue = safe(headerData.measurementDates);
+        String datesValue = safe(measurementDates);
         setMergedCellValueWithPrefix(sheet, 7, datesPrefix, datesValue, sectionFont, sectionValueFont, sectionMixedStyle);
         adjustRowHeightForMergedTextDoubling(sheet, 7, 0, 31, datesPrefix + datesValue);
 
@@ -2288,6 +2295,46 @@ public final class PhysicalFactorsMapExporter {
         } catch (Exception ex) {
             return "";
         }
+    }
+
+    private static String resolveTitleMeasurementDates(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findTitleMeasurementDates(sheet);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String findTitleMeasurementDates(Sheet sheet) {
+        if (sheet == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        Row row = sheet.getRow(TITLE_MEASUREMENT_DATES_ROW);
+        if (row == null) {
+            return "";
+        }
+        for (Cell cell : row) {
+            String text = formatter.formatCellValue(cell).trim();
+            if (text.isEmpty()) {
+                continue;
+            }
+            String prefix = "2. Дата замеров:";
+            int index = text.indexOf(prefix);
+            if (index >= 0) {
+                return text.substring(index + prefix.length()).trim();
+            }
+            return text;
+        }
+        return "";
     }
 
     private static String findControlDate(Sheet sheet) {
