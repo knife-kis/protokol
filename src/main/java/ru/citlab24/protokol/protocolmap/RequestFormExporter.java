@@ -8,8 +8,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.ss.util.SheetUtil;
-import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
 import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
@@ -43,19 +41,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import javax.imageio.ImageIO;
 
 final class RequestFormExporter {
     private static final String REQUEST_FORM_NAME = "заявка.docx";
@@ -76,12 +65,6 @@ final class RequestFormExporter {
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
-    private static final String SKETCH_MARKER =
-            "Эскиз (ситуационный план) места проведения измерений с указанием точек измерений:";
-    private static final int SKETCH_ROWS_COUNT = 30;
-    private static final int SKETCH_START_COL = 0;
-    private static final int SKETCH_END_COL = 25;
-    private static final int SKETCH_MAX_WIDTH_POINTS = 468;
     private static final String OBJECT_PREFIX = "4. Наименование объекта:";
     private static final String ADDRESS_PREFIX = "Адрес объекта";
     private static final String NORMATIVE_SECTION_TITLE = "Сведения о нормативных документах";
@@ -111,7 +94,6 @@ final class RequestFormExporter {
         List<LightingRow> lightingRows = resolveArtificialLightingRows(sourceFile);
         List<GroundLightingRow> groundLightingRows = resolveArtificialGroundLightingRows(sourceFile);
         String lightingNormativeMethod = resolveArtificialLightingNormativeMethod(sourceFile);
-        SketchImage sketchImage = resolveSketchImage(sourceFile);
         boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
         boolean hasMed3Sheet = hasSheetByName(sourceFile, "МЭД (3)");
         boolean hasEroaRadonSheet = hasSheetByName(sourceFile, "ЭРОА радона");
@@ -391,7 +373,7 @@ final class RequestFormExporter {
                             "                                                 (Должность, ФИО, контактные данные) ");
 
             if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet
-                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet || sketchImage != null) {
+                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -736,33 +718,6 @@ final class RequestFormExporter {
                             setTableCellText(groundLightingTable.getRow(rowIndex).getCell(2), row.normalizedLight,
                                     MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         }
-                    }
-                    sectionIndex++;
-                }
-
-                if (sketchImage != null) {
-                    XWPFParagraph spacerBeforeSketch = document.createParagraph();
-                    setParagraphSpacing(spacerBeforeSketch);
-
-                    XWPFParagraph sketchTitle = document.createParagraph();
-                    setParagraphSpacing(sketchTitle);
-                    XWPFRun sketchTitleRun = sketchTitle.createRun();
-                    sketchTitleRun.setFontFamily(FONT_NAME);
-                    sketchTitleRun.setFontSize(FONT_SIZE);
-                    sketchTitleRun.setText(sectionIndex + ".\t" + SKETCH_MARKER);
-
-                    XWPFParagraph sketchImageParagraph = document.createParagraph();
-                    setParagraphSpacing(sketchImageParagraph);
-                    XWPFRun sketchImageRun = sketchImageParagraph.createRun();
-                    try (InputStream imageStream = new ByteArrayInputStream(sketchImage.data())) {
-                        int[] imageSize = scaleSketchImage(sketchImage.widthPx(), sketchImage.heightPx());
-                        sketchImageRun.addPicture(
-                                imageStream,
-                                XWPFDocument.PICTURE_TYPE_PNG,
-                                "sketch.png",
-                                imageSize[0],
-                                imageSize[1]
-                        );
                     }
                     sectionIndex++;
                 }
@@ -2099,244 +2054,7 @@ final class RequestFormExporter {
         return false;
     }
 
-    private static SketchImage resolveSketchImage(File sourceFile) {
-        if (sourceFile == null || !sourceFile.exists()) {
-            return null;
-        }
-        try (InputStream in = new FileInputStream(sourceFile);
-             Workbook workbook = WorkbookFactory.create(in)) {
-            if (workbook.getNumberOfSheets() == 0) {
-                return null;
-            }
-            Sheet sheet = workbook.getSheetAt(0);
-            DataFormatter formatter = new DataFormatter();
-            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
-            CellPosition anchor = findSketchAnchorPosition(sheet, formatter, evaluator);
-            if (anchor == null) {
-                return null;
-            }
-            int startRow = anchor.row() + 1;
-            int endRow = Math.min(sheet.getLastRowNum(), startRow + SKETCH_ROWS_COUNT - 1);
-            return renderSketchImage(sheet, startRow, endRow, SKETCH_START_COL, SKETCH_END_COL, formatter, evaluator);
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static CellPosition findSketchAnchorPosition(Sheet sheet, DataFormatter formatter, FormulaEvaluator evaluator) {
-        if (sheet == null) {
-            return null;
-        }
-        int lastRow = sheet.getLastRowNum();
-        for (int rowIndex = sheet.getFirstRowNum(); rowIndex <= lastRow; rowIndex++) {
-            Row row = sheet.getRow(rowIndex);
-            if (row == null) {
-                continue;
-            }
-            short lastCell = row.getLastCellNum();
-            if (lastCell < 0) {
-                continue;
-            }
-            for (int colIndex = 0; colIndex < lastCell; colIndex++) {
-                String text = readMergedCellValue(sheet, rowIndex, colIndex, formatter, evaluator);
-                if (!text.isEmpty() && text.contains(SKETCH_MARKER)) {
-                    return new CellPosition(rowIndex, colIndex);
-                }
-            }
-        }
-        return null;
-    }
-
-    private static SketchImage renderSketchImage(Sheet sheet,
-                                                 int startRow,
-                                                 int endRow,
-                                                 int startCol,
-                                                 int endCol,
-                                                 DataFormatter formatter,
-                                                 FormulaEvaluator evaluator) {
-        if (sheet == null) {
-            return null;
-        }
-        int rowCount = endRow - startRow + 1;
-        int colCount = endCol - startCol + 1;
-        if (rowCount <= 0 || colCount <= 0) {
-            return null;
-        }
-
-        int[] colStarts = new int[colCount + 1];
-        for (int index = 0; index < colCount; index++) {
-            int col = startCol + index;
-            int widthPx = Math.max(1, (int) Math.ceil(SheetUtil.getColumnWidthInPixels(sheet, col)));
-            colStarts[index + 1] = colStarts[index] + widthPx;
-        }
-
-        int[] rowStarts = new int[rowCount + 1];
-        float defaultHeightPoints = sheet.getDefaultRowHeightInPoints();
-        for (int index = 0; index < rowCount; index++) {
-            int rowIndex = startRow + index;
-            Row row = sheet.getRow(rowIndex);
-            float heightPoints = row != null ? row.getHeightInPoints() : defaultHeightPoints;
-            int heightPx = Math.max(1, Math.round(heightPoints * 96f / 72f));
-            rowStarts[index + 1] = rowStarts[index] + heightPx;
-        }
-
-        int imageWidth = colStarts[colCount];
-        int imageHeight = rowStarts[rowCount];
-        if (imageWidth <= 0 || imageHeight <= 0) {
-            return null;
-        }
-
-        BufferedImage image = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
-        Graphics2D graphics = image.createGraphics();
-        graphics.setColor(Color.WHITE);
-        graphics.fillRect(0, 0, imageWidth, imageHeight);
-        graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        Font font = new Font(FONT_NAME, Font.PLAIN, 10);
-        graphics.setFont(font);
-        FontMetrics metrics = graphics.getFontMetrics();
-
-        for (int rowIndex = startRow; rowIndex <= endRow; rowIndex++) {
-            for (int colIndex = startCol; colIndex <= endCol; colIndex++) {
-                CellRangeAddress merged = findMergedRegion(sheet, rowIndex, colIndex);
-                if (merged != null && !(merged.getFirstRow() == rowIndex && merged.getFirstColumn() == colIndex)) {
-                    continue;
-                }
-                int regionFirstRow = merged != null ? merged.getFirstRow() : rowIndex;
-                int regionLastRow = merged != null ? merged.getLastRow() : rowIndex;
-                int regionFirstCol = merged != null ? merged.getFirstColumn() : colIndex;
-                int regionLastCol = merged != null ? merged.getLastColumn() : colIndex;
-
-                int drawFirstRow = Math.max(regionFirstRow, startRow);
-                int drawLastRow = Math.min(regionLastRow, endRow);
-                int drawFirstCol = Math.max(regionFirstCol, startCol);
-                int drawLastCol = Math.min(regionLastCol, endCol);
-
-                int x = colStarts[drawFirstCol - startCol];
-                int y = rowStarts[drawFirstRow - startRow];
-                int width = colStarts[drawLastCol - startCol + 1] - x;
-                int height = rowStarts[drawLastRow - startRow + 1] - y;
-
-                String text = readMergedCellValue(sheet, rowIndex, colIndex, formatter, evaluator);
-                if (!text.isEmpty()) {
-                    drawCellText(graphics, metrics, text, x, y, width, height);
-                }
-
-                drawCellBorders(sheet, graphics, rowIndex, colIndex, x, y, width, height);
-            }
-        }
-
-        graphics.dispose();
-
-        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            ImageIO.write(image, "png", outputStream);
-            return new SketchImage(outputStream.toByteArray(), imageWidth, imageHeight);
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static void drawCellText(Graphics2D graphics,
-                                     FontMetrics metrics,
-                                     String text,
-                                     int x,
-                                     int y,
-                                     int width,
-                                     int height) {
-        int padding = 3;
-        int maxWidth = Math.max(1, width - padding * 2);
-        List<String> lines = wrapText(text, metrics, maxWidth);
-        int lineHeight = metrics.getHeight();
-        int startY = y + padding + metrics.getAscent();
-        for (String line : lines) {
-            if (startY > y + height - padding) {
-                break;
-            }
-            graphics.setColor(Color.BLACK);
-            graphics.drawString(line, x + padding, startY);
-            startY += lineHeight;
-        }
-    }
-
-    private static List<String> wrapText(String text, FontMetrics metrics, int maxWidth) {
-        List<String> lines = new ArrayList<>();
-        if (text == null || text.isEmpty()) {
-            return lines;
-        }
-        String[] paragraphs = text.replace("\r", "").split("\n");
-        for (String paragraph : paragraphs) {
-            String[] words = paragraph.split("\\s+");
-            StringBuilder line = new StringBuilder();
-            for (String word : words) {
-                if (line.length() == 0) {
-                    line.append(word);
-                } else {
-                    String candidate = line + " " + word;
-                    if (metrics.stringWidth(candidate) <= maxWidth) {
-                        line.append(" ").append(word);
-                    } else {
-                        lines.add(line.toString());
-                        line.setLength(0);
-                        line.append(word);
-                    }
-                }
-            }
-            if (line.length() > 0) {
-                lines.add(line.toString());
-            }
-        }
-        return lines;
-    }
-
-    private static void drawCellBorders(Sheet sheet,
-                                        Graphics2D graphics,
-                                        int rowIndex,
-                                        int colIndex,
-                                        int x,
-                                        int y,
-                                        int width,
-                                        int height) {
-        Row row = sheet.getRow(rowIndex);
-        Cell cell = row != null ? row.getCell(colIndex) : null;
-        if (cell == null || cell.getCellStyle() == null) {
-            return;
-        }
-        org.apache.poi.ss.usermodel.CellStyle style = cell.getCellStyle();
-        graphics.setColor(Color.BLACK);
-        if (style.getBorderTop() != org.apache.poi.ss.usermodel.BorderStyle.NONE) {
-            graphics.drawLine(x, y, x + width, y);
-        }
-        if (style.getBorderBottom() != org.apache.poi.ss.usermodel.BorderStyle.NONE) {
-            graphics.drawLine(x, y + height, x + width, y + height);
-        }
-        if (style.getBorderLeft() != org.apache.poi.ss.usermodel.BorderStyle.NONE) {
-            graphics.drawLine(x, y, x, y + height);
-        }
-        if (style.getBorderRight() != org.apache.poi.ss.usermodel.BorderStyle.NONE) {
-            graphics.drawLine(x + width, y, x + width, y + height);
-        }
-    }
-
-    private static int[] scaleSketchImage(int widthPx, int heightPx) {
-        int widthEmu = Units.pixelToEMU(widthPx);
-        int heightEmu = Units.pixelToEMU(heightPx);
-        int maxWidthEmu = Units.toEMU(SKETCH_MAX_WIDTH_POINTS);
-        if (widthEmu <= maxWidthEmu) {
-            return new int[]{widthEmu, heightEmu};
-        }
-        double scale = maxWidthEmu / (double) widthEmu;
-        int scaledHeight = (int) Math.round(heightEmu * scale);
-        return new int[]{maxWidthEmu, scaledHeight};
-    }
-
     private record CustomerInfo(String name, String email, String phone) {
-    }
-
-    private record SketchImage(byte[] data, int widthPx, int heightPx) {
-    }
-
-    private record CellPosition(int row, int col) {
     }
 
     private static final class NormativeRow {
