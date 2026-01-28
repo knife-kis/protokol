@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
+import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFHeader;
@@ -46,21 +47,34 @@ final class RequestFormExporter {
     private static final String REQUEST_FORM_NAME = "заявка.docx";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
+    private static final int PLAN_TABLE_FONT_SIZE = 10;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
+    private static final String OBJECT_PREFIX = "4. Наименование объекта:";
+    private static final String ADDRESS_PREFIX = "Адрес объекта";
+    private static final String NORMATIVE_SECTION_TITLE = "Сведения о нормативных документах";
+    private static final String NORMATIVE_HEADER_TITLE = "Измеряемый показатель";
 
     private RequestFormExporter() {
     }
 
-    static void generate(File mapFile, String workDeadline, String customerInn) {
+    static void generate(File sourceFile, File mapFile, String workDeadline, String customerInn) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
         File targetFile = resolveRequestFormFile(mapFile);
         String applicationNumber = resolveApplicationNumberFromMap(mapFile);
         CustomerInfo customerInfo = resolveCustomerInfo(mapFile);
+        String objectName = resolveObjectName(mapFile);
+        String objectAddress = resolveObjectAddress(mapFile);
+        List<NormativeRow> normativeRows = resolveNormativeRows(sourceFile);
+        if (normativeRows.isEmpty()) {
+            normativeRows.add(new NormativeRow("", ""));
+        }
+        String protocolDate = resolveProtocolDateFromSource(sourceFile);
         String deadlineText = workDeadline == null ? "" : workDeadline.trim();
+        String planDeadline = deadlineText.isEmpty() ? protocolDate : deadlineText;
         String innText = customerInn == null ? "" : customerInn.trim();
 
         try (XWPFDocument document = new XWPFDocument()) {
@@ -254,6 +268,80 @@ final class RequestFormExporter {
             setTableCellText(signatureTable.getRow(1).getCell(2), "инициалы, фамилия", false,
                     ParagraphAlignment.CENTER);
 
+            XWPFParagraph pageBreak = document.createParagraph();
+            setParagraphSpacing(pageBreak);
+            pageBreak.createRun().addBreak(BreakType.PAGE);
+
+            XWPFParagraph appendixHeader = document.createParagraph();
+            appendixHeader.setAlignment(ParagraphAlignment.RIGHT);
+            setParagraphSpacing(appendixHeader);
+            XWPFRun appendixHeaderRun = appendixHeader.createRun();
+            appendixHeaderRun.setFontFamily(FONT_NAME);
+            appendixHeaderRun.setFontSize(FONT_SIZE);
+            setRunTextWithBreaks(appendixHeaderRun,
+                    "Приложения к заявке № " + applicationNumber + "\nПриложение – План измерений");
+
+            XWPFParagraph appendixTitle = document.createParagraph();
+            appendixTitle.setAlignment(ParagraphAlignment.CENTER);
+            setParagraphSpacing(appendixTitle);
+            XWPFRun appendixTitleRun = appendixTitle.createRun();
+            appendixTitleRun.setText("ПЛАН ИЗМЕРЕНИЙ");
+            appendixTitleRun.setFontFamily(FONT_NAME);
+            appendixTitleRun.setFontSize(FONT_SIZE);
+            appendixTitleRun.setBold(true);
+
+            int dataRowsCount = normativeRows.size();
+            XWPFTable planTable = document.createTable(1 + dataRowsCount, 5);
+            configureTableLayout(planTable, new int[]{2500, 2500, 2100, 2560, 2900});
+            setTableCellText(planTable.getRow(0).getCell(0), "Наименование объекта измерений",
+                    PLAN_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+            setTableCellText(planTable.getRow(0).getCell(1), "Адрес объекта измерений",
+                    PLAN_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+            setTableCellText(planTable.getRow(0).getCell(2), "Показатель",
+                    PLAN_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+            setTableCellText(planTable.getRow(0).getCell(3), "Метод (методика) измерений (шифр)",
+                    PLAN_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+            setTableCellText(planTable.getRow(0).getCell(4),
+                    "Срок выполнения работ в области лабораторной деятельности и оформления проекта отчета",
+                    PLAN_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+            for (int index = 0; index < dataRowsCount; index++) {
+                int rowIndex = index + 1;
+                NormativeRow row = normativeRows.get(index);
+                setTableCellText(planTable.getRow(rowIndex).getCell(2), row.indicator,
+                        PLAN_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                setTableCellText(planTable.getRow(rowIndex).getCell(3), row.method,
+                        PLAN_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                if (index == 0) {
+                    setTableCellText(planTable.getRow(rowIndex).getCell(0), objectName,
+                            PLAN_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    setTableCellText(planTable.getRow(rowIndex).getCell(1), objectAddress,
+                            PLAN_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    setTableCellText(planTable.getRow(rowIndex).getCell(4), planDeadline,
+                            PLAN_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                } else {
+                    setTableCellText(planTable.getRow(rowIndex).getCell(0), "",
+                            PLAN_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    setTableCellText(planTable.getRow(rowIndex).getCell(1), "",
+                            PLAN_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    setTableCellText(planTable.getRow(rowIndex).getCell(4), "",
+                            PLAN_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                }
+            }
+
+            if (dataRowsCount > 1) {
+                mergeCellsVertically(planTable, 0, 1, dataRowsCount);
+                mergeCellsVertically(planTable, 1, 1, dataRowsCount);
+                mergeCellsVertically(planTable, 4, 1, dataRowsCount);
+            }
+
+            XWPFParagraph spacerAfterPlan = document.createParagraph();
+            setParagraphSpacing(spacerAfterPlan);
+
+            addParagraphWithLineBreaks(document,
+                    "Представитель заказчика _______________________________________________\n" +
+                            "                                                 (Должность, ФИО, контактные данные) ");
+
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 document.write(out);
             }
@@ -386,6 +474,11 @@ final class RequestFormExporter {
 
     private static void setTableCellText(XWPFTableCell cell, String text, boolean bold,
                                          ParagraphAlignment alignment) {
+        setTableCellText(cell, text, FONT_SIZE, bold, alignment);
+    }
+
+    private static void setTableCellText(XWPFTableCell cell, String text, int fontSize, boolean bold,
+                                         ParagraphAlignment alignment) {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
         paragraph.setAlignment(alignment);
@@ -393,7 +486,7 @@ final class RequestFormExporter {
         XWPFRun run = paragraph.createRun();
         setRunTextWithBreaks(run, text);
         run.setFontFamily(FONT_NAME);
-        run.setFontSize(FONT_SIZE);
+        run.setFontSize(fontSize);
         run.setBold(bold);
     }
 
@@ -643,6 +736,166 @@ final class RequestFormExporter {
         return value.substring(index).trim();
     }
 
+    private static String resolveObjectName(File mapFile) {
+        String value = findValueByPrefix(mapFile, OBJECT_PREFIX);
+        if (value.isBlank()) {
+            value = findValueByPrefix(mapFile, "4. Наименование объекта");
+        }
+        return value;
+    }
+
+    private static String resolveObjectAddress(File mapFile) {
+        String value = findValueByPrefix(mapFile, ADDRESS_PREFIX);
+        if (value.isBlank()) {
+            value = findValueByPrefix(mapFile, "Адрес объекта:");
+        }
+        return value;
+    }
+
+    private static String findValueByPrefix(File mapFile, String prefix) {
+        if (mapFile == null || !mapFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(mapFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            DataFormatter formatter = new DataFormatter();
+            for (Row row : sheet) {
+                for (Cell cell : row) {
+                    String text = formatter.formatCellValue(cell).trim();
+                    if (text.startsWith(prefix)) {
+                        String tail = text.substring(prefix.length()).trim();
+                        if (!tail.isEmpty()) {
+                            return trimLeadingPunctuation(tail);
+                        }
+                        Cell next = row.getCell(cell.getColumnIndex() + 1);
+                        if (next != null) {
+                            String nextText = formatter.formatCellValue(next).trim();
+                            if (!nextText.isEmpty()) {
+                                return trimLeadingPunctuation(nextText);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            return "";
+        }
+        return "";
+    }
+
+    private static String resolveProtocolDateFromSource(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            Row row = sheet.getRow(6);
+            if (row == null) {
+                return "";
+            }
+            DataFormatter formatter = new DataFormatter();
+            String lastValue = "";
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                if (text.isEmpty()) {
+                    if (!lastValue.isEmpty()) {
+                        break;
+                    }
+                    continue;
+                }
+                lastValue = text;
+            }
+            return lastValue;
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static List<NormativeRow> resolveNormativeRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return new ArrayList<>();
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            DataFormatter formatter = new DataFormatter();
+            int headerRowIndex = findNormativeHeaderRow(sheet, formatter);
+            if (headerRowIndex < 0) {
+                return new ArrayList<>();
+            }
+            List<NormativeRow> rows = new ArrayList<>();
+            for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    break;
+                }
+                String indicator = findFirstValueInRange(row, formatter, 0, 4);
+                String method = findFirstValueInRange(row, formatter, 15, 25);
+                if (indicator.contains(NORMATIVE_HEADER_TITLE)) {
+                    continue;
+                }
+                if (indicator.isEmpty() && method.isEmpty()) {
+                    break;
+                }
+                rows.add(new NormativeRow(indicator, method));
+            }
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static int findNormativeHeaderRow(Sheet sheet, DataFormatter formatter) {
+        int sectionStart = -1;
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                if (sectionStart < 0 && text.contains(NORMATIVE_SECTION_TITLE)) {
+                    sectionStart = row.getRowNum();
+                }
+                if (sectionStart >= 0 && text.contains(NORMATIVE_HEADER_TITLE)) {
+                    return row.getRowNum();
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static String findFirstValueInRange(Row row, DataFormatter formatter, int startCol, int endCol) {
+        for (int col = startCol; col <= endCol; col++) {
+            Cell cell = row.getCell(col);
+            if (cell == null) {
+                continue;
+            }
+            String text = formatter.formatCellValue(cell).trim();
+            if (!text.isEmpty()) {
+                return text;
+            }
+        }
+        return "";
+    }
+
     private record CustomerInfo(String name, String email, String phone) {
+    }
+
+    private static final class NormativeRow {
+        private final String indicator;
+        private final String method;
+
+        private NormativeRow(String indicator, String method) {
+            this.indicator = indicator == null ? "" : indicator;
+            this.method = method == null ? "" : method;
+        }
     }
 }
