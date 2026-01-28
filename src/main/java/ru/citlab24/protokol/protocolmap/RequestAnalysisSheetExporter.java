@@ -50,6 +50,7 @@ final class RequestAnalysisSheetExporter {
     private static final int TITLE_FONT_SIZE = 12;
     private static final int TABLE_FONT_SIZE = 10;
     private static final int SMALL_FONT_SIZE = 8;
+    private static final int PORTRAIT_TABLE_WIDTH_DXA = 9639;
     private static final String DATES_PREFIX = "2. Дата замеров:";
     private static final String PERFORMER_PREFIX = "3. Измерения провел, подпись:";
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
@@ -93,7 +94,7 @@ final class RequestAnalysisSheetExporter {
             addSpacer(document);
 
             XWPFTable applicationTable = document.createTable(1, 2);
-            configureTableLayout(applicationTable, new int[]{6280, 6280});
+            configureTableLayout(applicationTable, new int[]{4820, 4819});
             setTableCellText(applicationTable.getRow(0).getCell(0), "Заявка №",
                     TABLE_FONT_SIZE, true, ParagraphAlignment.LEFT);
             setTableCellText(applicationTable.getRow(0).getCell(1), applicationNumber,
@@ -102,7 +103,7 @@ final class RequestAnalysisSheetExporter {
             addSpacer(document);
 
             XWPFTable analysisTable = document.createTable(6, 3);
-            configureTableLayout(analysisTable, new int[]{8792, 1884, 1884});
+            configureTableLayout(analysisTable, new int[]{6747, 1446, 1446});
             setTableCellText(analysisTable.getRow(0).getCell(0), "Анализ заявки, критерии",
                     TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
             setTableCellText(analysisTable.getRow(0).getCell(1), "ДА",
@@ -130,7 +131,7 @@ final class RequestAnalysisSheetExporter {
             addSpacer(document);
 
             XWPFTable decisionTable = document.createTable(2, 4);
-            configureTableLayout(decisionTable, new int[]{3768, 2931, 2931, 2931});
+            configureTableLayout(decisionTable, new int[]{2892, 2249, 2249, 2249});
             setTableCellText(decisionTable.getRow(0).getCell(0), "Решение по заявке:",
                     TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
             setTableCellText(decisionTable.getRow(1).getCell(0), "",
@@ -152,7 +153,7 @@ final class RequestAnalysisSheetExporter {
             addSpacer(document);
 
             XWPFTable contractTable = document.createTable(1, 2);
-            configureTableLayout(contractTable, new int[]{8792, 3768});
+            configureTableLayout(contractTable, new int[]{6747, 2892});
             setTableCellText(contractTable.getRow(0).getCell(0), "Договор с Заказчиком заключен:",
                     TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
             setTableCellText(contractTable.getRow(0).getCell(1), "ДА/НЕТ/НЕ ТРЕБУЕТСЯ",
@@ -187,7 +188,7 @@ final class RequestAnalysisSheetExporter {
             addParagraphText(document, "Обсуждения с Заказчиком:");
 
             XWPFTable discussionTable = document.createTable(4, 4);
-            configureTableLayout(discussionTable, new int[]{3140, 3140, 3140, 3140});
+            configureTableLayout(discussionTable, new int[]{2410, 2410, 2410, 2409});
             setTableCellText(discussionTable.getRow(0).getCell(0), "Дата переговоров (обсуждений)",
                     TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
             setTableCellText(discussionTable.getRow(0).getCell(1), "Содержание переговоров (обсуждений)",
@@ -270,7 +271,7 @@ final class RequestAnalysisSheetExporter {
 
         CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
         tblW.setType(STTblWidth.DXA);
-        tblW.setW(BigInteger.valueOf(12560));
+        tblW.setW(BigInteger.valueOf(PORTRAIT_TABLE_WIDTH_DXA));
 
         CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
         jc.setVal(STJcTable.CENTER);
