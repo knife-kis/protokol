@@ -38,17 +38,13 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
 import org.apache.xmlbeans.impl.xb.xmlschema.SpaceAttribute;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -56,6 +52,16 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
+import java.io.File;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 final class RequestFormExporter {
     private static final String REQUEST_FORM_NAME = "заявка.docx";
@@ -111,7 +117,7 @@ final class RequestFormExporter {
         List<LightingRow> lightingRows = resolveArtificialLightingRows(sourceFile);
         List<GroundLightingRow> groundLightingRows = resolveArtificialGroundLightingRows(sourceFile);
         String lightingNormativeMethod = resolveArtificialLightingNormativeMethod(sourceFile);
-        SketchImage sketchImage = resolveSketchImage(sourceFile);
+        SketchAttachment sketchAttachment = resolveSketchAttachment(sourceFile);
         boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
         boolean hasMed3Sheet = hasSheetByName(sourceFile, "МЭД (3)");
         boolean hasEroaRadonSheet = hasSheetByName(sourceFile, "ЭРОА радона");
@@ -391,7 +397,7 @@ final class RequestFormExporter {
                             "                                                 (Должность, ФИО, контактные данные) ");
 
             if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet
-                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet || sketchImage != null) {
+                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet || sketchAttachment != null) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -740,7 +746,7 @@ final class RequestFormExporter {
                     sectionIndex++;
                 }
 
-                if (sketchImage != null) {
+                if (sketchAttachment != null) {
                     XWPFParagraph spacerBeforeSketch = document.createParagraph();
                     setParagraphSpacing(spacerBeforeSketch);
 
@@ -754,8 +760,8 @@ final class RequestFormExporter {
                     XWPFParagraph sketchImageParagraph = document.createParagraph();
                     setParagraphSpacing(sketchImageParagraph);
                     XWPFRun sketchImageRun = sketchImageParagraph.createRun();
-                    try (InputStream imageStream = new ByteArrayInputStream(sketchImage.data())) {
-                        int[] imageSize = scaleSketchImage(sketchImage.widthPx(), sketchImage.heightPx());
+                    try (InputStream imageStream = new ByteArrayInputStream(sketchAttachment.imageData())) {
+                        int[] imageSize = scaleSketchImage(sketchAttachment.widthPx(), sketchAttachment.heightPx());
                         sketchImageRun.addPicture(
                                 imageStream,
                                 XWPFDocument.PICTURE_TYPE_PNG,
@@ -2099,7 +2105,7 @@ final class RequestFormExporter {
         return false;
     }
 
-    private static SketchImage resolveSketchImage(File sourceFile) {
+    private static SketchAttachment resolveSketchAttachment(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return null;
         }
@@ -2117,7 +2123,7 @@ final class RequestFormExporter {
             }
             int startRow = anchor.row() + 1;
             int endRow = Math.min(sheet.getLastRowNum(), startRow + SKETCH_ROWS_COUNT - 1);
-            return renderSketchImage(sheet, startRow, endRow, SKETCH_START_COL, SKETCH_END_COL, formatter, evaluator);
+            return renderSketchAttachment(sheet, startRow, endRow, SKETCH_START_COL, SKETCH_END_COL, formatter, evaluator);
         } catch (Exception ignored) {
             return null;
         }
@@ -2147,13 +2153,13 @@ final class RequestFormExporter {
         return null;
     }
 
-    private static SketchImage renderSketchImage(Sheet sheet,
-                                                 int startRow,
-                                                 int endRow,
-                                                 int startCol,
-                                                 int endCol,
-                                                 DataFormatter formatter,
-                                                 FormulaEvaluator evaluator) {
+    private static SketchAttachment renderSketchAttachment(Sheet sheet,
+                                                           int startRow,
+                                                           int endRow,
+                                                           int startCol,
+                                                           int endCol,
+                                                           DataFormatter formatter,
+                                                           FormulaEvaluator evaluator) {
         if (sheet == null) {
             return null;
         }
@@ -2231,7 +2237,8 @@ final class RequestFormExporter {
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             ImageIO.write(image, "png", outputStream);
-            return new SketchImage(outputStream.toByteArray(), imageWidth, imageHeight);
+            byte[] pdfData = createSketchPdf(image);
+            return new SketchAttachment(outputStream.toByteArray(), pdfData, imageWidth, imageHeight);
         } catch (Exception ignored) {
             return null;
         }
@@ -2318,6 +2325,28 @@ final class RequestFormExporter {
         }
     }
 
+    private static byte[] createSketchPdf(BufferedImage image) {
+        if (image == null) {
+            return null;
+        }
+        float widthPoints = image.getWidth() * 72f / 96f;
+        float heightPoints = image.getHeight() * 72f / 96f;
+        PDRectangle pageSize = new PDRectangle(widthPoints, heightPoints);
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage(pageSize);
+            document.addPage(page);
+            PDImageXObject pdImage = LosslessFactory.createFromImage(document, image);
+            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+                contentStream.drawImage(pdImage, 0, 0, widthPoints, heightPoints);
+            }
+            document.save(outputStream);
+            return outputStream.toByteArray();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     private static int[] scaleSketchImage(int widthPx, int heightPx) {
         int widthEmu = Units.pixelToEMU(widthPx);
         int heightEmu = Units.pixelToEMU(heightPx);
@@ -2333,7 +2362,7 @@ final class RequestFormExporter {
     private record CustomerInfo(String name, String email, String phone) {
     }
 
-    private record SketchImage(byte[] data, int widthPx, int heightPx) {
+    private record SketchAttachment(byte[] imageData, byte[] pdfData, int widthPx, int heightPx) {
     }
 
     private record CellPosition(int row, int col) {
