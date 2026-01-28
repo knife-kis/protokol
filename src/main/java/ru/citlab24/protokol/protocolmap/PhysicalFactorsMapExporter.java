@@ -180,7 +180,7 @@ public final class PhysicalFactorsMapExporter {
         MeasurementCardRegistrationSheetExporter.generate(sourceFile, targetFile);
         EquipmentIssuanceSheetExporter.generate(targetFile);
         MeasurementPlanExporter.generate(sourceFile, targetFile, workDeadline);
-        RequestFormExporter.generate(targetFile, workDeadline, customerInn);
+        RequestFormExporter.generate(sourceFile, targetFile, workDeadline, customerInn);
 
         return targetFile;
     }
