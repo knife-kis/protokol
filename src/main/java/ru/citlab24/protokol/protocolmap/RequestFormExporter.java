@@ -60,6 +60,8 @@ final class RequestFormExporter {
     private static final int EROA_RADON_SOURCE_START_ROW = 5;
     private static final int ARTIFICIAL_LIGHTING_SOURCE_START_ROW = 7;
     private static final int ARTIFICIAL_LIGHTING_LAST_COL = 15;
+    private static final int ARTIFICIAL_GROUND_LIGHTING_SOURCE_START_ROW = 7;
+    private static final int ARTIFICIAL_GROUND_LIGHTING_MERGE_LAST_COL = 9;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
@@ -90,11 +92,13 @@ final class RequestFormExporter {
         List<String> eroaRadonRows = resolveEroaRadonRows(sourceFile);
         String eroaRadonNormativeMethod = resolveEroaRadonNormativeMethod(sourceFile);
         List<LightingRow> lightingRows = resolveArtificialLightingRows(sourceFile);
+        List<GroundLightingRow> groundLightingRows = resolveArtificialGroundLightingRows(sourceFile);
         String lightingNormativeMethod = resolveArtificialLightingNormativeMethod(sourceFile);
         boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
         boolean hasMed3Sheet = hasSheetByName(sourceFile, "МЭД (3)");
         boolean hasEroaRadonSheet = hasSheetByName(sourceFile, "ЭРОА радона");
         boolean hasArtificialLightingSheet = hasSheetByName(sourceFile, "Иск освещение");
+        boolean hasArtificialGroundLightingSheet = hasSheetByName(sourceFile, "Иск освещение (2)");
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -369,7 +373,7 @@ final class RequestFormExporter {
                             "                                                 (Должность, ФИО, контактные данные) ");
 
             if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet
-                    || hasArtificialLightingSheet) {
+                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -662,6 +666,56 @@ final class RequestFormExporter {
                             setTableCellText(lightingTable.getRow(rowIndex).getCell(1), row.normalizedLight,
                                     MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                             setTableCellText(lightingTable.getRow(rowIndex).getCell(2), row.normalizedPulsation,
+                                    MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        }
+                    }
+                    sectionIndex++;
+                }
+
+                if (hasArtificialGroundLightingSheet) {
+                    XWPFParagraph spacerBeforeGroundLighting = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeGroundLighting);
+
+                    XWPFParagraph groundLightingTitle = document.createParagraph();
+                    setParagraphSpacing(groundLightingTitle);
+                    XWPFRun groundLightingTitleRun = groundLightingTitle.createRun();
+                    groundLightingTitleRun.setFontFamily(FONT_NAME);
+                    groundLightingTitleRun.setFontSize(FONT_SIZE);
+                    String groundLightingTitleText = sectionIndex + ".\tНормируемые значения средней горизонтальной " +
+                            "освещенности на уровне земли, лк в соответствии с СанПиН 1.2.3685-21 " +
+                            "\"Гигиенические нормативы и требования к обеспечению безопасности и (или) безвредности " +
+                            "для человека факторов среды обитания\" с указанием места проведения измерений:";
+                    groundLightingTitleRun.setText(groundLightingTitleText);
+
+                    if (groundLightingRows.isEmpty()) {
+                        groundLightingRows.add(GroundLightingRow.empty());
+                    }
+                    int groundLightingRowsCount = groundLightingRows.size();
+                    XWPFTable groundLightingTable = document.createTable(1 + groundLightingRowsCount, 3);
+                    configureTableLayout(groundLightingTable, new int[]{2093, 6280, 4187});
+                    setTableCellText(groundLightingTable.getRow(0).getCell(0),
+                            "№ поля",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(groundLightingTable.getRow(0).getCell(1),
+                            "Наименование места\nпроведения измерений",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(groundLightingTable.getRow(0).getCell(2),
+                            "нормируемая средняя горизонтальная освещенность на уровне земли, лк",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    for (int index = 0; index < groundLightingRowsCount; index++) {
+                        int rowIndex = index + 1;
+                        GroundLightingRow row = groundLightingRows.get(index);
+                        if (row.isSection) {
+                            setTableCellText(groundLightingTable.getRow(rowIndex).getCell(0), row.placeName,
+                                    MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            mergeCellsHorizontally(groundLightingTable, rowIndex, 0, 2);
+                        } else {
+                            setTableCellText(groundLightingTable.getRow(rowIndex).getCell(0), row.fieldNumber,
+                                    MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(groundLightingTable.getRow(rowIndex).getCell(1), row.placeName,
+                                    MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            setTableCellText(groundLightingTable.getRow(rowIndex).getCell(2), row.normalizedLight,
                                     MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         }
                     }
@@ -1616,6 +1670,62 @@ final class RequestFormExporter {
         }
     }
 
+    private static List<GroundLightingRow> resolveArtificialGroundLightingRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = findSheetByName(workbook, "Иск освещение (2)");
+            if (sheet == null) {
+                return new ArrayList<>();
+            }
+            List<GroundLightingRow> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int lastRow = sheet.getLastRowNum();
+            int emptyStreak = 0;
+            boolean started = false;
+
+            for (int rowIndex = ARTIFICIAL_GROUND_LIGHTING_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
+                if (isArtificialGroundLightingMergedRow(mergedRow, rowIndex)) {
+                    String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator,
+                            0, ARTIFICIAL_GROUND_LIGHTING_MERGE_LAST_COL)) {
+                        if (started) {
+                            break;
+                        }
+                        continue;
+                    }
+                    rows.add(GroundLightingRow.section(text));
+                    started = true;
+                    emptyStreak = 0;
+                    continue;
+                }
+
+                String fieldNumber = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator).trim();
+                String place = readMergedCellValue(sheet, rowIndex, 2, formatter, evaluator).trim();
+                String normalizedLight = readMergedCellValue(sheet, rowIndex, 14, formatter, evaluator).trim();
+
+                if (fieldNumber.isEmpty() && place.isEmpty() && normalizedLight.isEmpty()) {
+                    emptyStreak++;
+                    if (started && emptyStreak >= 10) {
+                        break;
+                    }
+                    continue;
+                }
+                emptyStreak = 0;
+                started = true;
+                rows.add(new GroundLightingRow(fieldNumber, place, normalizedLight));
+            }
+
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
     private static String resolveArtificialLightingNormativeMethod(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return "";
@@ -1796,6 +1906,14 @@ final class RequestFormExporter {
                 && region.getLastRow() == rowIndex
                 && region.getFirstColumn() == 0
                 && region.getLastColumn() >= ARTIFICIAL_LIGHTING_LAST_COL;
+    }
+
+    private static boolean isArtificialGroundLightingMergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= ARTIFICIAL_GROUND_LIGHTING_MERGE_LAST_COL;
     }
 
     private static String findEroaNormativeMethodInRow(Row row, DataFormatter formatter) {
@@ -2000,6 +2118,32 @@ final class RequestFormExporter {
 
         private static LightingRow section(String text) {
             return new LightingRow(text, "", "", true);
+        }
+    }
+
+    private static final class GroundLightingRow {
+        private final String fieldNumber;
+        private final String placeName;
+        private final String normalizedLight;
+        private final boolean isSection;
+
+        private GroundLightingRow(String fieldNumber, String placeName, String normalizedLight) {
+            this(fieldNumber, placeName, normalizedLight, false);
+        }
+
+        private GroundLightingRow(String fieldNumber, String placeName, String normalizedLight, boolean isSection) {
+            this.fieldNumber = fieldNumber == null ? "" : fieldNumber;
+            this.placeName = placeName == null ? "" : placeName;
+            this.normalizedLight = normalizedLight == null ? "" : normalizedLight;
+            this.isSection = isSection;
+        }
+
+        private static GroundLightingRow section(String text) {
+            return new GroundLightingRow("", text, "", true);
+        }
+
+        private static GroundLightingRow empty() {
+            return new GroundLightingRow("", "", "");
         }
     }
 
