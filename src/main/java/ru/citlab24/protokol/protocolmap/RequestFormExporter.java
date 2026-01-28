@@ -1594,7 +1594,7 @@ final class RequestFormExporter {
                     continue;
                 }
 
-                String place = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator).trim();
+                String place = readMergedCellValue(sheet, rowIndex, 2, formatter, evaluator).trim();
                 String normalizedLight = readMergedCellValue(sheet, rowIndex, 11, formatter, evaluator).trim();
                 String normalizedPulsation = readMergedCellValue(sheet, rowIndex, 15, formatter, evaluator).trim();
 
