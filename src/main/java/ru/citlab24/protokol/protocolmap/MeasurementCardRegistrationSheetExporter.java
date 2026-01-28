@@ -20,6 +20,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblCellMar;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
@@ -174,6 +175,7 @@ final class MeasurementCardRegistrationSheetExporter {
         setBorder(borders.isSetRight() ? borders.getRight() : borders.addNewRight());
         setBorder(borders.isSetInsideH() ? borders.getInsideH() : borders.addNewInsideH());
         setBorder(borders.isSetInsideV() ? borders.getInsideV() : borders.addNewInsideV());
+        applyMinimalHeaderCellMargins(pr);
 
         CTTblGrid grid = ct.getTblGrid();
         if (grid == null) {
@@ -207,6 +209,24 @@ final class MeasurementCardRegistrationSheetExporter {
         border.setColor("auto");
     }
 
+    private static void applyMinimalHeaderCellMargins(CTTblPr pr) {
+        CTTblCellMar cellMar = pr.isSetTblCellMar() ? pr.getTblCellMar() : pr.addNewTblCellMar();
+        setCellMargin(cellMar.isSetTop() ? cellMar.getTop() : cellMar.addNewTop());
+        setCellMargin(cellMar.isSetLeft() ? cellMar.getLeft() : cellMar.addNewLeft());
+        setCellMargin(cellMar.isSetBottom() ? cellMar.getBottom() : cellMar.addNewBottom());
+        setCellMargin(cellMar.isSetRight() ? cellMar.getRight() : cellMar.addNewRight());
+    }
+
+    private static void setCellMargin(CTTblWidth margin) {
+        margin.setType(STTblWidth.DXA);
+        margin.setW(BigInteger.ZERO);
+    }
+
+    private static void setParagraphSpacing(XWPFParagraph paragraph) {
+        paragraph.setSpacingBefore(0);
+        paragraph.setSpacingAfter(0);
+    }
+
     private static void setCellWidth(XWPFTable table, int row, int col, int widthDxa) {
         XWPFTableCell cell = table.getRow(row).getCell(col);
         CTTcPr tcPr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
@@ -219,6 +239,7 @@ final class MeasurementCardRegistrationSheetExporter {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
         paragraph.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(paragraph);
 
         String[] lines = text == null ? new String[]{""} : text.split("\\n", -1);
         for (int i = 0; i < lines.length; i++) {

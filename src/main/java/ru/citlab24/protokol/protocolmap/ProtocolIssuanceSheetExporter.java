@@ -22,6 +22,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJcTable;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblCellMar;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
@@ -346,6 +347,7 @@ final class ProtocolIssuanceSheetExporter {
         setBorder(borders.isSetRight() ? borders.getRight() : borders.addNewRight());
         setBorder(borders.isSetInsideH() ? borders.getInsideH() : borders.addNewInsideH());
         setBorder(borders.isSetInsideV() ? borders.getInsideV() : borders.addNewInsideV());
+        applyMinimalHeaderCellMargins(pr);
 
         // grid (без unsetTblGrid — его может не быть)
         CTTblGrid grid = ct.getTblGrid();
@@ -381,6 +383,24 @@ final class ProtocolIssuanceSheetExporter {
         b.setColor("auto");
     }
 
+    private static void applyMinimalHeaderCellMargins(CTTblPr pr) {
+        CTTblCellMar cellMar = pr.isSetTblCellMar() ? pr.getTblCellMar() : pr.addNewTblCellMar();
+        setCellMargin(cellMar.isSetTop() ? cellMar.getTop() : cellMar.addNewTop());
+        setCellMargin(cellMar.isSetLeft() ? cellMar.getLeft() : cellMar.addNewLeft());
+        setCellMargin(cellMar.isSetBottom() ? cellMar.getBottom() : cellMar.addNewBottom());
+        setCellMargin(cellMar.isSetRight() ? cellMar.getRight() : cellMar.addNewRight());
+    }
+
+    private static void setCellMargin(CTTblWidth margin) {
+        margin.setType(STTblWidth.DXA);
+        margin.setW(BigInteger.ZERO);
+    }
+
+    private static void setParagraphSpacing(XWPFParagraph paragraph) {
+        paragraph.setSpacingBefore(0);
+        paragraph.setSpacingAfter(0);
+    }
+
     private static void setCellWidth(XWPFTable table, int row, int col, int widthDxa) {
         XWPFTableCell cell = table.getRow(row).getCell(col);
         CTTcPr tcPr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
@@ -393,6 +413,7 @@ final class ProtocolIssuanceSheetExporter {
         cell.removeParagraph(0);
         XWPFParagraph p = cell.addParagraph();
         p.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(p);
 
         XWPFRun r = p.createRun();
         r.setText(text != null ? text : "");
@@ -404,6 +425,7 @@ final class ProtocolIssuanceSheetExporter {
         cell.removeParagraph(0);
         XWPFParagraph p = cell.addParagraph();
         p.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(p);
 
         XWPFRun r0 = p.createRun();
         r0.setText("Количество страниц: ");
