@@ -37,7 +37,7 @@ public final class PhysicalFactorsMapExporter {
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int VENTILATION_TARGET_START_ROW = 3;
     private static final int VENTILATION_LAST_COL = 9;
-    private static final String PRIMARY_FOLDER_NAME = "первичка";
+    private static final String PRIMARY_FOLDER_NAME = "Первичка Физ факторы";
 
     private PhysicalFactorsMapExporter() {
     }
