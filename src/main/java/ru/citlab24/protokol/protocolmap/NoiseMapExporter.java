@@ -28,6 +28,7 @@ public final class NoiseMapExporter {
     private static final double RIGHT_MARGIN_CM = 0.5;
     private static final double TOP_MARGIN_CM = 3.3;
     private static final double BOTTOM_MARGIN_CM = 1.9;
+    private static final int TITLE_MEASUREMENT_DATES_ROW = 7;
     private static final String PRIMARY_FOLDER_NAME = "Первичка Шумы";
 
     private NoiseMapExporter() {
@@ -39,7 +40,11 @@ public final class NoiseMapExporter {
         String protocolNumber = resolveProtocolNumber(sourceFile);
         String contractText = resolveContractText(sourceFile);
         String measurementPerformer = resolveMeasurementPerformer(sourceFile);
-        String measurementDates = resolveMeasurementDates(sourceFile);
+        String titleMeasurementDates = resolveTitleMeasurementDates(sourceFile);
+        String measurementDates = titleMeasurementDates.isBlank()
+                ? resolveMeasurementDates(sourceFile)
+                : titleMeasurementDates;
+        java.util.List<String> measurementDatesList = extractMeasurementDatesList(measurementDates);
         String controlDate = resolveControlDate(sourceFile);
         String specialConditions = resolveSpecialConditions(sourceFile);
         String measurementMethods = resolveMeasurementMethods(sourceFile);
@@ -53,6 +58,11 @@ public final class NoiseMapExporter {
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, measurementDates, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
+            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDatesList, true);
+            Sheet microclimateSheet = workbook.getSheet("Микроклимат");
+            if (microclimateSheet != null) {
+                applyHeaders(microclimateSheet, registrationNumber);
+            }
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -758,6 +768,46 @@ public final class NoiseMapExporter {
         }
     }
 
+    private static String resolveTitleMeasurementDates(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findTitleMeasurementDates(sheet);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String findTitleMeasurementDates(Sheet sheet) {
+        if (sheet == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        Row row = sheet.getRow(TITLE_MEASUREMENT_DATES_ROW);
+        if (row == null) {
+            return "";
+        }
+        for (Cell cell : row) {
+            String text = formatter.formatCellValue(cell).trim();
+            if (text.isEmpty()) {
+                continue;
+            }
+            String prefix = "2. Дата замеров:";
+            int index = text.indexOf(prefix);
+            if (index >= 0) {
+                return text.substring(index + prefix.length()).trim();
+            }
+            return text;
+        }
+        return "";
+    }
+
     private static String resolveMeasurementDates(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return "";
@@ -783,6 +833,21 @@ public final class NoiseMapExporter {
         } catch (Exception ex) {
             return "";
         }
+    }
+
+    private static java.util.List<String> extractMeasurementDatesList(String datesText) {
+        if (datesText == null || datesText.isBlank()) {
+            return java.util.List.of("");
+        }
+        java.util.LinkedHashSet<String> dates = new java.util.LinkedHashSet<>();
+        java.util.regex.Matcher matcher = DATE_PATTERN.matcher(datesText);
+        while (matcher.find()) {
+            dates.add(matcher.group());
+        }
+        if (dates.isEmpty()) {
+            return java.util.List.of(datesText.trim());
+        }
+        return new java.util.ArrayList<>(dates);
     }
 
     private static String findControlDate(Sheet sheet) {
