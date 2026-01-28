@@ -58,6 +58,9 @@ final class RequestFormExporter {
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int MED_SOURCE_START_ROW = 5;
     private static final int EROA_RADON_SOURCE_START_ROW = 5;
+    private static final int KEO_SOURCE_START_ROW = 5;
+    private static final int KEO_PLACE_COL = 1;
+    private static final int KEO_ALLOWED_VALUE_COL = 15;
     private static final int ARTIFICIAL_LIGHTING_SOURCE_START_ROW = 7;
     private static final int ARTIFICIAL_LIGHTING_LAST_COL = 15;
     private static final int ARTIFICIAL_GROUND_LIGHTING_SOURCE_START_ROW = 7;
@@ -93,12 +96,14 @@ final class RequestFormExporter {
         String eroaRadonNormativeMethod = resolveEroaRadonNormativeMethod(sourceFile);
         List<LightingRow> lightingRows = resolveArtificialLightingRows(sourceFile);
         List<GroundLightingRow> groundLightingRows = resolveArtificialGroundLightingRows(sourceFile);
+        List<KeoRow> keoRows = resolveKeoRows(sourceFile);
         String lightingNormativeMethod = resolveArtificialLightingNormativeMethod(sourceFile);
         boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
         boolean hasMed3Sheet = hasSheetByName(sourceFile, "МЭД (3)");
         boolean hasEroaRadonSheet = hasSheetByName(sourceFile, "ЭРОА радона");
         boolean hasArtificialLightingSheet = hasSheetByName(sourceFile, "Иск освещение");
         boolean hasArtificialGroundLightingSheet = hasSheetByName(sourceFile, "Иск освещение (2)");
+        boolean hasKeoSheet = hasSheetByName(sourceFile, "КЕО");
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -373,7 +378,7 @@ final class RequestFormExporter {
                             "                                                 (Должность, ФИО, контактные данные) ");
 
             if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet
-                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet) {
+                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet || hasKeoSheet) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -718,6 +723,45 @@ final class RequestFormExporter {
                             setTableCellText(groundLightingTable.getRow(rowIndex).getCell(2), row.normalizedLight,
                                     MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         }
+                    }
+                    sectionIndex++;
+                }
+
+                if (hasKeoSheet) {
+                    XWPFParagraph spacerBeforeKeo = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeKeo);
+
+                    XWPFParagraph keoTitle = document.createParagraph();
+                    setParagraphSpacing(keoTitle);
+                    XWPFRun keoTitleRun = keoTitle.createRun();
+                    keoTitleRun.setFontFamily(FONT_NAME);
+                    keoTitleRun.setFontSize(FONT_SIZE);
+                    String keoTitleText = sectionIndex + ".\tНормируемые значения средней горизонтальной " +
+                            "освещенности на уровне земли, лк в соответствии с СанПиН 1.2.3685-21 " +
+                            "\"Гигиенические нормативы и требования к обеспечению безопасности и (или) безвредности " +
+                            "для человека факторов среды обитания\" с указанием места проведения измерений:";
+                    keoTitleRun.setText(keoTitleText);
+
+                    if (keoRows.isEmpty()) {
+                        keoRows.add(new KeoRow("", ""));
+                    }
+                    int keoRowsCount = keoRows.size();
+                    XWPFTable keoTable = document.createTable(1 + keoRowsCount, 2);
+                    configureTableLayout(keoTable, new int[]{6280, 6280});
+                    setTableCellText(keoTable.getRow(0).getCell(0),
+                            "Наименование места\nпроведения измерений",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(keoTable.getRow(0).getCell(1),
+                            "Допустимое значение КЕО, %",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    for (int index = 0; index < keoRowsCount; index++) {
+                        int rowIndex = index + 1;
+                        KeoRow row = keoRows.get(index);
+                        setTableCellText(keoTable.getRow(rowIndex).getCell(0), row.placeName,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(keoTable.getRow(rowIndex).getCell(1), row.allowedValue,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                     }
                     sectionIndex++;
                 }
@@ -1726,6 +1770,47 @@ final class RequestFormExporter {
         }
     }
 
+    private static List<KeoRow> resolveKeoRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet keoSheet = findSheetByName(workbook, "КЕО");
+            Sheet lightingSheet = findSheetByName(workbook, "Иск освещение");
+            if (keoSheet == null || lightingSheet == null) {
+                return new ArrayList<>();
+            }
+            List<KeoRow> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int lastRow = Math.max(keoSheet.getLastRowNum(), lightingSheet.getLastRowNum());
+            int emptyStreak = 0;
+            boolean started = false;
+
+            for (int rowIndex = KEO_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                String place = readMergedCellValue(keoSheet, rowIndex, KEO_PLACE_COL, formatter, evaluator).trim();
+                String allowedValue = readMergedCellValue(lightingSheet, rowIndex, KEO_ALLOWED_VALUE_COL,
+                        formatter, evaluator).trim();
+
+                if (place.isEmpty() && allowedValue.isEmpty()) {
+                    emptyStreak++;
+                    if (started && emptyStreak >= 10) {
+                        break;
+                    }
+                    continue;
+                }
+                emptyStreak = 0;
+                started = true;
+                rows.add(new KeoRow(place, allowedValue));
+            }
+
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
     private static String resolveArtificialLightingNormativeMethod(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return "";
@@ -2144,6 +2229,16 @@ final class RequestFormExporter {
 
         private static GroundLightingRow empty() {
             return new GroundLightingRow("", "", "");
+        }
+    }
+
+    private static final class KeoRow {
+        private final String placeName;
+        private final String allowedValue;
+
+        private KeoRow(String placeName, String allowedValue) {
+            this.placeName = placeName == null ? "" : placeName;
+            this.allowedValue = allowedValue == null ? "" : allowedValue;
         }
     }
 
