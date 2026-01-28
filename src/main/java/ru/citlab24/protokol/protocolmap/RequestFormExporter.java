@@ -21,6 +21,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJcTable;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblCellMar;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
@@ -400,6 +401,7 @@ final class RequestFormExporter {
         setBorder(borders.isSetRight() ? borders.getRight() : borders.addNewRight());
         setBorder(borders.isSetInsideH() ? borders.getInsideH() : borders.addNewInsideH());
         setBorder(borders.isSetInsideV() ? borders.getInsideV() : borders.addNewInsideV());
+        applyMinimalHeaderCellMargins(pr);
 
         CTTblGrid grid = ct.getTblGrid();
         if (grid == null) {
@@ -559,6 +561,7 @@ final class RequestFormExporter {
         cell.removeParagraph(0);
         XWPFParagraph p = cell.addParagraph();
         p.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(p);
 
         XWPFRun r = p.createRun();
         r.setText(text != null ? text : "");
@@ -570,6 +573,7 @@ final class RequestFormExporter {
         cell.removeParagraph(0);
         XWPFParagraph p = cell.addParagraph();
         p.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(p);
 
         XWPFRun r0 = p.createRun();
         r0.setText("Количество страниц: ");
@@ -619,6 +623,19 @@ final class RequestFormExporter {
         border.setSz(BigInteger.valueOf(4));
         border.setSpace(BigInteger.ZERO);
         border.setColor("auto");
+    }
+
+    private static void applyMinimalHeaderCellMargins(CTTblPr pr) {
+        CTTblCellMar cellMar = pr.isSetTblCellMar() ? pr.getTblCellMar() : pr.addNewTblCellMar();
+        setCellMargin(cellMar.isSetTop() ? cellMar.getTop() : cellMar.addNewTop());
+        setCellMargin(cellMar.isSetLeft() ? cellMar.getLeft() : cellMar.addNewLeft());
+        setCellMargin(cellMar.isSetBottom() ? cellMar.getBottom() : cellMar.addNewBottom());
+        setCellMargin(cellMar.isSetRight() ? cellMar.getRight() : cellMar.addNewRight());
+    }
+
+    private static void setCellMargin(CTTblWidth margin) {
+        margin.setType(STTblWidth.DXA);
+        margin.setW(BigInteger.ZERO);
     }
 
     private static void setCellWidth(XWPFTable table, int row, int col, int widthDxa) {
