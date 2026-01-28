@@ -57,6 +57,7 @@ final class RequestFormExporter {
     private static final int MED_TABLE_FONT_SIZE = 9;
     private static final int VENTILATION_SOURCE_START_ROW = 4;
     private static final int MED_SOURCE_START_ROW = 5;
+    private static final int EROA_RADON_SOURCE_START_ROW = 5;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
@@ -84,8 +85,11 @@ final class RequestFormExporter {
         List<String> medRows = resolveMedRows(sourceFile);
         List<String> med3Rows = resolveMed3Rows(sourceFile);
         String medNormativeMethod = resolveMedNormativeMethod(sourceFile);
+        List<String> eroaRadonRows = resolveEroaRadonRows(sourceFile);
+        String eroaRadonNormativeMethod = resolveEroaRadonNormativeMethod(sourceFile);
         boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
         boolean hasMed3Sheet = hasSheetByName(sourceFile, "МЭД (3)");
+        boolean hasEroaRadonSheet = hasSheetByName(sourceFile, "ЭРОА радона");
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -359,7 +363,7 @@ final class RequestFormExporter {
                     "Представитель заказчика _______________________________________________\n" +
                             "                                                 (Должность, ФИО, контактные данные) ");
 
-            if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet) {
+            if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -566,6 +570,43 @@ final class RequestFormExporter {
                         setTableCellText(med3Table.getRow(rowIndex).getCell(0), row,
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                     }
+                }
+
+                if (hasEroaRadonSheet) {
+                    XWPFParagraph spacerBeforeEroaRadon = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeEroaRadon);
+
+                    XWPFParagraph eroaRadonTitle = document.createParagraph();
+                    setParagraphSpacing(eroaRadonTitle);
+                    XWPFRun eroaRadonTitleRun = eroaRadonTitle.createRun();
+                    eroaRadonTitleRun.setFontFamily(FONT_NAME);
+                    eroaRadonTitleRun.setFontSize(FONT_SIZE);
+                    String eroaMethodText = eroaRadonNormativeMethod == null ? "" : eroaRadonNormativeMethod.trim();
+                    String eroaMethodClause = eroaMethodText.isBlank()
+                            ? ""
+                            : "в соответствии с " + eroaMethodText + " ";
+                    String eroaTitleText = sectionIndex + ".\tДопустимые уровни ЭРОА радона, ЭРОА торона "
+                            + eroaMethodClause
+                            + "100 Бк/м3";
+                    eroaRadonTitleRun.setText(eroaTitleText.trim());
+
+                    if (eroaRadonRows.isEmpty()) {
+                        eroaRadonRows.add("");
+                    }
+                    int eroaRowsCount = eroaRadonRows.size();
+                    XWPFTable eroaTable = document.createTable(1 + eroaRowsCount, 1);
+                    configureTableLayout(eroaTable, new int[]{12560});
+                    setTableCellText(eroaTable.getRow(0).getCell(0),
+                            "Наименование места\nпроведения измерений",
+                            MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    for (int index = 0; index < eroaRowsCount; index++) {
+                        int rowIndex = index + 1;
+                        String row = eroaRadonRows.get(index);
+                        setTableCellText(eroaTable.getRow(rowIndex).getCell(0), row,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    }
+                    sectionIndex++;
                 }
             }
 
@@ -1377,6 +1418,89 @@ final class RequestFormExporter {
         }
     }
 
+    private static List<String> resolveEroaRadonRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = findSheetByName(workbook, "ЭРОА радона");
+            if (sheet == null) {
+                return new ArrayList<>();
+            }
+            List<String> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int lastRow = sheet.getLastRowNum();
+            int emptyStreak = 0;
+            boolean started = false;
+
+            for (int rowIndex = EROA_RADON_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
+                if (isEroaRadonMergedRow(mergedRow, rowIndex)) {
+                    String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator, 0, 6)) {
+                        if (started) {
+                            break;
+                        }
+                        continue;
+                    }
+                    rows.add(text);
+                    started = true;
+                    emptyStreak = 0;
+                    continue;
+                }
+
+                String place = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator).trim();
+                if (place.isEmpty()) {
+                    emptyStreak++;
+                    if (started && emptyStreak >= 10) {
+                        break;
+                    }
+                    continue;
+                }
+                emptyStreak = 0;
+                started = true;
+                rows.add(place);
+            }
+
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static String resolveEroaRadonNormativeMethod(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            DataFormatter formatter = new DataFormatter();
+            int headerRowIndex = findNormativeHeaderRow(sheet, formatter);
+            if (headerRowIndex < 0) {
+                return "";
+            }
+            for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    break;
+                }
+                String method = findEroaNormativeMethodInRow(row, formatter);
+                if (!method.isEmpty()) {
+                    return method;
+                }
+            }
+            return "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
     private static Sheet findSheetByName(Workbook workbook, String sheetName) {
         if (workbook == null) {
             return null;
@@ -1510,6 +1634,49 @@ final class RequestFormExporter {
                 && region.getLastRow() == rowIndex
                 && region.getFirstColumn() == 0
                 && region.getLastColumn() >= 5;
+    }
+
+    private static boolean isEroaRadonMergedRow(CellRangeAddress region, int rowIndex) {
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= 6;
+    }
+
+    private static String findEroaNormativeMethodInRow(Row row, DataFormatter formatter) {
+        if (row == null) {
+            return "";
+        }
+        String indicatorKey = "эквивалентная равновесная объемная активность";
+        int lastCell = row.getLastCellNum();
+        if (lastCell < 0) {
+            return "";
+        }
+        for (int colIndex = 0; colIndex < lastCell; colIndex++) {
+            Cell cell = row.getCell(colIndex);
+            if (cell == null) {
+                continue;
+            }
+            String text = formatter.formatCellValue(cell).trim();
+            if (text.isEmpty()) {
+                continue;
+            }
+            if (text.toLowerCase(Locale.ROOT).contains(indicatorKey)) {
+                for (int valueIndex = colIndex + 1; valueIndex < lastCell; valueIndex++) {
+                    Cell valueCell = row.getCell(valueIndex);
+                    if (valueCell == null) {
+                        continue;
+                    }
+                    String value = formatter.formatCellValue(valueCell).trim();
+                    if (!value.isEmpty()) {
+                        return value;
+                    }
+                }
+                return "";
+            }
+        }
+        return "";
     }
 
     private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {
