@@ -379,7 +379,11 @@ public final class NoiseMapExporter {
 
         sheet.setRowBreak(rowIndex - 1);
 
-        setMergedCellValue(sheet, rowIndex, "6. Эскиз", plainStyle);
+        setMergedCellValue(sheet, rowIndex,
+                "5.4 калибровочный уровень: 94 дБ\n" +
+                        "показания шумомера перед измерениями на частоте 1 кГц:\n" +
+                        "показания шумомера после измерений на частоте 1 кГц:",
+                plainStyle);
         rowIndex++;
     }
 
