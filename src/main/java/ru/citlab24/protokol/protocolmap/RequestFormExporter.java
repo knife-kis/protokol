@@ -509,8 +509,12 @@ final class RequestFormExporter {
                     String medMethodClause = medMethodText.isBlank()
                             ? ""
                             : "в соответствии с " + medMethodText + " ";
+                    String medMethodSuffix = medMethodText.isBlank()
+                            ? ""
+                            : "с указанием места проведения измерений: ";
                     String medTitleText = sectionIndex + ".\tДопустимый уровень мощности дозы гамма-излучения "
                             + medMethodClause
+                            + medMethodSuffix
                             + "Превышение мощности дозы, измеренной на открытой местности, не более чем на 0,3 мкЗв/ч";
                     medTitleRun.setText(medTitleText.trim());
 
