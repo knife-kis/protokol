@@ -110,6 +110,10 @@ public class ProtocolMapPanel extends JPanel {
             if (requestForm != null && requestForm.exists()) {
                 listModel.addElement("Сформирована заявка: " + requestForm.getName());
             }
+            File analysisSheet = RequestAnalysisSheetExporter.resolveAnalysisSheetFile(generatedFile);
+            if (analysisSheet != null && analysisSheet.exists()) {
+                listModel.addElement("Сформирован лист анализа заявки: " + analysisSheet.getName());
+            }
             generatedMapFile = generatedFile;
             downloadButton.setEnabled(generatedMapFile != null && generatedMapFile.exists());
         }
