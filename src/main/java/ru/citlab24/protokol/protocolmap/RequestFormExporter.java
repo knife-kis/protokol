@@ -736,10 +736,10 @@ final class RequestFormExporter {
                     XWPFRun keoTitleRun = keoTitle.createRun();
                     keoTitleRun.setFontFamily(FONT_NAME);
                     keoTitleRun.setFontSize(FONT_SIZE);
-                    String keoTitleText = sectionIndex + ".\tНормируемые значения средней горизонтальной " +
-                            "освещенности на уровне земли, лк в соответствии с СанПиН 1.2.3685-21 " +
-                            "\"Гигиенические нормативы и требования к обеспечению безопасности и (или) безвредности " +
-                            "для человека факторов среды обитания\" с указанием места проведения измерений:";
+                    String keoTitleText = sectionIndex + ".\tНормируемые значения освещенности, лк " +
+                            "в соответствии с СанПиН 1.2.3685-21 \"Гигиенические нормативы и требования " +
+                            "к обеспечению безопасности и (или) безвредности для человека факторов среды обитания\" " +
+                            "с указанием места проведения измерений:";
                     keoTitleRun.setText(keoTitleText);
 
                     if (keoRows.isEmpty()) {
@@ -1777,20 +1777,22 @@ final class RequestFormExporter {
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
             Sheet keoSheet = findSheetByName(workbook, "КЕО");
-            Sheet lightingSheet = findSheetByName(workbook, "Иск освещение");
-            if (keoSheet == null || lightingSheet == null) {
+            if (keoSheet == null) {
                 return new ArrayList<>();
             }
             List<KeoRow> rows = new ArrayList<>();
             DataFormatter formatter = new DataFormatter();
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
-            int lastRow = Math.max(keoSheet.getLastRowNum(), lightingSheet.getLastRowNum());
+            int lastRow = keoSheet.getLastRowNum();
             int emptyStreak = 0;
             boolean started = false;
 
             for (int rowIndex = KEO_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
                 String place = readMergedCellValue(keoSheet, rowIndex, KEO_PLACE_COL, formatter, evaluator).trim();
-                String allowedValue = readMergedCellValue(lightingSheet, rowIndex, KEO_ALLOWED_VALUE_COL,
+                if (place.contains("Данные, предоставленные зак")) {
+                    break;
+                }
+                String allowedValue = readMergedCellValue(keoSheet, rowIndex, KEO_ALLOWED_VALUE_COL,
                         formatter, evaluator).trim();
 
                 if (place.isEmpty() && allowedValue.isEmpty()) {
