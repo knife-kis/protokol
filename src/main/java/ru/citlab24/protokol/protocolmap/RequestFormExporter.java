@@ -747,7 +747,7 @@ final class RequestFormExporter {
                     }
                     int keoRowsCount = keoRows.size();
                     XWPFTable keoTable = document.createTable(1 + keoRowsCount, 2);
-                    configureTableLayout(keoTable, new int[]{6280, 6280});
+                    configureTableLayout(keoTable, new int[]{10048, 2512});
                     setTableCellText(keoTable.getRow(0).getCell(0),
                             "Наименование места\nпроведения измерений",
                             MED_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
