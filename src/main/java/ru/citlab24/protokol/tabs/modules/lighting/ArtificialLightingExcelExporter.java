@@ -539,7 +539,7 @@ public final class ArtificialLightingExcelExporter {
             headCenterBorderWrap.setVerticalAlignment(VerticalAlignment.CENTER);
             headCenterBorderWrap.setWrapText(true);
             setAllBorders(headCenterBorderWrap);
-            headCenterBorderWrap.setFont(arial10);
+            headCenterBorderWrap.setFont(arial9);
 
             headVertical = wb.createCellStyle();
             headVertical.setAlignment(HorizontalAlignment.CENTER);
@@ -547,20 +547,20 @@ public final class ArtificialLightingExcelExporter {
             headVertical.setWrapText(true);
             headVertical.setRotation((short)90);
             setAllBorders(headVertical);
-            headVertical.setFont(arial10);
+            headVertical.setFont(arial9);
 
             centerBorder = wb.createCellStyle();
             centerBorder.setAlignment(HorizontalAlignment.CENTER);
             centerBorder.setVerticalAlignment(VerticalAlignment.CENTER);
             setAllBorders(centerBorder);
-            centerBorder.setFont(arial9);
+            centerBorder.setFont(arial10);
 
             textLeftBorderWrap = wb.createCellStyle();
             textLeftBorderWrap.setAlignment(HorizontalAlignment.LEFT);
             textLeftBorderWrap.setVerticalAlignment(VerticalAlignment.CENTER);
             textLeftBorderWrap.setWrapText(true);
             setAllBorders(textLeftBorderWrap);
-            textLeftBorderWrap.setFont(arial9);
+            textLeftBorderWrap.setFont(arial10);
 
             bottomOnly = wb.createCellStyle();
             bottomOnly.setAlignment(HorizontalAlignment.LEFT);
@@ -569,7 +569,7 @@ public final class ArtificialLightingExcelExporter {
             bottomOnly.setBorderLeft(BorderStyle.NONE);
             bottomOnly.setBorderRight(BorderStyle.NONE);
             bottomOnly.setBorderBottom(BorderStyle.THIN);
-            bottomOnly.setFont(arial9);
+            bottomOnly.setFont(arial10);
 
             pmTopBottom = wb.createCellStyle();
             pmTopBottom.setAlignment(HorizontalAlignment.CENTER);
@@ -578,7 +578,7 @@ public final class ArtificialLightingExcelExporter {
             pmTopBottom.setBorderBottom(BorderStyle.THIN);
             pmTopBottom.setBorderLeft(BorderStyle.NONE);
             pmTopBottom.setBorderRight(BorderStyle.NONE);
-            pmTopBottom.setFont(arial9);
+            pmTopBottom.setFont(arial10);
 
             centerNoRight = wb.createCellStyle();
             centerNoRight.setAlignment(HorizontalAlignment.CENTER);
@@ -587,7 +587,7 @@ public final class ArtificialLightingExcelExporter {
             centerNoRight.setBorderBottom(BorderStyle.THIN);
             centerNoRight.setBorderLeft(BorderStyle.THIN);
             centerNoRight.setBorderRight(BorderStyle.NONE);
-            centerNoRight.setFont(arial9);
+            centerNoRight.setFont(arial10);
 
             centerNoLeft = wb.createCellStyle();
             centerNoLeft.setAlignment(HorizontalAlignment.CENTER);
@@ -596,7 +596,7 @@ public final class ArtificialLightingExcelExporter {
             centerNoLeft.setBorderBottom(BorderStyle.THIN);
             centerNoLeft.setBorderRight(BorderStyle.THIN);
             centerNoLeft.setBorderLeft(BorderStyle.NONE);
-            centerNoLeft.setFont(arial9);
+            centerNoLeft.setFont(arial10);
 
 // H: базовая розовая подложка
             centerNoRightRose = wb.createCellStyle();

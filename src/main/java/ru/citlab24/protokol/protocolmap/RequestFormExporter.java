@@ -49,6 +49,8 @@ final class RequestFormExporter {
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
     private static final int PLAN_TABLE_FONT_SIZE = 10;
+    private static final int MICROCLIMATE_HEADER_MAIN_FONT_SIZE = 10;
+    private static final int MICROCLIMATE_TABLE_FONT_SIZE = 9;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final double REQUEST_TABLE_WIDTH_SCALE = 0.8;
@@ -386,38 +388,38 @@ final class RequestFormExporter {
                 setTableCellText(microclimateTable.getRow(0).getCell(0),
                         "Рабочее место, место проведения измерений, цех, участок,\n" +
                                 "наименование профессии или \nдолжности",
-                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                        MICROCLIMATE_HEADER_MAIN_FONT_SIZE, true, ParagraphAlignment.CENTER);
                 setTableCellText(microclimateTable.getRow(0).getCell(1),
                         "Допустимый уровень температуры воздуха, ºС",
-                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                        MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
                 setTableCellText(microclimateTable.getRow(0).getCell(2),
                         "Допустимый уровень результирующей температуры, ºС",
-                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                        MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
                 setTableCellText(microclimateTable.getRow(0).getCell(3),
                         "Допустимый уровень влажности воздуха, %",
-                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                        MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
                 setTableCellText(microclimateTable.getRow(0).getCell(4),
                         "Допустимый уровень скорости движения воздуха, м/с",
-                        FONT_SIZE, true, ParagraphAlignment.CENTER);
+                        MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
 
                 for (int index = 0; index < microclimateRowsCount; index++) {
                     int rowIndex = index + 1;
                     MicroclimateRow row = microclimateRows.get(index);
                     if (row.isSection) {
                         setTableCellText(microclimateTable.getRow(rowIndex).getCell(0), row.workplace,
-                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         mergeCellsHorizontally(microclimateTable, rowIndex, 0, 4);
                     } else {
                         setTableCellText(microclimateTable.getRow(rowIndex).getCell(0), row.workplace,
-                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         setTableCellText(microclimateTable.getRow(rowIndex).getCell(1), row.airTemperature,
-                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         setTableCellText(microclimateTable.getRow(rowIndex).getCell(2), row.resultTemperature,
-                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         setTableCellText(microclimateTable.getRow(rowIndex).getCell(3), row.humidity,
-                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         setTableCellText(microclimateTable.getRow(rowIndex).getCell(4), row.airSpeed,
-                                FONT_SIZE, false, ParagraphAlignment.LEFT);
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                     }
                 }
             }
