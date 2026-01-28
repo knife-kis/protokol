@@ -795,10 +795,7 @@ public final class NoiseMapExporter {
             if (text.isEmpty()) {
                 continue;
             }
-            java.util.regex.Matcher matcher = CONTROL_DATE_PATTERN.matcher(text);
-            if (matcher.find()) {
-                return matcher.group();
-            }
+            return text;
         }
         return "";
     }
