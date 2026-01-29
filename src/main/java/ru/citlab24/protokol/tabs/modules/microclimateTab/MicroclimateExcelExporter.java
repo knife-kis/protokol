@@ -89,9 +89,9 @@ public final class MicroclimateExcelExporter {
         String registrationNumber = resolveRegistrationNumber(building);
         applyMapHeaders(sh, registrationNumber);
 
-        // Ориентация страницы: книжная
+        // Ориентация страницы: альбомная
         PrintSetup ps = sh.getPrintSetup();
-        ps.setLandscape(false);
+        ps.setLandscape(true);
         ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
         sh.setFitToPage(true);
         ps.setFitWidth((short) 1);

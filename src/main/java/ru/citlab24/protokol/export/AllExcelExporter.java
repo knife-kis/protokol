@@ -918,6 +918,12 @@ public final class AllExcelExporter {
         for (int i = 1; i < wb.getNumberOfSheets(); i++) {
             Sheet sheet = wb.getSheetAt(i);
             if (sheet == null) continue;
+            Header header = sheet.getHeader();
+            if (header != null) {
+                header.setLeft("");
+                header.setCenter("");
+                header.setRight("");
+            }
             Footer footer = sheet.getFooter();
             if (footer != null) {
                 footer.setRight(headerText);
@@ -936,6 +942,12 @@ public final class AllExcelExporter {
         }
 
         String footerText = buildFooterText(frame);
+        Header header = sheet.getHeader();
+        if (header != null) {
+            header.setLeft("");
+            header.setCenter("");
+            header.setRight("");
+        }
         Footer footer = sheet.getFooter();
         if (footer != null) {
             footer.setRight(footerText);
