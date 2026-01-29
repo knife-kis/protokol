@@ -250,7 +250,7 @@ public final class MicroclimateExcelExporter {
                         // 2) у наружной стены — по числу стен (0..N)
                         int walls = externalWallsCount(room);
                         if (isOffice) {
-                            if (walls >= 1) {
+                            for (int i = 0; i < walls; i++) {
                                 pageBreakHelper.ensureSpace(row, 3);
                                 row = emitBlock(sh, row, seq++, building, f, space, room,
                                         Position.NEAR_WALL, today, isResidential, isOffice, mode, S, rng, spaceOBase, roomOBase);
