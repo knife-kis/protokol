@@ -8,7 +8,7 @@ import java.util.Locale;
 
 public class RoomUtils {
     public static final List<String> RESIDENTIAL_ROOM_KEYWORDS = List.of(
-            "кухня", "кухня-ниша", "кухня-гостиная", "кухня гостиная", "кухня ниша",
+            "кухн", "кухня", "кухня-ниша", "кухня-гостиная", "кухня гостиная", "кухня ниша",
             "санузел", "сан узел", "сан. узел",
             "ванная", "ванная комната",
             "совмещенный", "совмещенный санузел", "туалет", "уборная",
@@ -26,7 +26,7 @@ public class RoomUtils {
 
         String normalized = normalizeRoomName(roomName);
 
-        if (normalized.contains("кухня") || normalized.contains("кухня-ниша") ||
+        if (normalized.contains("кухн") || normalized.contains("кухня-ниша") ||
                 normalized.contains("кухня ниша") || normalized.contains("кухня-гостиная") ||
                 normalized.contains("кухня гостиная")) {
             return 60.0;
