@@ -58,7 +58,7 @@ public final class NoiseMapExporter {
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, measurementDates, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
-            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDatesList, true);
+            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDatesList, false);
             Sheet microclimateSheet = workbook.getSheet("Микроклимат");
             if (microclimateSheet != null) {
                 applyHeaders(microclimateSheet, registrationNumber);
