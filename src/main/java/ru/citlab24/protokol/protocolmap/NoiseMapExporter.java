@@ -435,15 +435,19 @@ public final class NoiseMapExporter {
 
             boolean noiseHeaderApplied = false;
             for (String sheetName : sheetNames) {
+                Sheet sourceSheet = sourceWorkbook.getSheet(sheetName);
                 Sheet targetSheet = workbook.createSheet(sheetName);
                 applyNoiseResultsSheetDefaults(workbook, targetSheet);
                 applyHeaders(targetSheet, registrationNumber);
+                boolean hasFullHeader = false;
                 if (!noiseHeaderApplied && isNoiseProtocolSheet(sheetName)) {
                     buildNoiseResultsHeader(workbook, targetSheet);
                     noiseHeaderApplied = true;
+                    hasFullHeader = true;
                 } else {
                     addSimpleNumberingRow(workbook, targetSheet);
                 }
+                fillNoiseResultsFromProtocol(sourceSheet, workbook, targetSheet, hasFullHeader);
             }
         } catch (Exception ex) {
             // Игнорируем ошибки чтения, чтобы карта всё равно сформировалась.
@@ -594,12 +598,148 @@ public final class NoiseMapExporter {
         setThinBorders(numberStyle);
 
         Row numberingRow = sheet.createRow(0);
-        for (int col = 0; col <= 21; col++) {
+        for (int col = 0; col <= 19; col++) {
             setCellValueWithStyle(numberingRow, col, String.valueOf(col + 1), numberStyle);
         }
-        for (int col = 22; col <= 23; col++) {
-            setCellValueWithStyle(numberingRow, col, "", numberStyle);
+        setMergedRegionWithStyle(sheet, 0, 0, 20, 22, numberStyle, "21");
+        setCellValueWithStyle(numberingRow, 23, "22", numberStyle);
+    }
+
+    private static void fillNoiseResultsFromProtocol(Sheet sourceSheet,
+                                                     Workbook targetWorkbook,
+                                                     Sheet targetSheet,
+                                                     boolean hasFullHeader) {
+        if (sourceSheet == null || targetSheet == null) {
+            return;
         }
+        DataFormatter formatter = new DataFormatter();
+        CellStyle centerStyle = createNoiseDataStyle(targetWorkbook,
+                org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        CellStyle leftStyle = createNoiseDataStyle(targetWorkbook,
+                org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+
+        int sourceRowIndex = 7;
+        int targetRowIndex = hasFullHeader ? 6 : 1;
+        int lastRow = sourceSheet.getLastRowNum();
+
+        while (sourceRowIndex <= lastRow) {
+            CellRangeAddress mergedRegion = findMergedRegion(sourceSheet, sourceRowIndex, 0);
+            if (mergedRegion != null && mergedRegion.getFirstRow() == sourceRowIndex) {
+                if (isMergedDateRow(mergedRegion)) {
+                    String text = "Дата, время проведения измерений ____________________________";
+                    setMergedRegionWithStyle(targetSheet, targetRowIndex, targetRowIndex,
+                            0, 23, leftStyle, text);
+                    adjustRowHeightForMergedText(targetSheet, targetRowIndex, 0, 23, text);
+                    targetRowIndex++;
+                    sourceRowIndex = mergedRegion.getLastRow() + 1;
+                    continue;
+                }
+                if (isMergedBlockHeader(mergedRegion)) {
+                    String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
+                    String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 1, formatter);
+                    String cValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter);
+                    String dValue = readMergedCellValue(sourceSheet, sourceRowIndex, 3, formatter);
+                    targetRowIndex = appendNoiseMeasurementBlock(targetSheet, targetWorkbook, targetRowIndex,
+                            aValue, bValue, cValue, dValue, centerStyle, leftStyle);
+                    sourceRowIndex = mergedRegion.getLastRow() + 1;
+                    continue;
+                }
+            }
+            sourceRowIndex++;
+        }
+    }
+
+    private static boolean isMergedDateRow(CellRangeAddress mergedRegion) {
+        return mergedRegion.getFirstColumn() == 0
+                && mergedRegion.getLastColumn() >= 23
+                && mergedRegion.getFirstRow() == mergedRegion.getLastRow();
+    }
+
+    private static boolean isMergedBlockHeader(CellRangeAddress mergedRegion) {
+        return mergedRegion.getFirstColumn() == 0
+                && mergedRegion.getLastColumn() == 0
+                && mergedRegion.getLastRow() - mergedRegion.getFirstRow() == 2;
+    }
+
+    private static int appendNoiseMeasurementBlock(Sheet sheet,
+                                                   Workbook workbook,
+                                                   int startRow,
+                                                   String aValue,
+                                                   String bValue,
+                                                   String cValue,
+                                                   String dValue,
+                                                   CellStyle centerStyle,
+                                                   CellStyle leftStyle) {
+        int endRow = startRow + 4;
+        setMergedRegionWithStyle(sheet, startRow, endRow, 0, 0, centerStyle, safe(aValue));
+        setMergedRegionWithStyle(sheet, startRow, endRow, 1, 1, leftStyle, safe(bValue));
+
+        setCellValueWithStyle(sheet, startRow, 2, safe(cValue), leftStyle);
+        setCellValueWithStyle(sheet, startRow, 3, safe(dValue), leftStyle);
+        fillRowCells(sheet, startRow, 4, 19, "", centerStyle);
+        setMergedRegionWithStyle(sheet, startRow, startRow, 20, 22, centerStyle, "");
+        setCellValueWithStyle(sheet, startRow, 23, "", centerStyle);
+
+        int row2 = startRow + 1;
+        setMergedRegionWithStyle(sheet, row2, row2, 2, 3, leftStyle, "Фон");
+        fillRowCells(sheet, row2, 4, 19, "", centerStyle);
+        setMergedRegionWithStyle(sheet, row2, row2, 20, 22, centerStyle, "");
+        setCellValueWithStyle(sheet, row2, 23, "", centerStyle);
+
+        int row3 = startRow + 2;
+        String correctionSpectra = "Поправка (МИ Ш.13-2021 п.12.3.2.1.3) дБА (дБ) ";
+        setMergedRegionWithStyle(sheet, row3, row3, 2, 9, leftStyle, correctionSpectra);
+        fillRowCells(sheet, row3, 10, 19, "", centerStyle);
+        setMergedRegionWithStyle(sheet, row3, row3, 20, 22, centerStyle, "");
+        setCellValueWithStyle(sheet, row3, 23, "", centerStyle);
+        adjustRowHeightForMergedText(sheet, row3, 2, 9, correctionSpectra);
+
+        int row4 = startRow + 3;
+        String correctionTime = "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ) ";
+        setMergedRegionWithStyle(sheet, row4, row4, 2, 9, leftStyle, correctionTime);
+        fillRowCells(sheet, row4, 10, 19, "2", centerStyle);
+        setMergedRegionWithStyle(sheet, row4, row4, 20, 22, centerStyle, "2");
+        setCellValueWithStyle(sheet, row4, 23, "2", centerStyle);
+        adjustRowHeightForMergedText(sheet, row4, 2, 9, correctionTime);
+
+        int row5 = startRow + 4;
+        String levelsText = "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ) ";
+        setMergedRegionWithStyle(sheet, row5, row5, 2, 9, leftStyle, levelsText);
+        fillRowCells(sheet, row5, 10, 19, "", centerStyle);
+        setMergedRegionWithStyle(sheet, row5, row5, 20, 22, centerStyle, "");
+        setCellValueWithStyle(sheet, row5, 23, "", centerStyle);
+        adjustRowHeightForMergedText(sheet, row5, 2, 9, levelsText);
+
+        return endRow + 1;
+    }
+
+    private static void fillRowCells(Sheet sheet,
+                                     int rowIndex,
+                                     int startCol,
+                                     int endCol,
+                                     String value,
+                                     CellStyle style) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        for (int col = startCol; col <= endCol; col++) {
+            setCellValueWithStyle(row, col, value, style);
+        }
+    }
+
+    private static CellStyle createNoiseDataStyle(Workbook workbook,
+                                                  org.apache.poi.ss.usermodel.HorizontalAlignment alignment) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 9);
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setAlignment(alignment);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        style.setWrapText(true);
+        setThinBorders(style);
+        return style;
     }
 
     private static void setMergedRegionWithStyle(Sheet sheet,
@@ -1302,6 +1442,18 @@ public final class NoiseMapExporter {
         }
         Cell cell = row.getCell(colIndex);
         return normalizeText(cell == null ? "" : formatter.formatCellValue(cell));
+    }
+
+    private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {
+        if (sheet == null) {
+            return null;
+        }
+        for (CellRangeAddress region : sheet.getMergedRegions()) {
+            if (region.isInRange(rowIndex, colIndex)) {
+                return region;
+            }
+        }
+        return null;
     }
 
     private static String findMeasurementMethods(Sheet sheet) {
