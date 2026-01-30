@@ -4,6 +4,7 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Header;
 import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Row;
@@ -613,6 +614,9 @@ public final class NoiseMapExporter {
             return;
         }
         DataFormatter formatter = new DataFormatter();
+        FormulaEvaluator evaluator = sourceSheet.getWorkbook()
+                .getCreationHelper()
+                .createFormulaEvaluator();
         CellStyle centerStyle = createNoiseDataStyle(targetWorkbook,
                 org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
         CellStyle leftStyle = createNoiseDataStyle(targetWorkbook,
@@ -635,10 +639,10 @@ public final class NoiseMapExporter {
                     continue;
                 }
                 if (isMergedBlockHeader(mergedRegion)) {
-                    String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter);
-                    String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 1, formatter);
-                    String cValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter);
-                    String dValue = readMergedCellValue(sourceSheet, sourceRowIndex, 3, formatter);
+                    String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                    String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 1, formatter, evaluator);
+                    String cValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter, evaluator);
+                    String dValue = readMergedCellValue(sourceSheet, sourceRowIndex, 3, formatter, evaluator);
                     targetRowIndex = appendNoiseMeasurementBlock(targetSheet, targetWorkbook, targetRowIndex,
                             aValue, bValue, cValue, dValue, centerStyle, leftStyle);
                     sourceRowIndex = mergedRegion.getLastRow() + 1;
@@ -1403,9 +1407,12 @@ public final class NoiseMapExporter {
 
         java.util.List<InstrumentData> instruments = new java.util.ArrayList<>();
         java.util.Set<String> seenSerials = new java.util.HashSet<>();
+        FormulaEvaluator evaluator = sheet.getWorkbook()
+                .getCreationHelper()
+                .createFormulaEvaluator();
         for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-            String name = readMergedCellValue(sheet, rowIndex, nameColumn, formatter);
-            String serial = readMergedCellValue(sheet, rowIndex, serialColumn, formatter);
+            String name = readMergedCellValue(sheet, rowIndex, nameColumn, formatter, evaluator);
+            String serial = readMergedCellValue(sheet, rowIndex, serialColumn, formatter, evaluator);
             String normalizedName = normalizeText(name).toLowerCase(Locale.ROOT);
             if (normalizedName.equals(INSTRUMENTS_NAME_HEADER)) {
                 continue;
@@ -1422,7 +1429,11 @@ public final class NoiseMapExporter {
         return instruments;
     }
 
-    private static String readMergedCellValue(Sheet sheet, int rowIndex, int colIndex, DataFormatter formatter) {
+    private static String readMergedCellValue(Sheet sheet,
+                                              int rowIndex,
+                                              int colIndex,
+                                              DataFormatter formatter,
+                                              FormulaEvaluator evaluator) {
         if (sheet == null) {
             return "";
         }
@@ -1433,7 +1444,7 @@ public final class NoiseMapExporter {
                     return "";
                 }
                 Cell cell = row.getCell(range.getFirstColumn());
-                return normalizeText(cell == null ? "" : formatter.formatCellValue(cell));
+                return normalizeText(cell == null ? "" : formatter.formatCellValue(cell, evaluator));
             }
         }
         Row row = sheet.getRow(rowIndex);
@@ -1441,7 +1452,7 @@ public final class NoiseMapExporter {
             return "";
         }
         Cell cell = row.getCell(colIndex);
-        return normalizeText(cell == null ? "" : formatter.formatCellValue(cell));
+        return normalizeText(cell == null ? "" : formatter.formatCellValue(cell, evaluator));
     }
 
     private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {
