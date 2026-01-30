@@ -437,9 +437,6 @@ final class RequestFormExporter {
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         if (row.mergeLastColumns) {
                             mergeCellsHorizontally(noiseTable, rowIndex, 2, 3);
-                            if (isNoiseNormativeRow(row.columnA)) {
-                                setNoiseNormativeRowWidths(noiseTable, rowIndex);
-                            }
                             continue;
                         }
                         setTableCellText(noiseTable.getRow(rowIndex).getCell(3), row.columnD,
@@ -1924,8 +1921,8 @@ final class RequestFormExporter {
                                 String value = readMergedCellValue(sheet, rowIndex, 23, formatter, evaluator);
                                 rows.add(NoiseRow.threeColumnRow(
                                         aValue,
-                                        formatNoiseNormativeValue("Эквивалентные уровни звука,  (дБА) - ", method),
-                                        formatNoiseNormativeValue("Максимальные уровни звука  (дБА) - ", value)));
+                                        prefixNoiseLevel(method, "Эквивалентные уровни звука, дБА - "),
+                                        prefixNoiseLevel(value, "Максимальные уровни звука дБА - ")));
                             } else if (hasAnyText(aValue, bValue, cValue, dValue)) {
                                 rows.add(new NoiseRow(aValue, bValue, cValue, dValue, false, false));
                             }
@@ -1951,8 +1948,8 @@ final class RequestFormExporter {
                         String value = readMergedCellValue(sheet, rowIndex, 23, formatter, evaluator);
                         rows.add(NoiseRow.threeColumnRow(
                                 aValue,
-                                formatNoiseNormativeValue("Эквивалентные уровни звука,  (дБА) - ", method),
-                                formatNoiseNormativeValue("Максимальные уровни звука  (дБА) - ", value)));
+                                prefixNoiseLevel(method, "Эквивалентные уровни звука, дБА - "),
+                                prefixNoiseLevel(value, "Максимальные уровни звука дБА - ")));
                         rowIndex++;
                         continue;
                     }
@@ -2019,27 +2016,15 @@ final class RequestFormExporter {
         return value.trim().toLowerCase(Locale.ROOT).startsWith("нормативные требования");
     }
 
-    private static String formatNoiseNormativeValue(String prefix, String value) {
-        String safePrefix = prefix == null ? "" : prefix;
-        if (value == null) {
-            return safePrefix;
+    private static String prefixNoiseLevel(String value, String prefix) {
+        if (value == null || value.isBlank()) {
+            return value == null ? "" : value;
         }
-        return safePrefix + value.trim();
-    }
-
-    private static void setNoiseNormativeRowWidths(XWPFTable table, int rowIndex) {
-        int totalWidth = 12560;
-        int baseWidth = totalWidth / 3;
-        int remainder = totalWidth - baseWidth * 3;
-        int firstWidth = baseWidth + Math.min(1, remainder);
-        int secondWidth = baseWidth + Math.max(0, remainder - 1);
-        int thirdWidth = baseWidth;
-        int thirdColWidth = Math.max(1, thirdWidth - 1);
-
-        setCellWidth(table, rowIndex, 0, scaleWidth(firstWidth));
-        setCellWidth(table, rowIndex, 1, scaleWidth(secondWidth));
-        setCellWidth(table, rowIndex, 2, scaleWidth(thirdColWidth));
-        setCellWidth(table, rowIndex, 3, scaleWidth(1));
+        String trimmed = value.trim();
+        if (trimmed.startsWith(prefix)) {
+            return trimmed;
+        }
+        return prefix + trimmed;
     }
 
     private static String resolveArtificialLightingNormativeMethod(File sourceFile) {
