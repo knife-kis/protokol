@@ -435,6 +435,10 @@ final class RequestFormExporter {
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         setTableCellText(noiseTable.getRow(rowIndex).getCell(2), row.columnC,
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        if (row.mergeLastColumns) {
+                            mergeCellsHorizontally(noiseTable, rowIndex, 2, 3);
+                            continue;
+                        }
                         setTableCellText(noiseTable.getRow(rowIndex).getCell(3), row.columnD,
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                     }
@@ -1907,10 +1911,17 @@ final class RequestFormExporter {
                             String bValue = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator);
                             String cValue = readMergedCellValue(sheet, rowIndex, 2, formatter, evaluator);
                             String dValue = readMergedCellValue(sheet, rowIndex, 3, formatter, evaluator);
-                            if (hasAnyText(aValue, bValue, cValue, dValue)) {
-                                rows.add(new NoiseRow(aValue, bValue, cValue, dValue, false));
-                                rows.add(new NoiseRow(aValue, bValue, "", "", false));
-                                rows.add(new NoiseRow(aValue, bValue, "", "", false));
+                            if (shouldStopNoiseSearch(aValue, bValue, cValue, dValue)) {
+                                return rows;
+                            }
+                            if (isNoiseDateRow(aValue)) {
+                                rows.add(NoiseRow.mergedRow(aValue));
+                            } else if (isNoiseNormativeRow(aValue)) {
+                                String method = readMergedCellValue(sheet, rowIndex, 20, formatter, evaluator);
+                                String value = readMergedCellValue(sheet, rowIndex, 23, formatter, evaluator);
+                                rows.add(NoiseRow.threeColumnRow(aValue, method, value));
+                            } else if (hasAnyText(aValue, bValue, cValue, dValue)) {
+                                rows.add(new NoiseRow(aValue, bValue, cValue, dValue, false, false));
                             }
                             rowIndex = aMerge.getLastRow() + 1;
                             continue;
@@ -1921,8 +1932,23 @@ final class RequestFormExporter {
                     String bValue = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator);
                     String cValue = readMergedCellValue(sheet, rowIndex, 2, formatter, evaluator);
                     String dValue = readMergedCellValue(sheet, rowIndex, 3, formatter, evaluator);
+                    if (shouldStopNoiseSearch(aValue, bValue, cValue, dValue)) {
+                        return rows;
+                    }
+                    if (isNoiseDateRow(aValue)) {
+                        rows.add(NoiseRow.mergedRow(aValue));
+                        rowIndex++;
+                        continue;
+                    }
+                    if (isNoiseNormativeRow(aValue)) {
+                        String method = readMergedCellValue(sheet, rowIndex, 20, formatter, evaluator);
+                        String value = readMergedCellValue(sheet, rowIndex, 23, formatter, evaluator);
+                        rows.add(NoiseRow.threeColumnRow(aValue, method, value));
+                        rowIndex++;
+                        continue;
+                    }
                     if (hasAnyText(aValue, bValue, cValue, dValue)) {
-                        rows.add(new NoiseRow(aValue, bValue, cValue, dValue, false));
+                        rows.add(new NoiseRow(aValue, bValue, cValue, dValue, false, false));
                     }
                     rowIndex++;
                 }
@@ -1952,6 +1978,36 @@ final class RequestFormExporter {
             }
         }
         return false;
+    }
+
+    private static boolean shouldStopNoiseSearch(String... values) {
+        if (values == null) {
+            return false;
+        }
+        for (String value : values) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            String normalized = value.toLowerCase(Locale.ROOT);
+            if (normalized.contains("данные, предоставленные")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNoiseDateRow(String value) {
+        if (value == null) {
+            return false;
+        }
+        return value.trim().toLowerCase(Locale.ROOT).startsWith("дата, время провед");
+    }
+
+    private static boolean isNoiseNormativeRow(String value) {
+        if (value == null) {
+            return false;
+        }
+        return value.trim().toLowerCase(Locale.ROOT).startsWith("нормативные требования");
     }
 
     private static String resolveArtificialLightingNormativeMethod(File sourceFile) {
@@ -2419,17 +2475,28 @@ final class RequestFormExporter {
         private final String columnC;
         private final String columnD;
         private final boolean mergeAllColumns;
+        private final boolean mergeLastColumns;
 
-        private NoiseRow(String columnA, String columnB, String columnC, String columnD, boolean mergeAllColumns) {
+        private NoiseRow(String columnA,
+                         String columnB,
+                         String columnC,
+                         String columnD,
+                         boolean mergeAllColumns,
+                         boolean mergeLastColumns) {
             this.columnA = columnA == null ? "" : columnA;
             this.columnB = columnB == null ? "" : columnB;
             this.columnC = columnC == null ? "" : columnC;
             this.columnD = columnD == null ? "" : columnD;
             this.mergeAllColumns = mergeAllColumns;
+            this.mergeLastColumns = mergeLastColumns;
         }
 
         private static NoiseRow mergedRow(String text) {
-            return new NoiseRow(text, "", "", "", true);
+            return new NoiseRow(text, "", "", "", true, false);
+        }
+
+        private static NoiseRow threeColumnRow(String columnA, String columnB, String columnC) {
+            return new NoiseRow(columnA, columnB, columnC, "", false, true);
         }
     }
 }
