@@ -1919,7 +1919,10 @@ final class RequestFormExporter {
                             } else if (isNoiseNormativeRow(aValue)) {
                                 String method = readMergedCellValue(sheet, rowIndex, 20, formatter, evaluator);
                                 String value = readMergedCellValue(sheet, rowIndex, 23, formatter, evaluator);
-                                rows.add(NoiseRow.threeColumnRow(aValue, method, value));
+                                rows.add(NoiseRow.threeColumnRow(
+                                        aValue,
+                                        prefixNoiseLevel(method, "Эквивалентные уровни звука, дБА - "),
+                                        prefixNoiseLevel(value, "Максимальные уровни звука дБА - ")));
                             } else if (hasAnyText(aValue, bValue, cValue, dValue)) {
                                 rows.add(new NoiseRow(aValue, bValue, cValue, dValue, false, false));
                             }
@@ -1943,7 +1946,10 @@ final class RequestFormExporter {
                     if (isNoiseNormativeRow(aValue)) {
                         String method = readMergedCellValue(sheet, rowIndex, 20, formatter, evaluator);
                         String value = readMergedCellValue(sheet, rowIndex, 23, formatter, evaluator);
-                        rows.add(NoiseRow.threeColumnRow(aValue, method, value));
+                        rows.add(NoiseRow.threeColumnRow(
+                                aValue,
+                                prefixNoiseLevel(method, "Эквивалентные уровни звука, дБА - "),
+                                prefixNoiseLevel(value, "Максимальные уровни звука дБА - ")));
                         rowIndex++;
                         continue;
                     }
@@ -2008,6 +2014,17 @@ final class RequestFormExporter {
             return false;
         }
         return value.trim().toLowerCase(Locale.ROOT).startsWith("нормативные требования");
+    }
+
+    private static String prefixNoiseLevel(String value, String prefix) {
+        if (value == null || value.isBlank()) {
+            return value == null ? "" : value;
+        }
+        String trimmed = value.trim();
+        if (trimmed.startsWith(prefix)) {
+            return trimmed;
+        }
+        return prefix + trimmed;
     }
 
     private static String resolveArtificialLightingNormativeMethod(File sourceFile) {
