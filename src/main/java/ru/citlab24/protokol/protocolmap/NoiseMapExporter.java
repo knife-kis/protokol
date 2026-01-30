@@ -649,6 +649,21 @@ public final class NoiseMapExporter {
                     continue;
                 }
             }
+            if (mergedRegion == null) {
+                Row sourceRow = sourceSheet.getRow(sourceRowIndex);
+                Cell cellA = sourceRow == null ? null : sourceRow.getCell(0);
+                if (isNumericCell(cellA, formatter, evaluator)) {
+                    CellRangeAddress dRegion = findMergedRegion(sourceSheet, sourceRowIndex, 3);
+                    int blockStart = dRegion != null ? dRegion.getFirstRow() : sourceRowIndex;
+                    int blockEnd = dRegion != null ? dRegion.getLastRow() : sourceRowIndex;
+                    if (sourceRowIndex == blockStart) {
+                        targetRowIndex = appendProtocolRows(sourceSheet, targetSheet, targetRowIndex,
+                                blockStart, blockEnd, centerStyle, leftStyle, formatter, evaluator);
+                        sourceRowIndex = blockEnd + 1;
+                        continue;
+                    }
+                }
+            }
             sourceRowIndex++;
         }
     }
@@ -715,6 +730,44 @@ public final class NoiseMapExporter {
         adjustRowHeightForMergedText(sheet, row5, 2, 9, levelsText);
 
         return endRow + 1;
+    }
+
+    private static int appendProtocolRows(Sheet sourceSheet,
+                                          Sheet targetSheet,
+                                          int targetStartRow,
+                                          int sourceStartRow,
+                                          int sourceEndRow,
+                                          CellStyle centerStyle,
+                                          CellStyle leftStyle,
+                                          DataFormatter formatter,
+                                          FormulaEvaluator evaluator) {
+        CellRangeAddress dRegion = findMergedRegion(sourceSheet, sourceStartRow, 3);
+        String dValue = dRegion == null
+                ? readCellText(sourceSheet.getRow(sourceStartRow), 3, formatter, evaluator)
+                : readMergedCellValue(sourceSheet, sourceStartRow, 3, formatter, evaluator);
+        int targetRowIndex = targetStartRow;
+        for (int sourceRowIndex = sourceStartRow; sourceRowIndex <= sourceEndRow; sourceRowIndex++) {
+            Row sourceRow = sourceSheet.getRow(sourceRowIndex);
+            setCellValueWithStyle(targetSheet, targetRowIndex, 0,
+                    readCellText(sourceRow, 0, formatter, evaluator), centerStyle);
+            setCellValueWithStyle(targetSheet, targetRowIndex, 1,
+                    readCellText(sourceRow, 1, formatter, evaluator), leftStyle);
+            setCellValueWithStyle(targetSheet, targetRowIndex, 2,
+                    readCellText(sourceRow, 2, formatter, evaluator), leftStyle);
+            if (dRegion == null) {
+                setCellValueWithStyle(targetSheet, targetRowIndex, 3,
+                        readCellText(sourceRow, 3, formatter, evaluator), leftStyle);
+            } else {
+                String value = sourceRowIndex == sourceStartRow ? dValue : "";
+                setCellValueWithStyle(targetSheet, targetRowIndex, 3, value, leftStyle);
+            }
+            fillRowCells(targetSheet, targetRowIndex, 4, 23, "", centerStyle);
+            targetRowIndex++;
+        }
+        if (dRegion != null && sourceEndRow > sourceStartRow) {
+            setMergedRegionWithStyle(targetSheet, targetStartRow, targetRowIndex - 1, 3, 3, leftStyle, dValue);
+        }
+        return targetRowIndex;
     }
 
     private static void fillRowCells(Sheet sheet,
@@ -1453,6 +1506,36 @@ public final class NoiseMapExporter {
         }
         Cell cell = row.getCell(colIndex);
         return normalizeText(cell == null ? "" : formatter.formatCellValue(cell, evaluator));
+    }
+
+    private static String readCellText(Row row,
+                                       int columnIndex,
+                                       DataFormatter formatter,
+                                       FormulaEvaluator evaluator) {
+        if (row == null) {
+            return "";
+        }
+        Cell cell = row.getCell(columnIndex);
+        return normalizeText(cell == null ? "" : formatter.formatCellValue(cell, evaluator));
+    }
+
+    private static boolean isNumericCell(Cell cell,
+                                         DataFormatter formatter,
+                                         FormulaEvaluator evaluator) {
+        if (cell == null) {
+            return false;
+        }
+        String text = normalizeText(formatter.formatCellValue(cell, evaluator));
+        if (text.isBlank()) {
+            return false;
+        }
+        String normalized = text.replace(',', '.');
+        try {
+            Double.parseDouble(normalized);
+            return true;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
     }
 
     private static CellRangeAddress findMergedRegion(Sheet sheet, int rowIndex, int colIndex) {
