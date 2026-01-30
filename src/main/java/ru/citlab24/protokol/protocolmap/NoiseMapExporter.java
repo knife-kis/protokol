@@ -727,7 +727,10 @@ public final class NoiseMapExporter {
         fillRowCells(sheet, row5, 10, 19, "", centerStyle);
         setMergedRegionWithStyle(sheet, row5, row5, 20, 22, centerStyle, "");
         setCellValueWithStyle(sheet, row5, 23, "", centerStyle);
-        adjustRowHeightForMergedText(sheet, row5, 2, 9, levelsText);
+        Row row5Ref = sheet.getRow(row5);
+        if (row5Ref != null) {
+            row5Ref.setHeightInPoints(sheet.getDefaultRowHeightInPoints());
+        }
 
         return endRow + 1;
     }
@@ -761,7 +764,9 @@ public final class NoiseMapExporter {
                 String value = sourceRowIndex == sourceStartRow ? dValue : "";
                 setCellValueWithStyle(targetSheet, targetRowIndex, 3, value, leftStyle);
             }
-            fillRowCells(targetSheet, targetRowIndex, 4, 23, "", centerStyle);
+            fillRowCells(targetSheet, targetRowIndex, 4, 19, "", centerStyle);
+            setMergedRegionWithStyle(targetSheet, targetRowIndex, targetRowIndex, 20, 22, centerStyle, "");
+            setCellValueWithStyle(targetSheet, targetRowIndex, 23, "", centerStyle);
             targetRowIndex++;
         }
         if (dRegion != null && sourceEndRow > sourceStartRow) {
