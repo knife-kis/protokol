@@ -404,6 +404,7 @@ public final class NoiseMapExporter {
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook sourceWorkbook = WorkbookFactory.create(in)) {
             int sheetCount = sourceWorkbook.getNumberOfSheets();
+            java.util.List<String> sheetNames = new java.util.ArrayList<>();
             for (int idx = 1; idx < sheetCount; idx++) {
                 Sheet sourceSheet = sourceWorkbook.getSheetAt(idx);
                 if (sourceSheet == null) {
@@ -413,10 +414,24 @@ public final class NoiseMapExporter {
                 if (isGeneratorSheet(sheetName)) {
                     continue;
                 }
+                sheetNames.add(sheetName);
+            }
+
+            if (sheetNames.stream().noneMatch(NoiseMapExporter::isMicroclimateSheet)) {
+                sheetNames.add("Микроклимат");
+            }
+
+            boolean noiseHeaderApplied = false;
+            for (String sheetName : sheetNames) {
                 Sheet targetSheet = workbook.createSheet(sheetName);
                 applyNoiseResultsSheetDefaults(workbook, targetSheet);
                 applyHeaders(targetSheet, registrationNumber);
-                buildNoiseResultsHeader(workbook, targetSheet);
+                if (!noiseHeaderApplied && isNoiseProtocolSheet(sheetName)) {
+                    buildNoiseResultsHeader(workbook, targetSheet);
+                    noiseHeaderApplied = true;
+                } else {
+                    addSimpleNumberingRow(workbook, targetSheet);
+                }
             }
         } catch (Exception ex) {
             // Игнорируем ошибки чтения, чтобы карта всё равно сформировалась.
@@ -555,6 +570,26 @@ public final class NoiseMapExporter {
             setCellValueWithStyle(numberingRow, col, "21", numberStyle);
         }
         setCellValueWithStyle(numberingRow, 23, "22", numberStyle);
+    }
+
+    private static void addSimpleNumberingRow(Workbook workbook, Sheet sheet) {
+        Font titleFont = workbook.createFont();
+        titleFont.setFontName("Arial");
+        titleFont.setFontHeightInPoints((short) 9);
+
+        CellStyle numberStyle = workbook.createCellStyle();
+        numberStyle.setFont(titleFont);
+        numberStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        numberStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        setThinBorders(numberStyle);
+
+        Row numberingRow = sheet.createRow(0);
+        for (int col = 0; col <= 21; col++) {
+            setCellValueWithStyle(numberingRow, col, String.valueOf(col + 1), numberStyle);
+        }
+        for (int col = 22; col <= 23; col++) {
+            setCellValueWithStyle(numberingRow, col, "", numberStyle);
+        }
     }
 
     private static void setMergedRegionWithStyle(Sheet sheet,
@@ -1306,6 +1341,22 @@ public final class NoiseMapExporter {
         return normalized.equals("генератор")
                 || normalized.equals("генератор (2)")
                 || normalized.equals("генератор (2.0.)");
+    }
+
+    private static boolean isNoiseProtocolSheet(String sheetName) {
+        if (sheetName == null) {
+            return false;
+        }
+        String normalized = normalizeText(sheetName).toLowerCase(Locale.ROOT);
+        return normalized.contains("шум");
+    }
+
+    private static boolean isMicroclimateSheet(String sheetName) {
+        if (sheetName == null) {
+            return false;
+        }
+        String normalized = normalizeText(sheetName).toLowerCase(Locale.ROOT);
+        return normalized.equals("микроклимат");
     }
 
     private static String findMeasurementPerformer(Sheet sheet, DataFormatter formatter) {
