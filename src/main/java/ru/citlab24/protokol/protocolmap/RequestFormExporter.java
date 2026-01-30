@@ -97,6 +97,7 @@ final class RequestFormExporter {
         List<LightingRow> lightingRows = resolveArtificialLightingRows(sourceFile);
         List<GroundLightingRow> groundLightingRows = resolveArtificialGroundLightingRows(sourceFile);
         List<KeoRow> keoRows = resolveKeoRows(sourceFile);
+        List<NoiseRow> noiseRows = resolveNoiseRows(sourceFile);
         String lightingNormativeMethod = resolveArtificialLightingNormativeMethod(sourceFile);
         boolean hasMedSheet = hasSheetByName(sourceFile, "МЭД");
         boolean hasMed3Sheet = hasSheetByName(sourceFile, "МЭД (3)");
@@ -104,6 +105,7 @@ final class RequestFormExporter {
         boolean hasArtificialLightingSheet = hasSheetByName(sourceFile, "Иск освещение");
         boolean hasArtificialGroundLightingSheet = hasSheetByName(sourceFile, "Иск освещение (2)");
         boolean hasKeoSheet = hasSheetByName(sourceFile, "КЕО");
+        boolean hasNoiseRows = !noiseRows.isEmpty();
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -378,7 +380,8 @@ final class RequestFormExporter {
                             "                                                 (Должность, ФИО, контактные данные) ");
 
             if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet
-                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet || hasKeoSheet) {
+                    || hasArtificialLightingSheet || hasArtificialGroundLightingSheet || hasKeoSheet
+                    || hasNoiseRows) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -406,6 +409,39 @@ final class RequestFormExporter {
                 setParagraphSpacing(spacerBeforeMicroclimate);
 
                 int sectionIndex = 1;
+
+                if (hasNoiseRows) {
+                    XWPFParagraph noiseTitle = document.createParagraph();
+                    setParagraphSpacing(noiseTitle);
+                    XWPFRun noiseTitleRun = noiseTitle.createRun();
+                    noiseTitleRun.setFontFamily(FONT_NAME);
+                    noiseTitleRun.setFontSize(FONT_SIZE);
+                    noiseTitleRun.setText("Измерение шума с указанием места проведения измерений:");
+
+                    int noiseRowsCount = noiseRows.size();
+                    XWPFTable noiseTable = document.createTable(noiseRowsCount, 4);
+                    configureTableLayout(noiseTable, new int[]{1200, 1200, 5200, 4960});
+
+                    for (int index = 0; index < noiseRowsCount; index++) {
+                        NoiseRow row = noiseRows.get(index);
+                        int rowIndex = index;
+                        setTableCellText(noiseTable.getRow(rowIndex).getCell(0), row.columnA,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        if (row.mergeAllColumns) {
+                            mergeCellsHorizontally(noiseTable, rowIndex, 0, 3);
+                            continue;
+                        }
+                        setTableCellText(noiseTable.getRow(rowIndex).getCell(1), row.columnB,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(noiseTable.getRow(rowIndex).getCell(2), row.columnC,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(noiseTable.getRow(rowIndex).getCell(3), row.columnD,
+                                MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    }
+
+                    XWPFParagraph spacerAfterNoise = document.createParagraph();
+                    setParagraphSpacing(spacerAfterNoise);
+                }
 
                 if (!microclimateRows.isEmpty()) {
                     XWPFParagraph microclimateTitle = document.createParagraph();
@@ -1813,6 +1849,105 @@ final class RequestFormExporter {
         }
     }
 
+    private static List<NoiseRow> resolveNoiseRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            List<NoiseRow> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int sheetCount = workbook.getNumberOfSheets();
+            for (int sheetIndex = 1; sheetIndex < sheetCount; sheetIndex++) {
+                Sheet sheet = workbook.getSheetAt(sheetIndex);
+                if (sheet == null) {
+                    continue;
+                }
+                String name = sheet.getSheetName();
+                if (name != null) {
+                    String lower = name.toLowerCase(Locale.ROOT);
+                    if (lower.contains("неопред") || lower.contains("истор")) {
+                        continue;
+                    }
+                }
+                String headerText = readMergedCellValue(sheet, 0, 0, formatter, evaluator);
+                if (!headerText.startsWith("16. Результаты измерений виброакустических факторов")) {
+                    continue;
+                }
+
+                int lastRow = sheet.getLastRowNum();
+                int dateRowIndex = 6;
+                if (lastRow < dateRowIndex) {
+                    continue;
+                }
+                if (isNoiseMergedHeaderRow(sheet, dateRowIndex)) {
+                    String mergedText = readMergedCellValue(sheet, dateRowIndex, 0, formatter, evaluator);
+                    if (!mergedText.isEmpty()) {
+                        rows.add(NoiseRow.mergedRow(mergedText));
+                    }
+                }
+
+                int startRow = 7;
+                for (int rowIndex = startRow; rowIndex <= lastRow; ) {
+                    CellRangeAddress aMerge = findMergedRegion(sheet, rowIndex, 0);
+                    if (aMerge != null && aMerge.getFirstColumn() == 0 && aMerge.getLastColumn() == 0) {
+                        if (aMerge.getFirstRow() < rowIndex) {
+                            rowIndex++;
+                            continue;
+                        }
+                        if (aMerge.getFirstRow() == rowIndex && aMerge.getLastRow() == rowIndex + 2) {
+                            String aValue = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator);
+                            String bValue = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator);
+                            String cValue = readMergedCellValue(sheet, rowIndex, 2, formatter, evaluator);
+                            String dValue = readMergedCellValue(sheet, rowIndex, 3, formatter, evaluator);
+                            if (hasAnyText(aValue, bValue, cValue, dValue)) {
+                                rows.add(new NoiseRow(aValue, bValue, cValue, dValue, false));
+                                rows.add(new NoiseRow(aValue, bValue, "", "", false));
+                                rows.add(new NoiseRow(aValue, bValue, "", "", false));
+                            }
+                            rowIndex = aMerge.getLastRow() + 1;
+                            continue;
+                        }
+                    }
+
+                    String aValue = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator);
+                    String bValue = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator);
+                    String cValue = readMergedCellValue(sheet, rowIndex, 2, formatter, evaluator);
+                    String dValue = readMergedCellValue(sheet, rowIndex, 3, formatter, evaluator);
+                    if (hasAnyText(aValue, bValue, cValue, dValue)) {
+                        rows.add(new NoiseRow(aValue, bValue, cValue, dValue, false));
+                    }
+                    rowIndex++;
+                }
+            }
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static boolean isNoiseMergedHeaderRow(Sheet sheet, int rowIndex) {
+        CellRangeAddress region = findMergedRegion(sheet, rowIndex, 0);
+        return region != null
+                && region.getFirstRow() == rowIndex
+                && region.getLastRow() == rowIndex
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= 23;
+    }
+
+    private static boolean hasAnyText(String... values) {
+        if (values == null) {
+            return false;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String resolveArtificialLightingNormativeMethod(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return "";
@@ -2269,6 +2404,26 @@ final class RequestFormExporter {
 
         private static VentilationRow section(String section) {
             return new VentilationRow(section);
+        }
+    }
+
+    private static final class NoiseRow {
+        private final String columnA;
+        private final String columnB;
+        private final String columnC;
+        private final String columnD;
+        private final boolean mergeAllColumns;
+
+        private NoiseRow(String columnA, String columnB, String columnC, String columnD, boolean mergeAllColumns) {
+            this.columnA = columnA == null ? "" : columnA;
+            this.columnB = columnB == null ? "" : columnB;
+            this.columnC = columnC == null ? "" : columnC;
+            this.columnD = columnD == null ? "" : columnD;
+            this.mergeAllColumns = mergeAllColumns;
+        }
+
+        private static NoiseRow mergedRow(String text) {
+            return new NoiseRow(text, "", "", "", true);
         }
     }
 }
