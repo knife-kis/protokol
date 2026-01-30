@@ -8,6 +8,7 @@ import org.apache.poi.ss.usermodel.Header;
 import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.SpreadsheetVersion;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -44,7 +45,6 @@ public final class NoiseMapExporter {
         String measurementDates = titleMeasurementDates.isBlank()
                 ? resolveMeasurementDates(sourceFile)
                 : titleMeasurementDates;
-        java.util.List<String> measurementDatesList = extractMeasurementDatesList(measurementDates);
         String controlDate = resolveControlDate(sourceFile);
         String specialConditions = resolveSpecialConditions(sourceFile);
         String measurementMethods = resolveMeasurementMethods(sourceFile);
@@ -58,11 +58,7 @@ public final class NoiseMapExporter {
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, measurementDates, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
-            PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook, measurementDatesList, false);
-            Sheet microclimateSheet = workbook.getSheet("Микроклимат");
-            if (microclimateSheet != null) {
-                applyHeaders(microclimateSheet, registrationNumber);
-            }
+            createProtocolTabs(sourceFile, workbook, registrationNumber);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -394,7 +390,229 @@ public final class NoiseMapExporter {
                         "показания шумомера перед измерениями на частоте 1 кГц:\n" +
                         "показания шумомера после измерений на частоте 1 кГц:",
                 plainStyle);
+        Row calibrationRow = sheet.getRow(rowIndex);
+        if (calibrationRow != null) {
+            calibrationRow.setHeightInPoints(sheet.getDefaultRowHeightInPoints() * 3);
+        }
         rowIndex++;
+    }
+
+    private static void createProtocolTabs(File sourceFile, Workbook workbook, String registrationNumber) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return;
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            int sheetCount = sourceWorkbook.getNumberOfSheets();
+            for (int idx = 1; idx < sheetCount; idx++) {
+                Sheet sourceSheet = sourceWorkbook.getSheetAt(idx);
+                if (sourceSheet == null) {
+                    continue;
+                }
+                String sheetName = sourceSheet.getSheetName();
+                if (isGeneratorSheet(sheetName)) {
+                    continue;
+                }
+                Sheet targetSheet = workbook.createSheet(sheetName);
+                applyNoiseResultsSheetDefaults(workbook, targetSheet);
+                applyHeaders(targetSheet, registrationNumber);
+                buildNoiseResultsHeader(workbook, targetSheet);
+            }
+        } catch (Exception ex) {
+            // Игнорируем ошибки чтения, чтобы карта всё равно сформировалась.
+        }
+    }
+
+    private static void applyNoiseResultsSheetDefaults(Workbook workbook, Sheet sheet) {
+        Font baseFont = workbook.createFont();
+        baseFont.setFontName("Arial");
+        baseFont.setFontHeightInPoints((short) 9);
+
+        CellStyle baseStyle = workbook.createCellStyle();
+        baseStyle.setFont(baseFont);
+        baseStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+        baseStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        baseStyle.setWrapText(true);
+
+        int[] widthsPx = buildNoiseResultsColumnWidthsPx();
+        for (int col = 0; col < widthsPx.length; col++) {
+            sheet.setColumnWidth(col, pixel2WidthUnits(widthsPx[col]));
+            sheet.setDefaultColumnStyle(col, baseStyle);
+        }
+
+        PrintSetup printSetup = sheet.getPrintSetup();
+        printSetup.setLandscape(true);
+        printSetup.setFitWidth((short) 1);
+        printSetup.setFitHeight((short) 0);
+        sheet.setFitToPage(true);
+        sheet.setAutobreaks(true);
+
+        sheet.setMargin(Sheet.LeftMargin, cmToInches(LEFT_MARGIN_CM));
+        sheet.setMargin(Sheet.RightMargin, cmToInches(RIGHT_MARGIN_CM));
+        sheet.setMargin(Sheet.TopMargin, cmToInches(TOP_MARGIN_CM));
+        sheet.setMargin(Sheet.BottomMargin, cmToInches(BOTTOM_MARGIN_CM));
+
+        int maxRow = SpreadsheetVersion.EXCEL2007.getMaxRows() - 1;
+        workbook.setPrintArea(workbook.getSheetIndex(sheet), 0, 23, 0, maxRow);
+    }
+
+    private static int[] buildNoiseResultsColumnWidthsPx() {
+        return new int[]{
+                28, 28, 160, 130, 25, 25, 25, 25, 25, 25, 34, 34, 34, 34, 34, 34,
+                34, 34, 34, 34, 26, 11, 20, 43
+        };
+    }
+
+    private static void buildNoiseResultsHeader(Workbook workbook, Sheet sheet) {
+        Font titleFont = workbook.createFont();
+        titleFont.setFontName("Arial");
+        titleFont.setFontHeightInPoints((short) 9);
+
+        CellStyle titleStyle = workbook.createCellStyle();
+        titleStyle.setFont(titleFont);
+        titleStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+        titleStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+
+        CellStyle headerStyle = workbook.createCellStyle();
+        headerStyle.setFont(titleFont);
+        headerStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        headerStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        headerStyle.setWrapText(true);
+        setThinBorders(headerStyle);
+
+        Font smallFont = workbook.createFont();
+        smallFont.setFontName("Arial");
+        smallFont.setFontHeightInPoints((short) 8);
+
+        CellStyle headerSmallStyle = workbook.createCellStyle();
+        headerSmallStyle.cloneStyleFrom(headerStyle);
+        headerSmallStyle.setFont(smallFont);
+
+        CellStyle headerVerticalStyle = workbook.createCellStyle();
+        headerVerticalStyle.cloneStyleFrom(headerStyle);
+        headerVerticalStyle.setRotation((short) 90);
+
+        CellStyle numberStyle = workbook.createCellStyle();
+        numberStyle.setFont(titleFont);
+        numberStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        numberStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        setThinBorders(numberStyle);
+
+        setMergedRegionWithStyle(sheet, 0, 0, 0, 23, titleStyle, "7.6 Результаты измерений шума");
+        setMergedRegionWithStyle(sheet, 1, 1, 0, 23, titleStyle, "7.6.1. Шум:");
+
+        Row headerTopRow = sheet.createRow(2);
+        Row headerMiddleRow = sheet.createRow(3);
+        Row headerBottomRow = sheet.createRow(4);
+        headerTopRow.setHeightInPoints(20f);
+        headerMiddleRow.setHeightInPoints(20f);
+        headerBottomRow.setHeightInPoints(108f);
+
+        setMergedRegionWithStyle(sheet, 2, 4, 0, 0, headerVerticalStyle, "№ п/п");
+        setMergedRegionWithStyle(sheet, 2, 4, 1, 1, headerVerticalStyle, "№ точки измерения");
+        setMergedRegionWithStyle(sheet, 2, 4, 2, 2, headerStyle, "Место измерений");
+        setMergedRegionWithStyle(sheet, 2, 4, 3, 3, headerStyle,
+                "Источник шума \n(тип, вид, марка, условия замера)");
+
+        setMergedRegionWithStyle(sheet, 2, 2, 4, 9, headerStyle, "Характер шума");
+        setMergedRegionWithStyle(sheet, 3, 3, 4, 5, headerSmallStyle, "по спектру");
+        setMergedRegionWithStyle(sheet, 3, 3, 6, 9, headerSmallStyle,
+                "по временным\nхарактеристикам");
+
+        setCellValueWithStyle(sheet, 4, 4, "широкополосный", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 5, "тональный", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 6, "постоянный", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 7, "колеблющийся", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 8, "прерывистый", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 9, "импульсный", headerVerticalStyle);
+
+        setMergedRegionWithStyle(sheet, 2, 3, 10, 18, headerStyle,
+                "Уровни звукового давления (дБ) ± U (дБ) в октавных полосах частот " +
+                        "со среднегеометрическими частотами (Гц)");
+
+        setCellValueWithStyle(sheet, 4, 10, "31,5", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 11, "63", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 12, "125", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 13, "250", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 14, "500", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 15, "1000", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 16, "2000", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 17, "4000", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 18, "8000", headerVerticalStyle);
+
+        setMergedRegionWithStyle(sheet, 2, 4, 19, 19, headerVerticalStyle,
+                "Уровни звука (дБА) \n±U (дБ)");
+        setMergedRegionWithStyle(sheet, 2, 4, 20, 22, headerVerticalStyle,
+                "Эквивалентные уровни звука,  (дБА) ±U (дБ)");
+        setMergedRegionWithStyle(sheet, 2, 4, 23, 23, headerVerticalStyle,
+                "Максимальные уровни звука  (дБА)");
+
+        Row numberingRow = sheet.createRow(5);
+        for (int col = 0; col <= 19; col++) {
+            setCellValueWithStyle(numberingRow, col, String.valueOf(col + 1), numberStyle);
+        }
+        for (int col = 20; col <= 22; col++) {
+            setCellValueWithStyle(numberingRow, col, "21", numberStyle);
+        }
+        setCellValueWithStyle(numberingRow, 23, "22", numberStyle);
+    }
+
+    private static void setMergedRegionWithStyle(Sheet sheet,
+                                                 int rowStart,
+                                                 int rowEnd,
+                                                 int colStart,
+                                                 int colEnd,
+                                                 CellStyle style,
+                                                 String value) {
+        Row row = sheet.getRow(rowStart);
+        if (row == null) {
+            row = sheet.createRow(rowStart);
+        }
+        Cell cell = row.getCell(colStart);
+        if (cell == null) {
+            cell = row.createCell(colStart);
+        }
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+
+        CellRangeAddress region = new CellRangeAddress(rowStart, rowEnd, colStart, colEnd);
+        sheet.addMergedRegion(region);
+        RegionUtil.setBorderTop(style.getBorderTop(), region, sheet);
+        RegionUtil.setBorderBottom(style.getBorderBottom(), region, sheet);
+        RegionUtil.setBorderLeft(style.getBorderLeft(), region, sheet);
+        RegionUtil.setBorderRight(style.getBorderRight(), region, sheet);
+
+        for (int rowIndex = rowStart; rowIndex <= rowEnd; rowIndex++) {
+            Row currentRow = sheet.getRow(rowIndex);
+            if (currentRow == null) {
+                currentRow = sheet.createRow(rowIndex);
+            }
+            for (int colIndex = colStart; colIndex <= colEnd; colIndex++) {
+                Cell currentCell = currentRow.getCell(colIndex);
+                if (currentCell == null) {
+                    currentCell = currentRow.createCell(colIndex);
+                }
+                currentCell.setCellStyle(style);
+            }
+        }
+    }
+
+    private static void setCellValueWithStyle(Sheet sheet, int rowIndex, int columnIndex,
+                                              String value, CellStyle style) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        setCellValueWithStyle(row, columnIndex, value, style);
+    }
+
+    private static void setCellValueWithStyle(Row row, int columnIndex, String value, CellStyle style) {
+        Cell cell = row.getCell(columnIndex);
+        if (cell == null) {
+            cell = row.createCell(columnIndex);
+        }
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
     }
 
     private static int addInstrumentRow(Sheet sheet,
