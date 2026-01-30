@@ -1871,24 +1871,30 @@ final class RequestFormExporter {
                         continue;
                     }
                 }
-                String headerText = readMergedCellValue(sheet, 0, 0, formatter, evaluator);
-                if (!headerText.startsWith("16. Результаты измерений виброакустических факторов")) {
-                    continue;
-                }
-
                 int lastRow = sheet.getLastRowNum();
                 int dateRowIndex = 6;
                 if (lastRow < dateRowIndex) {
                     continue;
                 }
+                int startRow = 7;
                 if (isNoiseMergedHeaderRow(sheet, dateRowIndex)) {
                     String mergedText = readMergedCellValue(sheet, dateRowIndex, 0, formatter, evaluator);
                     if (!mergedText.isEmpty()) {
                         rows.add(NoiseRow.mergedRow(mergedText));
                     }
+                } else {
+                    for (int rowIndex = 0; rowIndex <= lastRow; rowIndex++) {
+                        if (isNoiseMergedHeaderRow(sheet, rowIndex)) {
+                            String mergedText = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator);
+                            if (!mergedText.isEmpty()) {
+                                rows.add(NoiseRow.mergedRow(mergedText));
+                            }
+                            startRow = rowIndex + 1;
+                            break;
+                        }
+                    }
                 }
 
-                int startRow = 7;
                 for (int rowIndex = startRow; rowIndex <= lastRow; ) {
                     CellRangeAddress aMerge = findMergedRegion(sheet, rowIndex, 0);
                     if (aMerge != null && aMerge.getFirstColumn() == 0 && aMerge.getLastColumn() == 0) {
