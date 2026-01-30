@@ -57,7 +57,8 @@ public final class NoiseMapExporter {
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, measurementDates, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
                     specialConditions, measurementMethods, instruments);
-            createProtocolTabs(sourceFile, workbook, registrationNumber);
+            java.util.List<String> measurementDatesList = extractMeasurementDatesList(measurementDates);
+            createProtocolTabs(sourceFile, workbook, registrationNumber, measurementDatesList);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 workbook.write(out);
@@ -396,7 +397,10 @@ public final class NoiseMapExporter {
         rowIndex++;
     }
 
-    private static void createProtocolTabs(File sourceFile, Workbook workbook, String registrationNumber) {
+    private static void createProtocolTabs(File sourceFile,
+                                           Workbook workbook,
+                                           String registrationNumber,
+                                           java.util.List<String> measurementDates) {
         if (sourceFile == null || !sourceFile.exists()) {
             return;
         }
@@ -410,14 +414,22 @@ public final class NoiseMapExporter {
                     continue;
                 }
                 String sheetName = sourceSheet.getSheetName();
-                if (isGeneratorSheet(sheetName)) {
+                if (isGeneratorSheet(sheetName) || isIgnoredProtocolSheet(sheetName)) {
                     continue;
                 }
-                sheetNames.add(sheetName);
+                if (!isMicroclimateSheet(sheetName)) {
+                    sheetNames.add(sheetName);
+                }
             }
 
-            if (sheetNames.stream().noneMatch(NoiseMapExporter::isMicroclimateSheet)) {
-                sheetNames.add("Микроклимат");
+            if (workbook.getSheet("Микроклимат") == null) {
+                PhysicalFactorsMapResultsTabBuilder.createResultsSheet(workbook,
+                        measurementDates,
+                        false);
+                Sheet microclimateSheet = workbook.getSheet("Микроклимат");
+                if (microclimateSheet != null) {
+                    applyHeaders(microclimateSheet, registrationNumber);
+                }
             }
 
             boolean noiseHeaderApplied = false;
@@ -567,9 +579,7 @@ public final class NoiseMapExporter {
         for (int col = 0; col <= 19; col++) {
             setCellValueWithStyle(numberingRow, col, String.valueOf(col + 1), numberStyle);
         }
-        for (int col = 20; col <= 22; col++) {
-            setCellValueWithStyle(numberingRow, col, "21", numberStyle);
-        }
+        setMergedRegionWithStyle(sheet, 5, 5, 20, 22, numberStyle, "21");
         setCellValueWithStyle(numberingRow, 23, "22", numberStyle);
     }
 
@@ -1358,6 +1368,14 @@ public final class NoiseMapExporter {
         }
         String normalized = normalizeText(sheetName).toLowerCase(Locale.ROOT);
         return normalized.equals("микроклимат");
+    }
+
+    private static boolean isIgnoredProtocolSheet(String sheetName) {
+        if (sheetName == null) {
+            return false;
+        }
+        String normalized = normalizeText(sheetName).toLowerCase(Locale.ROOT);
+        return normalized.equals("неопред");
     }
 
     private static String findMeasurementPerformer(Sheet sheet, DataFormatter formatter) {
