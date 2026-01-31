@@ -22,8 +22,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -423,11 +425,15 @@ public final class SoundInsulationMapExporter {
         if (labelRow < 0) {
             return;
         }
+        applyWrapStyleToRange(sheet, labelRow, 0, 31);
+        adjustRowHeightForMergedText(sheet, labelRow, 0, 31, readRowText(sheet, labelRow));
         int headerRow = labelRow + 1;
         int dataStartRow = headerRow + 1;
         int sketchRow = findRowIndexByPrefix(sheet, "6. Эскиз");
         int lastRow = sheet.getLastRowNum();
         int endBoundary = sketchRow > 0 ? sketchRow : lastRow;
+
+        removeRowBreaks(sheet, labelRow, endBoundary);
 
         int lastInstrumentRow = dataStartRow - 1;
         for (int rowIndex = dataStartRow; rowIndex < endBoundary; rowIndex++) {
@@ -578,16 +584,11 @@ public final class SoundInsulationMapExporter {
         }
 
         rowIndex = writeMergedRow(sheet, rowIndex, "Конструктивные решения:");
-        if (!safe(data.constructiveSolutionsTable).isBlank()) {
-            rowIndex = writeMergedRow(sheet, rowIndex, data.constructiveSolutionsTable);
-        }
+        rowIndex = writeConstructiveSolutionsTable(sheet, rowIndex, data.constructiveSolutionsTable);
 
         rowIndex = writeMergedRow(sheet, rowIndex, "");
         rowIndex = writeMergedRow(sheet, rowIndex, "Параметры помещений:");
-        rowIndex = writeMergedRow(sheet, rowIndex, "");
-        if (!safe(data.roomParametersTable).isBlank()) {
-            rowIndex = writeMergedRow(sheet, rowIndex, data.roomParametersTable);
-        }
+        rowIndex = writeRoomParametersTable(sheet, rowIndex, data.roomParametersTable);
 
         rowIndex = writeMergedRow(sheet, rowIndex, "");
         String areaLine = safe(data.areaBetweenRooms);
@@ -600,6 +601,7 @@ public final class SoundInsulationMapExporter {
     private static int writeMergedRow(Sheet sheet, int rowIndex, String text) {
         setCellText(sheet, rowIndex, text);
         ensureMergedRegion(sheet, rowIndex, 0, 31);
+        applyWrapStyleToRange(sheet, rowIndex, 0, 31);
         adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, text);
         return rowIndex + 1;
     }
@@ -728,6 +730,63 @@ public final class SoundInsulationMapExporter {
             baseHeightPx = pointsToPixels(sheet.getDefaultRowHeightInPoints());
         }
         row.setHeightInPoints(pixelsToPoints((int) (baseHeightPx * Math.max(1, lines))));
+    }
+
+    private static String readRowText(Sheet sheet, int rowIndex) {
+        if (sheet == null) {
+            return "";
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        return formatCellValue(formatter, row.getCell(0));
+    }
+
+    private static void applyWrapStyleToRange(Sheet sheet, int rowIndex, int firstCol, int lastCol) {
+        if (sheet == null) {
+            return;
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        Map<CellStyle, CellStyle> cache = new IdentityHashMap<>();
+        for (int col = firstCol; col <= lastCol; col++) {
+            Cell cell = row.getCell(col);
+            if (cell == null) {
+                cell = row.createCell(col);
+            }
+            CellStyle baseStyle = cell.getCellStyle();
+            if (baseStyle != null && baseStyle.getWrapText()) {
+                continue;
+            }
+            CellStyle wrappedStyle = cache.get(baseStyle);
+            if (wrappedStyle == null) {
+                Workbook workbook = sheet.getWorkbook();
+                wrappedStyle = workbook.createCellStyle();
+                if (baseStyle != null) {
+                    wrappedStyle.cloneStyleFrom(baseStyle);
+                }
+                wrappedStyle.setWrapText(true);
+                cache.put(baseStyle, wrappedStyle);
+            }
+            cell.setCellStyle(wrappedStyle);
+        }
+    }
+
+    private static void removeRowBreaks(Sheet sheet, int startRow, int endRow) {
+        if (sheet == null) {
+            return;
+        }
+        int from = Math.max(0, startRow);
+        int to = Math.max(from, endRow);
+        for (int rowIndex = from; rowIndex <= to; rowIndex++) {
+            if (sheet.isRowBroken(rowIndex)) {
+                sheet.removeRowBreak(rowIndex);
+            }
+        }
     }
 
     private static double totalColumnChars(Sheet sheet, int firstCol, int lastCol) {
@@ -992,6 +1051,127 @@ public final class SoundInsulationMapExporter {
             builder.append('\n');
         }
         builder.append(value);
+    }
+
+    private static int writeConstructiveSolutionsTable(Sheet sheet, int rowIndex, String tableText) {
+        if (tableText == null || tableText.isBlank()) {
+            return rowIndex;
+        }
+        rowIndex = writeConstructiveSolutionsHeader(sheet, rowIndex);
+        List<List<String>> rows = parseTableRows(tableText);
+        for (List<String> row : rows) {
+            if (isConstructiveSolutionsHeader(row)) {
+                continue;
+            }
+            rowIndex = writeConstructiveSolutionsRow(sheet, rowIndex, row);
+        }
+        return rowIndex;
+    }
+
+    private static int writeRoomParametersTable(Sheet sheet, int rowIndex, String tableText) {
+        if (tableText == null || tableText.isBlank()) {
+            return rowIndex;
+        }
+        List<List<String>> rows = parseTableRows(tableText);
+        for (List<String> row : rows) {
+            rowIndex = writeRoomParametersRow(sheet, rowIndex, row);
+        }
+        return rowIndex;
+    }
+
+    private static int writeConstructiveSolutionsHeader(Sheet sheet, int rowIndex) {
+        List<String> header = List.of("Тип конструкции", "Между помещениями", "Состав");
+        return writeMergedRowWithColumns(sheet, rowIndex, header, new int[][]{{0, 6}, {7, 13}, {14, 31}});
+    }
+
+    private static int writeConstructiveSolutionsRow(Sheet sheet, int rowIndex, List<String> columns) {
+        List<String> values = normalizeToSize(columns, 3);
+        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 13}, {14, 31}});
+    }
+
+    private static int writeRoomParametersRow(Sheet sheet, int rowIndex, List<String> columns) {
+        List<String> values = normalizeToSize(columns, 4);
+        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 10}, {11, 14}, {15, 19}});
+    }
+
+    private static int writeMergedRowWithColumns(Sheet sheet,
+                                                 int rowIndex,
+                                                 List<String> values,
+                                                 int[][] ranges) {
+        if (sheet == null) {
+            return rowIndex;
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        int totalFirstCol = ranges[0][0];
+        int totalLastCol = ranges[ranges.length - 1][1];
+        for (int index = 0; index < ranges.length; index++) {
+            int startCol = ranges[index][0];
+            int endCol = ranges[index][1];
+            ensureMergedRegion(sheet, rowIndex, startCol, endCol);
+            String value = index < values.size() ? safe(values.get(index)) : "";
+            for (int col = startCol; col <= endCol; col++) {
+                Cell cell = row.getCell(col);
+                if (cell == null) {
+                    cell = row.createCell(col);
+                }
+                if (col == startCol) {
+                    cell.setCellValue(value);
+                }
+            }
+        }
+        applyWrapStyleToRange(sheet, rowIndex, totalFirstCol, totalLastCol);
+        String heightText = String.join(" ", values);
+        adjustRowHeightForMergedText(sheet, rowIndex, totalFirstCol, totalLastCol, heightText);
+        return rowIndex + 1;
+    }
+
+    private static List<List<String>> parseTableRows(String tableText) {
+        List<List<String>> rows = new ArrayList<>();
+        if (tableText == null || tableText.isBlank()) {
+            return rows;
+        }
+        String[] lines = tableText.split("\\R");
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            String[] parts = trimmed.split("\\s*\\|\\s*");
+            List<String> row = new ArrayList<>();
+            for (String part : parts) {
+                row.add(normalizeSpace(part));
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private static List<String> normalizeToSize(List<String> values, int targetSize) {
+        List<String> normalized = new ArrayList<>();
+        if (values != null) {
+            normalized.addAll(values);
+        }
+        if (normalized.size() > targetSize) {
+            List<String> trimmed = new ArrayList<>(normalized.subList(0, targetSize - 1));
+            String tail = String.join(" ", normalized.subList(targetSize - 1, normalized.size()));
+            trimmed.add(tail);
+            return trimmed;
+        }
+        while (normalized.size() < targetSize) {
+            normalized.add("");
+        }
+        return normalized;
+    }
+
+    private static boolean isConstructiveSolutionsHeader(List<String> row) {
+        if (row == null || row.isEmpty()) {
+            return false;
+        }
+        String joined = String.join(" ", row).toLowerCase(Locale.ROOT);
+        return joined.contains("тип конструкции") || joined.contains("между помещениями") || joined.contains("состав");
     }
 
     private record SoundInsulationProtocolData(String registrationNumber,
