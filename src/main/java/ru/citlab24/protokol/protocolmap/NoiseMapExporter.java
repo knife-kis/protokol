@@ -9,7 +9,6 @@ import org.apache.poi.ss.usermodel.Header;
 import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.SpreadsheetVersion;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -484,7 +483,8 @@ public final class NoiseMapExporter {
         sheet.setMargin(Sheet.TopMargin, cmToInches(TOP_MARGIN_CM));
         sheet.setMargin(Sheet.BottomMargin, cmToInches(BOTTOM_MARGIN_CM));
 
-        int maxRow = SpreadsheetVersion.EXCEL2007.getMaxRows() - 1;
+        // Excel 2007+ (.xlsx): 1 048 576 строк => последний индекс 1 048 575
+        int maxRow = 1_048_575;
         workbook.setPrintArea(workbook.getSheetIndex(sheet), 0, 23, 0, maxRow);
     }
 
