@@ -24,7 +24,7 @@ import java.io.InputStream;
 import java.util.Locale;
 
 public final class NoiseMapExporter {
-    private static final String REGISTRATION_PREFIX = "Регистрационный номер карты замеров:";
+    private static final String REGISTRATION_PREFIX = "9. Регистрационный номер карты:";
     private static final double COLUMN_WIDTH_SCALE = 0.9;
     private static final double LEFT_MARGIN_CM = 0.8;
     private static final double RIGHT_MARGIN_CM = 0.5;
@@ -97,7 +97,8 @@ public final class NoiseMapExporter {
         DataFormatter formatter = new DataFormatter();
         for (Row row : sheet) {
             for (Cell cell : row) {
-                String text = formatter.formatCellValue(cell).trim();
+                String rawText = formatter.formatCellValue(cell);
+                String text = normalizeText(rawText);
                 if (text.startsWith(REGISTRATION_PREFIX)) {
                     String tail = text.substring(REGISTRATION_PREFIX.length()).trim();
                     if (!tail.isEmpty()) {
@@ -105,7 +106,7 @@ public final class NoiseMapExporter {
                     }
                     Cell next = row.getCell(cell.getColumnIndex() + 1);
                     if (next != null) {
-                        String nextText = formatter.formatCellValue(next).trim();
+                        String nextText = normalizeText(formatter.formatCellValue(next));
                         if (!nextText.isEmpty()) {
                             return nextText;
                         }
@@ -1058,6 +1059,9 @@ public final class NoiseMapExporter {
                 }
                 if (dates.isEmpty()) {
                     dates = extractMeasurementDates(text);
+                    if (dates.isEmpty() && text.startsWith(MEASUREMENT_DATES_PHRASE)) {
+                        dates = readNextCellText(row, cell, formatter);
+                    }
                 }
                 if (representative.isEmpty()) {
                     representative = extractRepresentative(text);
@@ -1075,6 +1079,9 @@ public final class NoiseMapExporter {
                     objectName = extractObjectName(normalized);
                     if (objectName.isEmpty() && normalized.startsWith(OBJECT_NAME_PREFIX)) {
                         objectName = readNextCellText(row, cell, formatter);
+                    }
+                    if (!objectName.isEmpty()) {
+                        objectName = appendUntilObjectAddress(sheet, row.getRowNum(), objectName, formatter);
                     }
                 }
                 if (objectAddress.isEmpty()) {
@@ -1113,19 +1120,7 @@ public final class NoiseMapExporter {
             return "";
         }
         String tail = text.substring(start + MEASUREMENT_DATES_PHRASE.length()).trim();
-        if (tail.isEmpty()) {
-            return "";
-        }
-        java.util.regex.Matcher matcher = DATE_PATTERN.matcher(tail);
-        if (!matcher.find()) {
-            return tail;
-        }
-        java.util.List<String> dates = new java.util.ArrayList<>();
-        matcher.reset();
-        while (matcher.find()) {
-            dates.add(matcher.group());
-        }
-        return String.join(", ", dates);
+        return tail;
     }
 
     private static String extractRepresentative(String text) {
@@ -1171,6 +1166,34 @@ public final class NoiseMapExporter {
             return "";
         }
         return text.substring(index + OBJECT_ADDRESS_PREFIX.length()).trim();
+    }
+
+    private static String appendUntilObjectAddress(Sheet sheet,
+                                                   int startRow,
+                                                   String initialValue,
+                                                   DataFormatter formatter) {
+        if (sheet == null) {
+            return initialValue;
+        }
+        StringBuilder builder = new StringBuilder(initialValue == null ? "" : initialValue.trim());
+        for (int rowIndex = startRow + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                continue;
+            }
+            String rowText = normalizeText(collectRowText(row, formatter));
+            if (rowText.isEmpty()) {
+                continue;
+            }
+            if (rowText.contains(OBJECT_ADDRESS_PREFIX)) {
+                break;
+            }
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(rowText);
+        }
+        return builder.toString();
     }
 
     private static String readNextCellText(Row row, Cell cell, DataFormatter formatter) {
@@ -1279,8 +1302,13 @@ public final class NoiseMapExporter {
         }
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
-            if (workbook.getNumberOfSheets() <= 1) {
+            if (workbook.getNumberOfSheets() == 0) {
                 return "";
+            }
+            Sheet headerSheet = workbook.getSheetAt(0);
+            String headerDates = findHeaderMeasurementDates(headerSheet);
+            if (!headerDates.isBlank()) {
+                return headerDates;
             }
             DataFormatter formatter = new DataFormatter();
             java.util.Map<String, String> dates = new java.util.LinkedHashMap<>();
@@ -1298,6 +1326,29 @@ public final class NoiseMapExporter {
         } catch (Exception ex) {
             return "";
         }
+    }
+
+    private static String findHeaderMeasurementDates(Sheet sheet) {
+        if (sheet == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                String dates = extractMeasurementDates(text);
+                if (!dates.isEmpty()) {
+                    return dates;
+                }
+                if (text.startsWith(MEASUREMENT_DATES_PHRASE)) {
+                    String next = readNextCellText(row, cell, formatter);
+                    if (!next.isEmpty()) {
+                        return next;
+                    }
+                }
+            }
+        }
+        return "";
     }
 
     private static java.util.List<String> extractMeasurementDatesList(String datesText) {
@@ -1320,16 +1371,42 @@ public final class NoiseMapExporter {
             return "";
         }
         DataFormatter formatter = new DataFormatter();
-        Row row = sheet.getRow(6);
-        if (row == null) {
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = normalizeText(formatter.formatCellValue(cell));
+                if (text.isEmpty()) {
+                    continue;
+                }
+                if (text.equalsIgnoreCase("УТВЕРЖДАЮ") || text.contains("УТВЕРЖДАЮ")) {
+                    String rowText = collectRowText(row, formatter);
+                    String date = findDateInText(rowText);
+                    if (!date.isEmpty()) {
+                        return date;
+                    }
+                    for (int offset = 1; offset <= 3; offset++) {
+                        Row nextRow = sheet.getRow(row.getRowNum() + offset);
+                        if (nextRow == null) {
+                            continue;
+                        }
+                        String nextText = collectRowText(nextRow, formatter);
+                        date = findDateInText(nextText);
+                        if (!date.isEmpty()) {
+                            return date;
+                        }
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String findDateInText(String text) {
+        if (text == null || text.isBlank()) {
             return "";
         }
-        for (Cell cell : row) {
-            String text = formatter.formatCellValue(cell).trim();
-            if (text.isEmpty()) {
-                continue;
-            }
-            return text;
+        java.util.regex.Matcher matcher = CONTROL_DATE_PATTERN.matcher(text);
+        if (matcher.find()) {
+            return matcher.group().trim();
         }
         return "";
     }
@@ -1658,12 +1735,12 @@ public final class NoiseMapExporter {
         }
         String rowText = collectRowText(row, formatter).toLowerCase(Locale.ROOT);
         if (rowText.contains("белов")) {
-            return "Белов Д.А.";
+            return "инженер Белов Д.А.";
         }
         if (rowText.contains("тарновский")) {
-            return "Тарновский М.О.";
+            return "заведующий лабораторией Тарновский М.О.";
         }
-        return "";
+        return "заведующий лабораторией Тарновский М.О.";
     }
 
     private static String collectRowText(Row row, DataFormatter formatter) {
@@ -1794,11 +1871,11 @@ public final class NoiseMapExporter {
     }
 
     private static String resolveControlSuffix(String measurementPerformer) {
-        if ("Тарновский М.О.".equals(measurementPerformer)) {
-            return "Инженер Белов Д.А.";
+        if ("заведующий лабораторией Тарновский М.О.".equals(measurementPerformer)) {
+            return "Белов Д.А.";
         }
-        if ("Белов Д.А.".equals(measurementPerformer)) {
-            return "Заведующий лабораторией Тарновский М.О.";
+        if ("инженер Белов Д.А.".equals(measurementPerformer)) {
+            return "Тарновский М.О.";
         }
         return "";
     }
@@ -1939,9 +2016,9 @@ public final class NoiseMapExporter {
 
     private static final String CUSTOMER_PREFIX =
             "Наименование и контактные данные заявителя (заказчика):";
-    private static final String MEASUREMENT_DATES_PHRASE = "Измерения были проведены";
+    private static final String MEASUREMENT_DATES_PHRASE = "Дата проведения измерений:";
     private static final String REPRESENTATIVE_PREFIX =
-            "Измерения проводились в присутствии представителя заказчика:";
+            "7. Измерения проводились в присутствии:";
     private static final String LEGAL_ADDRESS_PREFIX = "Юридический адрес заказчика:";
     private static final String OBJECT_NAME_PREFIX =
             "Наименование предприятия, организации, объекта, где производились измерения:";
@@ -1953,9 +2030,15 @@ public final class NoiseMapExporter {
     private static final String PROTOCOL_PREFIX = "Протокол испытаний";
     private static final String BASIS_PREFIX = "Основание для измерений: договор";
     private static final java.util.regex.Pattern DATE_PATTERN =
-            java.util.regex.Pattern.compile("\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b");
+            java.util.regex.Pattern.compile(
+                    "\\b\\d{2}\\.\\d{2}\\.(?:\\d{2}|\\d{4})\\b|\\b\\d{1,2}\\s+"
+                            + "(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+                            + "\\s+\\d{4}\\b",
+                    java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
     private static final java.util.regex.Pattern CONTROL_DATE_PATTERN =
-            java.util.regex.Pattern.compile("\\b\\d{1,2}\\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\\s+\\d{4}\\b",
+            java.util.regex.Pattern.compile(
+                    "\\b\\d{1,2}\\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+                            + "\\s+\\d{4}(?:\\s*г\\.)?\\b",
                     java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
     private static final java.util.regex.Pattern MEASUREMENT_DATE_PATTERN =
             java.util.regex.Pattern.compile(
