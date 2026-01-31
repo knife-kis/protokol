@@ -4,7 +4,10 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.ClientAnchor;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.CreationHelper;
+import org.apache.poi.ss.usermodel.Drawing;
 import org.apache.poi.ss.usermodel.Header;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -18,6 +21,9 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.apache.poi.xwpf.usermodel.XWPFPicture;
+import org.apache.poi.xwpf.usermodel.XWPFPictureData;
+import org.apache.poi.util.Units;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -62,16 +68,18 @@ public final class SoundInsulationMapExporter {
         File targetFile = PhysicalFactorsMapExporter.generateMap(impactFile, workDeadline, customerInn,
                 PRIMARY_FOLDER_NAME);
         removeMicroclimateSheet(targetFile);
-        if (protocolFile == null || !protocolFile.exists()) {
-            applySecondPageFontSize(targetFile, 10);
-            return targetFile;
+        removeVentilationSheet(targetFile);
+        SoundInsulationProtocolData data = new SoundInsulationProtocolData();
+        boolean hasProtocol = protocolFile != null && protocolFile.exists();
+        if (hasProtocol) {
+            try {
+                data = extractProtocolData(protocolFile);
+                applyProtocolData(targetFile, data);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
-        try {
-            SoundInsulationProtocolData data = extractProtocolData(protocolFile);
-            applyProtocolData(targetFile, data);
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+        updateSketchesSheet(targetFile, data.sketches);
         applySecondPageFontSize(targetFile, 10);
         return targetFile;
     }
@@ -86,6 +94,30 @@ public final class SoundInsulationMapExporter {
             for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
                 String name = workbook.getSheetName(i);
                 if (name != null && name.startsWith("Микроклимат")) {
+                    indicesToRemove.add(i);
+                }
+            }
+            for (int i = indicesToRemove.size() - 1; i >= 0; i--) {
+                workbook.removeSheetAt(indicesToRemove.get(i));
+            }
+            if (!indicesToRemove.isEmpty()) {
+                try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                    workbook.write(outputStream);
+                }
+            }
+        }
+    }
+
+    private static void removeVentilationSheet(File targetFile) throws IOException {
+        if (targetFile == null || !targetFile.exists()) {
+            return;
+        }
+        try (InputStream inputStream = new FileInputStream(targetFile);
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+            List<Integer> indicesToRemove = new ArrayList<>();
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                String name = workbook.getSheetName(i);
+                if (name != null && name.equalsIgnoreCase("Вентиляция")) {
                     indicesToRemove.add(i);
                 }
             }
@@ -129,11 +161,12 @@ public final class SoundInsulationMapExporter {
             String roomParametersTable = extractTableTextAfterTitle(document,
                     "16. Параметры помещений и испытываемой поверхности:");
             String areaBetweenRooms = extractLineContaining(lines, "Площадь испытываемой поверхности между помещениями");
+            List<SketchEntry> sketches = extractSketches(document);
             String controlPerson = resolveControlPerson(measurementPerformer);
             return new SoundInsulationProtocolData(registrationNumber, customer, measurementDates,
                     measurementPerformer, representative, controlPerson, controlDate, protocolNumber, contractText,
                     legalAddress, objectName, objectAddress, measurementMethods, instruments, roomNames,
-                    objectDetails, constructiveSolutionsTable, roomParametersTable, areaBetweenRooms);
+                    objectDetails, constructiveSolutionsTable, roomParametersTable, areaBetweenRooms, sketches);
         }
     }
 
@@ -664,6 +697,107 @@ public final class SoundInsulationMapExporter {
         }
     }
 
+    private static void updateSketchesSheet(File targetFile, List<SketchEntry> sketches) throws IOException {
+        if (targetFile == null || !targetFile.exists()) {
+            return;
+        }
+        try (InputStream inputStream = new FileInputStream(targetFile);
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+            int existingIndex = workbook.getSheetIndex("Эскизы");
+            if (existingIndex >= 0) {
+                workbook.removeSheetAt(existingIndex);
+            }
+            Sheet sheet = workbook.createSheet("Эскизы");
+            applySketchesSheetDefaults(workbook, sheet);
+            createSketchesHeader(sheet);
+            fillSketches(sheet, sketches);
+            try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                workbook.write(outputStream);
+            }
+        }
+    }
+
+    private static void applySketchesSheetDefaults(Workbook workbook, Sheet sheet) {
+        if (workbook == null || sheet == null) {
+            return;
+        }
+        sheet.setColumnWidth(0, 40 * 256);
+        sheet.setColumnWidth(1, 40 * 256);
+        Font baseFont = workbook.createFont();
+        baseFont.setFontName("Arial");
+        baseFont.setFontHeightInPoints((short) 10);
+        CellStyle baseStyle = workbook.createCellStyle();
+        baseStyle.setFont(baseFont);
+        baseStyle.setWrapText(true);
+        for (int col = 0; col <= 1; col++) {
+            sheet.setDefaultColumnStyle(col, baseStyle);
+        }
+    }
+
+    private static void createSketchesHeader(Sheet sheet) {
+        Row headerRow = sheet.createRow(0);
+        Cell cell = headerRow.createCell(0);
+        cell.setCellValue("Эскизы");
+        Workbook workbook = sheet.getWorkbook();
+        if (workbook != null) {
+            Font font = workbook.createFont();
+            font.setBold(true);
+            font.setFontName("Arial");
+            font.setFontHeightInPoints((short) 12);
+            CellStyle style = workbook.createCellStyle();
+            style.setFont(font);
+            cell.setCellStyle(style);
+        }
+        ensureMergedRegion(sheet, 0, 0, 1);
+    }
+
+    private static void fillSketches(Sheet sheet, List<SketchEntry> sketches) {
+        if (sheet == null) {
+            return;
+        }
+        int rowIndex = 2;
+        if (sketches == null || sketches.isEmpty()) {
+            return;
+        }
+        Workbook workbook = sheet.getWorkbook();
+        Drawing<?> drawing = sheet.createDrawingPatriarch();
+        CreationHelper helper = workbook.getCreationHelper();
+        for (SketchEntry sketch : sketches) {
+            if (sketch == null || sketch.imageData == null) {
+                continue;
+            }
+            int imageRowIndex = rowIndex;
+            Row imageRow = sheet.createRow(imageRowIndex);
+            imageRow.setHeightInPoints(pixelsToPoints(100));
+            ensureMergedRegion(sheet, imageRowIndex, 0, 1);
+            applyWrapStyleToRange(sheet, imageRowIndex, 0, 1);
+
+            int pictureIndex = workbook.addPicture(sketch.imageData, sketch.pictureType);
+            ClientAnchor anchor = helper.createClientAnchor();
+            anchor.setCol1(0);
+            anchor.setCol2(2);
+            anchor.setRow1(imageRowIndex);
+            anchor.setRow2(imageRowIndex + 1);
+            anchor.setDx1(Units.toEMU(5));
+            anchor.setDy1(Units.toEMU(5));
+            anchor.setDx2(Units.toEMU(5));
+            anchor.setDy2(Units.toEMU(5));
+            drawing.createPicture(anchor, pictureIndex);
+
+            rowIndex++;
+            String caption = safe(sketch.caption);
+            if (!caption.isBlank()) {
+                Row captionRow = sheet.createRow(rowIndex);
+                Cell captionCell = captionRow.createCell(0);
+                captionCell.setCellValue(caption);
+                ensureMergedRegion(sheet, rowIndex, 0, 1);
+                applyWrapStyleToRange(sheet, rowIndex, 0, 1);
+                adjustRowHeightForMergedText(sheet, rowIndex, 0, 1, caption);
+                rowIndex++;
+            }
+        }
+    }
+
     private static int writeMergedRow(Sheet sheet, int rowIndex, String text) {
         setCellText(sheet, rowIndex, text);
         ensureMergedRegion(sheet, rowIndex, 0, 31);
@@ -989,6 +1123,55 @@ public final class SoundInsulationMapExporter {
         return builder.toString();
     }
 
+    private static List<SketchEntry> extractSketches(XWPFDocument document) {
+        List<SketchEntry> sketches = new ArrayList<>();
+        if (document == null) {
+            return sketches;
+        }
+        XWPFTable table = findTableAfterTitle(document, "15. Эскизы (планы):");
+        if (table == null) {
+            return sketches;
+        }
+        for (XWPFTableRow row : table.getRows()) {
+            if (row == null) {
+                continue;
+            }
+            for (XWPFTableCell cell : row.getTableCells()) {
+                if (cell == null) {
+                    continue;
+                }
+                String caption = normalizeSpace(cell.getText());
+                caption = caption.replaceFirst("(?i)^15\\.\\s*Эскизы\\s*\\(планы\\):?\\s*", "").trim();
+                List<XWPFPictureData> pictures = extractPicturesFromCell(cell);
+                if (pictures.isEmpty()) {
+                    continue;
+                }
+                for (XWPFPictureData pictureData : pictures) {
+                    if (pictureData == null || pictureData.getData() == null) {
+                        continue;
+                    }
+                    sketches.add(new SketchEntry(pictureData.getData(), pictureData.getPictureType(), caption));
+                }
+            }
+        }
+        return sketches;
+    }
+
+    private static List<XWPFPictureData> extractPicturesFromCell(XWPFTableCell cell) {
+        List<XWPFPictureData> pictures = new ArrayList<>();
+        for (XWPFParagraph paragraph : cell.getParagraphs()) {
+            for (org.apache.poi.xwpf.usermodel.XWPFRun run : paragraph.getRuns()) {
+                for (XWPFPicture picture : run.getEmbeddedPictures()) {
+                    XWPFPictureData data = picture.getPictureData();
+                    if (data != null) {
+                        pictures.add(data);
+                    }
+                }
+            }
+        }
+        return pictures;
+    }
+
     private static String extractTableTextAfterTitle(XWPFDocument document, String title) {
         XWPFTable table = findTableAfterTitle(document, title);
         if (table == null) {
@@ -1165,7 +1348,7 @@ public final class SoundInsulationMapExporter {
 
     private static int writeRoomParametersRow(Sheet sheet, int rowIndex, List<String> columns) {
         List<String> values = normalizeToSize(columns, 4);
-        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 10}, {11, 14}, {15, 19}}, false);
+        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 10}, {11, 14}, {15, 19}}, true);
     }
 
     private static int writeMergedRowWithColumns(Sheet sheet,
@@ -1281,13 +1464,17 @@ public final class SoundInsulationMapExporter {
                                                String objectDetails,
                                                String constructiveSolutionsTable,
                                                String roomParametersTable,
-                                               String areaBetweenRooms) {
+                                               String areaBetweenRooms,
+                                               List<SketchEntry> sketches) {
         private SoundInsulationProtocolData() {
             this("", "", "", "", "", "", "", "", "", "", "", "", "", new ArrayList<>(), new ArrayList<>(),
-                    "", "", "", "");
+                    "", "", "", "", new ArrayList<>());
         }
     }
 
     private record InstrumentData(String name, String serialNumber) {
+    }
+
+    private record SketchEntry(byte[] imageData, int pictureType, String caption) {
     }
 }
