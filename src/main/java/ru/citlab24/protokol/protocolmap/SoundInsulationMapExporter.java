@@ -56,6 +56,7 @@ public final class SoundInsulationMapExporter {
                                    String customerInn) throws IOException {
         File targetFile = PhysicalFactorsMapExporter.generateMap(impactFile, workDeadline, customerInn,
                 PRIMARY_FOLDER_NAME);
+        removeMicroclimateSheet(targetFile);
         if (protocolFile == null || !protocolFile.exists()) {
             return targetFile;
         }
@@ -66,6 +67,30 @@ public final class SoundInsulationMapExporter {
             ex.printStackTrace();
         }
         return targetFile;
+    }
+
+    private static void removeMicroclimateSheet(File targetFile) throws IOException {
+        if (targetFile == null || !targetFile.exists()) {
+            return;
+        }
+        try (InputStream inputStream = new FileInputStream(targetFile);
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+            List<Integer> indicesToRemove = new ArrayList<>();
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                String name = workbook.getSheetName(i);
+                if (name != null && name.startsWith("Микроклимат")) {
+                    indicesToRemove.add(i);
+                }
+            }
+            for (int i = indicesToRemove.size() - 1; i >= 0; i--) {
+                workbook.removeSheetAt(indicesToRemove.get(i));
+            }
+            if (!indicesToRemove.isEmpty()) {
+                try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                    workbook.write(outputStream);
+                }
+            }
+        }
     }
 
     private static SoundInsulationProtocolData extractProtocolData(File protocolFile) throws IOException {
@@ -251,41 +276,7 @@ public final class SoundInsulationMapExporter {
     }
 
     private static String resolveMeasurementPerformer(XWPFDocument document, List<String> lines) {
-        String defaultPerformer = "заведующий лабораторией Тарновский М.О.";
-        if (document == null) {
-            return resolveMeasurementPerformerFromLines(lines, defaultPerformer);
-        }
-        String label = "3. Измерения провел, подпись:";
-        for (XWPFTable table : document.getTables()) {
-            for (XWPFTableRow row : table.getRows()) {
-                if (row == null) {
-                    continue;
-                }
-                List<XWPFTableCell> cells = row.getTableCells();
-                if (cells == null || cells.isEmpty()) {
-                    continue;
-                }
-                boolean hasLabel = false;
-                for (XWPFTableCell cell : cells) {
-                    String cellText = normalizeSpace(cell.getText());
-                    if (cellText.toLowerCase(Locale.ROOT).contains(label.toLowerCase(Locale.ROOT))) {
-                        hasLabel = true;
-                        break;
-                    }
-                }
-                if (!hasLabel) {
-                    continue;
-                }
-                for (XWPFTableCell cell : cells) {
-                    String cellText = normalizeSpace(cell.getText());
-                    if (cellText.toLowerCase(Locale.ROOT).contains("белов")) {
-                        return "инженер Белов Д.А.";
-                    }
-                }
-                return defaultPerformer;
-            }
-        }
-        return resolveMeasurementPerformerFromLines(lines, defaultPerformer);
+        return "инженер Белов Д.А.";
     }
 
     private static String resolveMeasurementPerformerFromLines(List<String> lines, String defaultPerformer) {
@@ -608,6 +599,7 @@ public final class SoundInsulationMapExporter {
 
     private static int writeMergedRow(Sheet sheet, int rowIndex, String text) {
         setCellText(sheet, rowIndex, text);
+        ensureMergedRegion(sheet, rowIndex, 0, 31);
         adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, text);
         return rowIndex + 1;
     }
