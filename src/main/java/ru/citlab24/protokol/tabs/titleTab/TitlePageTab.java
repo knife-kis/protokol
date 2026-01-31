@@ -24,8 +24,8 @@ import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.export.AllExcelExporter;
 import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
-import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
+import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.models.TitlePageData;
 
 import java.awt.KeyboardFocusManager;
