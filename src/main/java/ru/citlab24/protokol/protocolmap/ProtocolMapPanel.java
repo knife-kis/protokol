@@ -337,7 +337,7 @@ public class ProtocolMapPanel extends JPanel {
             if (name.endsWith(".doc") || name.endsWith(".docx")) {
                 return FileKind.PROTOCOL;
             }
-            if (name.endsWith(".xls") || name.endsWith(".xlsx")) {
+            if (name.endsWith(".xls") || name.endsWith(".xlsx") || name.endsWith(".xlsm")) {
                 for (FileKind kind : new FileKind[] {FileKind.IMPACT, FileKind.WALL, FileKind.SLAB}) {
                     if (name.contains(kind.keyword)) {
                         return kind;
