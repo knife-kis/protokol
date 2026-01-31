@@ -60,6 +60,7 @@ public final class SoundInsulationMapExporter {
                 PRIMARY_FOLDER_NAME);
         removeMicroclimateSheet(targetFile);
         if (protocolFile == null || !protocolFile.exists()) {
+            applySecondPageFontSize(targetFile, 10);
             return targetFile;
         }
         try {
@@ -68,6 +69,7 @@ public final class SoundInsulationMapExporter {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+        applySecondPageFontSize(targetFile, 10);
         return targetFile;
     }
 
@@ -398,6 +400,67 @@ public final class SoundInsulationMapExporter {
         Header header = sheet.getHeader();
         String font = "&\"Arial\"&12";
         header.setCenter(font + "Карта замеров № " + safe(registrationNumber) + "\nФ8 РИ ИЛ 2-2023");
+    }
+
+    private static void applySecondPageFontSize(File targetFile, int fontSize) throws IOException {
+        if (targetFile == null || !targetFile.exists()) {
+            return;
+        }
+        try (InputStream inputStream = new FileInputStream(targetFile);
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+            Sheet sheet = workbook.getSheet("карта замеров");
+            if (sheet == null) {
+                return;
+            }
+            int startRow = 21;
+            int lastRow = sheet.getLastRowNum();
+            Map<CellStyle, CellStyle> styleCache = new IdentityHashMap<>();
+            Map<Integer, Font> fontCache = new java.util.HashMap<>();
+            for (int rowIndex = startRow; rowIndex <= lastRow; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    continue;
+                }
+                for (Cell cell : row) {
+                    CellStyle style = cell.getCellStyle();
+                    if (style == null) {
+                        continue;
+                    }
+                    CellStyle updatedStyle = styleCache.get(style);
+                    if (updatedStyle == null) {
+                        updatedStyle = workbook.createCellStyle();
+                        updatedStyle.cloneStyleFrom(style);
+                        int fontIndex = style.getFontIndexAsInt();
+                        Font originalFont = workbook.getFontAt(fontIndex);
+                        Font resizedFont = fontCache.get(fontIndex);
+                        if (resizedFont == null) {
+                            resizedFont = cloneFontWithSize(workbook, originalFont, fontSize);
+                            fontCache.put(fontIndex, resizedFont);
+                        }
+                        updatedStyle.setFont(resizedFont);
+                        styleCache.put(style, updatedStyle);
+                    }
+                    cell.setCellStyle(updatedStyle);
+                }
+            }
+            try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                workbook.write(outputStream);
+            }
+        }
+    }
+
+    private static Font cloneFontWithSize(Workbook workbook, Font source, int fontSize) {
+        Font font = workbook.createFont();
+        font.setFontName(source.getFontName());
+        font.setBold(source.getBold());
+        font.setItalic(source.getItalic());
+        font.setUnderline(source.getUnderline());
+        font.setColor(source.getColor());
+        font.setCharSet(source.getCharSet());
+        font.setStrikeout(source.getStrikeout());
+        font.setTypeOffset(source.getTypeOffset());
+        font.setFontHeightInPoints((short) fontSize);
+        return font;
     }
 
     private static void updateSpecialConditions(Sheet sheet) {
