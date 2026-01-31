@@ -44,6 +44,13 @@ public final class PhysicalFactorsMapExporter {
     }
 
     public static File generateMap(File sourceFile, String workDeadline, String customerInn) throws IOException {
+        return generateMap(sourceFile, workDeadline, customerInn, PRIMARY_FOLDER_NAME);
+    }
+
+    public static File generateMap(File sourceFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   String primaryFolderName) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
         String titleMeasurementDates = resolveTitleMeasurementDates(sourceFile);
@@ -66,7 +73,7 @@ public final class PhysicalFactorsMapExporter {
         boolean hasArtificialLightingSheet = hasSheetWithName(sourceFile, "Иск освещение");
         boolean hasStreetLightingSheet = hasSheetWithName(sourceFile, "Иск освещение (2)");
         boolean hasKeoSheet = hasSheetWithName(sourceFile, "КЕО");
-        File targetFile = buildTargetFile(sourceFile);
+        File targetFile = buildTargetFile(sourceFile, primaryFolderName);
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("карта замеров");
@@ -262,20 +269,23 @@ public final class PhysicalFactorsMapExporter {
         }
     }
 
-    private static File buildTargetFile(File sourceFile) {
+    private static File buildTargetFile(File sourceFile, String primaryFolderName) {
         String name = sourceFile.getName();
         int dotIndex = name.lastIndexOf('.');
         String baseName = dotIndex > 0 ? name.substring(0, dotIndex) : name;
-        File primaryFolder = ensurePrimaryFolder(sourceFile);
+        File primaryFolder = ensurePrimaryFolder(sourceFile, primaryFolderName);
         return new File(primaryFolder, baseName + "_карта.xlsx");
     }
 
-    private static File ensurePrimaryFolder(File sourceFile) {
+    private static File ensurePrimaryFolder(File sourceFile, String primaryFolderName) {
+        String resolvedFolderName = primaryFolderName == null || primaryFolderName.isBlank()
+                ? PRIMARY_FOLDER_NAME
+                : primaryFolderName;
         File parent = sourceFile != null ? sourceFile.getParentFile() : null;
         if (parent == null) {
             parent = new File(".");
         }
-        File primaryFolder = new File(parent, PRIMARY_FOLDER_NAME);
+        File primaryFolder = new File(parent, resolvedFolderName);
         if (!primaryFolder.exists()) {
             primaryFolder.mkdirs();
         }
