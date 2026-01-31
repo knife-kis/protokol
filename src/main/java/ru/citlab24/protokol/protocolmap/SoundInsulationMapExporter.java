@@ -1165,7 +1165,7 @@ public final class SoundInsulationMapExporter {
 
     private static int writeRoomParametersRow(Sheet sheet, int rowIndex, List<String> columns) {
         List<String> values = normalizeToSize(columns, 4);
-        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 10}, {11, 14}, {15, 19}}, false);
+        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 10}, {11, 14}, {15, 19}}, true);
     }
 
     private static int writeMergedRowWithColumns(Sheet sheet,
