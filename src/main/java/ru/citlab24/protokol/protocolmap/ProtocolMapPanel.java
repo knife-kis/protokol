@@ -304,12 +304,54 @@ public class ProtocolMapPanel extends JPanel {
                     missing.add(kind.label);
                 }
             }
-            StringBuilder message = new StringBuilder("Файлы загружены. Запуск анализа для звукоизоляции пока не реализован.\n");
             if (!missing.isEmpty()) {
-                message.append("Не загружены: ").append(String.join(", ", missing));
+                JOptionPane.showMessageDialog(this,
+                        "Не загружены: " + String.join(", ", missing),
+                        "Звукоизоляция",
+                        JOptionPane.WARNING_MESSAGE);
+                return;
             }
-            JOptionPane.showMessageDialog(this, message.toString(),
-                    "Звукоизоляция", JOptionPane.INFORMATION_MESSAGE);
+            File source = uploadedFiles.get(FileKind.IMPACT);
+            if (source == null) {
+                JOptionPane.showMessageDialog(this,
+                        "Не удалось определить исходный Excel файл.",
+                        "Звукоизоляция",
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            String workDeadline = JOptionPane.showInputDialog(
+                    this,
+                    "Какой срок выполнения работ?",
+                    "Срок выполнения работ",
+                    JOptionPane.QUESTION_MESSAGE
+            );
+            if (workDeadline == null) {
+                workDeadline = "";
+            }
+            String customerInn = JOptionPane.showInputDialog(
+                    this,
+                    "ИНН заказчика?",
+                    "ИНН заказчика",
+                    JOptionPane.QUESTION_MESSAGE
+            );
+            if (customerInn == null) {
+                customerInn = "";
+            }
+            File generated = null;
+            try {
+                generated = SoundInsulationMapExporter.generateMap(source, workDeadline.trim(), customerInn.trim());
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Не удалось сформировать карту:\n" + ex.getClass().getSimpleName() + ": " + ex.getMessage(),
+                        "Ошибка",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            }
+            if (generated != null) {
+                showGeneratedMap(generated);
+            }
         }
 
         private void handleFiles(List<File> files) {
@@ -345,6 +387,42 @@ public class ProtocolMapPanel extends JPanel {
                 }
             }
             return null;
+        }
+
+        private void showGeneratedMap(File generatedFile) {
+            listModel.clear();
+            for (FileKind kind : FileKind.values()) {
+                File file = uploadedFiles.get(kind);
+                String fileName = file != null ? file.getName() : "не загружен";
+                listModel.addElement(kind.label + ": " + fileName);
+            }
+            listModel.addElement("Сформированная карта: " + generatedFile.getName());
+            File issuanceSheet = ProtocolIssuanceSheetExporter.resolveIssuanceSheetFile(generatedFile);
+            if (issuanceSheet != null && issuanceSheet.exists()) {
+                listModel.addElement("Сформирован лист выдачи протоколов: " + issuanceSheet.getName());
+            }
+            File registrationSheet = MeasurementCardRegistrationSheetExporter.resolveRegistrationSheetFile(generatedFile);
+            if (registrationSheet != null && registrationSheet.exists()) {
+                listModel.addElement("Сформирован лист регистрации карт замеров: " + registrationSheet.getName());
+            }
+            List<File> equipmentSheets = EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(generatedFile);
+            for (File equipmentSheet : equipmentSheets) {
+                if (equipmentSheet != null && equipmentSheet.exists()) {
+                    listModel.addElement("Сформирован лист выдачи приборов: " + equipmentSheet.getName());
+                }
+            }
+            File measurementPlan = MeasurementPlanExporter.resolveMeasurementPlanFile(generatedFile);
+            if (measurementPlan != null && measurementPlan.exists()) {
+                listModel.addElement("Сформирован план измерений: " + measurementPlan.getName());
+            }
+            File requestForm = RequestFormExporter.resolveRequestFormFile(generatedFile);
+            if (requestForm != null && requestForm.exists()) {
+                listModel.addElement("Сформирована заявка: " + requestForm.getName());
+            }
+            File analysisSheet = RequestAnalysisSheetExporter.resolveAnalysisSheetFile(generatedFile);
+            if (analysisSheet != null && analysisSheet.exists()) {
+                listModel.addElement("Сформирован лист анализа заявки: " + analysisSheet.getName());
+            }
         }
 
         private class SoundInsulationDropHandler extends TransferHandler {
