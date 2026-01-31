@@ -574,7 +574,7 @@ public final class SoundInsulationMapExporter {
         rowIndex = writeMergedRow(sheet, rowIndex, "");
 
         if (!safe(data.objectDetails).isBlank()) {
-            rowIndex = writeMergedRow(sheet, rowIndex, data.objectDetails);
+            rowIndex = writeMergedRowsForLines(sheet, rowIndex, data.objectDetails);
         }
 
         rowIndex = writeMergedRow(sheet, rowIndex, "Конструктивные решения:");
@@ -602,6 +602,18 @@ public final class SoundInsulationMapExporter {
         ensureMergedRegion(sheet, rowIndex, 0, 31);
         adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, text);
         return rowIndex + 1;
+    }
+
+    private static int writeMergedRowsForLines(Sheet sheet, int rowIndex, String text) {
+        if (text == null || text.isBlank()) {
+            return rowIndex;
+        }
+        String[] lines = text.split("\\R", -1);
+        int currentRow = rowIndex;
+        for (String line : lines) {
+            currentRow = writeMergedRow(sheet, currentRow, line);
+        }
+        return currentRow;
     }
 
     private static String buildMeteorologyText(List<String> roomNames) {
