@@ -311,8 +311,11 @@ public class ProtocolMapPanel extends JPanel {
                         JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            File source = uploadedFiles.get(FileKind.IMPACT);
-            if (source == null) {
+            File impactFile = uploadedFiles.get(FileKind.IMPACT);
+            File wallFile = uploadedFiles.get(FileKind.WALL);
+            File slabFile = uploadedFiles.get(FileKind.SLAB);
+            File protocolFile = uploadedFiles.get(FileKind.PROTOCOL);
+            if (impactFile == null || wallFile == null || slabFile == null || protocolFile == null) {
                 JOptionPane.showMessageDialog(this,
                         "Не удалось определить исходный Excel файл.",
                         "Звукоизоляция",
@@ -339,7 +342,8 @@ public class ProtocolMapPanel extends JPanel {
             }
             File generated = null;
             try {
-                generated = SoundInsulationMapExporter.generateMap(source, workDeadline.trim(), customerInn.trim());
+                generated = SoundInsulationMapExporter.generateMap(impactFile, wallFile, slabFile, protocolFile,
+                        workDeadline.trim(), customerInn.trim());
             } catch (Exception ex) {
                 ex.printStackTrace();
                 JOptionPane.showMessageDialog(
