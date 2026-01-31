@@ -1,7 +1,10 @@
 package ru.citlab24.protokol.protocolmap;
 
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.Header;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -85,11 +88,20 @@ public final class SoundInsulationMapExporter {
             String objectName = extractBetweenLabels(lines, OBJECT_NAME_LABEL, OBJECT_ADDRESS_SECTION_LABEL);
             String objectAddress = extractValueAfterLabel(lines, OBJECT_ADDRESS_LABEL);
             String controlDate = extractApprovalDate(lines);
-            String measurementPerformer = resolveMeasurementPerformer(lines);
+            String measurementPerformer = resolveMeasurementPerformer(document, lines);
+            String measurementMethods = extractMeasurementMethods(document);
+            List<InstrumentData> instruments = extractInstruments(document);
+            List<String> roomNames = extractRoomNames(document);
+            String objectDetails = extractObjectDetailsBlock(document);
+            String constructiveSolutionsTable = extractTableTextAfterTitle(document, "13.1 Конструктивные решения:");
+            String roomParametersTable = extractTableTextAfterTitle(document,
+                    "16. Параметры помещений и испытываемой поверхности:");
+            String areaBetweenRooms = extractLineContaining(lines, "Площадь испытываемой поверхности между помещениями");
             String controlPerson = resolveControlPerson(measurementPerformer);
             return new SoundInsulationProtocolData(registrationNumber, customer, measurementDates,
                     measurementPerformer, representative, controlPerson, controlDate, protocolNumber, contractText,
-                    legalAddress, objectName, objectAddress);
+                    legalAddress, objectName, objectAddress, measurementMethods, instruments, roomNames,
+                    objectDetails, constructiveSolutionsTable, roomParametersTable, areaBetweenRooms);
         }
     }
 
@@ -238,9 +250,47 @@ public final class SoundInsulationMapExporter {
         return "";
     }
 
-    private static String resolveMeasurementPerformer(List<String> lines) {
+    private static String resolveMeasurementPerformer(XWPFDocument document, List<String> lines) {
+        String defaultPerformer = "заведующий лабораторией Тарновский М.О.";
+        if (document == null) {
+            return resolveMeasurementPerformerFromLines(lines, defaultPerformer);
+        }
+        String label = "3. Измерения провел, подпись:";
+        for (XWPFTable table : document.getTables()) {
+            for (XWPFTableRow row : table.getRows()) {
+                if (row == null) {
+                    continue;
+                }
+                List<XWPFTableCell> cells = row.getTableCells();
+                if (cells == null || cells.isEmpty()) {
+                    continue;
+                }
+                boolean hasLabel = false;
+                for (XWPFTableCell cell : cells) {
+                    String cellText = normalizeSpace(cell.getText());
+                    if (cellText.toLowerCase(Locale.ROOT).contains(label.toLowerCase(Locale.ROOT))) {
+                        hasLabel = true;
+                        break;
+                    }
+                }
+                if (!hasLabel) {
+                    continue;
+                }
+                for (XWPFTableCell cell : cells) {
+                    String cellText = normalizeSpace(cell.getText());
+                    if (cellText.toLowerCase(Locale.ROOT).contains("белов")) {
+                        return "инженер Белов Д.А.";
+                    }
+                }
+                return defaultPerformer;
+            }
+        }
+        return resolveMeasurementPerformerFromLines(lines, defaultPerformer);
+    }
+
+    private static String resolveMeasurementPerformerFromLines(List<String> lines, String defaultPerformer) {
         if (lines == null || lines.isEmpty()) {
-            return "заведующий лабораторией Тарновский М.О.";
+            return defaultPerformer;
         }
         for (int i = 0; i < lines.size(); i++) {
             String line = normalizeSpace(lines.get(i));
@@ -259,9 +309,9 @@ public final class SoundInsulationMapExporter {
             if (combinedLower.contains("белов")) {
                 return "инженер Белов Д.А.";
             }
-            return "заведующий лабораторией Тарновский М.О.";
+            return defaultPerformer;
         }
-        return "заведующий лабораторией Тарновский М.О.";
+        return defaultPerformer;
     }
 
     private static String resolveControlPerson(String measurementPerformer) {
@@ -324,6 +374,12 @@ public final class SoundInsulationMapExporter {
             setCellText(sheet, 26, objectAddressText);
             adjustRowHeightForMergedText(sheet, 26, 0, 31, objectAddressText);
 
+            applyHeaderCenter(sheet, data.registrationNumber);
+            updateSpecialConditions(sheet);
+            updateMeasurementMethods(sheet, data.measurementMethods);
+            updateInstrumentsTable(sheet, data.instruments);
+            updateSketchSection(sheet, data);
+
             try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
                 workbook.write(outputStream);
             }
@@ -340,6 +396,263 @@ public final class SoundInsulationMapExporter {
             cell = row.createCell(0);
         }
         cell.setCellValue(text);
+    }
+
+    private static void applyHeaderCenter(Sheet sheet, String registrationNumber) {
+        if (sheet == null) {
+            return;
+        }
+        Header header = sheet.getHeader();
+        String font = "&\"Arial\"&12";
+        header.setCenter(font + "Карта замеров № " + safe(registrationNumber) + "\nФ8 РИ ИЛ 2-2023");
+    }
+
+    private static void updateSpecialConditions(Sheet sheet) {
+        int rowIndex = findRowIndexByPrefix(sheet, "5.1. Особые условия:");
+        if (rowIndex < 0) {
+            return;
+        }
+        String text = "5.1. Особые условия: -";
+        setCellText(sheet, rowIndex, text);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, text);
+    }
+
+    private static void updateMeasurementMethods(Sheet sheet, String measurementMethods) {
+        int rowIndex = findRowIndexByPrefix(sheet, "5.2. Методы измерения");
+        if (rowIndex < 0) {
+            return;
+        }
+        String text = "5.2. Методы измерения " + safe(measurementMethods);
+        setCellText(sheet, rowIndex, text);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, text);
+    }
+
+    private static void updateInstrumentsTable(Sheet sheet, List<InstrumentData> instruments) {
+        int labelRow = findRowIndexByPrefix(sheet, "5.3. Приборы для измерения");
+        if (labelRow < 0) {
+            return;
+        }
+        int headerRow = labelRow + 1;
+        int dataStartRow = headerRow + 1;
+        int sketchRow = findRowIndexByPrefix(sheet, "6. Эскиз");
+        int lastRow = sheet.getLastRowNum();
+        int endBoundary = sketchRow > 0 ? sketchRow : lastRow;
+
+        int lastInstrumentRow = dataStartRow - 1;
+        for (int rowIndex = dataStartRow; rowIndex < endBoundary; rowIndex++) {
+            if (isInstrumentRowEmpty(sheet, rowIndex)) {
+                break;
+            }
+            lastInstrumentRow = rowIndex;
+        }
+        int existingRows = Math.max(0, lastInstrumentRow - dataStartRow + 1);
+        int neededRows = instruments == null ? 0 : instruments.size();
+        if (neededRows > existingRows) {
+            int delta = neededRows - existingRows;
+            sheet.shiftRows(endBoundary, lastRow, delta);
+        }
+
+        int totalRows = Math.max(existingRows, neededRows);
+        for (int index = 0; index < totalRows; index++) {
+            int rowIndex = dataStartRow + index;
+            InstrumentData instrument = index < neededRows ? instruments.get(index) : null;
+            updateInstrumentRow(sheet, rowIndex, instrument);
+        }
+    }
+
+    private static void updateInstrumentRow(Sheet sheet, int rowIndex, InstrumentData instrument) {
+        Row templateRow = sheet.getRow(rowIndex);
+        if (templateRow == null) {
+            templateRow = sheet.createRow(rowIndex);
+        }
+        Row fallbackRow = rowIndex > 0 ? sheet.getRow(rowIndex - 1) : null;
+        CellStyle templateNameStyle = resolveCellStyle(templateRow, 1, resolveCellStyle(fallbackRow, 1, null));
+        CellStyle templateSerialStyle = resolveCellStyle(templateRow, 20, resolveCellStyle(fallbackRow, 20, templateNameStyle));
+        CellStyle templateCheckboxStyle = resolveCellStyle(templateRow, 30,
+                resolveCellStyle(fallbackRow, 30, templateSerialStyle));
+
+        ensureMergedRegion(sheet, rowIndex, 1, 19);
+        ensureMergedRegion(sheet, rowIndex, 20, 29);
+
+        for (int col = 1; col <= 29; col++) {
+            Cell cell = templateRow.getCell(col);
+            if (cell == null) {
+                cell = templateRow.createCell(col);
+            }
+            if (col <= 19) {
+                if (templateNameStyle != null) {
+                    cell.setCellStyle(templateNameStyle);
+                }
+                if (col == 1) {
+                    cell.setCellValue(instrument == null ? "" : safe(instrument.name));
+                }
+            } else {
+                if (templateSerialStyle != null) {
+                    cell.setCellStyle(templateSerialStyle);
+                }
+                if (col == 20) {
+                    cell.setCellValue(instrument == null ? "" : safe(instrument.serialNumber));
+                }
+            }
+        }
+
+        Cell checkboxCell = templateRow.getCell(30);
+        if (checkboxCell == null) {
+            checkboxCell = templateRow.createCell(30);
+        }
+        if (templateCheckboxStyle != null) {
+            checkboxCell.setCellStyle(templateCheckboxStyle);
+        }
+        checkboxCell.setCellValue(instrument == null ? "" : "☑");
+
+        String name = instrument == null ? "" : safe(instrument.name);
+        String serial = instrument == null ? "" : safe(instrument.serialNumber);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, name + " " + serial);
+    }
+
+    private static CellStyle resolveCellStyle(Row row, int col, CellStyle fallback) {
+        if (row == null) {
+            return fallback;
+        }
+        Cell cell = row.getCell(col);
+        if (cell == null) {
+            return fallback;
+        }
+        CellStyle style = cell.getCellStyle();
+        return style == null ? fallback : style;
+    }
+
+    private static boolean isInstrumentRowEmpty(Sheet sheet, int rowIndex) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return true;
+        }
+        DataFormatter formatter = new DataFormatter();
+        String name = formatCellValue(formatter, row.getCell(1));
+        String serial = formatCellValue(formatter, row.getCell(20));
+        return name.isEmpty() && serial.isEmpty();
+    }
+
+    private static void ensureMergedRegion(Sheet sheet, int rowIndex, int firstCol, int lastCol) {
+        for (int idx = 0; idx < sheet.getNumMergedRegions(); idx++) {
+            if (sheet.getMergedRegion(idx).getFirstRow() == rowIndex
+                    && sheet.getMergedRegion(idx).getLastRow() == rowIndex
+                    && sheet.getMergedRegion(idx).getFirstColumn() == firstCol
+                    && sheet.getMergedRegion(idx).getLastColumn() == lastCol) {
+                return;
+            }
+        }
+        sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowIndex, rowIndex, firstCol, lastCol));
+    }
+
+    private static void updateSketchSection(Sheet sheet, SoundInsulationProtocolData data) {
+        int sketchRow = findRowIndexByPrefix(sheet, "6. Эскиз");
+        if (sketchRow < 0) {
+            return;
+        }
+        if (sketchRow > 0) {
+            sheet.removeRowBreak(sketchRow - 1);
+        }
+        int rowIndex = sketchRow;
+        String calibrationText = "5.4. калибровочный уровень: 94 дБ\n" +
+                "показания шумомера перед измерениями на частоте 1 кГц:\n" +
+                "показания шумомера после измерений на частоте 1 кГц:";
+        rowIndex = writeMergedRow(sheet, rowIndex, calibrationText);
+
+        String meteorologyText = buildMeteorologyText(data.roomNames);
+        if (!meteorologyText.isBlank()) {
+            rowIndex = writeMergedRow(sheet, rowIndex, meteorologyText);
+        }
+
+        String measurementsText = "7.8. Измерения звукоизоляции ограждающих конструкций:\n" +
+                "В соответствии с ГОСТ Р ИСО 3382-2-2013: точность метода - технический; " +
+                "метод оценки кривых спада - расчет методом наименьших квадратов; " +
+                "используемый метод усреднения результатов в каждой позиции - определением времени реверберации " +
+                "для каждой из всех кривых спада и расчетом их среднего значения; " +
+                "метод усреднения результатов по всем позициям - арифметическим усреднением времени реверберации; " +
+                "пространственное среднее получают как среднее отдельных времен реверберации для всех независимых " +
+                "измерительных конфигураций; применен звуковой сигнал - розовый шум.";
+        rowIndex = writeMergedRow(sheet, rowIndex, measurementsText);
+
+        rowIndex = writeMergedRow(sheet, rowIndex, "");
+
+        String peopleText = "Количество людей присутствующих в помещениях при испытаниях - ___ человек\n" +
+                "Объект испытаний – внутренние ограждающие конструкции помещений";
+        rowIndex = writeMergedRow(sheet, rowIndex, peopleText);
+
+        rowIndex = writeMergedRow(sheet, rowIndex, "");
+
+        if (!safe(data.objectDetails).isBlank()) {
+            rowIndex = writeMergedRow(sheet, rowIndex, data.objectDetails);
+        }
+
+        rowIndex = writeMergedRow(sheet, rowIndex, "Конструктивные решения:");
+        if (!safe(data.constructiveSolutionsTable).isBlank()) {
+            rowIndex = writeMergedRow(sheet, rowIndex, data.constructiveSolutionsTable);
+        }
+
+        rowIndex = writeMergedRow(sheet, rowIndex, "");
+        rowIndex = writeMergedRow(sheet, rowIndex, "Параметры помещений:");
+        rowIndex = writeMergedRow(sheet, rowIndex, "");
+        if (!safe(data.roomParametersTable).isBlank()) {
+            rowIndex = writeMergedRow(sheet, rowIndex, data.roomParametersTable);
+        }
+
+        rowIndex = writeMergedRow(sheet, rowIndex, "");
+        String areaLine = safe(data.areaBetweenRooms);
+        if (!areaLine.isBlank()) {
+            rowIndex = writeMergedRow(sheet, rowIndex, "Площадь испытываемой поверхности между помещениями: " +
+                    areaLine.replaceFirst("(?i)^Площадь испытываемой поверхности между помещениями:?\\s*", ""));
+        }
+    }
+
+    private static int writeMergedRow(Sheet sheet, int rowIndex, String text) {
+        setCellText(sheet, rowIndex, text);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, text);
+        return rowIndex + 1;
+    }
+
+    private static String buildMeteorologyText(List<String> roomNames) {
+        if (roomNames == null || roomNames.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder("7.1. Метеорологические факторы атмосферного воздуха:");
+        for (String room : roomNames) {
+            String roomName = normalizeSpace(room);
+            if (roomName.isBlank()) {
+                continue;
+            }
+            builder.append("\nпомещение ").append(roomName)
+                    .append(": Температура, __________ºС Относительная влажность, __________% ")
+                    .append("Давление,__________мм рт. ст., скорость движения воздуха ______________м/с.");
+        }
+        return builder.toString();
+    }
+
+    private static int findRowIndexByPrefix(Sheet sheet, String prefix) {
+        if (sheet == null) {
+            return -1;
+        }
+        String normalizedPrefix = normalizeSpace(prefix).toLowerCase(Locale.ROOT);
+        DataFormatter formatter = new DataFormatter();
+        for (Row row : sheet) {
+            Cell cell = row.getCell(0);
+            if (cell == null) {
+                continue;
+            }
+            String text = normalizeSpace(formatter.formatCellValue(cell));
+            if (text.toLowerCase(Locale.ROOT).startsWith(normalizedPrefix)) {
+                return row.getRowNum();
+            }
+        }
+        return -1;
+    }
+
+    private static String formatCellValue(DataFormatter formatter, Cell cell) {
+        if (formatter == null || cell == null) {
+            return "";
+        }
+        return formatter.formatCellValue(cell).trim();
     }
 
     private static void setMergedCellValueWithPrefix(Sheet sheet,
@@ -476,6 +789,207 @@ public final class SoundInsulationMapExporter {
         return value.replaceAll("\\s+", " ").trim();
     }
 
+    private static String extractMeasurementMethods(XWPFDocument document) {
+        XWPFTable table = findTableAfterTitle(document,
+                "12. Сведения о нормативных документах (НД), регламентирующих значения показателей и НД " +
+                        "на методы (методики) измерений:");
+        if (table == null) {
+            return "";
+        }
+        List<String> values = extractColumnValues(table, 2, 1);
+        return String.join("; ", values);
+    }
+
+    private static List<InstrumentData> extractInstruments(XWPFDocument document) {
+        List<InstrumentData> instruments = new ArrayList<>();
+        XWPFTable instrumentsTable = findTableAfterTitle(document, "10. Сведения о средствах измерения:");
+        if (instrumentsTable != null) {
+            instruments.addAll(extractInstrumentRows(instrumentsTable, 1, 2));
+        }
+        XWPFTable equipmentTable = findTableAfterTitle(document, "11. Сведения об испытательном оборудовании:");
+        if (equipmentTable != null) {
+            instruments.addAll(extractInstrumentRows(equipmentTable, 0, 1));
+        }
+        return instruments;
+    }
+
+    private static List<String> extractRoomNames(XWPFDocument document) {
+        XWPFTable table = findTableAfterTitle(document, "16. Параметры помещений и испытываемой поверхности:");
+        if (table == null) {
+            return new ArrayList<>();
+        }
+        return extractColumnValues(table, 0, 1);
+    }
+
+    private static String extractObjectDetailsBlock(XWPFDocument document) {
+        if (document == null) {
+            return "";
+        }
+        String start = "Объект испытаний – внутренние ограждающие конструкции помещений, их монтаж осуществлен " +
+                "заказчиком согласно требованиям технической документации.";
+        String end = "13.1 Конструктивные решения:";
+        StringBuilder builder = new StringBuilder();
+        boolean capture = false;
+        for (IBodyElement element : document.getBodyElements()) {
+            if (!(element instanceof XWPFParagraph paragraph)) {
+                continue;
+            }
+            String text = normalizeSpace(paragraph.getText());
+            if (text.isBlank()) {
+                continue;
+            }
+            if (!capture && text.contains(start)) {
+                capture = true;
+                continue;
+            }
+            if (capture && text.contains(end)) {
+                break;
+            }
+            if (capture) {
+                appendWithNewline(builder, text);
+            }
+        }
+        return builder.toString();
+    }
+
+    private static String extractTableTextAfterTitle(XWPFDocument document, String title) {
+        XWPFTable table = findTableAfterTitle(document, title);
+        if (table == null) {
+            return "";
+        }
+        return tableToText(table);
+    }
+
+    private static String extractLineContaining(List<String> lines, String label) {
+        if (lines == null || lines.isEmpty()) {
+            return "";
+        }
+        String lowerLabel = label.toLowerCase(Locale.ROOT);
+        for (String line : lines) {
+            String normalized = normalizeSpace(line);
+            if (normalized.toLowerCase(Locale.ROOT).contains(lowerLabel)) {
+                return normalized;
+            }
+        }
+        return "";
+    }
+
+    private static XWPFTable findTableAfterTitle(XWPFDocument document, String title) {
+        if (document == null) {
+            return null;
+        }
+        String lowerTitle = normalizeSpace(title).toLowerCase(Locale.ROOT);
+        List<IBodyElement> elements = document.getBodyElements();
+        for (int i = 0; i < elements.size(); i++) {
+            IBodyElement element = elements.get(i);
+            if (element instanceof XWPFParagraph paragraph) {
+                String text = normalizeSpace(paragraph.getText()).toLowerCase(Locale.ROOT);
+                if (!text.contains(lowerTitle)) {
+                    continue;
+                }
+                for (int j = i + 1; j < elements.size(); j++) {
+                    IBodyElement next = elements.get(j);
+                    if (next instanceof XWPFTable table) {
+                        return table;
+                    }
+                }
+            } else if (element instanceof XWPFTable table) {
+                if (tableContainsTitle(table, lowerTitle)) {
+                    return table;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean tableContainsTitle(XWPFTable table, String lowerTitle) {
+        if (table == null) {
+            return false;
+        }
+        for (XWPFTableRow row : table.getRows()) {
+            for (XWPFTableCell cell : row.getTableCells()) {
+                String text = normalizeSpace(cell.getText()).toLowerCase(Locale.ROOT);
+                if (text.contains(lowerTitle)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static List<String> extractColumnValues(XWPFTable table, int columnIndex, int skipRows) {
+        List<String> values = new ArrayList<>();
+        if (table == null) {
+            return values;
+        }
+        List<XWPFTableRow> rows = table.getRows();
+        for (int rowIndex = skipRows; rowIndex < rows.size(); rowIndex++) {
+            XWPFTableRow row = rows.get(rowIndex);
+            if (row == null) {
+                continue;
+            }
+            List<XWPFTableCell> cells = row.getTableCells();
+            if (cells == null || cells.size() <= columnIndex) {
+                continue;
+            }
+            String value = normalizeSpace(cells.get(columnIndex).getText());
+            if (!value.isBlank()) {
+                values.add(value);
+            }
+        }
+        return values;
+    }
+
+    private static List<InstrumentData> extractInstrumentRows(XWPFTable table, int nameCol, int serialCol) {
+        List<InstrumentData> instruments = new ArrayList<>();
+        if (table == null) {
+            return instruments;
+        }
+        List<XWPFTableRow> rows = table.getRows();
+        for (int rowIndex = 1; rowIndex < rows.size(); rowIndex++) {
+            XWPFTableRow row = rows.get(rowIndex);
+            if (row == null) {
+                continue;
+            }
+            List<XWPFTableCell> cells = row.getTableCells();
+            if (cells == null || cells.size() <= Math.max(nameCol, serialCol)) {
+                continue;
+            }
+            String name = normalizeSpace(cells.get(nameCol).getText());
+            String serial = normalizeSpace(cells.get(serialCol).getText());
+            if (name.isBlank() && serial.isBlank()) {
+                continue;
+            }
+            instruments.add(new InstrumentData(name, serial));
+        }
+        return instruments;
+    }
+
+    private static String tableToText(XWPFTable table) {
+        if (table == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (XWPFTableRow row : table.getRows()) {
+            List<String> cells = new ArrayList<>();
+            for (XWPFTableCell cell : row.getTableCells()) {
+                cells.add(normalizeSpace(cell.getText()));
+            }
+            String rowText = String.join(" | ", cells).trim();
+            if (!rowText.isBlank()) {
+                appendWithNewline(builder, rowText);
+            }
+        }
+        return builder.toString();
+    }
+
+    private static void appendWithNewline(StringBuilder builder, String value) {
+        if (builder.length() > 0) {
+            builder.append('\n');
+        }
+        builder.append(value);
+    }
+
     private record SoundInsulationProtocolData(String registrationNumber,
                                                String customerNameAndContacts,
                                                String measurementDates,
@@ -487,9 +1001,20 @@ public final class SoundInsulationMapExporter {
                                                String contractText,
                                                String customerLegalAddress,
                                                String objectName,
-                                               String objectAddress) {
+                                               String objectAddress,
+                                               String measurementMethods,
+                                               List<InstrumentData> instruments,
+                                               List<String> roomNames,
+                                               String objectDetails,
+                                               String constructiveSolutionsTable,
+                                               String roomParametersTable,
+                                               String areaBetweenRooms) {
         private SoundInsulationProtocolData() {
-            this("", "", "", "", "", "", "", "", "", "", "", "");
+            this("", "", "", "", "", "", "", "", "", "", "", "", "", new ArrayList<>(), new ArrayList<>(),
+                    "", "", "", "");
         }
+    }
+
+    private record InstrumentData(String name, String serialNumber) {
     }
 }
