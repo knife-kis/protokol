@@ -3,12 +3,15 @@ package ru.citlab24.protokol.protocolmap;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.Header;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -646,7 +649,7 @@ public final class SoundInsulationMapExporter {
             rowIndex = writeMergedRowsForLines(sheet, rowIndex, data.objectDetails);
         }
 
-        rowIndex = writeMergedRow(sheet, rowIndex, "Конструктивные решения:");
+        rowIndex = writeMergedRowWithBorders(sheet, rowIndex, "Конструктивные решения:");
         rowIndex = writeConstructiveSolutionsTable(sheet, rowIndex, data.constructiveSolutionsTable);
 
         rowIndex = writeMergedRow(sheet, rowIndex, "");
@@ -667,6 +670,14 @@ public final class SoundInsulationMapExporter {
         applyWrapStyleToRange(sheet, rowIndex, 0, 31);
         adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, text);
         return rowIndex + 1;
+    }
+
+    private static int writeMergedRowWithBorders(Sheet sheet, int rowIndex, String text) {
+        int nextRow = writeMergedRow(sheet, rowIndex, text);
+        if (text != null && !text.isBlank()) {
+            applyBorderToMergedRegion(sheet, rowIndex, 0, 31);
+        }
+        return nextRow;
     }
 
     private static int writeMergedRowsForLines(Sheet sheet, int rowIndex, String text) {
@@ -1144,23 +1155,24 @@ public final class SoundInsulationMapExporter {
 
     private static int writeConstructiveSolutionsHeader(Sheet sheet, int rowIndex) {
         List<String> header = List.of("Тип конструкции", "Между помещениями", "Состав");
-        return writeMergedRowWithColumns(sheet, rowIndex, header, new int[][]{{0, 6}, {7, 13}, {14, 31}});
+        return writeMergedRowWithColumns(sheet, rowIndex, header, new int[][]{{0, 6}, {7, 13}, {14, 31}}, true);
     }
 
     private static int writeConstructiveSolutionsRow(Sheet sheet, int rowIndex, List<String> columns) {
         List<String> values = normalizeToSize(columns, 3);
-        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 13}, {14, 31}});
+        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 13}, {14, 31}}, true);
     }
 
     private static int writeRoomParametersRow(Sheet sheet, int rowIndex, List<String> columns) {
         List<String> values = normalizeToSize(columns, 4);
-        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 10}, {11, 14}, {15, 19}});
+        return writeMergedRowWithColumns(sheet, rowIndex, values, new int[][]{{0, 6}, {7, 10}, {11, 14}, {15, 19}}, false);
     }
 
     private static int writeMergedRowWithColumns(Sheet sheet,
                                                  int rowIndex,
                                                  List<String> values,
-                                                 int[][] ranges) {
+                                                 int[][] ranges,
+                                                 boolean addBorders) {
         if (sheet == null) {
             return rowIndex;
         }
@@ -1184,11 +1196,25 @@ public final class SoundInsulationMapExporter {
                     cell.setCellValue(value);
                 }
             }
+            if (addBorders && value != null && !value.isBlank()) {
+                applyBorderToMergedRegion(sheet, rowIndex, startCol, endCol);
+            }
         }
         applyWrapStyleToRange(sheet, rowIndex, totalFirstCol, totalLastCol);
         String heightText = String.join(" ", values);
         adjustRowHeightForMergedText(sheet, rowIndex, totalFirstCol, totalLastCol, heightText);
         return rowIndex + 1;
+    }
+
+    private static void applyBorderToMergedRegion(Sheet sheet, int rowIndex, int startCol, int endCol) {
+        if (sheet == null) {
+            return;
+        }
+        CellRangeAddress region = new CellRangeAddress(rowIndex, rowIndex, startCol, endCol);
+        RegionUtil.setBorderTop(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderBottom(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderLeft(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderRight(BorderStyle.THIN, region, sheet);
     }
 
     private static List<List<String>> parseTableRows(String tableText) {
