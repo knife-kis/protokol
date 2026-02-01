@@ -509,11 +509,11 @@ public final class SoundInsulationMapExporter {
                  InputStream impactInput = new FileInputStream(impactFile);
                  Workbook impactWorkbook = WorkbookFactory.create(impactInput)) {
 
-                int existingIndex = targetWorkbook.getSheetIndex("Lnw AC");
+                int existingIndex = targetWorkbook.getSheetIndex("Lnw");
                 if (existingIndex >= 0) {
                     targetWorkbook.removeSheetAt(existingIndex);
                 }
-                Sheet targetSheet = targetWorkbook.createSheet("Lnw AC");
+                Sheet targetSheet = targetWorkbook.createSheet("Lnw");
                 applyLnwAcColumnWidths(targetSheet);
 
                 LnwAcSourceData sourceData = resolveLnwAcSourceData(impactWorkbook);
@@ -570,10 +570,15 @@ public final class SoundInsulationMapExporter {
                                       int targetStartRow) {
         DataFormatter formatter = new DataFormatter();
         Map<CellStyle, CellStyle> styleCache = new IdentityHashMap<>();
-        int rowOffset = targetStartRow - sourceData.startRow;
+        Map<Integer, Integer> rowMapping = new java.util.HashMap<>();
+        int targetRowIndex = targetStartRow;
+        boolean removeNumericCells = false;
         for (int rowIndex = sourceData.startRow; rowIndex <= sourceData.endRow; rowIndex++) {
             Row sourceRow = sourceData.sourceSheet.getRow(rowIndex);
-            int targetRowIndex = rowIndex + rowOffset;
+            if (sourceRow != null && rowContainsText(sourceRow, "Третьоктава, Гц", formatter)) {
+                removeNumericCells = true;
+                continue;
+            }
             Row targetRow = targetSheet.getRow(targetRowIndex);
             if (targetRow == null) {
                 targetRow = targetSheet.createRow(targetRowIndex);
@@ -581,6 +586,7 @@ public final class SoundInsulationMapExporter {
             if (sourceRow != null) {
                 targetRow.setHeight(sourceRow.getHeight());
             }
+            rowMapping.put(rowIndex, targetRowIndex);
             for (int col = 0; col <= 16; col++) {
                 Cell sourceCell = sourceRow != null ? sourceRow.getCell(col) : null;
                 if (sourceCell == null) {
@@ -590,7 +596,12 @@ public final class SoundInsulationMapExporter {
                 if (targetCell == null) {
                     targetCell = targetRow.createCell(col);
                 }
-                copyCellValue(sourceCell, targetCell, formatter);
+                boolean isNumericOnly = removeNumericCells && isNumericOnlyCell(sourceCell, formatter);
+                if (isNumericOnly) {
+                    targetCell.setBlank();
+                } else {
+                    copyCellValue(sourceCell, targetCell, formatter);
+                }
                 CellStyle sourceStyle = sourceCell.getCellStyle();
                 if (sourceStyle != null) {
                     CellStyle clonedStyle = styleCache.get(sourceStyle);
@@ -602,8 +613,9 @@ public final class SoundInsulationMapExporter {
                     targetCell.setCellStyle(clonedStyle);
                 }
             }
+            targetRowIndex++;
         }
-        copyMergedRegions(sourceData, targetSheet, rowOffset);
+        copyMergedRegions(sourceData, targetSheet, rowMapping);
     }
 
     private static void copyCellValue(Cell sourceCell, Cell targetCell, DataFormatter formatter) {
@@ -620,7 +632,9 @@ public final class SoundInsulationMapExporter {
         }
     }
 
-    private static void copyMergedRegions(LnwAcSourceData sourceData, Sheet targetSheet, int rowOffset) {
+    private static void copyMergedRegions(LnwAcSourceData sourceData,
+                                          Sheet targetSheet,
+                                          Map<Integer, Integer> rowMapping) {
         int count = sourceData.sourceSheet.getNumMergedRegions();
         for (int index = 0; index < count; index++) {
             CellRangeAddress region = sourceData.sourceSheet.getMergedRegion(index);
@@ -630,14 +644,36 @@ public final class SoundInsulationMapExporter {
             if (region.getFirstColumn() > 16 || region.getLastColumn() > 16) {
                 continue;
             }
+            Integer mappedStart = rowMapping.get(region.getFirstRow());
+            Integer mappedEnd = rowMapping.get(region.getLastRow());
+            if (mappedStart == null || mappedEnd == null) {
+                continue;
+            }
+            if (!isContiguousRowMapping(region, rowMapping, mappedStart)) {
+                continue;
+            }
             CellRangeAddress shifted = new CellRangeAddress(
-                    region.getFirstRow() + rowOffset,
-                    region.getLastRow() + rowOffset,
+                    mappedStart,
+                    mappedEnd,
                     region.getFirstColumn(),
                     region.getLastColumn()
             );
             targetSheet.addMergedRegion(shifted);
         }
+    }
+
+    private static boolean isContiguousRowMapping(CellRangeAddress region,
+                                                  Map<Integer, Integer> rowMapping,
+                                                  int mappedStart) {
+        int firstRow = region.getFirstRow();
+        int lastRow = region.getLastRow();
+        for (int row = firstRow; row <= lastRow; row++) {
+            Integer mapped = rowMapping.get(row);
+            if (mapped == null || mapped != mappedStart + (row - firstRow)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String buildLnwAcHeaderText(String firstRoomWord, String secondRoomWord) {
@@ -658,41 +694,13 @@ public final class SoundInsulationMapExporter {
     }
 
     private static LnwAcSourceData resolveLnwAcSourceData(Workbook impactWorkbook) {
+        DataFormatter formatter = new DataFormatter();
+        Sheet lnvSheet = impactWorkbook.getSheet("Lnw");
         String firstRoomWord = "";
         String secondRoomWord = "";
-        DataFormatter formatter = new DataFormatter();
-        List<String> pnuWords = new ArrayList<>();
-        int sheetCount = impactWorkbook.getNumberOfSheets();
-        for (int sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
-            Sheet sheet = impactWorkbook.getSheetAt(sheetIndex);
-            for (Row row : sheet) {
-                for (Cell cell : row) {
-                    String text = normalizeSpace(formatter.formatCellValue(cell));
-                    if (text.equalsIgnoreCase("ПНУ:")) {
-                        Cell rightCell = row.getCell(cell.getColumnIndex() + 1);
-                        String rightText = normalizeSpace(formatter.formatCellValue(rightCell));
-                        if (!rightText.isBlank()) {
-                            String firstWord = rightText.split("\\s+")[0];
-                            pnuWords.add(firstWord);
-                            if (pnuWords.size() >= 2) {
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (pnuWords.size() >= 2) {
-                    break;
-                }
-            }
-            if (pnuWords.size() >= 2) {
-                break;
-            }
-        }
-        if (!pnuWords.isEmpty()) {
-            firstRoomWord = pnuWords.get(0);
-        }
-        if (pnuWords.size() > 1) {
-            secondRoomWord = pnuWords.get(1);
+        if (lnvSheet != null) {
+            firstRoomWord = findRightCellValue(lnvSheet, "ПВУ:", formatter);
+            secondRoomWord = findRightCellValue(lnvSheet, "ПНУ:", formatter);
         }
 
         LnwAcSourceData sourceData = new LnwAcSourceData();
@@ -701,8 +709,16 @@ public final class SoundInsulationMapExporter {
 
         String startNeedle = "для карты";
         String stopNeedle = "Текст цветом переписывать только с протоколов ФГИС";
-        for (int sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
-            Sheet sheet = impactWorkbook.getSheetAt(sheetIndex);
+        List<Sheet> sheets = new ArrayList<>();
+        if (lnvSheet != null) {
+            sheets.add(lnvSheet);
+        } else {
+            int sheetCount = impactWorkbook.getNumberOfSheets();
+            for (int sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
+                sheets.add(impactWorkbook.getSheetAt(sheetIndex));
+            }
+        }
+        for (Sheet sheet : sheets) {
             int startRow = -1;
             int endRow = -1;
             for (Row row : sheet) {
@@ -727,6 +743,30 @@ public final class SoundInsulationMapExporter {
             }
         }
         return sourceData;
+    }
+
+    private static String findRightCellValue(Sheet sheet, String needle, DataFormatter formatter) {
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = normalizeSpace(formatter.formatCellValue(cell));
+                if (text.equalsIgnoreCase(needle)) {
+                    Cell rightCell = row.getCell(cell.getColumnIndex() + 1);
+                    return normalizeSpace(formatter.formatCellValue(rightCell));
+                }
+            }
+        }
+        return "";
+    }
+
+    private static boolean isNumericOnlyCell(Cell cell, DataFormatter formatter) {
+        if (cell == null) {
+            return false;
+        }
+        String text = normalizeSpace(formatter.formatCellValue(cell));
+        if (text.isBlank()) {
+            return false;
+        }
+        return text.matches("[+-]?\\d+(?:[\\.,]\\d+)?");
     }
 
     private static boolean rowContainsText(Row row, String needle, DataFormatter formatter) {
