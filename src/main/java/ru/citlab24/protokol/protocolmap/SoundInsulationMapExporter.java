@@ -87,6 +87,7 @@ public final class SoundInsulationMapExporter {
         }
         updateSketchesSheet(targetFile, data.sketches);
         applySecondPageFontSize(targetFile, 10);
+        addLnwAcSheet(targetFile, impactFile);
         return targetFile;
     }
 
@@ -489,6 +490,253 @@ public final class SoundInsulationMapExporter {
                 workbook.write(outputStream);
             }
         }
+    }
+
+    private static void addLnwAcSheet(File targetFile, File impactFile) throws IOException {
+        if (targetFile == null || !targetFile.exists() || impactFile == null || !impactFile.exists()) {
+            return;
+        }
+        try (InputStream targetInput = new FileInputStream(targetFile);
+             Workbook targetWorkbook = WorkbookFactory.create(targetInput);
+             InputStream impactInput = new FileInputStream(impactFile);
+             Workbook impactWorkbook = WorkbookFactory.create(impactInput)) {
+            int existingIndex = targetWorkbook.getSheetIndex("Lnw AC");
+            if (existingIndex >= 0) {
+                targetWorkbook.removeSheetAt(existingIndex);
+            }
+            Sheet targetSheet = targetWorkbook.createSheet("Lnw AC");
+            applyLnwAcColumnWidths(targetSheet);
+
+            LnwAcSourceData sourceData = resolveLnwAcSourceData(impactWorkbook);
+            String headerText = buildLnwAcHeaderText(sourceData.firstRoomWord, sourceData.secondRoomWord);
+            createLnwAcHeaderRow(targetWorkbook, targetSheet, headerText);
+
+            if (sourceData.sourceSheet != null && sourceData.startRow >= 0 && sourceData.endRow >= sourceData.startRow) {
+                copyLnwAcRows(sourceData, targetWorkbook, targetSheet, 1);
+            }
+
+            try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                targetWorkbook.write(outputStream);
+            }
+        }
+    }
+
+    private static void applyLnwAcColumnWidths(Sheet sheet) {
+        int[] widthsPx = new int[17];
+        widthsPx[0] = 173;
+        for (int i = 1; i < widthsPx.length; i++) {
+            widthsPx[i] = 54;
+        }
+        for (int col = 0; col < widthsPx.length; col++) {
+            sheet.setColumnWidth(col, pixel2WidthUnits(widthsPx[col]));
+        }
+    }
+
+    private static void createLnwAcHeaderRow(Workbook workbook, Sheet sheet, String headerText) {
+        Row row = sheet.createRow(0);
+        Cell cell = row.createCell(0);
+        cell.setCellValue(headerText);
+
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints((short) 12);
+        font.setBold(true);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setWrapText(true);
+        style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        cell.setCellStyle(style);
+
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 16));
+    }
+
+    private static void copyLnwAcRows(LnwAcSourceData sourceData,
+                                      Workbook targetWorkbook,
+                                      Sheet targetSheet,
+                                      int targetStartRow) {
+        DataFormatter formatter = new DataFormatter();
+        Map<CellStyle, CellStyle> styleCache = new IdentityHashMap<>();
+        int rowOffset = targetStartRow - sourceData.startRow;
+        for (int rowIndex = sourceData.startRow; rowIndex <= sourceData.endRow; rowIndex++) {
+            Row sourceRow = sourceData.sourceSheet.getRow(rowIndex);
+            int targetRowIndex = rowIndex + rowOffset;
+            Row targetRow = targetSheet.getRow(targetRowIndex);
+            if (targetRow == null) {
+                targetRow = targetSheet.createRow(targetRowIndex);
+            }
+            if (sourceRow != null) {
+                targetRow.setHeight(sourceRow.getHeight());
+            }
+            for (int col = 0; col <= 16; col++) {
+                Cell sourceCell = sourceRow != null ? sourceRow.getCell(col) : null;
+                if (sourceCell == null) {
+                    continue;
+                }
+                Cell targetCell = targetRow.getCell(col);
+                if (targetCell == null) {
+                    targetCell = targetRow.createCell(col);
+                }
+                copyCellValue(sourceCell, targetCell, formatter);
+                CellStyle sourceStyle = sourceCell.getCellStyle();
+                if (sourceStyle != null) {
+                    CellStyle clonedStyle = styleCache.get(sourceStyle);
+                    if (clonedStyle == null) {
+                        clonedStyle = targetWorkbook.createCellStyle();
+                        clonedStyle.cloneStyleFrom(sourceStyle);
+                        styleCache.put(sourceStyle, clonedStyle);
+                    }
+                    targetCell.setCellStyle(clonedStyle);
+                }
+            }
+        }
+        copyMergedRegions(sourceData, targetSheet, rowOffset);
+    }
+
+    private static void copyCellValue(Cell sourceCell, Cell targetCell, DataFormatter formatter) {
+        if (sourceCell == null || targetCell == null) {
+            return;
+        }
+        switch (sourceCell.getCellType()) {
+            case STRING -> targetCell.setCellValue(sourceCell.getStringCellValue());
+            case NUMERIC -> targetCell.setCellValue(sourceCell.getNumericCellValue());
+            case BOOLEAN -> targetCell.setCellValue(sourceCell.getBooleanCellValue());
+            case FORMULA -> targetCell.setCellFormula(sourceCell.getCellFormula());
+            case BLANK -> targetCell.setBlank();
+            default -> targetCell.setCellValue(formatter.formatCellValue(sourceCell));
+        }
+    }
+
+    private static void copyMergedRegions(LnwAcSourceData sourceData, Sheet targetSheet, int rowOffset) {
+        int count = sourceData.sourceSheet.getNumMergedRegions();
+        for (int index = 0; index < count; index++) {
+            CellRangeAddress region = sourceData.sourceSheet.getMergedRegion(index);
+            if (region.getFirstRow() < sourceData.startRow || region.getLastRow() > sourceData.endRow) {
+                continue;
+            }
+            if (region.getFirstColumn() > 16 || region.getLastColumn() > 16) {
+                continue;
+            }
+            CellRangeAddress shifted = new CellRangeAddress(
+                    region.getFirstRow() + rowOffset,
+                    region.getLastRow() + rowOffset,
+                    region.getFirstColumn(),
+                    region.getLastColumn()
+            );
+            targetSheet.addMergedRegion(shifted);
+        }
+    }
+
+    private static String buildLnwAcHeaderText(String firstRoomWord, String secondRoomWord) {
+        String base = "7.8.1 Результаты измерения приведенного уровня ударного шума, "
+                + "индекса приведенного уровня ударного шума для перекрытия между помещениями";
+        String first = safe(firstRoomWord).trim();
+        String second = safe(secondRoomWord).trim();
+        if (first.isBlank() && second.isBlank()) {
+            return base;
+        }
+        if (first.isBlank()) {
+            return base + " " + second;
+        }
+        if (second.isBlank()) {
+            return base + " " + first;
+        }
+        return base + " " + first + " и " + second;
+    }
+
+    private static LnwAcSourceData resolveLnwAcSourceData(Workbook impactWorkbook) {
+        String firstRoomWord = "";
+        String secondRoomWord = "";
+        DataFormatter formatter = new DataFormatter();
+        List<String> pnuWords = new ArrayList<>();
+        int sheetCount = impactWorkbook.getNumberOfSheets();
+        for (int sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
+            Sheet sheet = impactWorkbook.getSheetAt(sheetIndex);
+            for (Row row : sheet) {
+                for (Cell cell : row) {
+                    String text = normalizeSpace(formatter.formatCellValue(cell));
+                    if (text.equalsIgnoreCase("ПНУ:")) {
+                        Cell rightCell = row.getCell(cell.getColumnIndex() + 1);
+                        String rightText = normalizeSpace(formatter.formatCellValue(rightCell));
+                        if (!rightText.isBlank()) {
+                            String firstWord = rightText.split("\\s+")[0];
+                            pnuWords.add(firstWord);
+                            if (pnuWords.size() >= 2) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (pnuWords.size() >= 2) {
+                    break;
+                }
+            }
+            if (pnuWords.size() >= 2) {
+                break;
+            }
+        }
+        if (!pnuWords.isEmpty()) {
+            firstRoomWord = pnuWords.get(0);
+        }
+        if (pnuWords.size() > 1) {
+            secondRoomWord = pnuWords.get(1);
+        }
+
+        LnwAcSourceData sourceData = new LnwAcSourceData();
+        sourceData.firstRoomWord = firstRoomWord;
+        sourceData.secondRoomWord = secondRoomWord;
+
+        String startNeedle = "для карты";
+        String stopNeedle = "Текст цветом переписывать только с протоколов ФГИС";
+        for (int sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
+            Sheet sheet = impactWorkbook.getSheetAt(sheetIndex);
+            int startRow = -1;
+            int endRow = -1;
+            for (Row row : sheet) {
+                if (startRow < 0) {
+                    if (rowContainsText(row, startNeedle, formatter)) {
+                        startRow = row.getRowNum() + 1;
+                        continue;
+                    }
+                } else if (rowContainsText(row, stopNeedle, formatter)) {
+                    endRow = row.getRowNum() - 1;
+                    break;
+                }
+            }
+            if (startRow >= 0) {
+                if (endRow < startRow) {
+                    endRow = sheet.getLastRowNum();
+                }
+                sourceData.sourceSheet = sheet;
+                sourceData.startRow = startRow;
+                sourceData.endRow = endRow;
+                break;
+            }
+        }
+        return sourceData;
+    }
+
+    private static boolean rowContainsText(Row row, String needle, DataFormatter formatter) {
+        if (row == null) {
+            return false;
+        }
+        String needleLower = needle.toLowerCase(Locale.ROOT);
+        for (Cell cell : row) {
+            String text = normalizeSpace(formatter.formatCellValue(cell));
+            if (text.toLowerCase(Locale.ROOT).contains(needleLower)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static int pixel2WidthUnits(int px) {
+        int units = (px / 7) * 256;
+        int rem = px % 7;
+        final int[] offset = {0, 36, 73, 109, 146, 182, 219};
+        units += offset[rem];
+        return units;
     }
 
     private static Font cloneFontWithSize(Workbook workbook, Font source, int fontSize) {
@@ -1507,6 +1755,14 @@ public final class SoundInsulationMapExporter {
         }
         String joined = String.join(" ", row).toLowerCase(Locale.ROOT);
         return joined.contains("тип конструкции") || joined.contains("между помещениями") || joined.contains("состав");
+    }
+
+    private static class LnwAcSourceData {
+        private Sheet sourceSheet;
+        private int startRow = -1;
+        private int endRow = -1;
+        private String firstRoomWord = "";
+        private String secondRoomWord = "";
     }
 
     private record SoundInsulationProtocolData(String registrationNumber,
