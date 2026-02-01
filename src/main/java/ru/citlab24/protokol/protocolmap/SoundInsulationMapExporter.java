@@ -25,6 +25,9 @@ import org.apache.poi.xwpf.usermodel.XWPFPicture;
 import org.apache.poi.xwpf.usermodel.XWPFPictureData;
 import org.apache.poi.util.Units;
 
+import javax.imageio.ImageIO;
+import java.awt.Dimension;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -55,6 +58,9 @@ public final class SoundInsulationMapExporter {
     private static final String APPROVAL_LABEL = "УТВЕРЖДАЮ";
     private static final Pattern APPROVAL_DATE_PATTERN =
             Pattern.compile("\\b\\d{1,2}\\s+[А-Яа-я]+\\s+\\d{4}\\s*г?\\.?");
+    private static final double SKETCH_HEIGHT_CM = 6.26;
+    private static final double SKETCH_WIDTH_CM = 4.08;
+    private static final int SKETCH_PADDING_PX = 5;
 
     private SoundInsulationMapExporter() {
     }
@@ -768,21 +774,21 @@ public final class SoundInsulationMapExporter {
             }
             int imageRowIndex = rowIndex;
             Row imageRow = sheet.createRow(imageRowIndex);
-            imageRow.setHeightInPoints(pixelsToPoints(100));
+            double targetWidthPx = cmToPixels(SKETCH_WIDTH_CM);
+            double targetHeightPx = cmToPixels(SKETCH_HEIGHT_CM);
+            int rowHeightPx = (int) Math.ceil(targetHeightPx + (SKETCH_PADDING_PX * 2.0));
+            imageRow.setHeightInPoints(pixelsToPoints(rowHeightPx));
             ensureMergedRegion(sheet, imageRowIndex, 0, 1);
             applyWrapStyleToRange(sheet, imageRowIndex, 0, 1);
 
             int pictureIndex = workbook.addPicture(sketch.imageData, sketch.pictureType);
             ClientAnchor anchor = helper.createClientAnchor();
             anchor.setCol1(0);
-            anchor.setCol2(2);
             anchor.setRow1(imageRowIndex);
-            anchor.setRow2(imageRowIndex + 1);
-            anchor.setDx1(Units.toEMU(5));
-            anchor.setDy1(Units.toEMU(5));
-            anchor.setDx2(Units.toEMU(5));
-            anchor.setDy2(Units.toEMU(5));
-            drawing.createPicture(anchor, pictureIndex);
+            anchor.setDx1(Units.pixelToEMU(SKETCH_PADDING_PX));
+            anchor.setDy1(Units.pixelToEMU(SKETCH_PADDING_PX));
+            org.apache.poi.ss.usermodel.Picture picture = drawing.createPicture(anchor, pictureIndex);
+            resizePictureToTarget(picture, sketch.imageData, targetWidthPx, targetHeightPx);
 
             rowIndex++;
             String caption = safe(sketch.caption);
@@ -1029,6 +1035,39 @@ public final class SoundInsulationMapExporter {
 
     private static float pixelsToPoints(int pixels) {
         return pixels * 72f / 96f;
+    }
+
+    private static double cmToPixels(double cm) {
+        return cm / 2.54 * 96.0;
+    }
+
+    private static void resizePictureToTarget(org.apache.poi.ss.usermodel.Picture picture,
+                                              byte[] imageData,
+                                              double targetWidthPx,
+                                              double targetHeightPx) {
+        if (picture == null || imageData == null) {
+            return;
+        }
+        Dimension dimension = readImageDimension(imageData);
+        if (dimension == null || dimension.getWidth() <= 0 || dimension.getHeight() <= 0) {
+            picture.resize();
+            return;
+        }
+        double scaleX = targetWidthPx / dimension.getWidth();
+        double scaleY = targetHeightPx / dimension.getHeight();
+        picture.resize(scaleX, scaleY);
+    }
+
+    private static Dimension readImageDimension(byte[] imageData) {
+        try (ByteArrayInputStream stream = new ByteArrayInputStream(imageData)) {
+            java.awt.image.BufferedImage image = ImageIO.read(stream);
+            if (image == null) {
+                return null;
+            }
+            return new Dimension(image.getWidth(), image.getHeight());
+        } catch (IOException ex) {
+            return null;
+        }
     }
 
     private static String safe(String value) {
