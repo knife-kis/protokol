@@ -765,40 +765,64 @@ public final class SoundInsulationMapExporter {
         if (sketches == null || sketches.isEmpty()) {
             return;
         }
+
         Workbook workbook = sheet.getWorkbook();
         Drawing<?> drawing = sheet.createDrawingPatriarch();
         CreationHelper helper = workbook.getCreationHelper();
+
         for (SketchEntry sketch : sketches) {
             if (sketch == null || sketch.imageData == null) {
                 continue;
             }
+
             int imageRowIndex = rowIndex;
             Row imageRow = sheet.createRow(imageRowIndex);
+
             double targetWidthPx = cmToPixels(SKETCH_WIDTH_CM);
             double targetHeightPx = cmToPixels(SKETCH_HEIGHT_CM);
+
             int rowHeightPx = (int) Math.ceil(targetHeightPx + (SKETCH_PADDING_PX * 2.0));
             imageRow.setHeightInPoints(pixelsToPoints(rowHeightPx));
+
+            // эскиз занимает A..B (0..1) на текущей строке
             ensureMergedRegion(sheet, imageRowIndex, 0, 1);
             applyWrapStyleToRange(sheet, imageRowIndex, 0, 1);
 
             int pictureIndex = workbook.addPicture(sketch.imageData, sketch.pictureType);
+
             ClientAnchor anchor = helper.createClientAnchor();
             anchor.setCol1(0);
             anchor.setRow1(imageRowIndex);
+
+            // ВАЖНО: без col2/row2 у POI остаются нули, и при row1>0 получается row2<row1 => target size < 0
+            anchor.setCol2(2);               // 0..1 (A..B) => col2 = 2
+            anchor.setRow2(imageRowIndex + 1);
+
             anchor.setDx1(Units.pixelToEMU(SKETCH_PADDING_PX));
             anchor.setDy1(Units.pixelToEMU(SKETCH_PADDING_PX));
+
+            // (не обязательно, но полезно)
+            try {
+                anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+            } catch (Exception ignore) {
+                // если AnchorType недоступен в конкретной реализации — просто игнорируем
+            }
+
             org.apache.poi.ss.usermodel.Picture picture = drawing.createPicture(anchor, pictureIndex);
             resizePictureToTarget(picture, sketch.imageData, targetWidthPx, targetHeightPx);
 
             rowIndex++;
+
             String caption = safe(sketch.caption);
             if (!caption.isBlank()) {
                 Row captionRow = sheet.createRow(rowIndex);
                 Cell captionCell = captionRow.createCell(0);
                 captionCell.setCellValue(caption);
+
                 ensureMergedRegion(sheet, rowIndex, 0, 1);
                 applyWrapStyleToRange(sheet, rowIndex, 0, 1);
                 adjustRowHeightForMergedText(sheet, rowIndex, 0, 1, caption);
+
                 rowIndex++;
             }
         }
