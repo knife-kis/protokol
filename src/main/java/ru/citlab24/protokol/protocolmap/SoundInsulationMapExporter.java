@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.protocolmap;
 
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.BorderStyle;
@@ -496,28 +497,39 @@ public final class SoundInsulationMapExporter {
         if (targetFile == null || !targetFile.exists() || impactFile == null || !impactFile.exists()) {
             return;
         }
-        try (InputStream targetInput = new FileInputStream(targetFile);
-             Workbook targetWorkbook = WorkbookFactory.create(targetInput);
-             InputStream impactInput = new FileInputStream(impactFile);
-             Workbook impactWorkbook = WorkbookFactory.create(impactInput)) {
-            int existingIndex = targetWorkbook.getSheetIndex("Lnw AC");
-            if (existingIndex >= 0) {
-                targetWorkbook.removeSheetAt(existingIndex);
-            }
-            Sheet targetSheet = targetWorkbook.createSheet("Lnw AC");
-            applyLnwAcColumnWidths(targetSheet);
 
-            LnwAcSourceData sourceData = resolveLnwAcSourceData(impactWorkbook);
-            String headerText = buildLnwAcHeaderText(sourceData.firstRoomWord, sourceData.secondRoomWord);
-            createLnwAcHeaderRow(targetWorkbook, targetSheet, headerText);
+        // POI-защита от zip-bomb иногда срабатывает на "обычных" xlsx с очень хорошо сжатым styles.xml.
+        // Понижаем порог только на время чтения доверенного файла.
+        double oldRatio = ZipSecureFile.getMinInflateRatio();
+        try {
+            ZipSecureFile.setMinInflateRatio(0.001d); // было 0.01, у тебя файл ~0.009943
 
-            if (sourceData.sourceSheet != null && sourceData.startRow >= 0 && sourceData.endRow >= sourceData.startRow) {
-                copyLnwAcRows(sourceData, targetWorkbook, targetSheet, 1);
-            }
+            try (InputStream targetInput = new FileInputStream(targetFile);
+                 Workbook targetWorkbook = WorkbookFactory.create(targetInput);
+                 InputStream impactInput = new FileInputStream(impactFile);
+                 Workbook impactWorkbook = WorkbookFactory.create(impactInput)) {
 
-            try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
-                targetWorkbook.write(outputStream);
+                int existingIndex = targetWorkbook.getSheetIndex("Lnw AC");
+                if (existingIndex >= 0) {
+                    targetWorkbook.removeSheetAt(existingIndex);
+                }
+                Sheet targetSheet = targetWorkbook.createSheet("Lnw AC");
+                applyLnwAcColumnWidths(targetSheet);
+
+                LnwAcSourceData sourceData = resolveLnwAcSourceData(impactWorkbook);
+                String headerText = buildLnwAcHeaderText(sourceData.firstRoomWord, sourceData.secondRoomWord);
+                createLnwAcHeaderRow(targetWorkbook, targetSheet, headerText);
+
+                if (sourceData.sourceSheet != null && sourceData.startRow >= 0 && sourceData.endRow >= sourceData.startRow) {
+                    copyLnwAcRows(sourceData, targetWorkbook, targetSheet, 1);
+                }
+
+                try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                    targetWorkbook.write(outputStream);
+                }
             }
+        } finally {
+            ZipSecureFile.setMinInflateRatio(oldRatio);
         }
     }
 
