@@ -551,7 +551,7 @@ public final class SoundInsulationMapExporter {
 
         Font font = workbook.createFont();
         font.setFontName("Arial");
-        font.setFontHeightInPoints((short) 12);
+        font.setFontHeightInPoints((short) 9);
         font.setBold(true);
 
         CellStyle style = workbook.createCellStyle();
@@ -572,11 +572,11 @@ public final class SoundInsulationMapExporter {
         Map<CellStyle, CellStyle> styleCache = new IdentityHashMap<>();
         Map<Integer, Integer> rowMapping = new java.util.HashMap<>();
         int targetRowIndex = targetStartRow;
-        boolean removeNumericCells = false;
+        boolean removeFormulaCells = false;
         for (int rowIndex = sourceData.startRow; rowIndex <= sourceData.endRow; rowIndex++) {
             Row sourceRow = sourceData.sourceSheet.getRow(rowIndex);
             if (sourceRow != null && rowContainsText(sourceRow, "Третьоктава, Гц", formatter)) {
-                removeNumericCells = true;
+                removeFormulaCells = true;
                 continue;
             }
             Row targetRow = targetSheet.getRow(targetRowIndex);
@@ -596,8 +596,8 @@ public final class SoundInsulationMapExporter {
                 if (targetCell == null) {
                     targetCell = targetRow.createCell(col);
                 }
-                boolean isNumericOnly = removeNumericCells && isNumericOnlyCell(sourceCell, formatter);
-                if (isNumericOnly) {
+                boolean isFormulaCell = removeFormulaCells && isFormulaCell(sourceCell);
+                if (isFormulaCell) {
                     targetCell.setBlank();
                 } else {
                     copyCellValue(sourceCell, targetCell, formatter);
@@ -758,15 +758,18 @@ public final class SoundInsulationMapExporter {
         return "";
     }
 
-    private static boolean isNumericOnlyCell(Cell cell, DataFormatter formatter) {
+    private static boolean isFormulaCell(Cell cell) {
         if (cell == null) {
             return false;
         }
-        String text = normalizeSpace(formatter.formatCellValue(cell));
-        if (text.isBlank()) {
-            return false;
+        if (cell.getCellType() == CellType.FORMULA) {
+            return true;
         }
-        return text.matches("[+-]?\\d+(?:[\\.,]\\d+)?");
+        if (cell.getCellType() == CellType.STRING) {
+            String text = normalizeSpace(cell.getStringCellValue());
+            return text.startsWith("=");
+        }
+        return false;
     }
 
     private static boolean rowContainsText(Row row, String needle, DataFormatter formatter) {
