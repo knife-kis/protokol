@@ -584,8 +584,8 @@ public final class SoundInsulationMapExporter {
                 if (targetCell == null) {
                     targetCell = targetRow.createCell(col);
                 }
-                boolean isFormulaCell = removeFormulaCells && isFormulaCell(sourceCell);
-                if (isFormulaCell) {
+                boolean shouldClearCell = removeFormulaCells && shouldClearLnwCell(sourceCell);
+                if (shouldClearCell) {
                     targetCell.setBlank();
                 } else {
                     copyCellValue(sourceCell, targetCell, formatter);
@@ -756,6 +756,24 @@ public final class SoundInsulationMapExporter {
         if (cell.getCellType() == CellType.STRING) {
             String text = normalizeSpace(cell.getStringCellValue());
             return text.startsWith("=");
+        }
+        return false;
+    }
+
+    private static boolean shouldClearLnwCell(Cell cell) {
+        return isFormulaCell(cell) || isNumericOnlyCell(cell);
+    }
+
+    private static boolean isNumericOnlyCell(Cell cell) {
+        if (cell == null) {
+            return false;
+        }
+        if (cell.getCellType() == CellType.NUMERIC) {
+            return true;
+        }
+        if (cell.getCellType() == CellType.STRING) {
+            String text = normalizeSpace(cell.getStringCellValue());
+            return !text.isEmpty() && text.matches("\\d+");
         }
         return false;
     }
