@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
+import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFHeader;
@@ -14,6 +15,7 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJcTable;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
@@ -41,6 +43,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 final class EquipmentIssuanceSheetExporter {
     private static final String ISSUANCE_SHEET_BASE_NAME = "лист выдачи приборов";
@@ -52,21 +55,27 @@ final class EquipmentIssuanceSheetExporter {
     private static final String PERFORMER_PREFIX = "3. Измерения провел, подпись:";
     private static final String OBJECT_PREFIX = "4. Наименование объекта:";
     private static final String INSTRUMENTS_PREFIX = "5.3. Приборы для измерения (используемое отметить):";
+    private static final String PROTOCOL_MEASUREMENT_DATES_LABEL = "Дата проведения измерений:";
+    private static final String PROTOCOL_INSTRUMENTS_LABEL = "Наименование, тип средства измерения";
 
     private EquipmentIssuanceSheetExporter() {
     }
 
     static void generate(File mapFile) {
+        generate(mapFile, null);
+    }
+
+    static void generate(File mapFile, File protocolFile) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
-        List<String> measurementDates = resolveMeasurementDates(mapFile);
+        List<String> measurementDates = resolveMeasurementDates(mapFile, protocolFile);
         if (measurementDates.isEmpty()) {
             measurementDates = List.of("");
         }
         String objectName = resolveObjectName(mapFile);
         String performer = resolveMeasurementPerformer(mapFile);
-        List<InstrumentEntry> instruments = resolveInstruments(mapFile);
+        List<InstrumentEntry> instruments = resolveInstruments(mapFile, protocolFile);
 
         for (int index = 0; index < measurementDates.size(); index++) {
             String date = measurementDates.get(index);
@@ -87,6 +96,10 @@ final class EquipmentIssuanceSheetExporter {
         for (int index = 0; index < measurementDates.size(); index++) {
             String date = measurementDates.get(index);
             files.add(resolveIssuanceSheetFile(mapFile, date, index, measurementDates.size()));
+        }
+        boolean hasExisting = files.stream().anyMatch(file -> file != null && file.exists());
+        if (!hasExisting) {
+            return findExistingIssuanceFiles(mapFile);
         }
         return files;
     }
@@ -419,6 +432,14 @@ final class EquipmentIssuanceSheetExporter {
         }
     }
 
+    private static List<String> resolveMeasurementDates(File mapFile, File protocolFile) {
+        List<String> protocolDates = resolveMeasurementDatesFromProtocol(protocolFile);
+        if (!protocolDates.isEmpty()) {
+            return protocolDates;
+        }
+        return resolveMeasurementDates(mapFile);
+    }
+
     private static List<String> resolveMeasurementDates(File mapFile) {
         String rawDates = findValueByPrefix(mapFile, DATES_PREFIX);
         if (rawDates.isBlank()) {
@@ -452,6 +473,14 @@ final class EquipmentIssuanceSheetExporter {
             value = findValueByPrefix(mapFile, "3. Измерения провел, подпись");
         }
         return value;
+    }
+
+    private static List<InstrumentEntry> resolveInstruments(File mapFile, File protocolFile) {
+        List<InstrumentEntry> protocolInstruments = resolveInstrumentsFromProtocol(protocolFile);
+        if (!protocolInstruments.isEmpty()) {
+            return protocolInstruments;
+        }
+        return resolveInstruments(mapFile);
     }
 
     private static List<InstrumentEntry> resolveInstruments(File mapFile) {
@@ -573,6 +602,206 @@ final class EquipmentIssuanceSheetExporter {
             return "";
         }
         return "";
+    }
+
+    private static List<String> resolveMeasurementDatesFromProtocol(File protocolFile) {
+        if (protocolFile == null || !protocolFile.exists()) {
+            return Collections.emptyList();
+        }
+        String name = protocolFile.getName().toLowerCase(Locale.ROOT);
+        if (!name.endsWith(".docx")) {
+            return Collections.emptyList();
+        }
+        try (InputStream in = new FileInputStream(protocolFile);
+             XWPFDocument document = new XWPFDocument(in)) {
+            List<String> lines = extractLines(document);
+            for (String line : lines) {
+                String value = extractValueFromLine(line, PROTOCOL_MEASUREMENT_DATES_LABEL);
+                if (value.isEmpty()) {
+                    continue;
+                }
+                return splitDates(value);
+            }
+        } catch (Exception ignored) {
+            return Collections.emptyList();
+        }
+        return Collections.emptyList();
+    }
+
+    private static List<String> splitDates(String value) {
+        if (value == null || value.isBlank()) {
+            return Collections.emptyList();
+        }
+        String[] parts = value.split(",");
+        List<String> dates = new ArrayList<>();
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                dates.add(trimmed);
+            }
+        }
+        return dates;
+    }
+
+    private static List<InstrumentEntry> resolveInstrumentsFromProtocol(File protocolFile) {
+        if (protocolFile == null || !protocolFile.exists()) {
+            return Collections.emptyList();
+        }
+        String name = protocolFile.getName().toLowerCase(Locale.ROOT);
+        if (!name.endsWith(".docx")) {
+            return Collections.emptyList();
+        }
+        try (InputStream in = new FileInputStream(protocolFile);
+             XWPFDocument document = new XWPFDocument(in)) {
+            for (XWPFTable table : document.getTables()) {
+                List<InstrumentEntry> instruments = extractInstrumentsFromTable(table);
+                if (!instruments.isEmpty()) {
+                    return instruments;
+                }
+            }
+        } catch (Exception ignored) {
+            return Collections.emptyList();
+        }
+        return Collections.emptyList();
+    }
+
+    private static List<InstrumentEntry> extractInstrumentsFromTable(XWPFTable table) {
+        if (table == null) {
+            return Collections.emptyList();
+        }
+        List<XWPFTableRow> rows = table.getRows();
+        for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+            XWPFTableRow row = rows.get(rowIndex);
+            int nameColumnIndex = findColumnIndex(row, PROTOCOL_INSTRUMENTS_LABEL);
+            if (nameColumnIndex < 0) {
+                continue;
+            }
+            int serialColumnIndex = nameColumnIndex + 1;
+            List<InstrumentEntry> instruments = new ArrayList<>();
+            for (int nextRow = rowIndex + 1; nextRow < rows.size(); nextRow++) {
+                XWPFTableRow dataRow = rows.get(nextRow);
+                if (dataRow == null) {
+                    break;
+                }
+                String instrumentName = getCellText(dataRow, nameColumnIndex);
+                String serial = getCellText(dataRow, serialColumnIndex);
+                if (instrumentName.isBlank() && serial.isBlank()) {
+                    if (isRowEmpty(dataRow)) {
+                        break;
+                    }
+                    continue;
+                }
+                instruments.add(new InstrumentEntry(instrumentName, serial));
+            }
+            return instruments;
+        }
+        return Collections.emptyList();
+    }
+
+    private static int findColumnIndex(XWPFTableRow row, String needle) {
+        if (row == null) {
+            return -1;
+        }
+        List<XWPFTableCell> cells = row.getTableCells();
+        for (int cellIndex = 0; cellIndex < cells.size(); cellIndex++) {
+            String text = normalizeText(cells.get(cellIndex).getText());
+            if (text.contains(needle)) {
+                return cellIndex;
+            }
+        }
+        return -1;
+    }
+
+    private static String getCellText(XWPFTableRow row, int cellIndex) {
+        if (row == null || cellIndex < 0) {
+            return "";
+        }
+        XWPFTableCell cell = row.getCell(cellIndex);
+        if (cell == null) {
+            return "";
+        }
+        return normalizeText(cell.getText());
+    }
+
+    private static boolean isRowEmpty(XWPFTableRow row) {
+        if (row == null) {
+            return true;
+        }
+        for (XWPFTableCell cell : row.getTableCells()) {
+            if (!normalizeText(cell.getText()).isBlank()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static List<String> extractLines(XWPFDocument document) {
+        List<String> lines = new ArrayList<>();
+        if (document == null) {
+            return lines;
+        }
+        for (IBodyElement element : document.getBodyElements()) {
+            if (element instanceof XWPFParagraph paragraph) {
+                addParagraphLines(lines, paragraph.getText());
+            } else if (element instanceof XWPFTable table) {
+                for (XWPFTableRow row : table.getRows()) {
+                    for (XWPFTableCell cell : row.getTableCells()) {
+                        addParagraphLines(lines, cell.getText());
+                    }
+                }
+            }
+        }
+        return lines;
+    }
+
+    private static void addParagraphLines(List<String> lines, String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        String[] parts = text.split("\\r?\\n");
+        for (String part : parts) {
+            String trimmed = normalizeText(part);
+            if (!trimmed.isBlank()) {
+                lines.add(trimmed);
+            }
+        }
+    }
+
+    private static String extractValueFromLine(String line, String label) {
+        if (line == null || label == null) {
+            return "";
+        }
+        int index = line.indexOf(label);
+        if (index < 0) {
+            return "";
+        }
+        String value = line.substring(index + label.length()).trim();
+        return trimLeadingPunctuation(value);
+    }
+
+    private static String normalizeText(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace('\u00a0', ' ').replaceAll("\\s+", " ").trim();
+    }
+
+    private static List<File> findExistingIssuanceFiles(File mapFile) {
+        File parent = mapFile.getParentFile();
+        if (parent == null || !parent.isDirectory()) {
+            return Collections.emptyList();
+        }
+        File[] matches = parent.listFiles((dir, name) -> {
+            String lower = name.toLowerCase(Locale.ROOT);
+            return lower.startsWith(ISSUANCE_SHEET_BASE_NAME) && lower.endsWith(".docx");
+        });
+        if (matches == null || matches.length == 0) {
+            return Collections.emptyList();
+        }
+        List<File> files = new ArrayList<>();
+        Collections.addAll(files, matches);
+        files.sort((left, right) -> left.getName().compareToIgnoreCase(right.getName()));
+        return files;
     }
 
     private static String trimLeadingPunctuation(String value) {
