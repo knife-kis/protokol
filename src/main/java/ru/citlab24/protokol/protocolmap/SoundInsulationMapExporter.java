@@ -4,9 +4,6 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
-import org.apache.poi.xssf.usermodel.XSSFCellStyle;
-import org.apache.poi.xssf.usermodel.XSSFColor;
-import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -50,6 +47,8 @@ public final class SoundInsulationMapExporter {
     private static final String APPROVAL_LABEL = "УТВЕРЖДАЮ";
     private static final Pattern APPROVAL_DATE_PATTERN =
             Pattern.compile("\\b\\d{1,2}\\s+[А-Яа-я]+\\s+\\d{4}\\s*г?\\.?");
+    private static final Pattern LNW_MEASUREMENT_ROW_PATTERN =
+            Pattern.compile("^[МM][1-3] для [TТ](\\d{1,2}), дБ$", Pattern.CASE_INSENSITIVE);
     private static final double SKETCH_HEIGHT_CM = 6.26;
     private static final double SKETCH_WIDTH_CM = 4.08;
     private static final int SKETCH_PADDING_PX = 5;
@@ -590,13 +589,8 @@ public final class SoundInsulationMapExporter {
         Map<CellStyle, CellStyle> styleCache = new IdentityHashMap<>();
         Map<Integer, Integer> rowMapping = new java.util.HashMap<>();
         int targetRowIndex = targetStartRow;
-        boolean removeFormulaCells = false;
         for (int rowIndex = sourceData.startRow; rowIndex <= sourceData.endRow; rowIndex++) {
             Row sourceRow = sourceData.sourceSheet.getRow(rowIndex);
-            if (sourceRow != null && rowContainsText(sourceRow, "Третьоктава, Гц", formatter)) {
-                removeFormulaCells = true;
-                continue;
-            }
             Row targetRow = targetSheet.getRow(targetRowIndex);
             if (targetRow == null) {
                 targetRow = targetSheet.createRow(targetRowIndex);
@@ -605,6 +599,7 @@ public final class SoundInsulationMapExporter {
                 targetRow.setHeight(sourceRow.getHeight());
             }
             rowMapping.put(rowIndex, targetRowIndex);
+            boolean protectRow = isProtectedLnwRow(sourceRow, formatter);
             for (int col = 0; col <= 16; col++) {
                 Cell sourceCell = sourceRow != null ? sourceRow.getCell(col) : null;
                 if (sourceCell == null) {
@@ -614,9 +609,11 @@ public final class SoundInsulationMapExporter {
                 if (targetCell == null) {
                     targetCell = targetRow.createCell(col);
                 }
-                boolean shouldClearCell = removeFormulaCells && shouldClearLnwCell(sourceCell);
+                boolean shouldClearCell = !protectRow
+                        && col != 0
+                        && shouldClearLnwCellValue(sourceCell);
                 if (shouldClearCell) {
-                    targetCell.setCellValue(0);
+                    targetCell.setBlank();
                 } else {
                     copyCellValue(sourceCell, targetCell, formatter);
                 }
@@ -776,70 +773,70 @@ public final class SoundInsulationMapExporter {
         return "";
     }
 
-    private static boolean shouldClearLnwCell(Cell cell) {
+    private static boolean shouldClearLnwCellValue(Cell cell) {
         if (cell == null) {
             return false;
         }
-        return isNonStandardFontColor(cell) || isNonStandardFillColor(cell);
+        CellType cellType = cell.getCellType();
+        if (cellType == CellType.NUMERIC || cellType == CellType.FORMULA) {
+            return true;
+        }
+        if (cellType == CellType.STRING) {
+            String value = normalizeSpace(cell.getStringCellValue());
+            if (value.startsWith("=")) {
+                return true;
+            }
+            return isNumericText(value);
+        }
+        return false;
     }
 
-    private static boolean isNonStandardFillColor(Cell cell) {
-        CellStyle style = cell.getCellStyle();
-        if (style == null) {
+    private static boolean isNumericText(String value) {
+        if (value == null) {
             return false;
         }
-        if (style instanceof XSSFCellStyle xssfStyle) {
-            XSSFColor color = xssfStyle.getFillForegroundColorColor();
-            if (color == null) {
-                return false;
-            }
-            byte[] rgb = color.getRGB();
-            if (rgb == null || rgb.length < 3) {
-                short idx = xssfStyle.getFillForegroundColor();
-                return idx != IndexedColors.AUTOMATIC.getIndex()
-                        && idx != IndexedColors.WHITE.getIndex()
-                        && idx != IndexedColors.BLACK.getIndex();
-            }
-            return !(rgb[0] == (byte) 255 && rgb[1] == (byte) 255 && rgb[2] == (byte) 255);
+        String trimmed = normalizeSpace(value);
+        if (trimmed.isEmpty()) {
+            return false;
         }
-        short idx = style.getFillForegroundColor();
-        return idx != IndexedColors.AUTOMATIC.getIndex()
-                && idx != IndexedColors.WHITE.getIndex()
-                && idx != IndexedColors.BLACK.getIndex();
+        boolean hasDigit = false;
+        for (int i = 0; i < trimmed.length(); i++) {
+            char ch = trimmed.charAt(i);
+            if (Character.isDigit(ch)) {
+                hasDigit = true;
+                continue;
+            }
+            if (ch == '.' || ch == ',' || ch == ' ' || ch == '\u00A0') {
+                continue;
+            }
+            return false;
+        }
+        return hasDigit;
     }
 
-    private static boolean isNonStandardFontColor(Cell cell) {
-        if (cell == null) {
+    private static boolean isProtectedLnwRow(Row row, DataFormatter formatter) {
+        if (row == null) {
             return false;
         }
-        CellStyle style = cell.getCellStyle();
-        if (style == null) {
+        Cell cell = row.getCell(0);
+        String text = normalizeSpace(formatter.formatCellValue(cell));
+        if (text.isEmpty()) {
             return false;
         }
-        Workbook workbook = cell.getSheet().getWorkbook();
-        if (workbook == null) {
-            return false;
+        if (text.equalsIgnoreCase("Третьоктава, Гц")
+                || text.equalsIgnoreCase("Оценочная кривая, дБ")) {
+            return true;
         }
-        Font font = workbook.getFontAt(style.getFontIndexAsInt());
-        if (font == null) {
-            return false;
+        if (text.equalsIgnoreCase("T20 для Д1 и Д2, с")
+                || text.equalsIgnoreCase("Т20 для Д1 и Д2, с")) {
+            return true;
         }
-        if (font instanceof XSSFFont xssfFont) {
-            XSSFColor color = xssfFont.getXSSFColor();
-            if (color == null) {
-                return false;
-            }
-            byte[] rgb = color.getRGB();
-            if (rgb == null || rgb.length < 3) {
-                short colorIndex = font.getColor();
-                return colorIndex != IndexedColors.BLACK.getIndex()
-                        && colorIndex != IndexedColors.AUTOMATIC.getIndex();
-            }
-            return !(rgb[0] == 0 && rgb[1] == 0 && rgb[2] == 0);
+        Matcher matcher = LNW_MEASUREMENT_ROW_PATTERN.matcher(text);
+        if (matcher.matches()) {
+            int index = Integer.parseInt(matcher.group(1));
+            return index >= 1 && index <= 12;
         }
-        short colorIndex = font.getColor();
-        return colorIndex != IndexedColors.BLACK.getIndex()
-                && colorIndex != IndexedColors.AUTOMATIC.getIndex();
+        return false;
     }
 
     private static boolean rowContainsText(Row row, String needle, DataFormatter formatter) {
