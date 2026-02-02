@@ -52,6 +52,8 @@ public final class SoundInsulationMapExporter {
             Pattern.compile("\\b\\d{1,2}\\s+[А-Яа-я]+\\s+\\d{4}\\s*г?\\.?");
     private static final Pattern LNW_MEASUREMENT_ROW_PATTERN =
             Pattern.compile("^[МM][1-3] для [TТ](\\d{1,2}), дБ$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern RW_MEASUREMENT_ROW_PATTERN =
+            Pattern.compile("^[МM](\\d{1,2})\\s*,\\s*дБ$", Pattern.CASE_INSENSITIVE);
     private static final double SKETCH_HEIGHT_CM = 6.26;
     private static final double SKETCH_WIDTH_CM = 4.08;
     private static final int SKETCH_PADDING_PX = 5;
@@ -83,6 +85,7 @@ public final class SoundInsulationMapExporter {
         updateSketchesSheet(targetFile, data.sketches);
         applySecondPageFontSize(targetFile, 10);
         addLnwAcSheets(targetFile, impactFiles);
+        addRwSheets(targetFile, wallFiles);
         return renameSoundInsulationMap(targetFile);
     }
 
@@ -540,6 +543,57 @@ public final class SoundInsulationMapExporter {
         }
     }
 
+    private static void addRwSheets(File targetFile, List<File> wallFiles) throws IOException {
+        if (targetFile == null || !targetFile.exists() || wallFiles == null || wallFiles.isEmpty()) {
+            return;
+        }
+        List<File> validWalls = new ArrayList<>();
+        for (File wallFile : wallFiles) {
+            if (wallFile != null && wallFile.exists()) {
+                validWalls.add(wallFile);
+            }
+        }
+        if (validWalls.isEmpty()) {
+            return;
+        }
+
+        double oldRatio = ZipSecureFile.getMinInflateRatio();
+        try {
+            ZipSecureFile.setMinInflateRatio(0.001d);
+
+            try (InputStream targetInput = new FileInputStream(targetFile);
+                 Workbook targetWorkbook = WorkbookFactory.create(targetInput)) {
+                removeExistingRwSheets(targetWorkbook);
+                boolean multipleSheets = validWalls.size() > 1;
+                int sheetIndex = 1;
+                for (File wallFile : validWalls) {
+                    try (InputStream wallInput = new FileInputStream(wallFile);
+                         Workbook wallWorkbook = WorkbookFactory.create(wallInput)) {
+                        String sheetName = multipleSheets ? "RW " + sheetIndex : "RW";
+                        Sheet targetSheet = targetWorkbook.createSheet(sheetName);
+                        applyLnwAcColumnWidths(targetSheet);
+
+                        RwSourceData sourceData = resolveRwSourceData(wallWorkbook);
+                        String headerText = buildRwHeaderText(sourceData.firstRoomWord, sourceData.secondRoomWord);
+                        createRwHeaderRow(targetWorkbook, targetSheet, headerText);
+
+                        if (sourceData.sourceSheet != null
+                                && sourceData.startRow >= 0
+                                && sourceData.endRow >= sourceData.startRow) {
+                            copyRwRows(sourceData, targetWorkbook, targetSheet, 1);
+                        }
+                    }
+                    sheetIndex++;
+                }
+                try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                    targetWorkbook.write(outputStream);
+                }
+            }
+        } finally {
+            ZipSecureFile.setMinInflateRatio(oldRatio);
+        }
+    }
+
     private static File renameSoundInsulationMap(File targetFile) throws IOException {
         if (targetFile == null || !targetFile.exists()) {
             return targetFile;
@@ -557,6 +611,19 @@ public final class SoundInsulationMapExporter {
         for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
             String name = targetWorkbook.getSheetName(i);
             if (name != null && (name.equalsIgnoreCase("Lnw") || name.toLowerCase(Locale.ROOT).startsWith("lnw "))) {
+                indicesToRemove.add(i);
+            }
+        }
+        for (int i = indicesToRemove.size() - 1; i >= 0; i--) {
+            targetWorkbook.removeSheetAt(indicesToRemove.get(i));
+        }
+    }
+
+    private static void removeExistingRwSheets(Workbook targetWorkbook) {
+        List<Integer> indicesToRemove = new ArrayList<>();
+        for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
+            String name = targetWorkbook.getSheetName(i);
+            if (name != null && (name.equalsIgnoreCase("RW") || name.toLowerCase(Locale.ROOT).startsWith("rw "))) {
                 indicesToRemove.add(i);
             }
         }
@@ -596,6 +663,10 @@ public final class SoundInsulationMapExporter {
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 16));
     }
 
+    private static void createRwHeaderRow(Workbook workbook, Sheet sheet, String headerText) {
+        createLnwAcHeaderRow(workbook, sheet, headerText);
+    }
+
     private static void copyLnwAcRows(LnwAcSourceData sourceData,
                                       Workbook targetWorkbook,
                                       Sheet targetSheet,
@@ -627,6 +698,61 @@ public final class SoundInsulationMapExporter {
                 boolean shouldClearCell = !protectRow
                         && col != 0
                         && shouldClearLnwCellValue(sourceCell);
+                if (shouldClearCell) {
+                    targetCell.setBlank();
+                } else {
+                    copyCellValue(sourceCell, targetCell, formatter);
+                }
+                CellStyle sourceStyle = sourceCell.getCellStyle();
+                if (sourceStyle != null) {
+                    CellStyle clonedStyle = styleCache.get(sourceStyle);
+                    if (clonedStyle == null) {
+                        clonedStyle = targetWorkbook.createCellStyle();
+                        clonedStyle.cloneStyleFrom(sourceStyle);
+                        styleCache.put(sourceStyle, clonedStyle);
+                    }
+                    targetCell.setCellStyle(clonedStyle);
+                }
+            }
+            targetRowIndex++;
+        }
+        copyMergedRegions(sourceData, targetSheet, rowMapping);
+    }
+
+    private static void copyRwRows(RwSourceData sourceData,
+                                   Workbook targetWorkbook,
+                                   Sheet targetSheet,
+                                   int targetStartRow) {
+        DataFormatter formatter = new DataFormatter();
+        Map<CellStyle, CellStyle> styleCache = new IdentityHashMap<>();
+        Map<Integer, Integer> rowMapping = new java.util.HashMap<>();
+        int targetRowIndex = targetStartRow;
+        for (int rowIndex = sourceData.startRow; rowIndex <= sourceData.endRow; rowIndex++) {
+            Row sourceRow = sourceData.sourceSheet.getRow(rowIndex);
+            if (rowContainsText(sourceRow, "Фон (помехи)", formatter)) {
+                continue;
+            }
+            Row targetRow = targetSheet.getRow(targetRowIndex);
+            if (targetRow == null) {
+                targetRow = targetSheet.createRow(targetRowIndex);
+            }
+            if (sourceRow != null) {
+                targetRow.setHeight(sourceRow.getHeight());
+            }
+            rowMapping.put(rowIndex, targetRowIndex);
+            boolean protectRow = isProtectedRwRow(sourceRow, formatter);
+            for (int col = 0; col <= 16; col++) {
+                Cell sourceCell = sourceRow != null ? sourceRow.getCell(col) : null;
+                if (sourceCell == null) {
+                    continue;
+                }
+                Cell targetCell = targetRow.getCell(col);
+                if (targetCell == null) {
+                    targetCell = targetRow.createCell(col);
+                }
+                boolean shouldClearCell = !protectRow
+                        && col != 0
+                        && shouldClearRwCellValue(sourceCell);
                 if (shouldClearCell) {
                     targetCell.setBlank();
                 } else {
@@ -692,6 +818,36 @@ public final class SoundInsulationMapExporter {
         }
     }
 
+    private static void copyMergedRegions(RwSourceData sourceData,
+                                          Sheet targetSheet,
+                                          Map<Integer, Integer> rowMapping) {
+        int count = sourceData.sourceSheet.getNumMergedRegions();
+        for (int index = 0; index < count; index++) {
+            CellRangeAddress region = sourceData.sourceSheet.getMergedRegion(index);
+            if (region.getFirstRow() < sourceData.startRow || region.getLastRow() > sourceData.endRow) {
+                continue;
+            }
+            if (region.getFirstColumn() > 16 || region.getLastColumn() > 16) {
+                continue;
+            }
+            Integer mappedStart = rowMapping.get(region.getFirstRow());
+            Integer mappedEnd = rowMapping.get(region.getLastRow());
+            if (mappedStart == null || mappedEnd == null) {
+                continue;
+            }
+            if (!isContiguousRowMapping(region, rowMapping, mappedStart)) {
+                continue;
+            }
+            CellRangeAddress shifted = new CellRangeAddress(
+                    mappedStart,
+                    mappedEnd,
+                    region.getFirstColumn(),
+                    region.getLastColumn()
+            );
+            targetSheet.addMergedRegion(shifted);
+        }
+    }
+
     private static boolean isContiguousRowMapping(CellRangeAddress region,
                                                   Map<Integer, Integer> rowMapping,
                                                   int mappedStart) {
@@ -709,6 +865,23 @@ public final class SoundInsulationMapExporter {
     private static String buildLnwAcHeaderText(String firstRoomWord, String secondRoomWord) {
         String base = "7.8.1 Результаты измерения приведенного уровня ударного шума, "
                 + "индекса приведенного уровня ударного шума для перекрытия между помещениями";
+        String first = safe(firstRoomWord).trim();
+        String second = safe(secondRoomWord).trim();
+        if (first.isBlank() && second.isBlank()) {
+            return base;
+        }
+        if (first.isBlank()) {
+            return base + " " + second;
+        }
+        if (second.isBlank()) {
+            return base + " " + first;
+        }
+        return base + " " + first + " и " + second;
+    }
+
+    private static String buildRwHeaderText(String firstRoomWord, String secondRoomWord) {
+        String base = "7.8.2 Результаты измерения изоляции воздушного шума, "
+                + "индекса изоляции воздушного шума для перегородки между помещениями";
         String first = safe(firstRoomWord).trim();
         String second = safe(secondRoomWord).trim();
         if (first.isBlank() && second.isBlank()) {
@@ -775,6 +948,61 @@ public final class SoundInsulationMapExporter {
         return sourceData;
     }
 
+    private static RwSourceData resolveRwSourceData(Workbook wallWorkbook) {
+        DataFormatter formatter = new DataFormatter();
+        Sheet rwSheet = wallWorkbook.getSheet("Rw");
+        if (rwSheet == null) {
+            rwSheet = wallWorkbook.getSheet("RW");
+        }
+        String firstRoomWord = "";
+        String secondRoomWord = "";
+        if (rwSheet != null) {
+            firstRoomWord = findRightCellValue(rwSheet, "ПВУ:", formatter);
+            secondRoomWord = findRightCellValue(rwSheet, "ПНУ:", formatter);
+        }
+
+        RwSourceData sourceData = new RwSourceData();
+        sourceData.firstRoomWord = firstRoomWord;
+        sourceData.secondRoomWord = secondRoomWord;
+
+        String startNeedle = "для карты";
+        String stopNeedle = "Текст цветом переписывать только с протоколов ФГИС";
+        List<Sheet> sheets = new ArrayList<>();
+        if (rwSheet != null) {
+            sheets.add(rwSheet);
+        } else {
+            int sheetCount = wallWorkbook.getNumberOfSheets();
+            for (int sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
+                sheets.add(wallWorkbook.getSheetAt(sheetIndex));
+            }
+        }
+        for (Sheet sheet : sheets) {
+            int startRow = -1;
+            int endRow = -1;
+            for (Row row : sheet) {
+                if (startRow < 0) {
+                    if (rowContainsText(row, startNeedle, formatter)) {
+                        startRow = row.getRowNum() + 1;
+                        continue;
+                    }
+                } else if (rowContainsText(row, stopNeedle, formatter)) {
+                    endRow = row.getRowNum() - 1;
+                    break;
+                }
+            }
+            if (startRow >= 0) {
+                if (endRow < startRow) {
+                    endRow = sheet.getLastRowNum();
+                }
+                sourceData.sourceSheet = sheet;
+                sourceData.startRow = startRow;
+                sourceData.endRow = endRow;
+                break;
+            }
+        }
+        return sourceData;
+    }
+
     private static String findRightCellValue(Sheet sheet, String needle, DataFormatter formatter) {
         for (Row row : sheet) {
             for (Cell cell : row) {
@@ -804,6 +1032,10 @@ public final class SoundInsulationMapExporter {
             return isNumericText(value);
         }
         return false;
+    }
+
+    private static boolean shouldClearRwCellValue(Cell cell) {
+        return shouldClearLnwCellValue(cell);
     }
 
     private static boolean isNumericText(String value) {
@@ -850,6 +1082,27 @@ public final class SoundInsulationMapExporter {
         if (matcher.matches()) {
             int index = Integer.parseInt(matcher.group(1));
             return index >= 1 && index <= 12;
+        }
+        return false;
+    }
+
+    private static boolean isProtectedRwRow(Row row, DataFormatter formatter) {
+        if (row == null) {
+            return false;
+        }
+        Cell cell = row.getCell(0);
+        String text = normalizeSpace(formatter.formatCellValue(cell));
+        if (text.isEmpty()) {
+            return false;
+        }
+        if (text.equalsIgnoreCase("Третьоктава, Гц")
+                || text.equalsIgnoreCase("Оценочная кривая, дБ")) {
+            return true;
+        }
+        Matcher matcher = RW_MEASUREMENT_ROW_PATTERN.matcher(text);
+        if (matcher.matches()) {
+            int index = Integer.parseInt(matcher.group(1));
+            return index >= 1 && index <= 22;
         }
         return false;
     }
@@ -1895,6 +2148,14 @@ public final class SoundInsulationMapExporter {
     }
 
     private static class LnwAcSourceData {
+        private Sheet sourceSheet;
+        private int startRow = -1;
+        private int endRow = -1;
+        private String firstRoomWord = "";
+        private String secondRoomWord = "";
+    }
+
+    private static class RwSourceData {
         private Sheet sourceSheet;
         private int startRow = -1;
         private int endRow = -1;
