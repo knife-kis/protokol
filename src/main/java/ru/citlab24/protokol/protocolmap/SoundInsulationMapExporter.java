@@ -22,6 +22,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -32,6 +34,7 @@ import java.util.regex.Pattern;
 
 public final class SoundInsulationMapExporter {
     private static final String PRIMARY_FOLDER_NAME = "Первичка Звукоизоляция";
+    private static final String SOUND_INSULATION_MAP_NAME = "Карта по звукоизоляции";
     private static final String REGISTRATION_LABEL = "9. Регистрационный номер карты:";
     private static final String CUSTOMER_LABEL = "Наименование и контактные данные заявителя (заказчика):";
     private static final String MEASUREMENT_DATES_LABEL = "Дата проведения измерений:";
@@ -57,8 +60,8 @@ public final class SoundInsulationMapExporter {
     }
 
     public static File generateMap(List<File> impactFiles,
-                                   File wallFile,
-                                   File slabFile,
+                                   List<File> wallFiles,
+                                   List<File> slabFiles,
                                    File protocolFile,
                                    String workDeadline,
                                    String customerInn) throws IOException {
@@ -80,7 +83,7 @@ public final class SoundInsulationMapExporter {
         updateSketchesSheet(targetFile, data.sketches);
         applySecondPageFontSize(targetFile, 10);
         addLnwAcSheets(targetFile, impactFiles);
-        return targetFile;
+        return renameSoundInsulationMap(targetFile);
     }
 
     private static void removeMicroclimateSheet(File targetFile) throws IOException {
@@ -535,6 +538,18 @@ public final class SoundInsulationMapExporter {
         } finally {
             ZipSecureFile.setMinInflateRatio(oldRatio);
         }
+    }
+
+    private static File renameSoundInsulationMap(File targetFile) throws IOException {
+        if (targetFile == null || !targetFile.exists()) {
+            return targetFile;
+        }
+        File renamedFile = new File(targetFile.getParentFile(), SOUND_INSULATION_MAP_NAME + ".xlsx");
+        if (targetFile.equals(renamedFile)) {
+            return targetFile;
+        }
+        Files.move(targetFile.toPath(), renamedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        return renamedFile;
     }
 
     private static void removeExistingLnwSheets(Workbook targetWorkbook) {

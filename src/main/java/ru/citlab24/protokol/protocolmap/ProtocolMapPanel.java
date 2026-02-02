@@ -321,11 +321,11 @@ public class ProtocolMapPanel extends JPanel {
             List<File> wallFiles = uploadedFiles.get(FileKind.WALL);
             List<File> slabFiles = uploadedFiles.get(FileKind.SLAB);
             List<File> protocolFiles = uploadedFiles.get(FileKind.PROTOCOL);
-            File impactFile = (impactFiles != null && !impactFiles.isEmpty()) ? impactFiles.get(0) : null;
-            File wallFile = (wallFiles != null && !wallFiles.isEmpty()) ? wallFiles.get(0) : null;
-            File slabFile = (slabFiles != null && !slabFiles.isEmpty()) ? slabFiles.get(0) : null;
             File protocolFile = (protocolFiles != null && !protocolFiles.isEmpty()) ? protocolFiles.get(0) : null;
-            if (impactFile == null || wallFile == null || slabFile == null || protocolFile == null) {
+            if (impactFiles == null || impactFiles.isEmpty()
+                    || wallFiles == null || wallFiles.isEmpty()
+                    || slabFiles == null || slabFiles.isEmpty()
+                    || protocolFile == null) {
                 JOptionPane.showMessageDialog(this,
                         "Не удалось определить исходный Excel файл.",
                         "Звукоизоляция",
@@ -353,7 +353,7 @@ public class ProtocolMapPanel extends JPanel {
             List<File> generatedFiles = new ArrayList<>();
             List<File> impactsToProcess = impactFiles != null ? impactFiles : List.of();
             try {
-                File generated = SoundInsulationMapExporter.generateMap(impactsToProcess, wallFile, slabFile, protocolFile,
+                File generated = SoundInsulationMapExporter.generateMap(impactsToProcess, wallFiles, slabFiles, protocolFile,
                         workDeadline.trim(), customerInn.trim());
                 if (generated != null) {
                     generatedFiles.add(generated);
