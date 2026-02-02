@@ -964,7 +964,6 @@ public final class SoundInsulationMapExporter {
                 targetRow.setHeight(sourceRow.getHeight());
             }
             rowMapping.put(rowIndex, targetRowIndex);
-            boolean protectRow = isProtectedRwRow(sourceRow, formatter);
             for (int col = 0; col <= 16; col++) {
                 Cell sourceCell = sourceRow != null ? sourceRow.getCell(col) : null;
                 if (sourceCell == null) {
@@ -974,14 +973,7 @@ public final class SoundInsulationMapExporter {
                 if (targetCell == null) {
                     targetCell = targetRow.createCell(col);
                 }
-                boolean shouldClearCell = !protectRow
-                        && col != 0
-                        && shouldClearRwCellValue(sourceCell);
-                if (shouldClearCell) {
-                    targetCell.setBlank();
-                } else {
-                    copyCellValue(sourceCell, targetCell, formatter);
-                }
+                copyCellValue(sourceCell, targetCell, formatter);
                 CellStyle sourceStyle = sourceCell.getCellStyle();
                 if (sourceStyle != null) {
                     CellStyle clonedStyle = styleCache.get(sourceStyle);
