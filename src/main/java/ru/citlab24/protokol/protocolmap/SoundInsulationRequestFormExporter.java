@@ -46,6 +46,8 @@ final class SoundInsulationRequestFormExporter {
     private static final String ROOM_PARAMS_START = "Параметры помещений и испытываемой поверхности:";
     private static final String ROOM_PARAMS_END = "17. Результаты измерений";
     private static final String ROOM_PARAMS_ALT_START = "16. Параметры помещений и испытываемой поверхности:";
+    private static final String APPLICATION_BASIS_LABEL = "6. Основание для измерений";
+    private static final String APPLICATION_BASIS_ALT_LABEL = "Основание для измерений";
 
     private SoundInsulationRequestFormExporter() {
     }
@@ -55,7 +57,7 @@ final class SoundInsulationRequestFormExporter {
             return;
         }
         File targetFile = resolveRequestFormFile(mapFile);
-        String applicationNumber = RequestFormExporter.resolveApplicationNumberFromMap(mapFile);
+        String applicationNumber = resolveApplicationNumber(protocolFile, mapFile);
         File planFile = SoundInsulationMeasurementPlanExporter.resolveMeasurementPlanFile(mapFile);
         List<List<String>> planRows = extractPlanRows(planFile);
         List<String> customerLines = extractCustomerDataLines(protocolFile);
@@ -69,6 +71,7 @@ final class SoundInsulationRequestFormExporter {
             }
             planRows.add(empty);
         }
+        applyPlanDeadline(planRows, workDeadline);
 
         try (XWPFDocument document = new XWPFDocument()) {
             RequestFormExporter.applyStandardHeader(document);
@@ -184,6 +187,49 @@ final class SoundInsulationRequestFormExporter {
         return RequestFormExporter.resolveRequestFormFile(mapFile);
     }
 
+    private static String resolveApplicationNumber(File protocolFile, File mapFile) {
+        String fromProtocol = extractApplicationNumberFromProtocol(protocolFile);
+        if (!fromProtocol.isBlank()) {
+            return fromProtocol;
+        }
+        return RequestFormExporter.resolveApplicationNumberFromMap(mapFile);
+    }
+
+    private static String extractApplicationNumberFromProtocol(File protocolFile) {
+        if (protocolFile == null || !protocolFile.exists()) {
+            return "";
+        }
+        try (InputStream inputStream = new FileInputStream(protocolFile);
+             XWPFDocument document = new XWPFDocument(inputStream)) {
+            List<String> lines = extractLines(document, true);
+            return extractApplicationNumberFromLines(lines);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static String extractApplicationNumberFromLines(List<String> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return "";
+        }
+        String basisLabel = APPLICATION_BASIS_LABEL.toLowerCase(Locale.ROOT);
+        String basisAltLabel = APPLICATION_BASIS_ALT_LABEL.toLowerCase(Locale.ROOT);
+        for (String line : lines) {
+            String normalized = normalizeSpace(line);
+            String lower = normalized.toLowerCase(Locale.ROOT);
+            if (!lower.contains(basisLabel) && !lower.contains(basisAltLabel)) {
+                continue;
+            }
+            int applicationIndex = lower.indexOf("заявка");
+            if (applicationIndex < 0) {
+                continue;
+            }
+            String tail = normalized.substring(applicationIndex + "заявка".length()).trim();
+            return trimLeadingPunctuation(tail);
+        }
+        return "";
+    }
+
     private static List<List<String>> extractPlanRows(File planFile) {
         List<List<String>> rows = new ArrayList<>();
         if (planFile == null || !planFile.exists()) {
@@ -210,6 +256,20 @@ final class SoundInsulationRequestFormExporter {
             // пропускаем чтение плана измерений при ошибке
         }
         return rows;
+    }
+
+    private static void applyPlanDeadline(List<List<String>> rows, String workDeadline) {
+        if (rows == null || rows.size() < 2) {
+            return;
+        }
+        if (workDeadline == null || workDeadline.isBlank()) {
+            return;
+        }
+        List<String> row = rows.get(1);
+        while (row.size() < 5) {
+            row.add("");
+        }
+        row.set(4, workDeadline.trim());
     }
 
     private static boolean isPlanTable(XWPFTable table) {
@@ -498,6 +558,17 @@ final class SoundInsulationRequestFormExporter {
             return "";
         }
         return value.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
+    }
+
+    private static String trimLeadingPunctuation(String value) {
+        if (value == null) {
+            return "";
+        }
+        int index = 0;
+        while (index < value.length() && !Character.isLetterOrDigit(value.charAt(index))) {
+            index++;
+        }
+        return value.substring(index).trim();
     }
 
     private static XWPFTable findTableAfterTitle(XWPFDocument document, String title) {
