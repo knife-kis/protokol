@@ -234,10 +234,10 @@ final class SoundInsulationProtocolDataParser {
             }
             for (XWPFTableRow row : table.getRows()) {
                 List<XWPFTableCell> cells = row.getTableCells();
-                if (cells == null || cells.size() < 2) {
+                if (cells == null || cells.size() < 3) {
                     continue;
                 }
-                String candidate = extractDateCandidate(cells.get(1).getText());
+                String candidate = extractDateCandidate(cells.get(2).getText());
                 if (!candidate.isBlank()) {
                     return candidate;
                 }
