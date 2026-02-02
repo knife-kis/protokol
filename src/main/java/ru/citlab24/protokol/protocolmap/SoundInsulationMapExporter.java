@@ -93,7 +93,16 @@ public final class SoundInsulationMapExporter {
         addRwSlabSheets(targetFile, slabFiles);
         addRtSheets(targetFile, slabFiles, wallFiles);
         addBackgroundSheet(targetFile, wallFiles, slabFiles);
-        return renameSoundInsulationMap(targetFile);
+        File renamed = renameSoundInsulationMap(targetFile);
+        if (renamed != null) {
+            SoundInsulationProtocolIssuanceSheetExporter.generate(protocolFile, renamed);
+            SoundInsulationMeasurementCardRegistrationSheetExporter.generate(protocolFile, renamed);
+            SoundInsulationEquipmentIssuanceSheetExporter.generate(protocolFile, renamed);
+            SoundInsulationMeasurementPlanExporter.generate(protocolFile, renamed, workDeadline);
+            SoundInsulationRequestFormExporter.generate(impactFile, renamed, workDeadline, customerInn);
+            SoundInsulationRequestAnalysisSheetExporter.generate(protocolFile, renamed);
+        }
+        return renamed;
     }
 
     private static void removeMicroclimateSheet(File targetFile) throws IOException {

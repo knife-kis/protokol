@@ -445,7 +445,14 @@ public class ProtocolMapPanel extends JPanel {
                 if (registrationSheet != null && registrationSheet.exists()) {
                     listModel.addElement("Сформирован лист регистрации карт замеров: " + registrationSheet.getName());
                 }
-                List<File> equipmentSheets = EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(generatedFile);
+                File protocolFile = null;
+                List<File> protocolFiles = uploadedFiles.get(FileKind.PROTOCOL);
+                if (protocolFiles != null && !protocolFiles.isEmpty()) {
+                    protocolFile = protocolFiles.get(0);
+                }
+                List<File> equipmentSheets = protocolFile == null
+                        ? EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(generatedFile)
+                        : SoundInsulationEquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(generatedFile, protocolFile);
                 for (File equipmentSheet : equipmentSheets) {
                     if (equipmentSheet != null && equipmentSheet.exists()) {
                         listModel.addElement("Сформирован лист выдачи приборов: " + equipmentSheet.getName());
