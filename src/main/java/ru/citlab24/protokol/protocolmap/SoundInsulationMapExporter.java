@@ -87,6 +87,7 @@ public final class SoundInsulationMapExporter {
         addLnwAcSheets(targetFile, impactFiles);
         addRwSheets(targetFile, wallFiles);
         addRwSlabSheets(targetFile, slabFiles);
+        addBackgroundSheet(targetFile, wallFiles, slabFiles);
         return renameSoundInsulationMap(targetFile);
     }
 
@@ -648,6 +649,93 @@ public final class SoundInsulationMapExporter {
         }
     }
 
+    private static void addBackgroundSheet(File targetFile, List<File> wallFiles, List<File> slabFiles)
+            throws IOException {
+        if (targetFile == null || !targetFile.exists()) {
+            return;
+        }
+        List<File> backgroundSources = new ArrayList<>();
+        appendExistingFiles(backgroundSources, wallFiles);
+        appendExistingFiles(backgroundSources, slabFiles);
+        if (backgroundSources.isEmpty()) {
+            return;
+        }
+
+        double oldRatio = ZipSecureFile.getMinInflateRatio();
+        try {
+            ZipSecureFile.setMinInflateRatio(0.001d);
+
+            try (InputStream targetInput = new FileInputStream(targetFile);
+                 Workbook targetWorkbook = WorkbookFactory.create(targetInput)) {
+                removeExistingBackgroundSheets(targetWorkbook);
+                Sheet targetSheet = targetWorkbook.createSheet("Фон");
+                applyLnwAcColumnWidths(targetSheet);
+                createRwHeaderRow(targetWorkbook, targetSheet, "7.8.3 Результаты измерения фона (помех):");
+
+                int targetRowIndex = 1;
+                for (File sourceFile : backgroundSources) {
+                    try (InputStream sourceInput = new FileInputStream(sourceFile);
+                         Workbook sourceWorkbook = WorkbookFactory.create(sourceInput)) {
+                        RwSourceData sourceData = resolveRwSourceData(sourceWorkbook);
+                        if (sourceData.sourceSheet == null
+                                || sourceData.startRow < 0
+                                || sourceData.endRow < sourceData.startRow) {
+                            continue;
+                        }
+                        List<Integer> backgroundRows = findBackgroundRows(sourceData);
+                        if (backgroundRows.isEmpty()) {
+                            continue;
+                        }
+                        targetRowIndex = copyRwBackgroundRows(sourceData, targetWorkbook, targetSheet,
+                                targetRowIndex, backgroundRows);
+                    }
+                }
+
+                try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                    targetWorkbook.write(outputStream);
+                }
+            }
+        } finally {
+            ZipSecureFile.setMinInflateRatio(oldRatio);
+        }
+    }
+
+    private static void appendExistingFiles(List<File> target, List<File> sources) {
+        if (sources == null) {
+            return;
+        }
+        for (File source : sources) {
+            if (source != null && source.exists()) {
+                target.add(source);
+            }
+        }
+    }
+
+    private static List<Integer> findBackgroundRows(RwSourceData sourceData) {
+        DataFormatter formatter = new DataFormatter();
+        int firstBackgroundRow = -1;
+        List<Integer> rows = new ArrayList<>();
+        for (int rowIndex = sourceData.startRow; rowIndex <= sourceData.endRow; rowIndex++) {
+            Row row = sourceData.sourceSheet.getRow(rowIndex);
+            if (rowContainsText(row, "Фон (помехи)", formatter)) {
+                if (firstBackgroundRow < 0) {
+                    firstBackgroundRow = rowIndex;
+                }
+                rows.add(rowIndex);
+            }
+        }
+        if (rows.isEmpty()) {
+            return rows;
+        }
+        List<Integer> ordered = new ArrayList<>();
+        int aboveRow = firstBackgroundRow - 1;
+        if (aboveRow >= sourceData.startRow) {
+            ordered.add(aboveRow);
+        }
+        ordered.addAll(rows);
+        return ordered;
+    }
+
     private static File renameSoundInsulationMap(File targetFile) throws IOException {
         if (targetFile == null || !targetFile.exists()) {
             return targetFile;
@@ -691,6 +779,19 @@ public final class SoundInsulationMapExporter {
         for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
             String name = targetWorkbook.getSheetName(i);
             if (name != null && name.toLowerCase(Locale.ROOT).startsWith("rw перек")) {
+                indicesToRemove.add(i);
+            }
+        }
+        for (int i = indicesToRemove.size() - 1; i >= 0; i--) {
+            targetWorkbook.removeSheetAt(indicesToRemove.get(i));
+        }
+    }
+
+    private static void removeExistingBackgroundSheets(Workbook targetWorkbook) {
+        List<Integer> indicesToRemove = new ArrayList<>();
+        for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
+            String name = targetWorkbook.getSheetName(i);
+            if (name != null && name.equalsIgnoreCase("Фон")) {
                 indicesToRemove.add(i);
             }
         }
@@ -839,6 +940,63 @@ public final class SoundInsulationMapExporter {
             targetRowIndex++;
         }
         copyMergedRegions(sourceData, targetSheet, rowMapping);
+    }
+
+    private static int copyRwBackgroundRows(RwSourceData sourceData,
+                                            Workbook targetWorkbook,
+                                            Sheet targetSheet,
+                                            int targetStartRow,
+                                            List<Integer> rowIndices) {
+        if (rowIndices.isEmpty()) {
+            return targetStartRow;
+        }
+        DataFormatter formatter = new DataFormatter();
+        Map<CellStyle, CellStyle> styleCache = new IdentityHashMap<>();
+        Map<Integer, Integer> rowMapping = new java.util.HashMap<>();
+        int targetRowIndex = targetStartRow;
+        for (int rowIndex : rowIndices) {
+            Row sourceRow = sourceData.sourceSheet.getRow(rowIndex);
+            Row targetRow = targetSheet.getRow(targetRowIndex);
+            if (targetRow == null) {
+                targetRow = targetSheet.createRow(targetRowIndex);
+            }
+            if (sourceRow != null) {
+                targetRow.setHeight(sourceRow.getHeight());
+            }
+            rowMapping.put(rowIndex, targetRowIndex);
+            boolean protectRow = isProtectedRwRow(sourceRow, formatter);
+            for (int col = 0; col <= 16; col++) {
+                Cell sourceCell = sourceRow != null ? sourceRow.getCell(col) : null;
+                if (sourceCell == null) {
+                    continue;
+                }
+                Cell targetCell = targetRow.getCell(col);
+                if (targetCell == null) {
+                    targetCell = targetRow.createCell(col);
+                }
+                boolean shouldClearCell = !protectRow
+                        && col != 0
+                        && shouldClearRwCellValue(sourceCell);
+                if (shouldClearCell) {
+                    targetCell.setBlank();
+                } else {
+                    copyCellValue(sourceCell, targetCell, formatter);
+                }
+                CellStyle sourceStyle = sourceCell.getCellStyle();
+                if (sourceStyle != null) {
+                    CellStyle clonedStyle = styleCache.get(sourceStyle);
+                    if (clonedStyle == null) {
+                        clonedStyle = targetWorkbook.createCellStyle();
+                        clonedStyle.cloneStyleFrom(sourceStyle);
+                        styleCache.put(sourceStyle, clonedStyle);
+                    }
+                    targetCell.setCellStyle(clonedStyle);
+                }
+            }
+            targetRowIndex++;
+        }
+        copyMergedRegions(sourceData, targetSheet, rowMapping);
+        return targetRowIndex;
     }
 
     private static void removeIsolatedRwThirdOctaveRow(Sheet sheet) {
