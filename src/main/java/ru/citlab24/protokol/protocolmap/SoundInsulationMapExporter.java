@@ -4,6 +4,8 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
+import org.apache.poi.xssf.usermodel.XSSFColor;
+import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -761,7 +763,14 @@ public final class SoundInsulationMapExporter {
     }
 
     private static boolean shouldClearLnwCell(Cell cell) {
-        return isFormulaCell(cell) || isNumericOnlyCell(cell);
+        if (cell == null) {
+            return false;
+        }
+        boolean shouldCheck = isFormulaCell(cell) || isNumericOnlyCell(cell);
+        if (!shouldCheck) {
+            return false;
+        }
+        return !isBlackFont(cell);
     }
 
     private static boolean isNumericOnlyCell(Cell cell) {
@@ -776,6 +785,40 @@ public final class SoundInsulationMapExporter {
             return !text.isEmpty() && text.matches("\\d+");
         }
         return false;
+    }
+
+    private static boolean isBlackFont(Cell cell) {
+        if (cell == null) {
+            return true;
+        }
+        CellStyle style = cell.getCellStyle();
+        if (style == null) {
+            return true;
+        }
+        Workbook workbook = cell.getSheet().getWorkbook();
+        if (workbook == null) {
+            return true;
+        }
+        Font font = workbook.getFontAt(style.getFontIndexAsInt());
+        if (font == null) {
+            return true;
+        }
+        if (font instanceof XSSFFont xssfFont) {
+            XSSFColor color = xssfFont.getXSSFColor();
+            if (color == null) {
+                return true;
+            }
+            byte[] rgb = color.getRGB();
+            if (rgb == null || rgb.length < 3) {
+                short colorIndex = font.getColor();
+                return colorIndex == IndexedColors.BLACK.getIndex()
+                        || colorIndex == IndexedColors.AUTOMATIC.getIndex();
+            }
+            return rgb[0] == 0 && rgb[1] == 0 && rgb[2] == 0;
+        }
+        short colorIndex = font.getColor();
+        return colorIndex == IndexedColors.BLACK.getIndex()
+                || colorIndex == IndexedColors.AUTOMATIC.getIndex();
     }
 
     private static boolean rowContainsText(Row row, String needle, DataFormatter formatter) {
