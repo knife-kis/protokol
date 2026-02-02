@@ -1,11 +1,5 @@
 package ru.citlab24.protokol.protocolmap;
 
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -34,52 +28,48 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
 import org.apache.xmlbeans.impl.xb.xmlschema.SpaceAttribute;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-final class EquipmentIssuanceSheetExporter {
+final class SoundInsulationEquipmentIssuanceSheetExporter {
     private static final String ISSUANCE_SHEET_BASE_NAME = "лист выдачи приборов";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
     private static final int TABLE_FONT_SIZE = 9;
     private static final int SIGNATURE_FONT_SIZE = 8;
-    private static final String DATES_PREFIX = "2. Дата замеров:";
-    private static final String PERFORMER_PREFIX = "3. Измерения провел, подпись:";
-    private static final String OBJECT_PREFIX = "4. Наименование объекта:";
-    private static final String INSTRUMENTS_PREFIX = "5.3. Приборы для измерения (используемое отметить):";
+    private static final String PERFORMER_NAME = "Белов Д.А.";
 
-    private EquipmentIssuanceSheetExporter() {
+    private SoundInsulationEquipmentIssuanceSheetExporter() {
     }
 
-    static void generate(File mapFile) {
+    static void generate(File protocolFile, File mapFile) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
-        List<String> measurementDates = resolveMeasurementDates(mapFile);
+        SoundInsulationProtocolDataParser.ProtocolData data = SoundInsulationProtocolDataParser.parse(protocolFile);
+        List<String> measurementDates = new ArrayList<>(data.measurementDates());
         if (measurementDates.isEmpty()) {
             measurementDates = List.of("");
         }
-        String objectName = resolveObjectName(mapFile);
-        String performer = resolveMeasurementPerformer(mapFile);
-        List<InstrumentEntry> instruments = resolveInstruments(mapFile);
+        String objectName = data.objectName();
+        List<SoundInsulationProtocolDataParser.InstrumentEntry> instruments = data.instruments();
 
         for (int index = 0; index < measurementDates.size(); index++) {
             String date = measurementDates.get(index);
             File targetFile = resolveIssuanceSheetFile(mapFile, date, index, measurementDates.size());
-            writeIssuanceSheet(targetFile, objectName, performer, instruments, date);
+            writeIssuanceSheet(targetFile, objectName, PERFORMER_NAME, instruments, date);
         }
     }
 
-    static List<File> resolveIssuanceSheetFiles(File mapFile) {
+    static List<File> resolveIssuanceSheetFiles(File mapFile, File protocolFile) {
         if (mapFile == null || !mapFile.exists()) {
             return Collections.emptyList();
         }
-        List<String> measurementDates = resolveMeasurementDates(mapFile);
+        SoundInsulationProtocolDataParser.ProtocolData data = SoundInsulationProtocolDataParser.parse(protocolFile);
+        List<String> measurementDates = new ArrayList<>(data.measurementDates());
         if (measurementDates.isEmpty()) {
             measurementDates = List.of("");
         }
@@ -94,7 +84,7 @@ final class EquipmentIssuanceSheetExporter {
     private static void writeIssuanceSheet(File targetFile,
                                            String objectName,
                                            String performer,
-                                           List<InstrumentEntry> instruments,
+                                           List<SoundInsulationProtocolDataParser.InstrumentEntry> instruments,
                                            String measurementDate) {
         try (XWPFDocument document = new XWPFDocument()) {
             applyStandardHeader(document);
@@ -119,9 +109,9 @@ final class EquipmentIssuanceSheetExporter {
             setTableCellText(table.getRow(0).getCell(4), "Примечание", TABLE_FONT_SIZE);
 
             int rowIndex = 1;
-            for (InstrumentEntry instrument : instruments) {
-                setTableCellText(table.getRow(rowIndex).getCell(0), safe(instrument.name), TABLE_FONT_SIZE);
-                setTableCellText(table.getRow(rowIndex).getCell(1), safe(instrument.serialNumber), TABLE_FONT_SIZE);
+            for (SoundInsulationProtocolDataParser.InstrumentEntry instrument : instruments) {
+                setTableCellText(table.getRow(rowIndex).getCell(0), safe(instrument.name()), TABLE_FONT_SIZE);
+                setTableCellText(table.getRow(rowIndex).getCell(1), safe(instrument.serialNumber()), TABLE_FONT_SIZE);
                 setTableCellText(table.getRow(rowIndex).getCell(2), "", TABLE_FONT_SIZE);
                 setTableCellText(table.getRow(rowIndex).getCell(3), "", TABLE_FONT_SIZE);
                 setTableCellText(table.getRow(rowIndex).getCell(4), "", TABLE_FONT_SIZE);
@@ -285,7 +275,10 @@ final class EquipmentIssuanceSheetExporter {
 
         CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
         tblW.setType(STTblWidth.DXA);
-        tblW.setW(BigInteger.valueOf(9900));
+        tblW.setW(BigInteger.valueOf(9639));
+
+        CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
+        jc.setVal(STJcTable.CENTER);
 
         CTTblLayoutType layout = pr.isSetTblLayout() ? pr.getTblLayout() : pr.addNewTblLayout();
         layout.setType(STTblLayoutType.FIXED);
@@ -298,12 +291,10 @@ final class EquipmentIssuanceSheetExporter {
                 grid.removeGridCol(0);
             }
         }
-
-        int[] widths = {1800, 1800, 2700, 2700, 900};
+        int[] widths = {1648, 1038, 2381, 2381, 2191};
         for (int width : widths) {
             grid.addNewGridCol().setW(BigInteger.valueOf(width));
         }
-
         for (int rowIndex = 0; rowIndex < table.getNumberOfRows(); rowIndex++) {
             for (int colIndex = 0; colIndex < widths.length; colIndex++) {
                 setCellWidth(table, rowIndex, colIndex, widths[colIndex]);
@@ -311,11 +302,11 @@ final class EquipmentIssuanceSheetExporter {
         }
     }
 
-    private static void setBorder(CTBorder border) {
-        border.setVal(STBorder.SINGLE);
-        border.setSz(BigInteger.valueOf(4));
-        border.setSpace(BigInteger.ZERO);
-        border.setColor("auto");
+    private static void setBorder(CTBorder b) {
+        b.setVal(STBorder.SINGLE);
+        b.setSz(BigInteger.valueOf(4));
+        b.setSpace(BigInteger.ZERO);
+        b.setColor("auto");
     }
 
     private static void applyMinimalHeaderCellMargins(CTTblPr pr) {
@@ -334,72 +325,75 @@ final class EquipmentIssuanceSheetExporter {
     private static void setCellWidth(XWPFTable table, int row, int col, int widthDxa) {
         XWPFTableCell cell = table.getRow(row).getCell(col);
         CTTcPr tcPr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
-        CTTblWidth width = tcPr.isSetTcW() ? tcPr.getTcW() : tcPr.addNewTcW();
-        width.setType(STTblWidth.DXA);
-        width.setW(BigInteger.valueOf(widthDxa));
+        CTTblWidth w = tcPr.isSetTcW() ? tcPr.getTcW() : tcPr.addNewTcW();
+        w.setType(STTblWidth.DXA);
+        w.setW(BigInteger.valueOf(widthDxa));
     }
 
     private static void setHeaderCellText(XWPFTableCell cell, String text) {
         cell.removeParagraph(0);
-        XWPFParagraph paragraph = cell.addParagraph();
-        paragraph.setAlignment(ParagraphAlignment.CENTER);
-        paragraph.setSpacingAfter(0);
-        paragraph.setSpacingBefore(0);
+        XWPFParagraph p = cell.addParagraph();
+        p.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(p);
 
-        XWPFRun run = paragraph.createRun();
-        run.setText(text != null ? text : "");
-        run.setFontFamily(FONT_NAME);
-        run.setFontSize(FONT_SIZE);
+        XWPFRun r = p.createRun();
+        r.setText(text != null ? text : "");
+        r.setFontFamily(FONT_NAME);
+        r.setFontSize(FONT_SIZE);
     }
 
     private static void setHeaderCellPageCount(XWPFTableCell cell) {
         cell.removeParagraph(0);
-        XWPFParagraph paragraph = cell.addParagraph();
-        paragraph.setAlignment(ParagraphAlignment.CENTER);
-        paragraph.setSpacingAfter(0);
-        paragraph.setSpacingBefore(0);
+        XWPFParagraph p = cell.addParagraph();
+        p.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(p);
 
-        XWPFRun run = paragraph.createRun();
-        run.setText("Количество страниц: ");
-        run.setFontFamily(FONT_NAME);
-        run.setFontSize(FONT_SIZE);
+        XWPFRun r0 = p.createRun();
+        r0.setText("Количество страниц: ");
+        r0.setFontFamily(FONT_NAME);
+        r0.setFontSize(FONT_SIZE);
 
-        appendField(paragraph, "PAGE");
-        XWPFRun separator = paragraph.createRun();
-        separator.setText(" / ");
-        separator.setFontFamily(FONT_NAME);
-        separator.setFontSize(FONT_SIZE);
+        appendField(p, "PAGE");
+        XWPFRun rSep = p.createRun();
+        rSep.setText(" / ");
+        rSep.setFontFamily(FONT_NAME);
+        rSep.setFontSize(FONT_SIZE);
 
-        appendField(paragraph, "NUMPAGES");
+        appendField(p, "NUMPAGES");
     }
 
-    private static void appendField(XWPFParagraph paragraph, String instr) {
-        XWPFRun runBegin = paragraph.createRun();
-        runBegin.setFontFamily(FONT_NAME);
-        runBegin.setFontSize(FONT_SIZE);
-        runBegin.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
+    private static void appendField(XWPFParagraph p, String instr) {
+        XWPFRun rBegin = p.createRun();
+        rBegin.setFontFamily(FONT_NAME);
+        rBegin.setFontSize(FONT_SIZE);
+        rBegin.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
 
-        XWPFRun runInstr = paragraph.createRun();
-        runInstr.setFontFamily(FONT_NAME);
-        runInstr.setFontSize(FONT_SIZE);
-        var ctText = runInstr.getCTR().addNewInstrText();
+        XWPFRun rInstr = p.createRun();
+        rInstr.setFontFamily(FONT_NAME);
+        rInstr.setFontSize(FONT_SIZE);
+        var ctText = rInstr.getCTR().addNewInstrText();
         ctText.setStringValue(instr);
         ctText.setSpace(SpaceAttribute.Space.PRESERVE);
 
-        XWPFRun runSep = paragraph.createRun();
-        runSep.setFontFamily(FONT_NAME);
-        runSep.setFontSize(FONT_SIZE);
-        runSep.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
+        XWPFRun rSep = p.createRun();
+        rSep.setFontFamily(FONT_NAME);
+        rSep.setFontSize(FONT_SIZE);
+        rSep.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
 
-        XWPFRun runText = paragraph.createRun();
-        runText.setFontFamily(FONT_NAME);
-        runText.setFontSize(FONT_SIZE);
-        runText.setText("1");
+        XWPFRun rText = p.createRun();
+        rText.setFontFamily(FONT_NAME);
+        rText.setFontSize(FONT_SIZE);
+        rText.setText("1");
 
-        XWPFRun runEnd = paragraph.createRun();
-        runEnd.setFontFamily(FONT_NAME);
-        runEnd.setFontSize(FONT_SIZE);
-        runEnd.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
+        XWPFRun rEnd = p.createRun();
+        rEnd.setFontFamily(FONT_NAME);
+        rEnd.setFontSize(FONT_SIZE);
+        rEnd.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
+    }
+
+    private static void setParagraphSpacing(XWPFParagraph paragraph) {
+        paragraph.setSpacingBefore(0);
+        paragraph.setSpacingAfter(0);
     }
 
     private static void mergeCellsVertically(XWPFTable table, int col, int fromRow, int toRow) {
@@ -417,170 +411,6 @@ final class EquipmentIssuanceSheetExporter {
                 cell.getCTTc().getTcPr().addNewVMerge().setVal(STMerge.CONTINUE);
             }
         }
-    }
-
-    private static List<String> resolveMeasurementDates(File mapFile) {
-        String rawDates = findValueByPrefix(mapFile, DATES_PREFIX);
-        if (rawDates.isBlank()) {
-            rawDates = findValueByPrefix(mapFile, "2. Дата замеров");
-        }
-        if (rawDates.isBlank()) {
-            return Collections.emptyList();
-        }
-        String[] parts = rawDates.split(",");
-        List<String> dates = new ArrayList<>();
-        for (String part : parts) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                dates.add(trimmed);
-            }
-        }
-        return dates;
-    }
-
-    private static String resolveObjectName(File mapFile) {
-        String value = findValueByPrefix(mapFile, OBJECT_PREFIX);
-        if (value.isBlank()) {
-            value = findValueByPrefix(mapFile, "4. Наименование объекта");
-        }
-        return value;
-    }
-
-    private static String resolveMeasurementPerformer(File mapFile) {
-        String value = findValueByPrefix(mapFile, PERFORMER_PREFIX);
-        if (value.isBlank()) {
-            value = findValueByPrefix(mapFile, "3. Измерения провел, подпись");
-        }
-        return value;
-    }
-
-    private static List<InstrumentEntry> resolveInstruments(File mapFile) {
-        if (mapFile == null || !mapFile.exists()) {
-            return Collections.emptyList();
-        }
-        try (InputStream in = new FileInputStream(mapFile);
-             Workbook workbook = WorkbookFactory.create(in)) {
-            if (workbook.getNumberOfSheets() == 0) {
-                return Collections.emptyList();
-            }
-            Sheet sheet = workbook.getSheetAt(0);
-            DataFormatter formatter = new DataFormatter();
-            int startRow = findRowIndexWithText(sheet, formatter, INSTRUMENTS_PREFIX);
-            if (startRow < 0) {
-                return Collections.emptyList();
-            }
-            List<InstrumentEntry> instruments = new ArrayList<>();
-            for (int rowIndex = startRow + 2; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                Row row = sheet.getRow(rowIndex);
-                if (row == null) {
-                    break;
-                }
-                if (rowContainsText(row, formatter, "6. Эскиз")) {
-                    break;
-                }
-                String name = findFirstValueInRange(row, formatter, 0, 19);
-                String serial = findFirstValueInRange(row, formatter, 20, 29);
-                if (name.isEmpty() && serial.isEmpty()) {
-                    if (isRowEmpty(row, formatter)) {
-                        break;
-                    }
-                    continue;
-                }
-                instruments.add(new InstrumentEntry(name, serial));
-            }
-            return instruments;
-        } catch (Exception ignored) {
-            return Collections.emptyList();
-        }
-    }
-
-    private static boolean rowContainsText(Row row, DataFormatter formatter, String needle) {
-        for (Cell cell : row) {
-            String text = formatter.formatCellValue(cell).trim();
-            if (text.contains(needle)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isRowEmpty(Row row, DataFormatter formatter) {
-        for (Cell cell : row) {
-            String text = formatter.formatCellValue(cell).trim();
-            if (!text.isEmpty()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static int findRowIndexWithText(Sheet sheet, DataFormatter formatter, String needle) {
-        for (Row row : sheet) {
-            for (Cell cell : row) {
-                String text = formatter.formatCellValue(cell).trim();
-                if (text.contains(needle)) {
-                    return row.getRowNum();
-                }
-            }
-        }
-        return -1;
-    }
-
-    private static String findFirstValueInRange(Row row, DataFormatter formatter, int startCol, int endCol) {
-        for (int col = startCol; col <= endCol; col++) {
-            Cell cell = row.getCell(col);
-            if (cell == null) {
-                continue;
-            }
-            String text = formatter.formatCellValue(cell).trim();
-            if (!text.isEmpty()) {
-                return text;
-            }
-        }
-        return "";
-    }
-
-    private static String findValueByPrefix(File mapFile, String prefix) {
-        if (mapFile == null || !mapFile.exists()) {
-            return "";
-        }
-        try (InputStream in = new FileInputStream(mapFile);
-             Workbook workbook = WorkbookFactory.create(in)) {
-            if (workbook.getNumberOfSheets() == 0) {
-                return "";
-            }
-            Sheet sheet = workbook.getSheetAt(0);
-            DataFormatter formatter = new DataFormatter();
-            for (Row row : sheet) {
-                for (Cell cell : row) {
-                    String text = formatter.formatCellValue(cell).trim();
-                    if (text.startsWith(prefix)) {
-                        String tail = text.substring(prefix.length()).trim();
-                        if (!tail.isEmpty()) {
-                            return trimLeadingPunctuation(tail);
-                        }
-                        Cell next = row.getCell(cell.getColumnIndex() + 1);
-                        if (next != null) {
-                            String nextText = formatter.formatCellValue(next).trim();
-                            if (!nextText.isEmpty()) {
-                                return trimLeadingPunctuation(nextText);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-            return "";
-        }
-        return "";
-    }
-
-    private static String trimLeadingPunctuation(String value) {
-        int index = 0;
-        while (index < value.length() && !Character.isLetterOrDigit(value.charAt(index))) {
-            index++;
-        }
-        return value.substring(index).trim();
     }
 
     private static File resolveIssuanceSheetFile(File mapFile, String date, int index, int total) {
@@ -605,15 +435,5 @@ final class EquipmentIssuanceSheetExporter {
 
     private static String safe(String value) {
         return value == null ? "" : value;
-    }
-
-    private static final class InstrumentEntry {
-        private final String name;
-        private final String serialNumber;
-
-        private InstrumentEntry(String name, String serialNumber) {
-            this.name = name;
-            this.serialNumber = serialNumber;
-        }
     }
 }
