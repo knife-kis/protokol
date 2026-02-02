@@ -581,6 +581,7 @@ public final class SoundInsulationMapExporter {
                                 && sourceData.startRow >= 0
                                 && sourceData.endRow >= sourceData.startRow) {
                             copyRwRows(sourceData, targetWorkbook, targetSheet, 1);
+                            removeIsolatedRwThirdOctaveRow(targetSheet);
                         }
                     }
                     sheetIndex++;
@@ -772,6 +773,49 @@ public final class SoundInsulationMapExporter {
             targetRowIndex++;
         }
         copyMergedRegions(sourceData, targetSheet, rowMapping);
+    }
+
+    private static void removeIsolatedRwThirdOctaveRow(Sheet sheet) {
+        if (sheet == null) {
+            return;
+        }
+        DataFormatter formatter = new DataFormatter();
+        List<Integer> rowsToRemove = new ArrayList<>();
+        int lastRow = sheet.getLastRowNum();
+        for (int rowIndex = sheet.getFirstRowNum(); rowIndex <= lastRow; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            String text = normalizeSpace(formatter.formatCellValue(row != null ? row.getCell(0) : null));
+            if (!text.equalsIgnoreCase("Третьоктава, Гц")) {
+                continue;
+            }
+            String above = normalizeSpace(formatter.formatCellValue(getCell(sheet, rowIndex - 1, 0)));
+            String below = normalizeSpace(formatter.formatCellValue(getCell(sheet, rowIndex + 1, 0)));
+            if (above.isEmpty() && below.isEmpty()) {
+                rowsToRemove.add(rowIndex);
+            }
+        }
+        for (int i = rowsToRemove.size() - 1; i >= 0; i--) {
+            int rowIndex = rowsToRemove.get(i);
+            Row row = sheet.getRow(rowIndex);
+            if (row != null) {
+                sheet.removeRow(row);
+            }
+            int currentLastRow = sheet.getLastRowNum();
+            if (rowIndex < currentLastRow) {
+                sheet.shiftRows(rowIndex + 1, currentLastRow, -1);
+            }
+        }
+    }
+
+    private static Cell getCell(Sheet sheet, int rowIndex, int columnIndex) {
+        if (sheet == null || rowIndex < 0) {
+            return null;
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return null;
+        }
+        return row.getCell(columnIndex);
     }
 
     private static void copyCellValue(Cell sourceCell, Cell targetCell, DataFormatter formatter) {
