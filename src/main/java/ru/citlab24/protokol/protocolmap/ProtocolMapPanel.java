@@ -352,25 +352,20 @@ public class ProtocolMapPanel extends JPanel {
             }
             List<File> generatedFiles = new ArrayList<>();
             List<File> impactsToProcess = impactFiles != null ? impactFiles : List.of();
-            for (File impact : impactsToProcess) {
-                if (impact == null) {
-                    continue;
+            try {
+                File generated = SoundInsulationMapExporter.generateMap(impactsToProcess, wallFile, slabFile, protocolFile,
+                        workDeadline.trim(), customerInn.trim());
+                if (generated != null) {
+                    generatedFiles.add(generated);
                 }
-                try {
-                    File generated = SoundInsulationMapExporter.generateMap(impact, wallFile, slabFile, protocolFile,
-                            workDeadline.trim(), customerInn.trim());
-                    if (generated != null) {
-                        generatedFiles.add(generated);
-                    }
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    JOptionPane.showMessageDialog(
-                            this,
-                            "Не удалось сформировать карту:\n" + ex.getClass().getSimpleName() + ": " + ex.getMessage(),
-                            "Ошибка",
-                            JOptionPane.ERROR_MESSAGE
-                    );
-                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Не удалось сформировать карту:\n" + ex.getClass().getSimpleName() + ": " + ex.getMessage(),
+                        "Ошибка",
+                        JOptionPane.ERROR_MESSAGE
+                );
             }
             if (!generatedFiles.isEmpty()) {
                 showGeneratedMaps(generatedFiles);
