@@ -30,7 +30,6 @@ import org.apache.xmlbeans.impl.xb.xmlschema.SpaceAttribute;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -50,35 +49,19 @@ final class SoundInsulationEquipmentIssuanceSheetExporter {
             return;
         }
         SoundInsulationProtocolDataParser.ProtocolData data = SoundInsulationProtocolDataParser.parse(protocolFile);
-        List<String> measurementDates = new ArrayList<>(data.measurementDates());
-        if (measurementDates.isEmpty()) {
-            measurementDates = List.of("");
-        }
+        String measurementDate = resolvePrimaryMeasurementDate(data.measurementDates());
         String objectName = data.objectName();
         List<SoundInsulationProtocolDataParser.InstrumentEntry> instruments = data.instruments();
 
-        for (int index = 0; index < measurementDates.size(); index++) {
-            String date = measurementDates.get(index);
-            File targetFile = resolveIssuanceSheetFile(mapFile, date, index, measurementDates.size());
-            writeIssuanceSheet(targetFile, objectName, PERFORMER_NAME, instruments, date);
-        }
+        File targetFile = resolveIssuanceSheetFile(mapFile);
+        writeIssuanceSheet(targetFile, objectName, PERFORMER_NAME, instruments, measurementDate);
     }
 
     static List<File> resolveIssuanceSheetFiles(File mapFile, File protocolFile) {
         if (mapFile == null || !mapFile.exists()) {
             return Collections.emptyList();
         }
-        SoundInsulationProtocolDataParser.ProtocolData data = SoundInsulationProtocolDataParser.parse(protocolFile);
-        List<String> measurementDates = new ArrayList<>(data.measurementDates());
-        if (measurementDates.isEmpty()) {
-            measurementDates = List.of("");
-        }
-        List<File> files = new ArrayList<>();
-        for (int index = 0; index < measurementDates.size(); index++) {
-            String date = measurementDates.get(index);
-            files.add(resolveIssuanceSheetFile(mapFile, date, index, measurementDates.size()));
-        }
-        return files;
+        return List.of(resolveIssuanceSheetFile(mapFile));
     }
 
     private static void writeIssuanceSheet(File targetFile,
@@ -414,24 +397,16 @@ final class SoundInsulationEquipmentIssuanceSheetExporter {
         }
     }
 
-    private static File resolveIssuanceSheetFile(File mapFile, String date, int index, int total) {
-        String name = ISSUANCE_SHEET_BASE_NAME;
-        String safeDate = sanitizeFileComponent(date);
-        if (total > 1) {
-            if (safeDate.isBlank()) {
-                name = name + " " + (index + 1);
-            } else {
-                name = name + " " + safeDate;
-            }
-        }
-        return new File(mapFile.getParentFile(), name + ".docx");
+    private static File resolveIssuanceSheetFile(File mapFile) {
+        return new File(mapFile.getParentFile(), ISSUANCE_SHEET_BASE_NAME + ".docx");
     }
 
-    private static String sanitizeFileComponent(String value) {
-        if (value == null) {
+    private static String resolvePrimaryMeasurementDate(List<String> measurementDates) {
+        if (measurementDates == null || measurementDates.isEmpty()) {
             return "";
         }
-        return value.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        String value = measurementDates.get(0);
+        return value == null ? "" : value;
     }
 
     private static String safe(String value) {
