@@ -76,6 +76,10 @@ final class SoundInsulationRequestFormExporter {
         try (XWPFDocument document = new XWPFDocument()) {
             RequestFormExporter.applyStandardHeader(document);
 
+            XWPFParagraph initialPageBreak = document.createParagraph();
+            setParagraphSpacing(initialPageBreak);
+            initialPageBreak.createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE);
+
             XWPFParagraph appendixHeader = document.createParagraph();
             appendixHeader.setAlignment(ParagraphAlignment.RIGHT);
             setParagraphSpacing(appendixHeader);
