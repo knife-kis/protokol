@@ -4,6 +4,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.RegionUtil;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
@@ -56,12 +57,13 @@ public final class SoundInsulationMapExporter {
     private SoundInsulationMapExporter() {
     }
 
-    public static File generateMap(File impactFile,
+    public static File generateMap(List<File> impactFiles,
                                    File wallFile,
                                    File slabFile,
                                    File protocolFile,
                                    String workDeadline,
                                    String customerInn) throws IOException {
+        File impactFile = (impactFiles != null && !impactFiles.isEmpty()) ? impactFiles.get(0) : null;
         File targetFile = PhysicalFactorsMapExporter.generateMap(impactFile, workDeadline, customerInn,
                 PRIMARY_FOLDER_NAME);
         removeMicroclimateSheet(targetFile);
@@ -78,7 +80,7 @@ public final class SoundInsulationMapExporter {
         }
         updateSketchesSheet(targetFile, data.sketches);
         applySecondPageFontSize(targetFile, 10);
-        addLnwAcSheet(targetFile, impactFile);
+        addLnwAcSheets(targetFile, impactFiles);
         return targetFile;
     }
 
@@ -483,8 +485,17 @@ public final class SoundInsulationMapExporter {
         }
     }
 
-    private static void addLnwAcSheet(File targetFile, File impactFile) throws IOException {
-        if (targetFile == null || !targetFile.exists() || impactFile == null || !impactFile.exists()) {
+    private static void addLnwAcSheets(File targetFile, List<File> impactFiles) throws IOException {
+        if (targetFile == null || !targetFile.exists() || impactFiles == null || impactFiles.isEmpty()) {
+            return;
+        }
+        List<File> validImpacts = new ArrayList<>();
+        for (File impact : impactFiles) {
+            if (impact != null && impact.exists()) {
+                validImpacts.add(impact);
+            }
+        }
+        if (validImpacts.isEmpty()) {
             return;
         }
 
@@ -495,31 +506,48 @@ public final class SoundInsulationMapExporter {
             ZipSecureFile.setMinInflateRatio(0.001d); // было 0.01, у тебя файл ~0.009943
 
             try (InputStream targetInput = new FileInputStream(targetFile);
-                 Workbook targetWorkbook = WorkbookFactory.create(targetInput);
-                 InputStream impactInput = new FileInputStream(impactFile);
-                 Workbook impactWorkbook = WorkbookFactory.create(impactInput)) {
+                 Workbook targetWorkbook = WorkbookFactory.create(targetInput)) {
+                removeExistingLnwSheets(targetWorkbook);
+                boolean multipleSheets = validImpacts.size() > 1;
+                int sheetIndex = 1;
+                for (File impactFile : validImpacts) {
+                    try (InputStream impactInput = new FileInputStream(impactFile);
+                         Workbook impactWorkbook = WorkbookFactory.create(impactInput)) {
+                        String sheetName = multipleSheets ? "Lnw " + sheetIndex : "Lnw";
+                        Sheet targetSheet = targetWorkbook.createSheet(sheetName);
+                        applyLnwAcColumnWidths(targetSheet);
 
-                int existingIndex = targetWorkbook.getSheetIndex("Lnw");
-                if (existingIndex >= 0) {
-                    targetWorkbook.removeSheetAt(existingIndex);
+                        LnwAcSourceData sourceData = resolveLnwAcSourceData(impactWorkbook);
+                        String headerText = buildLnwAcHeaderText(sourceData.firstRoomWord, sourceData.secondRoomWord);
+                        createLnwAcHeaderRow(targetWorkbook, targetSheet, headerText);
+
+                        if (sourceData.sourceSheet != null
+                                && sourceData.startRow >= 0
+                                && sourceData.endRow >= sourceData.startRow) {
+                            copyLnwAcRows(sourceData, targetWorkbook, targetSheet, 1);
+                        }
+                    }
+                    sheetIndex++;
                 }
-                Sheet targetSheet = targetWorkbook.createSheet("Lnw");
-                applyLnwAcColumnWidths(targetSheet);
-
-                LnwAcSourceData sourceData = resolveLnwAcSourceData(impactWorkbook);
-                String headerText = buildLnwAcHeaderText(sourceData.firstRoomWord, sourceData.secondRoomWord);
-                createLnwAcHeaderRow(targetWorkbook, targetSheet, headerText);
-
-                if (sourceData.sourceSheet != null && sourceData.startRow >= 0 && sourceData.endRow >= sourceData.startRow) {
-                    copyLnwAcRows(sourceData, targetWorkbook, targetSheet, 1);
-                }
-
                 try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
                     targetWorkbook.write(outputStream);
                 }
             }
         } finally {
             ZipSecureFile.setMinInflateRatio(oldRatio);
+        }
+    }
+
+    private static void removeExistingLnwSheets(Workbook targetWorkbook) {
+        List<Integer> indicesToRemove = new ArrayList<>();
+        for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
+            String name = targetWorkbook.getSheetName(i);
+            if (name != null && (name.equalsIgnoreCase("Lnw") || name.toLowerCase(Locale.ROOT).startsWith("lnw "))) {
+                indicesToRemove.add(i);
+            }
+        }
+        for (int i = indicesToRemove.size() - 1; i >= 0; i--) {
+            targetWorkbook.removeSheetAt(indicesToRemove.get(i));
         }
     }
 
@@ -588,7 +616,7 @@ public final class SoundInsulationMapExporter {
                 }
                 boolean shouldClearCell = removeFormulaCells && shouldClearLnwCell(sourceCell);
                 if (shouldClearCell) {
-                    targetCell.setBlank();
+                    targetCell.setCellValue(0);
                 } else {
                     copyCellValue(sourceCell, targetCell, formatter);
                 }
@@ -748,77 +776,70 @@ public final class SoundInsulationMapExporter {
         return "";
     }
 
-    private static boolean isFormulaCell(Cell cell) {
-        if (cell == null) {
-            return false;
-        }
-        if (cell.getCellType() == CellType.FORMULA) {
-            return true;
-        }
-        if (cell.getCellType() == CellType.STRING) {
-            String text = normalizeSpace(cell.getStringCellValue());
-            return text.startsWith("=");
-        }
-        return false;
-    }
-
     private static boolean shouldClearLnwCell(Cell cell) {
         if (cell == null) {
             return false;
         }
-        boolean shouldCheck = isFormulaCell(cell) || isNumericOnlyCell(cell);
-        if (!shouldCheck) {
-            return false;
-        }
-        return !isBlackFont(cell);
+        return isNonStandardFontColor(cell) || isNonStandardFillColor(cell);
     }
 
-    private static boolean isNumericOnlyCell(Cell cell) {
-        if (cell == null) {
+    private static boolean isNonStandardFillColor(Cell cell) {
+        CellStyle style = cell.getCellStyle();
+        if (style == null) {
             return false;
         }
-        if (cell.getCellType() == CellType.NUMERIC) {
-            return true;
+        if (style instanceof XSSFCellStyle xssfStyle) {
+            XSSFColor color = xssfStyle.getFillForegroundColorColor();
+            if (color == null) {
+                return false;
+            }
+            byte[] rgb = color.getRGB();
+            if (rgb == null || rgb.length < 3) {
+                short idx = xssfStyle.getFillForegroundColor();
+                return idx != IndexedColors.AUTOMATIC.getIndex()
+                        && idx != IndexedColors.WHITE.getIndex()
+                        && idx != IndexedColors.BLACK.getIndex();
+            }
+            return !(rgb[0] == (byte) 255 && rgb[1] == (byte) 255 && rgb[2] == (byte) 255);
         }
-        if (cell.getCellType() == CellType.STRING) {
-            String text = normalizeSpace(cell.getStringCellValue());
-            return !text.isEmpty() && text.matches("\\d+");
-        }
-        return false;
+        short idx = style.getFillForegroundColor();
+        return idx != IndexedColors.AUTOMATIC.getIndex()
+                && idx != IndexedColors.WHITE.getIndex()
+                && idx != IndexedColors.BLACK.getIndex();
     }
 
-    private static boolean isBlackFont(Cell cell) {
+    private static boolean isNonStandardFontColor(Cell cell) {
         if (cell == null) {
-            return true;
+            return false;
         }
         CellStyle style = cell.getCellStyle();
         if (style == null) {
-            return true;
+            return false;
         }
         Workbook workbook = cell.getSheet().getWorkbook();
         if (workbook == null) {
-            return true;
+            return false;
         }
         Font font = workbook.getFontAt(style.getFontIndexAsInt());
         if (font == null) {
-            return true;
+            return false;
         }
         if (font instanceof XSSFFont xssfFont) {
             XSSFColor color = xssfFont.getXSSFColor();
             if (color == null) {
-                return true;
+                return false;
             }
             byte[] rgb = color.getRGB();
             if (rgb == null || rgb.length < 3) {
                 short colorIndex = font.getColor();
-                return colorIndex == IndexedColors.BLACK.getIndex()
-                        || colorIndex == IndexedColors.AUTOMATIC.getIndex();
+                return colorIndex != IndexedColors.BLACK.getIndex()
+                        && colorIndex != IndexedColors.AUTOMATIC.getIndex();
             }
-            return rgb[0] == 0 && rgb[1] == 0 && rgb[2] == 0;
+            return !(rgb[0] == 0 && rgb[1] == 0 && rgb[2] == 0);
         }
         short colorIndex = font.getColor();
-        return colorIndex == IndexedColors.BLACK.getIndex()
-                || colorIndex == IndexedColors.AUTOMATIC.getIndex();
+        return colorIndex != IndexedColors.BLACK.getIndex()
+                && colorIndex != IndexedColors.AUTOMATIC.getIndex();
     }
 
     private static boolean rowContainsText(Row row, String needle, DataFormatter formatter) {
