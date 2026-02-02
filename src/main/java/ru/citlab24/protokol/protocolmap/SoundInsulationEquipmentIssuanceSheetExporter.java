@@ -90,8 +90,9 @@ final class SoundInsulationEquipmentIssuanceSheetExporter {
             applyStandardHeader(document);
 
             addCenteredParagraph(document, "Место использования прибора: " + safe(objectName), true);
-            addCenteredParagraph(document, "Фамилия, инициалы лица, получившего приборы: ", true);
-            addCenteredParagraph(document, safe(performer), false);
+            addCenteredParagraph(document,
+                    "Фамилия, инициалы лица, получившего приборы:  " + safe(performer),
+                    true);
             addCenteredParagraph(document, "Лист выдачи приборов", true);
 
             int rows = 1 + instruments.size() + 2;
