@@ -45,6 +45,7 @@ final class SoundInsulationRequestFormExporter {
             "14. Сведения о дополнении, отклонении или исключении из методов: -";
     private static final String ROOM_PARAMS_START = "Параметры помещений и испытываемой поверхности:";
     private static final String ROOM_PARAMS_END = "17. Результаты измерений";
+    private static final String ROOM_PARAMS_ALT_START = "16. Параметры помещений и испытываемой поверхности:";
 
     private SoundInsulationRequestFormExporter() {
     }
@@ -58,6 +59,8 @@ final class SoundInsulationRequestFormExporter {
         File planFile = SoundInsulationMeasurementPlanExporter.resolveMeasurementPlanFile(mapFile);
         List<List<String>> planRows = extractPlanRows(planFile);
         List<String> customerLines = extractCustomerDataLines(protocolFile);
+        List<List<String>> roomParamsRows = extractRoomParamsTable(protocolFile);
+        List<String> roomParamsLines = roomParamsRows.isEmpty() ? extractRoomParamsLines(protocolFile) : List.of();
 
         if (planRows.isEmpty()) {
             List<String> empty = new ArrayList<>();
@@ -132,6 +135,26 @@ final class SoundInsulationRequestFormExporter {
 
             for (String line : customerLines) {
                 addParagraphWithLineBreaks(document, line);
+            }
+
+            if (!roomParamsRows.isEmpty()) {
+                addParagraphWithLineBreaks(document, ROOM_PARAMS_START);
+                XWPFTable roomParamsTable = document.createTable(roomParamsRows.size(), 4);
+                configureTableLayout(roomParamsTable, new int[]{3600, 2600, 2000, 2200});
+                for (int rowIndex = 0; rowIndex < roomParamsRows.size(); rowIndex++) {
+                    List<String> row = roomParamsRows.get(rowIndex);
+                    boolean isHeader = rowIndex == 0;
+                    ParagraphAlignment alignment = isHeader ? ParagraphAlignment.CENTER : ParagraphAlignment.LEFT;
+                    for (int colIndex = 0; colIndex < 4; colIndex++) {
+                        String value = colIndex < row.size() ? row.get(colIndex) : "";
+                        setTableCellText(roomParamsTable.getRow(rowIndex).getCell(colIndex), value,
+                                PLAN_TABLE_FONT_SIZE, isHeader, alignment);
+                    }
+                }
+            } else {
+                for (String line : roomParamsLines) {
+                    addParagraphWithLineBreaks(document, line);
+                }
             }
 
             XWPFParagraph highlightParagraph = document.createParagraph();
@@ -218,11 +241,52 @@ final class SoundInsulationRequestFormExporter {
              XWPFDocument document = new XWPFDocument(inputStream)) {
             List<String> allLines = extractLines(document, true);
             lines.addAll(extractSection(allLines, CUSTOMER_DATA_START, CUSTOMER_DATA_END));
+        } catch (Exception ignored) {
+            // пропускаем извлечение данных при ошибке
+        }
+        return lines;
+    }
+
+    private static List<String> extractRoomParamsLines(File protocolFile) {
+        List<String> lines = new ArrayList<>();
+        if (protocolFile == null || !protocolFile.exists()) {
+            return lines;
+        }
+        try (InputStream inputStream = new FileInputStream(protocolFile);
+             XWPFDocument document = new XWPFDocument(inputStream)) {
+            List<String> allLines = extractLines(document, true);
             lines.addAll(extractSection(allLines, ROOM_PARAMS_START, ROOM_PARAMS_END));
         } catch (Exception ignored) {
             // пропускаем извлечение данных при ошибке
         }
         return lines;
+    }
+
+    private static List<List<String>> extractRoomParamsTable(File protocolFile) {
+        List<List<String>> rows = new ArrayList<>();
+        if (protocolFile == null || !protocolFile.exists()) {
+            return rows;
+        }
+        try (InputStream inputStream = new FileInputStream(protocolFile);
+             XWPFDocument document = new XWPFDocument(inputStream)) {
+            XWPFTable table = findTableAfterTitle(document, ROOM_PARAMS_START);
+            if (table == null) {
+                table = findTableAfterTitle(document, ROOM_PARAMS_ALT_START);
+            }
+            if (table == null) {
+                return rows;
+            }
+            for (XWPFTableRow row : table.getRows()) {
+                List<String> values = new ArrayList<>();
+                for (int colIndex = 0; colIndex < 4; colIndex++) {
+                    values.add(getCellText(row, colIndex));
+                }
+                rows.add(values);
+            }
+        } catch (Exception ignored) {
+            // пропускаем извлечение таблицы при ошибке
+        }
+        return rows;
     }
 
     private static List<String> extractSection(List<String> lines, String startMarker, String endMarker) {
@@ -434,5 +498,48 @@ final class SoundInsulationRequestFormExporter {
             return "";
         }
         return value.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
+    }
+
+    private static XWPFTable findTableAfterTitle(XWPFDocument document, String title) {
+        if (document == null) {
+            return null;
+        }
+        String lowerTitle = normalizeSpace(title).toLowerCase(Locale.ROOT);
+        List<IBodyElement> elements = document.getBodyElements();
+        for (int i = 0; i < elements.size(); i++) {
+            IBodyElement element = elements.get(i);
+            if (element instanceof XWPFParagraph paragraph) {
+                String text = normalizeSpace(paragraph.getText()).toLowerCase(Locale.ROOT);
+                if (!text.contains(lowerTitle)) {
+                    continue;
+                }
+                for (int j = i + 1; j < elements.size(); j++) {
+                    IBodyElement next = elements.get(j);
+                    if (next instanceof XWPFTable table) {
+                        return table;
+                    }
+                }
+            } else if (element instanceof XWPFTable table) {
+                if (tableContainsTitle(table, lowerTitle)) {
+                    return table;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean tableContainsTitle(XWPFTable table, String lowerTitle) {
+        if (table == null) {
+            return false;
+        }
+        for (XWPFTableRow row : table.getRows()) {
+            for (XWPFTableCell cell : row.getTableCells()) {
+                String text = normalizeSpace(cell.getText()).toLowerCase(Locale.ROOT);
+                if (text.contains(lowerTitle)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
