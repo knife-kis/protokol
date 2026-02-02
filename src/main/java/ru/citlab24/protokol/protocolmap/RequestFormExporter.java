@@ -822,7 +822,7 @@ final class RequestFormExporter {
         return new File(mapFile.getParentFile(), REQUEST_FORM_NAME);
     }
 
-    private static void applyStandardHeader(XWPFDocument document) {
+    static void applyStandardHeader(XWPFDocument document) {
         CTSectPr sectPr = document.getDocument().getBody().getSectPr();
         if (sectPr == null) {
             sectPr = document.getDocument().getBody().addNewSectPr();
@@ -1110,7 +1110,7 @@ final class RequestFormExporter {
         width.setW(BigInteger.valueOf(widthDxa));
     }
 
-    private static String resolveApplicationNumberFromMap(File mapFile) {
+    static String resolveApplicationNumberFromMap(File mapFile) {
         String line = readMapRowText(mapFile, MAP_APPLICATION_ROW_INDEX);
         String lowerLine = line.toLowerCase(Locale.ROOT);
         int applicationIndex = lowerLine.indexOf("заявка");

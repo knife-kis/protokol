@@ -99,7 +99,7 @@ public final class SoundInsulationMapExporter {
             SoundInsulationMeasurementCardRegistrationSheetExporter.generate(protocolFile, renamed);
             SoundInsulationEquipmentIssuanceSheetExporter.generate(protocolFile, renamed);
             SoundInsulationMeasurementPlanExporter.generate(protocolFile, renamed, workDeadline);
-            SoundInsulationRequestFormExporter.generate(impactFile, renamed, workDeadline, customerInn);
+            SoundInsulationRequestFormExporter.generate(protocolFile, renamed, workDeadline, customerInn);
             SoundInsulationRequestAnalysisSheetExporter.generate(protocolFile, renamed);
         }
         return renamed;
