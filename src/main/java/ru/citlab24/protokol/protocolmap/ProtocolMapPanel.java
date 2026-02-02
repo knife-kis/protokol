@@ -396,15 +396,25 @@ public class ProtocolMapPanel extends JPanel {
         }
 
         private FileKind guessKind(File file) {
-            String name = file.getName().toLowerCase(Locale.ROOT);
-            if (name.endsWith(".doc") || name.endsWith(".docx")) {
+            String rawName = file.getName();
+            String name = rawName == null ? "" : rawName.trim().toLowerCase(Locale.ROOT);
+            int dotIndex = name.lastIndexOf('.');
+            String extension = dotIndex >= 0 ? name.substring(dotIndex + 1) : "";
+            if (extension.equals("doc") || extension.equals("docx")) {
                 return FileKind.PROTOCOL;
             }
-            if (name.endsWith(".xls") || name.endsWith(".xlsx") || name.endsWith(".xlsm")) {
-                for (FileKind kind : new FileKind[] {FileKind.IMPACT, FileKind.WALL, FileKind.SLAB}) {
-                    if (name.contains(kind.keyword)) {
-                        return kind;
-                    }
+            if (extension.equals("xls") || extension.equals("xlsx") || extension.equals("xlsm")) {
+                if (name.contains(FileKind.IMPACT.keyword)) {
+                    return FileKind.IMPACT;
+                }
+                if (name.contains(FileKind.WALL.keyword)
+                        || name.contains("стена")
+                        || name.contains("stena")
+                        || name.contains("wall")) {
+                    return FileKind.WALL;
+                }
+                if (name.contains(FileKind.SLAB.keyword)) {
+                    return FileKind.SLAB;
                 }
             }
             return null;
