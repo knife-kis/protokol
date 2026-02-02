@@ -86,6 +86,7 @@ public final class SoundInsulationMapExporter {
         applySecondPageFontSize(targetFile, 10);
         addLnwAcSheets(targetFile, impactFiles);
         addRwSheets(targetFile, wallFiles);
+        addRwSlabSheets(targetFile, slabFiles);
         return renameSoundInsulationMap(targetFile);
     }
 
@@ -595,6 +596,58 @@ public final class SoundInsulationMapExporter {
         }
     }
 
+    private static void addRwSlabSheets(File targetFile, List<File> slabFiles) throws IOException {
+        if (targetFile == null || !targetFile.exists() || slabFiles == null || slabFiles.isEmpty()) {
+            return;
+        }
+        List<File> validSlabs = new ArrayList<>();
+        for (File slabFile : slabFiles) {
+            if (slabFile != null && slabFile.exists()) {
+                validSlabs.add(slabFile);
+            }
+        }
+        if (validSlabs.isEmpty()) {
+            return;
+        }
+
+        double oldRatio = ZipSecureFile.getMinInflateRatio();
+        try {
+            ZipSecureFile.setMinInflateRatio(0.001d);
+
+            try (InputStream targetInput = new FileInputStream(targetFile);
+                 Workbook targetWorkbook = WorkbookFactory.create(targetInput)) {
+                removeExistingRwSlabSheets(targetWorkbook);
+                boolean multipleSheets = validSlabs.size() > 1;
+                int sheetIndex = 1;
+                for (File slabFile : validSlabs) {
+                    try (InputStream slabInput = new FileInputStream(slabFile);
+                         Workbook slabWorkbook = WorkbookFactory.create(slabInput)) {
+                        String sheetName = multipleSheets ? "RW Перек " + sheetIndex : "RW Перек";
+                        Sheet targetSheet = targetWorkbook.createSheet(sheetName);
+                        applyLnwAcColumnWidths(targetSheet);
+
+                        RwSourceData sourceData = resolveRwSourceData(slabWorkbook);
+                        String headerText = buildRwSlabHeaderText(sourceData.firstRoomWord, sourceData.secondRoomWord);
+                        createRwHeaderRow(targetWorkbook, targetSheet, headerText);
+
+                        if (sourceData.sourceSheet != null
+                                && sourceData.startRow >= 0
+                                && sourceData.endRow >= sourceData.startRow) {
+                            copyRwRows(sourceData, targetWorkbook, targetSheet, 1);
+                            removeIsolatedRwThirdOctaveRow(targetSheet);
+                        }
+                    }
+                    sheetIndex++;
+                }
+                try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                    targetWorkbook.write(outputStream);
+                }
+            }
+        } finally {
+            ZipSecureFile.setMinInflateRatio(oldRatio);
+        }
+    }
+
     private static File renameSoundInsulationMap(File targetFile) throws IOException {
         if (targetFile == null || !targetFile.exists()) {
             return targetFile;
@@ -625,6 +678,19 @@ public final class SoundInsulationMapExporter {
         for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
             String name = targetWorkbook.getSheetName(i);
             if (name != null && (name.equalsIgnoreCase("RW") || name.toLowerCase(Locale.ROOT).startsWith("rw "))) {
+                indicesToRemove.add(i);
+            }
+        }
+        for (int i = indicesToRemove.size() - 1; i >= 0; i--) {
+            targetWorkbook.removeSheetAt(indicesToRemove.get(i));
+        }
+    }
+
+    private static void removeExistingRwSlabSheets(Workbook targetWorkbook) {
+        List<Integer> indicesToRemove = new ArrayList<>();
+        for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
+            String name = targetWorkbook.getSheetName(i);
+            if (name != null && name.toLowerCase(Locale.ROOT).startsWith("rw перек")) {
                 indicesToRemove.add(i);
             }
         }
@@ -926,6 +992,23 @@ public final class SoundInsulationMapExporter {
     private static String buildRwHeaderText(String firstRoomWord, String secondRoomWord) {
         String base = "7.8.2 Результаты измерения изоляции воздушного шума, "
                 + "индекса изоляции воздушного шума для перегородки между помещениями";
+        String first = safe(firstRoomWord).trim();
+        String second = safe(secondRoomWord).trim();
+        if (first.isBlank() && second.isBlank()) {
+            return base;
+        }
+        if (first.isBlank()) {
+            return base + " " + second;
+        }
+        if (second.isBlank()) {
+            return base + " " + first;
+        }
+        return base + " " + first + " и " + second;
+    }
+
+    private static String buildRwSlabHeaderText(String firstRoomWord, String secondRoomWord) {
+        String base = "7.8.2 Результаты измерения изоляции воздушного шума, "
+                + "индекса изоляции воздушного шума для перекрытия между помещениями";
         String first = safe(firstRoomWord).trim();
         String second = safe(secondRoomWord).trim();
         if (first.isBlank() && second.isBlank()) {
