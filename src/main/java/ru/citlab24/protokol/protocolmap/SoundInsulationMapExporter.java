@@ -713,27 +713,22 @@ public final class SoundInsulationMapExporter {
 
     private static List<Integer> findBackgroundRows(RwSourceData sourceData) {
         DataFormatter formatter = new DataFormatter();
-        int firstBackgroundRow = -1;
-        List<Integer> rows = new ArrayList<>();
+        java.util.LinkedHashSet<Integer> rows = new java.util.LinkedHashSet<>();
         for (int rowIndex = sourceData.startRow; rowIndex <= sourceData.endRow; rowIndex++) {
             Row row = sourceData.sourceSheet.getRow(rowIndex);
             if (rowContainsText(row, "Фон (помехи)", formatter)) {
-                if (firstBackgroundRow < 0) {
-                    firstBackgroundRow = rowIndex;
+                int aboveRow = rowIndex - 1;
+                int belowRow = rowIndex + 1;
+                if (aboveRow >= sourceData.startRow) {
+                    rows.add(aboveRow);
                 }
                 rows.add(rowIndex);
+                if (belowRow <= sourceData.endRow) {
+                    rows.add(belowRow);
+                }
             }
         }
-        if (rows.isEmpty()) {
-            return rows;
-        }
-        List<Integer> ordered = new ArrayList<>();
-        int aboveRow = firstBackgroundRow - 1;
-        if (aboveRow >= sourceData.startRow) {
-            ordered.add(aboveRow);
-        }
-        ordered.addAll(rows);
-        return ordered;
+        return new ArrayList<>(rows);
     }
 
     private static File renameSoundInsulationMap(File targetFile) throws IOException {
