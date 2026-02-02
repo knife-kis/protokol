@@ -13,6 +13,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 final class SoundInsulationProtocolDataParser {
     private static final String MEASUREMENT_DATES_LABEL = "Дата проведения измерений:";
@@ -28,6 +30,10 @@ final class SoundInsulationProtocolDataParser {
     private static final String METHODS_TITLE =
             "12. Сведения о нормативных документах (НД), регламентирующих значения показателей и НД " +
                     "на методы (методики) измерений:";
+    private static final Pattern PROTOCOL_DATE_PATTERN = Pattern.compile(
+            "(\\d{1,2}\\s*(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\\s*\\d{4}\\s*(?:г\\.?|года)?)"
+                    + "|(\\b\\d{1,2}[./-]\\d{1,2}[./-]\\d{2,4}\\b)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private SoundInsulationProtocolDataParser() {
     }
@@ -52,7 +58,7 @@ final class SoundInsulationProtocolDataParser {
             String protocolNumber = extractValueAfterLabel(lines, PROTOCOL_NUMBER_LABEL);
             String registrationNumber = extractValueAfterLabel(lines, REGISTRATION_LABEL);
             String applicationNumber = extractApplicationNumber(lines);
-            String protocolDate = extractProtocolDate(paragraphLines, lines);
+            String protocolDate = extractProtocolDate(document, paragraphLines, lines);
             List<InstrumentEntry> instruments = extractInstruments(document);
             instruments.addAll(extractEquipmentInstruments(document));
             String measurementMethods = extractMeasurementMethods(document);
@@ -206,12 +212,50 @@ final class SoundInsulationProtocolDataParser {
         return trimLeadingPunctuation(value);
     }
 
-    private static String extractProtocolDate(List<String> paragraphLines, List<String> allLines) {
+    private static String extractProtocolDate(XWPFDocument document, List<String> paragraphLines, List<String> allLines) {
+        String tableValue = extractProtocolDateFromHeaderTable(document);
+        if (!tableValue.isBlank()) {
+            return tableValue;
+        }
         String value = extractProtocolDateFromLines(paragraphLines);
         if (!value.isBlank()) {
             return value;
         }
         return extractProtocolDateFromLines(allLines);
+    }
+
+    private static String extractProtocolDateFromHeaderTable(XWPFDocument document) {
+        if (document == null) {
+            return "";
+        }
+        for (IBodyElement element : document.getBodyElements()) {
+            if (!(element instanceof XWPFTable table)) {
+                continue;
+            }
+            for (XWPFTableRow row : table.getRows()) {
+                List<XWPFTableCell> cells = row.getTableCells();
+                if (cells == null || cells.size() < 2) {
+                    continue;
+                }
+                String candidate = extractDateCandidate(cells.get(1).getText());
+                if (!candidate.isBlank()) {
+                    return candidate;
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String extractDateCandidate(String text) {
+        String normalized = normalizeSpace(text);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        Matcher matcher = PROTOCOL_DATE_PATTERN.matcher(normalized);
+        if (matcher.find()) {
+            return matcher.group().trim();
+        }
+        return "";
     }
 
     private static String extractProtocolDateFromLines(List<String> lines) {
