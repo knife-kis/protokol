@@ -1869,11 +1869,15 @@ final class RequestFormExporter {
                     continue;
                 }
                 String name = sheet.getSheetName();
-                if (name != null) {
-                    String lower = name.toLowerCase(Locale.ROOT);
-                    if (lower.contains("неопред") || lower.contains("истор")) {
-                        continue;
-                    }
+                if (name == null) {
+                    continue;
+                }
+                String lower = name.toLowerCase(Locale.ROOT);
+                if (!lower.contains("шум")) {
+                    continue;
+                }
+                if (lower.contains("неопред") || lower.contains("истор")) {
+                    continue;
                 }
                 int lastRow = sheet.getLastRowNum();
                 int dateRowIndex = 6;
