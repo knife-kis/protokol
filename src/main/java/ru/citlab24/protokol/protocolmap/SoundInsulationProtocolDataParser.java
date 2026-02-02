@@ -24,6 +24,7 @@ final class SoundInsulationProtocolDataParser {
     private static final String REGISTRATION_LABEL = "9. Регистрационный номер карты:";
     private static final String MEASUREMENT_BASIS_LABEL = "Основание для измерений:";
     private static final String INSTRUMENTS_HEADER = "Наименование, тип средства измерения";
+    private static final String EQUIPMENT_SECTION_TITLE = "11. Сведения об испытательном оборудовании:";
     private static final String METHODS_TITLE =
             "12. Сведения о нормативных документах (НД), регламентирующих значения показателей и НД " +
                     "на методы (методики) измерений:";
@@ -44,7 +45,7 @@ final class SoundInsulationProtocolDataParser {
             List<String> paragraphLines = extractLines(document, false);
             String measurementDatesRaw = extractValueAfterLabel(lines, MEASUREMENT_DATES_LABEL);
             List<String> measurementDates = splitDates(measurementDatesRaw);
-            String objectName = extractValueAfterLabel(lines, OBJECT_NAME_LABEL);
+            String objectName = extractValueBetweenLabels(lines, OBJECT_NAME_LABEL, OBJECT_ADDRESS_LABEL);
             String objectAddress = extractValueAfterLabel(lines, OBJECT_ADDRESS_LABEL);
             String customerName = extractValueAfterLabel(lines, CUSTOMER_LABEL);
             customerName = trimToComma(customerName);
@@ -53,6 +54,7 @@ final class SoundInsulationProtocolDataParser {
             String applicationNumber = extractApplicationNumber(lines);
             String protocolDate = extractProtocolDate(paragraphLines);
             List<InstrumentEntry> instruments = extractInstruments(document);
+            instruments.addAll(extractEquipmentInstruments(document));
             String measurementMethods = extractMeasurementMethods(document);
             return new ProtocolData(protocolNumber, protocolDate, customerName, registrationNumber, applicationNumber,
                     objectName, objectAddress, measurementDates, instruments, measurementMethods);
@@ -136,6 +138,60 @@ final class SoundInsulationProtocolDataParser {
         return "";
     }
 
+    private static String extractValueBetweenLabels(List<String> lines, String startLabel, String endLabel) {
+        if (lines == null || lines.isEmpty()) {
+            return "";
+        }
+        String normalizedStart = normalizeSpace(startLabel).toLowerCase(Locale.ROOT);
+        String normalizedEnd = normalizeSpace(endLabel).toLowerCase(Locale.ROOT);
+        StringBuilder result = new StringBuilder();
+        boolean collecting = false;
+        for (String line : lines) {
+            String normalizedLine = normalizeSpace(line);
+            String lowerLine = normalizedLine.toLowerCase(Locale.ROOT);
+            if (!collecting) {
+                int startIndex = lowerLine.indexOf(normalizedStart);
+                if (startIndex < 0) {
+                    continue;
+                }
+                String tail = normalizedLine.substring(startIndex + normalizedStart.length()).trim();
+                collecting = true;
+                if (!tail.isBlank()) {
+                    if (appendUntilEndLabel(result, tail, normalizedEnd)) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (appendUntilEndLabel(result, normalizedLine, normalizedEnd)) {
+                break;
+            }
+        }
+        return stripLeadingSeparators(result.toString().trim());
+    }
+
+    private static boolean appendUntilEndLabel(StringBuilder builder, String value, String normalizedEndLabel) {
+        String lowerValue = value.toLowerCase(Locale.ROOT);
+        int endIndex = lowerValue.indexOf(normalizedEndLabel);
+        if (endIndex >= 0) {
+            String chunk = value.substring(0, endIndex).trim();
+            appendWithSpace(builder, chunk);
+            return true;
+        }
+        appendWithSpace(builder, value);
+        return false;
+    }
+
+    private static void appendWithSpace(StringBuilder builder, String value) {
+        if (value.isBlank()) {
+            return;
+        }
+        if (builder.length() > 0) {
+            builder.append(' ');
+        }
+        builder.append(value);
+    }
+
     private static String extractApplicationNumber(List<String> lines) {
         String value = extractValueAfterLabel(lines, MEASUREMENT_BASIS_LABEL);
         if (value.isBlank()) {
@@ -184,6 +240,65 @@ final class SoundInsulationProtocolDataParser {
             }
         }
         return instruments;
+    }
+
+    private static List<InstrumentEntry> extractEquipmentInstruments(XWPFDocument document) {
+        List<InstrumentEntry> instruments = new ArrayList<>();
+        if (document == null) {
+            return instruments;
+        }
+        XWPFTable table = findTableAfterTitle(document, EQUIPMENT_SECTION_TITLE);
+        if (table == null) {
+            return instruments;
+        }
+        for (int rowIndex = 0; rowIndex < table.getNumberOfRows(); rowIndex++) {
+            XWPFTableRow row = table.getRow(rowIndex);
+            if (row == null) {
+                continue;
+            }
+            List<XWPFTableCell> cells = row.getTableCells();
+            int nameColumn = findColumnByHeader(cells, "наименование");
+            if (nameColumn < 0) {
+                continue;
+            }
+            int serialColumn = findColumnByHeader(cells, "зав");
+            if (serialColumn < 0 && nameColumn + 1 < cells.size()) {
+                serialColumn = nameColumn + 1;
+            }
+            for (int dataRowIndex = rowIndex + 1; dataRowIndex < table.getNumberOfRows(); dataRowIndex++) {
+                XWPFTableRow dataRow = table.getRow(dataRowIndex);
+                if (dataRow == null) {
+                    continue;
+                }
+                String name = getCellText(dataRow, nameColumn);
+                String serial = getCellText(dataRow, serialColumn);
+                if (name.isBlank() && serial.isBlank()) {
+                    if (rowIsEmpty(dataRow)) {
+                        break;
+                    }
+                    continue;
+                }
+                instruments.add(new InstrumentEntry(name, serial));
+            }
+            if (!instruments.isEmpty()) {
+                return instruments;
+            }
+        }
+        return instruments;
+    }
+
+    private static int findColumnByHeader(List<XWPFTableCell> cells, String header) {
+        if (cells == null) {
+            return -1;
+        }
+        String normalizedHeader = header.toLowerCase(Locale.ROOT);
+        for (int colIndex = 0; colIndex < cells.size(); colIndex++) {
+            String text = normalizeSpace(cells.get(colIndex).getText()).toLowerCase(Locale.ROOT);
+            if (text.contains(normalizedHeader)) {
+                return colIndex;
+            }
+        }
+        return -1;
     }
 
     private static InstrumentHeader findInstrumentHeader(XWPFTable table) {
