@@ -52,7 +52,7 @@ final class SoundInsulationProtocolDataParser {
             String protocolNumber = extractValueAfterLabel(lines, PROTOCOL_NUMBER_LABEL);
             String registrationNumber = extractValueAfterLabel(lines, REGISTRATION_LABEL);
             String applicationNumber = extractApplicationNumber(lines);
-            String protocolDate = extractProtocolDate(paragraphLines);
+            String protocolDate = extractProtocolDate(paragraphLines, lines);
             List<InstrumentEntry> instruments = extractInstruments(document);
             instruments.addAll(extractEquipmentInstruments(document));
             String measurementMethods = extractMeasurementMethods(document);
@@ -206,7 +206,15 @@ final class SoundInsulationProtocolDataParser {
         return trimLeadingPunctuation(value);
     }
 
-    private static String extractProtocolDate(List<String> lines) {
+    private static String extractProtocolDate(List<String> paragraphLines, List<String> allLines) {
+        String value = extractProtocolDateFromLines(paragraphLines);
+        if (!value.isBlank()) {
+            return value;
+        }
+        return extractProtocolDateFromLines(allLines);
+    }
+
+    private static String extractProtocolDateFromLines(List<String> lines) {
         if (lines == null) {
             return "";
         }
