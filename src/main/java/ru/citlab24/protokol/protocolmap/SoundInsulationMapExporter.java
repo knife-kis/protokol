@@ -54,6 +54,10 @@ public final class SoundInsulationMapExporter {
             Pattern.compile("^[МM][1-3] для [TТ](\\d{1,2}), дБ$", Pattern.CASE_INSENSITIVE);
     private static final Pattern RW_MEASUREMENT_ROW_PATTERN =
             Pattern.compile("^[МM](\\d{1,2})\\s*,\\s*дБ$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern RT_SECTION_PATTERN = Pattern.compile(
+            "7\\.8\\.4\\s+Результаты измерения времени реверберации в помещении\\s+([A-Za-zА-Яа-я])",
+            Pattern.CASE_INSENSITIVE
+    );
     private static final double SKETCH_HEIGHT_CM = 6.26;
     private static final double SKETCH_WIDTH_CM = 4.08;
     private static final int SKETCH_PADDING_PX = 5;
@@ -87,6 +91,7 @@ public final class SoundInsulationMapExporter {
         addLnwAcSheets(targetFile, impactFiles);
         addRwSheets(targetFile, wallFiles);
         addRwSlabSheets(targetFile, slabFiles);
+        addRtSheets(targetFile, slabFiles, wallFiles);
         addBackgroundSheet(targetFile, wallFiles, slabFiles);
         return renameSoundInsulationMap(targetFile);
     }
@@ -649,6 +654,51 @@ public final class SoundInsulationMapExporter {
         }
     }
 
+    private static void addRtSheets(File targetFile, List<File> slabFiles, List<File> wallFiles) throws IOException {
+        if (targetFile == null || !targetFile.exists()) {
+            return;
+        }
+        List<File> sourceFiles = new ArrayList<>();
+        appendExistingFiles(sourceFiles, slabFiles);
+        appendExistingFiles(sourceFiles, wallFiles);
+        if (sourceFiles.isEmpty()) {
+            return;
+        }
+
+        double oldRatio = ZipSecureFile.getMinInflateRatio();
+        try {
+            ZipSecureFile.setMinInflateRatio(0.001d);
+
+            try (InputStream targetInput = new FileInputStream(targetFile);
+                 Workbook targetWorkbook = WorkbookFactory.create(targetInput)) {
+                removeExistingRtSheets(targetWorkbook);
+                for (File sourceFile : sourceFiles) {
+                    try (InputStream sourceInput = new FileInputStream(sourceFile);
+                         Workbook sourceWorkbook = WorkbookFactory.create(sourceInput)) {
+                        List<RtSectionData> sections = resolveRtSections(sourceWorkbook);
+                        for (RtSectionData section : sections) {
+                            String baseName = buildRtSheetName(section.sectionLabel);
+                            String sheetName = makeUniqueSheetName(targetWorkbook, baseName);
+                            Sheet targetSheet = targetWorkbook.createSheet(sheetName);
+                            applyLnwAcColumnWidths(targetSheet);
+
+                            if (section.sourceSheet != null
+                                    && section.startRow >= 0
+                                    && section.endRow >= section.startRow) {
+                                copyRtRows(section, targetWorkbook, targetSheet, 0);
+                            }
+                        }
+                    }
+                }
+                try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                    targetWorkbook.write(outputStream);
+                }
+            }
+        } finally {
+            ZipSecureFile.setMinInflateRatio(oldRatio);
+        }
+    }
+
     private static void addBackgroundSheet(File targetFile, List<File> wallFiles, List<File> slabFiles)
             throws IOException {
         if (targetFile == null || !targetFile.exists()) {
@@ -787,6 +837,19 @@ public final class SoundInsulationMapExporter {
         for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
             String name = targetWorkbook.getSheetName(i);
             if (name != null && name.equalsIgnoreCase("Фон")) {
+                indicesToRemove.add(i);
+            }
+        }
+        for (int i = indicesToRemove.size() - 1; i >= 0; i--) {
+            targetWorkbook.removeSheetAt(indicesToRemove.get(i));
+        }
+    }
+
+    private static void removeExistingRtSheets(Workbook targetWorkbook) {
+        List<Integer> indicesToRemove = new ArrayList<>();
+        for (int i = 0; i < targetWorkbook.getNumberOfSheets(); i++) {
+            String name = targetWorkbook.getSheetName(i);
+            if (name != null && name.trim().toLowerCase(Locale.ROOT).startsWith("rt")) {
                 indicesToRemove.add(i);
             }
         }
@@ -937,6 +1000,50 @@ public final class SoundInsulationMapExporter {
         copyMergedRegions(sourceData, targetSheet, rowMapping);
     }
 
+    private static void copyRtRows(RtSectionData sourceData,
+                                   Workbook targetWorkbook,
+                                   Sheet targetSheet,
+                                   int targetStartRow) {
+        DataFormatter formatter = new DataFormatter();
+        Map<CellStyle, CellStyle> styleCache = new IdentityHashMap<>();
+        Map<Integer, Integer> rowMapping = new java.util.HashMap<>();
+        int targetRowIndex = targetStartRow;
+        for (int rowIndex = sourceData.startRow; rowIndex <= sourceData.endRow; rowIndex++) {
+            Row sourceRow = sourceData.sourceSheet.getRow(rowIndex);
+            Row targetRow = targetSheet.getRow(targetRowIndex);
+            if (targetRow == null) {
+                targetRow = targetSheet.createRow(targetRowIndex);
+            }
+            if (sourceRow != null) {
+                targetRow.setHeight(sourceRow.getHeight());
+            }
+            rowMapping.put(rowIndex, targetRowIndex);
+            for (int col = 0; col <= 16; col++) {
+                Cell sourceCell = sourceRow != null ? sourceRow.getCell(col) : null;
+                if (sourceCell == null) {
+                    continue;
+                }
+                Cell targetCell = targetRow.getCell(col);
+                if (targetCell == null) {
+                    targetCell = targetRow.createCell(col);
+                }
+                copyCellValue(sourceCell, targetCell, formatter);
+                CellStyle sourceStyle = sourceCell.getCellStyle();
+                if (sourceStyle != null) {
+                    CellStyle clonedStyle = styleCache.get(sourceStyle);
+                    if (clonedStyle == null) {
+                        clonedStyle = targetWorkbook.createCellStyle();
+                        clonedStyle.cloneStyleFrom(sourceStyle);
+                        styleCache.put(sourceStyle, clonedStyle);
+                    }
+                    targetCell.setCellStyle(clonedStyle);
+                }
+            }
+            targetRowIndex++;
+        }
+        copyMergedRegions(sourceData, targetSheet, rowMapping);
+    }
+
     private static int copyRwBackgroundRows(RwSourceData sourceData,
                                             Workbook targetWorkbook,
                                             Sheet targetSheet,
@@ -984,6 +1091,151 @@ public final class SoundInsulationMapExporter {
         }
         copyMergedRegions(sourceData, targetSheet, rowMapping);
         return targetRowIndex;
+    }
+
+    private static List<RtSectionData> resolveRtSections(Workbook sourceWorkbook) {
+        List<RtSectionData> sections = new ArrayList<>();
+        if (sourceWorkbook == null) {
+            return sections;
+        }
+        Sheet rtSheet = findSheetByName(sourceWorkbook, "Время реверберации");
+        if (rtSheet == null) {
+            return sections;
+        }
+        DataFormatter formatter = new DataFormatter();
+        int lastRow = rtSheet.getLastRowNum();
+        int rowIndex = 0;
+        while (rowIndex <= lastRow) {
+            Row row = rtSheet.getRow(rowIndex);
+            if (!rowContainsText(row, "для карты", formatter)) {
+                rowIndex++;
+                continue;
+            }
+            int headerRowIndex = findNextRowContaining(rtSheet, rowIndex + 1, lastRow,
+                    "7.8.4 Результаты измерения времени реверберации в помещении", formatter);
+            if (headerRowIndex < 0) {
+                rowIndex++;
+                continue;
+            }
+            String headerText = buildRowText(rtSheet.getRow(headerRowIndex), formatter);
+            String sectionLabel = extractRtSectionLabel(headerText);
+            int startRow = headerRowIndex + 1;
+            int stopRowIndex = findNextRowContaining(rtSheet, startRow, lastRow, "Общее среднее", formatter);
+            int endRow = stopRowIndex >= 0 ? stopRowIndex - 1 : lastRow;
+            if (startRow <= endRow) {
+                RtSectionData data = new RtSectionData();
+                data.sourceSheet = rtSheet;
+                data.startRow = startRow;
+                data.endRow = endRow;
+                data.sectionLabel = sectionLabel;
+                sections.add(data);
+            }
+            rowIndex = (endRow >= rowIndex) ? endRow + 1 : rowIndex + 1;
+        }
+        return sections;
+    }
+
+    private static Sheet findSheetByName(Workbook workbook, String targetName) {
+        if (workbook == null || targetName == null) {
+            return null;
+        }
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            String name = workbook.getSheetName(i);
+            if (name != null && name.trim().equalsIgnoreCase(targetName.trim())) {
+                return workbook.getSheetAt(i);
+            }
+        }
+        return null;
+    }
+
+    private static int findNextRowContaining(Sheet sheet,
+                                             int startRow,
+                                             int lastRow,
+                                             String needle,
+                                             DataFormatter formatter) {
+        for (int rowIndex = startRow; rowIndex <= lastRow; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (rowContainsText(row, needle, formatter)) {
+                return rowIndex;
+            }
+        }
+        return -1;
+    }
+
+    private static String buildRtSheetName(String sectionLabel) {
+        String normalized = safe(sectionLabel).trim();
+        if (normalized.isBlank()) {
+            return "RT";
+        }
+        return "RT " + normalized;
+    }
+
+    private static String makeUniqueSheetName(Workbook workbook, String baseName) {
+        String normalized = safe(baseName).trim();
+        if (normalized.isBlank()) {
+            normalized = "RT";
+        }
+        String name = trimSheetName(normalized);
+        int counter = 2;
+        while (workbook.getSheet(name) != null) {
+            String suffix = " " + counter;
+            String trimmed = trimSheetName(normalized, suffix.length());
+            name = trimmed + suffix;
+            counter++;
+        }
+        return name;
+    }
+
+    private static String trimSheetName(String name) {
+        return trimSheetName(name, 0);
+    }
+
+    private static String trimSheetName(String name, int suffixLength) {
+        String normalized = safe(name).trim();
+        int maxLength = 31 - suffixLength;
+        if (maxLength < 1) {
+            return normalized.substring(0, Math.min(31, normalized.length()));
+        }
+        if (normalized.length() > maxLength) {
+            return normalized.substring(0, maxLength);
+        }
+        return normalized;
+    }
+
+    private static String extractRtSectionLabel(String headerText) {
+        String normalized = normalizeSpace(headerText);
+        Matcher matcher = RT_SECTION_PATTERN.matcher(normalized);
+        if (matcher.find()) {
+            return matcher.group(1).toUpperCase(Locale.ROOT);
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        int index = lower.indexOf("помещении");
+        if (index >= 0) {
+            String tail = normalized.substring(index + "помещении".length()).trim();
+            if (!tail.isBlank()) {
+                String[] parts = tail.split("\\s+");
+                return parts[0].toUpperCase(Locale.ROOT);
+            }
+        }
+        return "";
+    }
+
+    private static String buildRowText(Row row, DataFormatter formatter) {
+        if (row == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (Cell cell : row) {
+            String text = normalizeSpace(formatter.formatCellValue(cell));
+            if (text.isBlank()) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(text);
+        }
+        return builder.toString().trim();
     }
 
     private static void removeIsolatedRwThirdOctaveRow(Sheet sheet) {
@@ -1074,6 +1326,36 @@ public final class SoundInsulationMapExporter {
     }
 
     private static void copyMergedRegions(RwSourceData sourceData,
+                                          Sheet targetSheet,
+                                          Map<Integer, Integer> rowMapping) {
+        int count = sourceData.sourceSheet.getNumMergedRegions();
+        for (int index = 0; index < count; index++) {
+            CellRangeAddress region = sourceData.sourceSheet.getMergedRegion(index);
+            if (region.getFirstRow() < sourceData.startRow || region.getLastRow() > sourceData.endRow) {
+                continue;
+            }
+            if (region.getFirstColumn() > 16 || region.getLastColumn() > 16) {
+                continue;
+            }
+            Integer mappedStart = rowMapping.get(region.getFirstRow());
+            Integer mappedEnd = rowMapping.get(region.getLastRow());
+            if (mappedStart == null || mappedEnd == null) {
+                continue;
+            }
+            if (!isContiguousRowMapping(region, rowMapping, mappedStart)) {
+                continue;
+            }
+            CellRangeAddress shifted = new CellRangeAddress(
+                    mappedStart,
+                    mappedEnd,
+                    region.getFirstColumn(),
+                    region.getLastColumn()
+            );
+            targetSheet.addMergedRegion(shifted);
+        }
+    }
+
+    private static void copyMergedRegions(RtSectionData sourceData,
                                           Sheet targetSheet,
                                           Map<Integer, Integer> rowMapping) {
         int count = sourceData.sourceSheet.getNumMergedRegions();
@@ -2433,6 +2715,13 @@ public final class SoundInsulationMapExporter {
         private int endRow = -1;
         private String firstRoomWord = "";
         private String secondRoomWord = "";
+    }
+
+    private static class RtSectionData {
+        private Sheet sourceSheet;
+        private int startRow = -1;
+        private int endRow = -1;
+        private String sectionLabel = "";
     }
 
     private record SoundInsulationProtocolData(String registrationNumber,
