@@ -68,12 +68,16 @@ public final class NoiseMapExporter {
 
         ProtocolIssuanceSheetExporter.generate(sourceFile, targetFile);
         MeasurementCardRegistrationSheetExporter.generate(sourceFile, targetFile);
-        EquipmentIssuanceSheetExporter.generate(targetFile);
+
+        // ШУМЫ: даты берём из исходного протокола (sourceFile), а не из сформированной карты (targetFile)
+        EquipmentIssuanceSheetExporter.generateForNoise(sourceFile, targetFile);
+
         MeasurementPlanExporter.generate(sourceFile, targetFile, workDeadline);
         RequestFormExporter.generate(sourceFile, targetFile, workDeadline, customerInn);
         RequestAnalysisSheetExporter.generate(targetFile);
 
         return targetFile;
+
     }
 
     private static String resolveRegistrationNumber(File sourceFile) {

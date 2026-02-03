@@ -1,11 +1,6 @@
 package ru.citlab24.protokol.protocolmap;
 
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -691,4 +686,117 @@ final class EquipmentIssuanceSheetExporter {
             this.serialNumber = serialNumber;
         }
     }
+    static void generateForNoise(File sourceNoiseProtocolFile, File mapFile) {
+        if (mapFile == null || !mapFile.exists()) {
+            return;
+        }
+
+        // 1) Даты шумов берём из ИСХОДНОГО файла протокола шумов
+        List<String> measurementDates = resolveNoiseMeasurementDatesFromProtocol(sourceNoiseProtocolFile);
+
+        // 2) Если почему-то не нашли — оставляем один пустой лист (как было раньше)
+        if (measurementDates.isEmpty()) {
+            measurementDates = List.of("");
+        }
+
+        // остальное (объект, исполнитель, приборы) берём из карты (там всё уже собрано)
+        String objectName = resolveObjectName(mapFile);
+        String performer = resolveMeasurementPerformer(mapFile);
+        List<InstrumentEntry> instruments = resolveInstruments(mapFile);
+
+        for (int index = 0; index < measurementDates.size(); index++) {
+            String date = measurementDates.get(index);
+
+            // ШУМЫ: дату в имя файла пишем всегда, если она есть
+            File targetFile = resolveIssuanceSheetFileForNoise(mapFile, date, index, measurementDates.size());
+
+            writeIssuanceSheet(targetFile, objectName, performer, instruments, date);
+        }
+    }
+
+    static List<File> resolveIssuanceSheetFilesForNoise(File sourceNoiseProtocolFile, File mapFile) {
+        if (mapFile == null || !mapFile.exists()) {
+            return Collections.emptyList();
+        }
+
+        List<String> measurementDates = resolveNoiseMeasurementDatesFromProtocol(sourceNoiseProtocolFile);
+        if (measurementDates.isEmpty()) {
+            measurementDates = List.of("");
+        }
+
+        List<File> files = new ArrayList<>();
+        for (int index = 0; index < measurementDates.size(); index++) {
+            String date = measurementDates.get(index);
+            files.add(resolveIssuanceSheetFileForNoise(mapFile, date, index, measurementDates.size()));
+        }
+        return files;
+    }
+
+    private static List<String> resolveNoiseMeasurementDatesFromProtocol(File sourceNoiseProtocolFile) {
+        if (sourceNoiseProtocolFile == null || !sourceNoiseProtocolFile.exists()) {
+            return Collections.emptyList();
+        }
+
+        try (InputStream in = new FileInputStream(sourceNoiseProtocolFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+
+            // “смотрим на все вкладки кроме первой”
+            if (workbook.getNumberOfSheets() <= 1) {
+                return Collections.emptyList();
+            }
+
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+
+            Set<String> dates = new LinkedHashSet<>();
+
+            for (int sheetIndex = 1; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
+                Sheet sheet = workbook.getSheetAt(sheetIndex);
+                if (sheet == null) {
+                    continue;
+                }
+
+                // Ищем объединённую строку A..Y (0..24) на ОДНОЙ строке, читаем текст и выдёргиваем даты
+                List<org.apache.poi.ss.util.CellRangeAddress> candidates = new ArrayList<>();
+                for (org.apache.poi.ss.util.CellRangeAddress region : sheet.getMergedRegions()) {
+                    if (isNoiseDateRegion(region)) {
+                        candidates.add(region);
+                    }
+                }
+                candidates.sort(java.util.Comparator.comparingInt(org.apache.poi.ss.util.CellRangeAddress::getFirstRow));
+
+                for (org.apache.poi.ss.util.CellRangeAddress region : candidates) {
+                    String text = readCellText(sheet,
+                            region.getFirstRow(),
+                            region.getFirstColumn(),
+                            formatter,
+                            evaluator);
+                    if (!text.isEmpty()) {
+                        addDatesFromText(text, dates);
+                    }
+                }
+            }
+
+            return new ArrayList<>(dates);
+
+        } catch (Exception ignored) {
+            return Collections.emptyList();
+        }
+    }
+
+    private static File resolveIssuanceSheetFileForNoise(File mapFile, String date, int index, int total) {
+        String name = ISSUANCE_SHEET_BASE_NAME;
+        String safeDate = sanitizeFileComponent(date);
+
+        // для шумов: если дата есть — всегда добавляем её к имени
+        if (!safeDate.isBlank()) {
+            name = name + " " + safeDate;
+        } else if (total > 1) {
+            // если даты нет, но листов несколько — нумеруем
+            name = name + " " + (index + 1);
+        }
+
+        return new File(mapFile.getParentFile(), name + ".docx");
+    }
+
 }
