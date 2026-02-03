@@ -57,7 +57,6 @@ final class SamplingPlanExporter {
     private static final int TABLE_FONT_SIZE = 9;
     private static final int TITLE_PAGE_ROW_INDEX = 4;
     private static final int PPR_START_ROW_INDEX = 4;
-    private static final int HEADER_ROW_INDEX = 4;
     private static final int DEFAULT_POINT_COUNT = 1;
 
     private SamplingPlanExporter() {
@@ -507,11 +506,12 @@ final class SamplingPlanExporter {
     }
 
     private static String buildApprovalText(String approvalDate) {
-        String dateValue = approvalDate == null ? "" : approvalDate;
+        String dateValue = approvalDate == null || approvalDate.isBlank()
+                ? "«17» февраля 2025 г."
+                : approvalDate;
         return "УТВЕРЖДАЮ:" +
-                "\nЗаместитель" +
-                "\nзаведующего лабораторией" +
-                "\n__________________________" +
+                "\nЗаместитель заведующего лабораторией" +
+                "\n_____________________Гаврилова М.Е." +
                 "\n(подпись, инициалы, фамилия)" +
                 "\n" + dateValue;
     }
@@ -598,57 +598,22 @@ final class SamplingPlanExporter {
             }
             DataFormatter formatter = new DataFormatter();
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
-            int columnIndex = resolvePointColumnIndex(sheet, formatter, evaluator);
             int lastRow = sheet.getLastRowNum();
             int count = 0;
-            int emptyStreak = 0;
             for (int rowIndex = PPR_START_ROW_INDEX; rowIndex <= lastRow; rowIndex++) {
-                String text = readMergedCellValue(sheet, rowIndex, columnIndex, formatter, evaluator);
-                if (text.isBlank()) {
-                    emptyStreak++;
-                    if (emptyStreak >= 20) {
-                        break;
-                    }
+                String text = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator);
+                if (text.toLowerCase(Locale.ROOT).contains("точка")) {
+                    count++;
                     continue;
                 }
-                emptyStreak = 0;
-                if (isPointLabelRow(text, rowIndex)) {
-                    count++;
+                if (count > 0) {
+                    break;
                 }
             }
             return count > 0 ? count : DEFAULT_POINT_COUNT;
         } catch (Exception ex) {
             return DEFAULT_POINT_COUNT;
         }
-    }
-
-    private static int resolvePointColumnIndex(Sheet sheet,
-                                               DataFormatter formatter,
-                                               FormulaEvaluator evaluator) {
-        if (sheet == null) {
-            return 1;
-        }
-        Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
-        if (headerRow != null) {
-            for (int colIndex = 0; colIndex < headerRow.getLastCellNum(); colIndex++) {
-                String text = readMergedCellValue(sheet, HEADER_ROW_INDEX, colIndex, formatter, evaluator);
-                if (text.toLowerCase(Locale.ROOT).contains("точка")) {
-                    return colIndex;
-                }
-            }
-        }
-        return 1;
-    }
-
-    private static boolean isPointLabelRow(String value, int rowIndex) {
-        String normalized = value.toLowerCase(Locale.ROOT);
-        if (!normalized.contains("точка")) {
-            return false;
-        }
-        if (rowIndex == HEADER_ROW_INDEX && normalized.equals("точка")) {
-            return false;
-        }
-        return normalized.matches(".*\\d+.*") || rowIndex > HEADER_ROW_INDEX;
     }
 
     private static Sheet findSheet(Workbook workbook, String name) {
