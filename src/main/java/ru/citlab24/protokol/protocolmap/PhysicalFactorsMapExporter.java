@@ -10,6 +10,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class PhysicalFactorsMapExporter {
     private static final String REGISTRATION_PREFIX = "Регистрационный номер карты замеров:";
@@ -39,6 +41,7 @@ public final class PhysicalFactorsMapExporter {
     private static final int VENTILATION_TARGET_START_ROW = 3;
     private static final int VENTILATION_LAST_COL = 9;
     private static final String PRIMARY_FOLDER_NAME = "Первичка Физ факторы";
+    private static final String AREA_RADIATION_FOLDER_NAME = "Первичка Радиация (участки)";
 
     private PhysicalFactorsMapExporter() {
     }
@@ -73,6 +76,7 @@ public final class PhysicalFactorsMapExporter {
         boolean hasArtificialLightingSheet = hasSheetWithName(sourceFile, "Иск освещение");
         boolean hasStreetLightingSheet = hasSheetWithName(sourceFile, "Иск освещение (2)");
         boolean hasKeoSheet = hasSheetWithName(sourceFile, "КЕО");
+        boolean isAreaRadiation = AREA_RADIATION_FOLDER_NAME.equals(primaryFolderName);
         File targetFile = buildTargetFile(sourceFile, primaryFolderName);
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -100,9 +104,14 @@ public final class PhysicalFactorsMapExporter {
             Sheet streetLightingSheet = null;
             int keoDataStartRow = -1;
             Sheet keoSheet = null;
-            Sheet ventilationSheet = VentilationMapTabBuilder.createSheet(workbook);
+            Sheet ventilationSheet = isAreaRadiation ? null : VentilationMapTabBuilder.createSheet(workbook);
             if (hasMedSheet) {
-                medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
+                if (isAreaRadiation) {
+                    int[] medCounts = resolveMedProfileAndControlPointCounts(sourceFile);
+                    medDataStartRow = MedMapTabBuilder.createAreaRadiationResultsSheet(workbook, medCounts[0], medCounts[1]);
+                } else {
+                    medDataStartRow = MedMapTabBuilder.createMedResultsSheet(workbook);
+                }
                 medSheet = workbook.getSheet("МЭД");
             }
             if (hasMed2Sheet) {
@@ -160,7 +169,7 @@ public final class PhysicalFactorsMapExporter {
             if (hasMicroclimateSheet) {
                 fillMicroclimateResults(sourceFile, workbook, resultsSheet, microclimateDataStartRow);
             }
-            if (hasMedSheet) {
+            if (hasMedSheet && !isAreaRadiation) {
                 fillMedResults(sourceFile, workbook, medSheet, medDataStartRow);
             }
             if (hasMed2Sheet) {
@@ -197,6 +206,53 @@ public final class PhysicalFactorsMapExporter {
         RequestAnalysisSheetExporter.generate(targetFile);
 
         return targetFile;
+    }
+
+    private static int[] resolveMedProfileAndControlPointCounts(File sourceFile) {
+        int maxProfile = 0;
+        int maxControlPoint = 0;
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new int[]{1, 0};
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook sourceWorkbook = WorkbookFactory.create(in)) {
+            Sheet sourceSheet = findSheetWithName(sourceWorkbook, "МЭД");
+            if (sourceSheet == null) {
+                return new int[]{1, 0};
+            }
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
+            Pattern profilePattern = Pattern.compile("(?i)профиль\\s*(\\d+)");
+            Pattern controlPattern = Pattern.compile("(?i)контрольная\\s*точка\\s*(\\d+)");
+            int lastRow = sourceSheet.getLastRowNum();
+            int emptyStreak = 0;
+            for (int rowIndex = 6; rowIndex <= lastRow; rowIndex++) {
+                String bValue = readMergedCellValue(sourceSheet, rowIndex, 1, formatter, evaluator);
+                String normalized = normalizeText(bValue);
+                if (normalized.isBlank()) {
+                    emptyStreak++;
+                    if (emptyStreak >= 20) {
+                        break;
+                    }
+                    continue;
+                }
+                emptyStreak = 0;
+                Matcher profileMatcher = profilePattern.matcher(normalized);
+                if (profileMatcher.find()) {
+                    maxProfile = Math.max(maxProfile, Integer.parseInt(profileMatcher.group(1)));
+                }
+                Matcher controlMatcher = controlPattern.matcher(normalized);
+                if (controlMatcher.find()) {
+                    maxControlPoint = Math.max(maxControlPoint, Integer.parseInt(controlMatcher.group(1)));
+                }
+            }
+        } catch (Exception ex) {
+            return new int[]{1, 0};
+        }
+        if (maxProfile <= 0) {
+            maxProfile = 1;
+        }
+        return new int[]{maxProfile, maxControlPoint};
     }
 
     private static String resolveRegistrationNumber(File sourceFile) {
