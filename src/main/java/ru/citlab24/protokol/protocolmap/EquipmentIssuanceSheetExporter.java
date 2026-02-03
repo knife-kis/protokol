@@ -40,7 +40,11 @@ import java.io.InputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 final class EquipmentIssuanceSheetExporter {
     private static final String ISSUANCE_SHEET_BASE_NAME = "лист выдачи приборов";
@@ -52,6 +56,8 @@ final class EquipmentIssuanceSheetExporter {
     private static final String PERFORMER_PREFIX = "3. Измерения провел, подпись:";
     private static final String OBJECT_PREFIX = "4. Наименование объекта:";
     private static final String INSTRUMENTS_PREFIX = "5.3. Приборы для измерения (используемое отметить):";
+    private static final int NOISE_MERGED_DATE_LAST_COLUMN = 24;
+    private static final Pattern DATE_PATTERN = Pattern.compile("\\b\\d{2}\\.\\d{2}\\.(?:\\d{2}|\\d{4})\\b");
 
     private EquipmentIssuanceSheetExporter() {
     }
@@ -420,6 +426,10 @@ final class EquipmentIssuanceSheetExporter {
     }
 
     private static List<String> resolveMeasurementDates(File mapFile) {
+        List<String> noiseDates = resolveNoiseMeasurementDates(mapFile);
+        if (!noiseDates.isEmpty()) {
+            return noiseDates;
+        }
         String rawDates = findValueByPrefix(mapFile, DATES_PREFIX);
         if (rawDates.isBlank()) {
             rawDates = findValueByPrefix(mapFile, "2. Дата замеров");
@@ -436,6 +446,71 @@ final class EquipmentIssuanceSheetExporter {
             }
         }
         return dates;
+    }
+
+    private static List<String> resolveNoiseMeasurementDates(File mapFile) {
+        if (mapFile == null || !mapFile.exists()) {
+            return Collections.emptyList();
+        }
+        try (InputStream in = new FileInputStream(mapFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() <= 1) {
+                return Collections.emptyList();
+            }
+            DataFormatter formatter = new DataFormatter();
+            var evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            Set<String> dates = new LinkedHashSet<>();
+            for (int sheetIndex = 1; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
+                Sheet sheet = workbook.getSheetAt(sheetIndex);
+                if (sheet == null) {
+                    continue;
+                }
+                for (org.apache.poi.ss.util.CellRangeAddress region : sheet.getMergedRegions()) {
+                    if (!isNoiseDateRegion(region)) {
+                        continue;
+                    }
+                    String text = readCellText(sheet, region.getFirstRow(), region.getFirstColumn(), formatter, evaluator);
+                    if (!text.isEmpty()) {
+                        addDatesFromText(text, dates);
+                    }
+                }
+            }
+            return new ArrayList<>(dates);
+        } catch (Exception ignored) {
+            return Collections.emptyList();
+        }
+    }
+
+    private static boolean isNoiseDateRegion(org.apache.poi.ss.util.CellRangeAddress region) {
+        return region.getFirstRow() == region.getLastRow()
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= NOISE_MERGED_DATE_LAST_COLUMN;
+    }
+
+    private static String readCellText(Sheet sheet,
+                                       int rowIndex,
+                                       int columnIndex,
+                                       DataFormatter formatter,
+                                       org.apache.poi.ss.usermodel.FormulaEvaluator evaluator) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return "";
+        }
+        Cell cell = row.getCell(columnIndex);
+        if (cell == null) {
+            return "";
+        }
+        return formatter.formatCellValue(cell, evaluator).trim();
+    }
+
+    private static void addDatesFromText(String text, Set<String> dates) {
+        Matcher matcher = DATE_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String date = matcher.group();
+            if (!date.isEmpty()) {
+                dates.add(date);
+            }
+        }
     }
 
     private static String resolveObjectName(File mapFile) {
