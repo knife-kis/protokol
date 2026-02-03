@@ -45,9 +45,11 @@ public final class MeasurementCardRegistrationSheetExporter {
     private static final String REGISTRATION_SHEET_NAME = "лист регистрации карт замеров.docx";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
+    private static final int MAP_CARD_NUMBER_ROW_INDEX = 3;
     private static final int MAP_PROTOCOL_NUMBER_ROW_INDEX = 21;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
     private static final String REGISTRATION_PREFIX = "Регистрационный номер карты замеров:";
+    private static final String CARD_NUMBER_PREFIX = "КАРТА ЗАМЕРОВ №";
     private static final String PERFORMER_PREFIX = "3. Измерения провел, подпись:";
 
     private MeasurementCardRegistrationSheetExporter() {
@@ -60,7 +62,10 @@ public final class MeasurementCardRegistrationSheetExporter {
         File targetFile = resolveRegistrationSheetFile(mapFile);
         String applicationNumber = resolveApplicationNumberFromMap(mapFile);
         String protocolNumber = resolveProtocolNumberFromMap(mapFile);
-        String cardNumber = resolveRegistrationNumberFromSource(sourceFile);
+        String cardNumber = resolveCardNumberFromMap(mapFile);
+        if (cardNumber.isEmpty()) {
+            cardNumber = resolveRegistrationNumberFromSource(sourceFile);
+        }
         String measurementPerformer = resolveMeasurementPerformerFromMap(mapFile);
 
         try (XWPFDocument document = new XWPFDocument()) {
@@ -315,6 +320,49 @@ public final class MeasurementCardRegistrationSheetExporter {
                             if (!nextText.isEmpty()) {
                                 return nextText;
                             }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            return "";
+        }
+        return "";
+    }
+
+    private static String resolveCardNumberFromMap(File mapFile) {
+        if (mapFile == null || !mapFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(mapFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            Row row = sheet.getRow(MAP_CARD_NUMBER_ROW_INDEX);
+            if (row == null) {
+                return "";
+            }
+            DataFormatter formatter = new DataFormatter();
+            for (Cell cell : row) {
+                String text = formatter.formatCellValue(cell).trim();
+                if (text.isEmpty()) {
+                    continue;
+                }
+                String upper = text.toUpperCase(Locale.ROOT);
+                int index = upper.indexOf(CARD_NUMBER_PREFIX);
+                if (index >= 0) {
+                    String tail = text.substring(index + CARD_NUMBER_PREFIX.length()).trim();
+                    tail = tail.replace(":", "").trim();
+                    if (!tail.isEmpty()) {
+                        return tail;
+                    }
+                    Cell next = row.getCell(cell.getColumnIndex() + 1);
+                    if (next != null) {
+                        String nextText = formatter.formatCellValue(next).trim();
+                        if (!nextText.isEmpty()) {
+                            return nextText;
                         }
                     }
                 }
