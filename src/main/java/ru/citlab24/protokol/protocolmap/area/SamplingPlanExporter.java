@@ -4,6 +4,8 @@ import ru.citlab24.protokol.protocolmap.MeasurementCardRegistrationSheetExporter
 import ru.citlab24.protokol.protocolmap.RequestFormExporter;
 
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
 import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -63,6 +65,11 @@ final class SamplingPlanExporter {
     }
 
     static void generate(File mapFile) {
+        // обратная совместимость (если раньше вызывали только с картой)
+        generate(null, mapFile);
+    }
+
+    static void generate(File sourceProtocolFile, File mapFile) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
@@ -70,17 +77,24 @@ final class SamplingPlanExporter {
         String applicationNumber = RequestFormExporter.resolveApplicationNumberFromMap(mapFile);
         String registrationDate = resolveRegistrationDate(mapFile);
         String approvalDate = formatApprovalDate(registrationDate);
-        int pointCount = resolveSamplingPointCount(mapFile);
+
+        // ВАЖНО: точки считаем из ИСХОДНОГО протокола (sheet "ППР"),
+        // а если не получилось — пробуем из карты (на случай других сценариев)
+        int pointCount = resolveSamplingPointCount(sourceProtocolFile, mapFile);
+
         PerformerInfo performerInfo = resolvePerformerInfo(mapFile);
 
         try (XWPFDocument document = new XWPFDocument()) {
             applySamplingHeader(document);
 
+            // Блок "УТВЕРЖДАЮ" — таблица 2 колонки без границ, правый столбец по центру.
             XWPFTable approvalTable = document.createTable(1, 2);
-            stretchTableToFullWidth(approvalTable);
+            configureApprovalTableLayout(approvalTable);
             removeTableBorders(approvalTable);
+
             setTableCellText(approvalTable.getRow(0).getCell(0), "", TITLE_FONT_SIZE, false,
                     ParagraphAlignment.LEFT);
+
             setTableCellText(approvalTable.getRow(0).getCell(1), buildApprovalText(approvalDate),
                     TITLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
 
@@ -235,6 +249,12 @@ final class SamplingPlanExporter {
             sectPr = document.getDocument().getBody().addNewSectPr();
         }
 
+        // АЛЬБОМНАЯ ОРИЕНТАЦИЯ A4
+        CTPageSz pgSz = sectPr.isSetPgSz() ? sectPr.getPgSz() : sectPr.addNewPgSz();
+        pgSz.setOrient(STPageOrientation.LANDSCAPE);
+        pgSz.setW(BigInteger.valueOf(16838)); // A4 landscape width (twips)
+        pgSz.setH(BigInteger.valueOf(11906)); // A4 landscape height (twips)
+
         XWPFHeaderFooterPolicy policy = new XWPFHeaderFooterPolicy(document, sectPr);
         XWPFHeader header = policy.createHeader(XWPFHeaderFooterPolicy.DEFAULT);
 
@@ -250,6 +270,7 @@ final class SamplingPlanExporter {
         mergeCellsVertically(table, 0, 0, 2);
         mergeCellsVertically(table, 1, 0, 2);
     }
+
 
     private static void configureHeaderTableLikeTemplate(XWPFTable table) {
         CTTbl ct = table.getCTTbl();
@@ -446,11 +467,19 @@ final class SamplingPlanExporter {
         paragraph.setAlignment(alignment);
         setParagraphSpacing(paragraph);
 
-        XWPFRun run = paragraph.createRun();
-        run.setText(text != null ? text : "");
-        run.setFontFamily(FONT_NAME);
-        run.setFontSize(fontSize);
-        run.setBold(bold);
+        String value = text == null ? "" : text;
+        String[] lines = value.split("\\n", -1);
+
+        for (int i = 0; i < lines.length; i++) {
+            XWPFRun run = paragraph.createRun();
+            run.setFontFamily(FONT_NAME);
+            run.setFontSize(fontSize);
+            run.setBold(bold);
+            run.setText(lines[i]);
+            if (i < lines.length - 1) {
+                run.addBreak();
+            }
+        }
     }
 
     private static void setParagraphSpacing(XWPFParagraph paragraph) {
@@ -586,23 +615,55 @@ final class SamplingPlanExporter {
         };
     }
 
-    private static int resolveSamplingPointCount(File mapFile) {
-        if (mapFile == null || !mapFile.exists()) {
-            return DEFAULT_POINT_COUNT;
+    private static int resolveSamplingPointCount(File sourceProtocolFile, File mapFile) {
+        int fromProtocol = countSamplingPointsFromFile(sourceProtocolFile);
+        if (fromProtocol > 0) {
+            return fromProtocol;
         }
-        try (InputStream in = new FileInputStream(mapFile);
+        int fromMap = countSamplingPointsFromFile(mapFile);
+        if (fromMap > 0) {
+            return fromMap;
+        }
+        return DEFAULT_POINT_COUNT;
+    }
+
+    private static int countSamplingPointsFromFile(File file) {
+        if (file == null || !file.exists()) {
+            return 0;
+        }
+        try (InputStream in = new FileInputStream(file);
              Workbook workbook = WorkbookFactory.create(in)) {
+
             Sheet sheet = findSheet(workbook, "ППР");
             if (sheet == null) {
-                return DEFAULT_POINT_COUNT;
+                return 0;
             }
+
             DataFormatter formatter = new DataFormatter();
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+
+            // По ТЗ: стартуем с строки 5 (B5-J5), но делаем страховку: если там нет "Точка" — ищем первую строку с "Точка"
+            int startRow = PPR_START_ROW_INDEX;
+            String startText = readMergedCellValue(sheet, startRow, 1, formatter, evaluator).toLowerCase(Locale.ROOT);
+            if (!startText.contains("точка")) {
+                int last = sheet.getLastRowNum();
+                for (int r = 0; r <= Math.min(last, 200); r++) {
+                    String t = readMergedCellValue(sheet, r, 1, formatter, evaluator).toLowerCase(Locale.ROOT);
+                    if (t.contains("точка")) {
+                        startRow = r;
+                        break;
+                    }
+                }
+            }
+
             int lastRow = sheet.getLastRowNum();
             int count = 0;
-            for (int rowIndex = PPR_START_ROW_INDEX; rowIndex <= lastRow; rowIndex++) {
-                String text = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator);
-                if (text.toLowerCase(Locale.ROOT).contains("точка")) {
+
+            for (int rowIndex = startRow; rowIndex <= lastRow; rowIndex++) {
+                String text = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator)
+                        .toLowerCase(Locale.ROOT);
+
+                if (text.contains("точка")) {
                     count++;
                     continue;
                 }
@@ -610,9 +671,9 @@ final class SamplingPlanExporter {
                     break;
                 }
             }
-            return count > 0 ? count : DEFAULT_POINT_COUNT;
+            return count;
         } catch (Exception ex) {
-            return DEFAULT_POINT_COUNT;
+            return 0;
         }
     }
 
@@ -627,6 +688,11 @@ final class SamplingPlanExporter {
             }
         }
         return null;
+    }
+    private static void configureApprovalTableLayout(XWPFTable table) {
+        // Левый столбец широкий (пустой), правый — под блок "УТВЕРЖДАЮ"
+        int[] widths = {7000, 5560}; // суммарно 12560
+        configureTableLayout(table, widths);
     }
 
     private static String readMergedCellValue(Sheet sheet,
