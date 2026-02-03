@@ -79,6 +79,11 @@ final class AreaRadiationMedMapTabBuilder {
             applyBorders(sheet, dataRow.getRowNum(), 8, LAST_COL);
         }
 
+        sheet.createRow(rowIndex++);
+        Row extraInfoRow = sheet.createRow(rowIndex++);
+        mergeCellRange(sheet, extraInfoRow.getRowNum(), 0, LAST_COL,
+                "Дополнительные сведения: ____________", titleStyle);
+
         return sheet;
     }
 

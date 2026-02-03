@@ -106,6 +106,16 @@ public final class RequestFormExporter {
         boolean hasArtificialGroundLightingSheet = hasSheetByName(sourceFile, "Иск освещение (2)");
         boolean hasKeoSheet = hasSheetByName(sourceFile, "КЕО");
         boolean hasNoiseRows = !noiseRows.isEmpty();
+        boolean isRadiationArea = hasMedSheet
+                && microclimateRows.isEmpty()
+                && ventilationRows.isEmpty()
+                && !hasMed3Sheet
+                && !hasEroaRadonSheet
+                && !hasArtificialLightingSheet
+                && !hasArtificialGroundLightingSheet
+                && !hasKeoSheet
+                && !hasNoiseRows;
+        String areaSize = isRadiationArea ? resolveAreaSizeFromSource(sourceFile) : "";
         if (normativeRows.isEmpty()) {
             normativeRows.add(new NormativeRow("", ""));
         }
@@ -142,8 +152,10 @@ public final class RequestFormExporter {
             setTableCellText(purposeTable.getRow(0).getCell(0), "Поставить отметку", false, ParagraphAlignment.LEFT);
             setTableCellText(purposeTable.getRow(0).getCell(1), "Цель", false, ParagraphAlignment.LEFT);
             setTableCellText(purposeTable.getRow(1).getCell(0), "Χ", false, ParagraphAlignment.LEFT);
-            setTableCellText(purposeTable.getRow(1).getCell(1),
-                    "Иная цель:\nВвод здания в эксплуатацию", false, ParagraphAlignment.LEFT);
+            String purposeText = isRadiationArea
+                    ? "Иная цель:\nПроектирование"
+                    : "Иная цель:\nВвод здания в эксплуатацию";
+            setTableCellText(purposeTable.getRow(1).getCell(1), purposeText, false, ParagraphAlignment.LEFT);
 
             XWPFParagraph spacerAfterPurpose = document.createParagraph();
             setParagraphSpacing(spacerAfterPurpose);
@@ -221,8 +233,10 @@ public final class RequestFormExporter {
             setTableCellText(optionsTable.getRow(14).getCell(0),
                     "Данные, предоставленные Заказчиком, за которые он несет ответственность",
                     false, ParagraphAlignment.LEFT);
-            setTableCellText(optionsTable.getRow(14).getCell(1), "Приложение к заявке", false,
-                    ParagraphAlignment.LEFT);
+            String appendixText = isRadiationArea
+                    ? buildRadiationAppendixText(areaSize)
+                    : "Приложение к заявке";
+            setTableCellText(optionsTable.getRow(14).getCell(1), appendixText, false, ParagraphAlignment.LEFT);
 
             setTableCellText(optionsTable.getRow(15).getCell(0), "Сроки выполнения работ", false,
                     ParagraphAlignment.LEFT);
@@ -386,29 +400,61 @@ public final class RequestFormExporter {
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
 
-                XWPFParagraph customerAppendixHeader = document.createParagraph();
-                customerAppendixHeader.setAlignment(ParagraphAlignment.RIGHT);
-                setParagraphSpacing(customerAppendixHeader);
-                XWPFRun customerAppendixHeaderRun = customerAppendixHeader.createRun();
-                customerAppendixHeaderRun.setFontFamily(FONT_NAME);
-                customerAppendixHeaderRun.setFontSize(FONT_SIZE);
-                setRunTextWithBreaks(customerAppendixHeaderRun,
-                        "Приложения к заявке № " + applicationNumber + "\n" +
-                                "Приложение – Данные, предоставлены Заказчиком");
+                if (isRadiationArea) {
+                    XWPFParagraph sketchHeader = document.createParagraph();
+                    sketchHeader.setAlignment(ParagraphAlignment.RIGHT);
+                    setParagraphSpacing(sketchHeader);
+                    XWPFRun sketchHeaderRun = sketchHeader.createRun();
+                    sketchHeaderRun.setFontFamily(FONT_NAME);
+                    sketchHeaderRun.setFontSize(FONT_SIZE);
+                    setRunTextWithBreaks(sketchHeaderRun,
+                            "Приложения к заявке № " + applicationNumber + "\n" +
+                                    "Приложение – Эскиз");
 
-                XWPFParagraph customerAppendixTitle = document.createParagraph();
-                customerAppendixTitle.setAlignment(ParagraphAlignment.CENTER);
-                setParagraphSpacing(customerAppendixTitle);
-                XWPFRun customerAppendixTitleRun = customerAppendixTitle.createRun();
-                customerAppendixTitleRun.setText("Данные, предоставленные Заказчиком, за которые он несет ответственность");
-                customerAppendixTitleRun.setFontFamily(FONT_NAME);
-                customerAppendixTitleRun.setFontSize(FONT_SIZE);
-                customerAppendixTitleRun.setBold(true);
+                    XWPFParagraph sketchTitle = document.createParagraph();
+                    sketchTitle.setAlignment(ParagraphAlignment.CENTER);
+                    setParagraphSpacing(sketchTitle);
+                    XWPFRun sketchTitleRun = sketchTitle.createRun();
+                    sketchTitleRun.setText("Эскиз (ситуационный план), с указанием точек измерения");
+                    sketchTitleRun.setFontFamily(FONT_NAME);
+                    sketchTitleRun.setFontSize(FONT_SIZE);
 
-                XWPFParagraph spacerBeforeMicroclimate = document.createParagraph();
-                setParagraphSpacing(spacerBeforeMicroclimate);
+                    for (int i = 0; i < 8; i++) {
+                        XWPFParagraph spacer = document.createParagraph();
+                        setParagraphSpacing(spacer);
+                    }
 
-                int sectionIndex = 1;
+                    XWPFParagraph sketchSignature = document.createParagraph();
+                    setParagraphSpacing(sketchSignature);
+                    XWPFRun sketchSignatureRun = sketchSignature.createRun();
+                    sketchSignatureRun.setFontFamily(FONT_NAME);
+                    sketchSignatureRun.setFontSize(FONT_SIZE);
+                    sketchSignatureRun.setText("Представитель заказчика _______________________________________");
+                } else {
+                    XWPFParagraph customerAppendixHeader = document.createParagraph();
+                    customerAppendixHeader.setAlignment(ParagraphAlignment.RIGHT);
+                    setParagraphSpacing(customerAppendixHeader);
+                    XWPFRun customerAppendixHeaderRun = customerAppendixHeader.createRun();
+                    customerAppendixHeaderRun.setFontFamily(FONT_NAME);
+                    customerAppendixHeaderRun.setFontSize(FONT_SIZE);
+                    setRunTextWithBreaks(customerAppendixHeaderRun,
+                            "Приложения к заявке № " + applicationNumber + "\n" +
+                                    "Приложение – Данные, предоставлены Заказчиком");
+
+                    XWPFParagraph customerAppendixTitle = document.createParagraph();
+                    customerAppendixTitle.setAlignment(ParagraphAlignment.CENTER);
+                    setParagraphSpacing(customerAppendixTitle);
+                    XWPFRun customerAppendixTitleRun = customerAppendixTitle.createRun();
+                    customerAppendixTitleRun.setText("Данные, предоставленные Заказчиком, " +
+                            "за которые он несет ответственность");
+                    customerAppendixTitleRun.setFontFamily(FONT_NAME);
+                    customerAppendixTitleRun.setFontSize(FONT_SIZE);
+                    customerAppendixTitleRun.setBold(true);
+
+                    XWPFParagraph spacerBeforeMicroclimate = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeMicroclimate);
+
+                    int sectionIndex = 1;
 
                 if (hasNoiseRows) {
                     XWPFParagraph noiseTitle = document.createParagraph();
@@ -804,6 +850,7 @@ public final class RequestFormExporter {
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                     }
                     sectionIndex++;
+                }
                 }
             }
 
@@ -1231,6 +1278,80 @@ public final class RequestFormExporter {
             value = findValueByPrefix(mapFile, "Адрес объекта:");
         }
         return value;
+    }
+
+    private static String resolveAreaSizeFromSource(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            DataFormatter formatter = new DataFormatter();
+            String prefix = "Площадь общая";
+            for (Row row : sheet) {
+                for (Cell cell : row) {
+                    String text = formatter.formatCellValue(cell).trim();
+                    if (text.isEmpty()) {
+                        continue;
+                    }
+                    String normalized = text.replace('\u00A0', ' ').trim();
+                    if (normalized.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT))) {
+                        String tail = normalized.substring(prefix.length()).trim();
+                        if (tail.isEmpty()) {
+                            Cell next = row.getCell(cell.getColumnIndex() + 1);
+                            if (next != null) {
+                                tail = formatter.formatCellValue(next).trim();
+                            }
+                        }
+                        return trimAreaValue(tail);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            return "";
+        }
+        return "";
+    }
+
+    private static String trimAreaValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.replace('\u00A0', ' ').trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        int index = findFirstUnitIndex(trimmed);
+        if (index >= 0) {
+            return trimmed.substring(0, index + 1).trim();
+        }
+        return trimmed;
+    }
+
+    private static int findFirstUnitIndex(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (ch == 'м' || ch == 'М' || ch == 'а' || ch == 'А'
+                    || ch == 'm' || ch == 'M' || ch == 'a' || ch == 'A') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String buildRadiationAppendixText(String areaSize) {
+        String areaPart = areaSize == null || areaSize.isBlank() ? "" : (" " + areaSize.trim());
+        return "Площадь участка" + areaPart + " Прошу указать в протоколе:\n" +
+                "Допустимый уровень мощность дозы гамма-излучения по СанПиН 2.6.1.2800-10 - 0,30 мкЗв/ч;\n" +
+                "Допустимый уровень плотности потока радона по СанПиН 2.6.1.2800-10 - 80 мБк/(м2∙с);\n" +
+                "Измерение эквивалентных и максимальных уровней звука производить в дневное время на " +
+                "любом временном интервале в период с 07. 00 ч. до 23.00 ч. \n" +
+                "Нормативные требования СанПиН 1.2.3685-21 (с 07. 00 ч. до 23.00 ч.) " +
+                "Эквивалентные уровни звука - 55 дБА; максимальные уровни звука - 70 дБА.";
     }
 
     private static String findValueByPrefix(File mapFile, String prefix) {
