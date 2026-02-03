@@ -13,6 +13,8 @@ import java.util.Locale;
 
 public final class PhysicalFactorsMapExporter {
     private static final String REGISTRATION_PREFIX = "Регистрационный номер карты замеров:";
+    private static final String REGISTRATION_RADON_PREFIX =
+            "Регистрационный номер карты замеров и(или) журнал регистрации результатов определения плотности потока радона:";
     private static final double COLUMN_WIDTH_SCALE = 0.9;
     private static final double LEFT_MARGIN_CM = 0.8;
     private static final double RIGHT_MARGIN_CM = 0.5;
@@ -220,22 +222,58 @@ public final class PhysicalFactorsMapExporter {
         for (Row row : sheet) {
             for (Cell cell : row) {
                 String text = formatter.formatCellValue(cell).trim();
-                if (text.startsWith(REGISTRATION_PREFIX)) {
-                    String tail = text.substring(REGISTRATION_PREFIX.length()).trim();
-                    if (!tail.isEmpty()) {
-                        return tail;
+                if (text.startsWith(REGISTRATION_RADON_PREFIX)) {
+                    String value = extractRegistrationValue(text, REGISTRATION_RADON_PREFIX);
+                    if (!value.isEmpty()) {
+                        return value;
                     }
-                    Cell next = row.getCell(cell.getColumnIndex() + 1);
-                    if (next != null) {
-                        String nextText = formatter.formatCellValue(next).trim();
-                        if (!nextText.isEmpty()) {
-                            return nextText;
-                        }
+                    String nextValue = readNextCellValue(row, cell.getColumnIndex(), formatter);
+                    if (!nextValue.isEmpty()) {
+                        return nextValue;
+                    }
+                    continue;
+                }
+                if (text.startsWith(REGISTRATION_PREFIX)) {
+                    String value = extractRegistrationValue(text, REGISTRATION_PREFIX);
+                    if (!value.isEmpty()) {
+                        return value;
+                    }
+                    String nextValue = readNextCellValue(row, cell.getColumnIndex(), formatter);
+                    if (!nextValue.isEmpty()) {
+                        return nextValue;
                     }
                 }
             }
         }
         return "";
+    }
+
+    private static String readNextCellValue(Row row, int cellIndex, DataFormatter formatter) {
+        Cell next = row.getCell(cellIndex + 1);
+        if (next == null) {
+            return "";
+        }
+        return trimRegistrationTail(formatter.formatCellValue(next));
+    }
+
+    private static String extractRegistrationValue(String text, String prefix) {
+        String tail = text.substring(prefix.length()).trim();
+        return trimRegistrationTail(tail);
+    }
+
+    private static String trimRegistrationTail(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?iu)\\s+и\\s+").matcher(trimmed);
+        if (matcher.find()) {
+            return trimmed.substring(0, matcher.start()).trim();
+        }
+        return trimmed;
     }
 
     private static boolean hasSheetWithPrefix(File sourceFile, String prefix) {
