@@ -44,7 +44,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-final class RequestAnalysisSheetExporter {
+public final class RequestAnalysisSheetExporter {
     private static final String ANALYSIS_SHEET_NAME = "лист анализа заявки.docx";
     private static final String FONT_NAME = "Arial";
     private static final int TITLE_FONT_SIZE = 12;
@@ -236,7 +236,7 @@ final class RequestAnalysisSheetExporter {
         }
     }
 
-    static File resolveAnalysisSheetFile(File mapFile) {
+    public static File resolveAnalysisSheetFile(File mapFile) {
         if (mapFile == null) {
             return null;
         }

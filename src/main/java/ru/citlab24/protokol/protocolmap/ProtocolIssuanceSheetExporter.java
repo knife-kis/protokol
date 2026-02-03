@@ -45,7 +45,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
 
-final class ProtocolIssuanceSheetExporter {
+public final class ProtocolIssuanceSheetExporter {
     private static final int MAP_PROTOCOL_NUMBER_ROW_INDEX = 21;
     private static final int MAP_CUSTOMER_ROW_INDEX = 5;
     private static final int MAP_APPLICATION_ROW_INDEX = 22;
@@ -124,7 +124,7 @@ final class ProtocolIssuanceSheetExporter {
         }
     }
 
-    static File resolveIssuanceSheetFile(File mapFile) {
+    public static File resolveIssuanceSheetFile(File mapFile) {
         if (mapFile == null) {
             return null;
         }

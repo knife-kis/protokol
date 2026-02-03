@@ -46,7 +46,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-final class RequestFormExporter {
+public final class RequestFormExporter {
     private static final String REQUEST_FORM_NAME = "заявка.docx";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
@@ -815,14 +815,14 @@ final class RequestFormExporter {
         }
     }
 
-    static File resolveRequestFormFile(File mapFile) {
+    public static File resolveRequestFormFile(File mapFile) {
         if (mapFile == null) {
             return null;
         }
         return new File(mapFile.getParentFile(), REQUEST_FORM_NAME);
     }
 
-    static void applyStandardHeader(XWPFDocument document) {
+    public static void applyStandardHeader(XWPFDocument document) {
         CTSectPr sectPr = document.getDocument().getBody().getSectPr();
         if (sectPr == null) {
             sectPr = document.getDocument().getBody().addNewSectPr();
@@ -1110,7 +1110,7 @@ final class RequestFormExporter {
         width.setW(BigInteger.valueOf(widthDxa));
     }
 
-    static String resolveApplicationNumberFromMap(File mapFile) {
+    public static String resolveApplicationNumberFromMap(File mapFile) {
         String line = readMapRowText(mapFile, MAP_APPLICATION_ROW_INDEX);
         String lowerLine = line.toLowerCase(Locale.ROOT);
         int applicationIndex = lowerLine.indexOf("заявка");

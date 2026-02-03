@@ -41,7 +41,7 @@ import java.io.InputStream;
 import java.math.BigInteger;
 import java.util.Locale;
 
-final class MeasurementCardRegistrationSheetExporter {
+public final class MeasurementCardRegistrationSheetExporter {
     private static final String REGISTRATION_SHEET_NAME = "лист регистрации карт замеров.docx";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
@@ -96,7 +96,7 @@ final class MeasurementCardRegistrationSheetExporter {
         }
     }
 
-    static File resolveRegistrationSheetFile(File mapFile) {
+    public static File resolveRegistrationSheetFile(File mapFile) {
         if (mapFile == null) {
             return null;
         }

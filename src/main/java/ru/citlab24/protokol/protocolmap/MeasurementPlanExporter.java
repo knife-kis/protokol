@@ -45,7 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-final class MeasurementPlanExporter {
+public final class MeasurementPlanExporter {
     private static final String PLAN_SHEET_NAME = "план измерений.docx";
     private static final String FONT_NAME = "Arial";
     private static final int TITLE_FONT_SIZE = 12;
@@ -195,7 +195,7 @@ final class MeasurementPlanExporter {
         }
     }
 
-    static File resolveMeasurementPlanFile(File mapFile) {
+    public static File resolveMeasurementPlanFile(File mapFile) {
         if (mapFile == null) {
             return null;
         }

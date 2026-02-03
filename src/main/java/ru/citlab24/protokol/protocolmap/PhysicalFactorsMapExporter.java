@@ -257,7 +257,7 @@ public final class PhysicalFactorsMapExporter {
         return false;
     }
 
-    private static boolean hasSheetWithName(File sourceFile, String name) {
+    public static boolean hasSheetWithName(File sourceFile, String name) {
         if (sourceFile == null || !sourceFile.exists()) {
             return false;
         }

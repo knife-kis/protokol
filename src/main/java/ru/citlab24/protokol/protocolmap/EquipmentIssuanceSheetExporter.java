@@ -41,7 +41,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-final class EquipmentIssuanceSheetExporter {
+public final class EquipmentIssuanceSheetExporter {
     private static final String ISSUANCE_SHEET_BASE_NAME = "лист выдачи приборов";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
@@ -76,7 +76,7 @@ final class EquipmentIssuanceSheetExporter {
         }
     }
 
-    static List<File> resolveIssuanceSheetFiles(File mapFile) {
+    public static List<File> resolveIssuanceSheetFiles(File mapFile) {
         if (mapFile == null || !mapFile.exists()) {
             return Collections.emptyList();
         }

@@ -33,7 +33,7 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 
-final class SoundInsulationEquipmentIssuanceSheetExporter {
+public final class SoundInsulationEquipmentIssuanceSheetExporter {
     private static final String ISSUANCE_SHEET_BASE_NAME = "лист выдачи приборов";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
@@ -57,7 +57,7 @@ final class SoundInsulationEquipmentIssuanceSheetExporter {
         writeIssuanceSheet(targetFile, objectName, PERFORMER_NAME, instruments, measurementDate);
     }
 
-    static List<File> resolveIssuanceSheetFiles(File mapFile, File protocolFile) {
+    public static List<File> resolveIssuanceSheetFiles(File mapFile, File protocolFile) {
         if (mapFile == null || !mapFile.exists()) {
             return Collections.emptyList();
         }
