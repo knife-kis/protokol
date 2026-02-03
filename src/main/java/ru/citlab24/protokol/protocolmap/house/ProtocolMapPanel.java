@@ -1,4 +1,15 @@
-package ru.citlab24.protokol.protocolmap;
+package ru.citlab24.protokol.protocolmap.house;
+
+import ru.citlab24.protokol.protocolmap.EquipmentIssuanceSheetExporter;
+import ru.citlab24.protokol.protocolmap.MeasurementCardRegistrationSheetExporter;
+import ru.citlab24.protokol.protocolmap.MeasurementPlanExporter;
+import ru.citlab24.protokol.protocolmap.NoiseMapExporter;
+import ru.citlab24.protokol.protocolmap.PhysicalFactorsMapExporter;
+import ru.citlab24.protokol.protocolmap.ProtocolIssuanceSheetExporter;
+import ru.citlab24.protokol.protocolmap.RequestAnalysisSheetExporter;
+import ru.citlab24.protokol.protocolmap.RequestFormExporter;
+import ru.citlab24.protokol.protocolmap.SoundInsulationEquipmentIssuanceSheetExporter;
+import ru.citlab24.protokol.protocolmap.SoundInsulationMapExporter;
 
 import javax.swing.*;
 import javax.swing.border.Border;
@@ -21,7 +32,7 @@ public class ProtocolMapPanel extends JPanel {
         super(new BorderLayout(24, 24));
         setBorder(BorderFactory.createEmptyBorder(24, 24, 24, 24));
 
-        JLabel title = new JLabel("Сформировать карту по протоколу");
+        JLabel title = new JLabel("Сформировать первичку по домам");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 20f));
         add(title, BorderLayout.NORTH);
 

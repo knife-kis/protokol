@@ -10,7 +10,8 @@ import ru.citlab24.protokol.tabs.modules.noise.NoiseTab;
 import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
-import ru.citlab24.protokol.protocolmap.ProtocolMapPanel;
+import ru.citlab24.protokol.protocolmap.area.AreaPrimaryPanel;
+import ru.citlab24.protokol.protocolmap.house.ProtocolMapPanel;
 
 
 import com.formdev.flatlaf.FlatClientProperties;
@@ -88,7 +89,7 @@ public class MainFrame extends JFrame {
         cardPanel.add(createScenePanel(tabbedPane), CARD_PROTOCOL_HOME);
         cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_AREA);
         cardPanel.add(createScenePanel(new ProtocolMapPanel()), CARD_PROTOCOL_MAP);
-        cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_REQUEST);
+        cardPanel.add(createScenePanel(new AreaPrimaryPanel()), CARD_PROTOCOL_REQUEST);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
@@ -118,10 +119,10 @@ public class MainFrame extends JFrame {
         JMenuItem protocolArea = new JMenuItem("Заполнение протокола участок");
         protocolArea.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_AREA));
 
-        JMenuItem protocolMap = new JMenuItem("Сформировать карту по протоколу");
+        JMenuItem protocolMap = new JMenuItem("Сформировать первичку по домам");
         protocolMap.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_MAP));
 
-        JMenuItem protocolRequest = new JMenuItem("Сформировать заявку по протоколу");
+        JMenuItem protocolRequest = new JMenuItem("Сформировать первичку по участкам");
         protocolRequest.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_REQUEST));
 
         fileMenu.add(protocolHome);
