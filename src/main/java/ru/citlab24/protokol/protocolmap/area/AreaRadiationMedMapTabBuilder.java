@@ -20,7 +20,7 @@ final class AreaRadiationMedMapTabBuilder {
     private AreaRadiationMedMapTabBuilder() {
     }
 
-    static Sheet createSheet(Workbook workbook, int profileCount, int controlPointCount) {
+    static Sheet createSheet(Workbook workbook, java.util.List<String> locationLabels) {
         Sheet sheet = workbook.createSheet("МЭД");
         applySheetDefaults(workbook, sheet);
 
@@ -65,21 +65,14 @@ final class AreaRadiationMedMapTabBuilder {
         applyBorders(sheet, numberRow.getRowNum(), 8, LAST_COL);
 
         int sequence = 1;
-        for (int i = 1; i <= profileCount; i++) {
+        java.util.List<String> labels = (locationLabels == null || locationLabels.isEmpty())
+                ? java.util.List.of("")
+                : locationLabels;
+        for (String label : labels) {
             Row dataRow = sheet.createRow(rowIndex++);
             dataRow.setHeightInPoints(defaultHeight * 3f);
             setCellValue(dataRow, 0, String.valueOf(sequence++), dataCenterStyle);
-            mergeCellRange(sheet, dataRow.getRowNum(), 1, 7, "Профиль " + i, dataLeftStyle);
-            mergeCellRange(sheet, dataRow.getRowNum(), 8, LAST_COL, "", dataCenterStyle);
-            applyBorders(sheet, dataRow.getRowNum(), 0, 0);
-            applyBorders(sheet, dataRow.getRowNum(), 1, 7);
-            applyBorders(sheet, dataRow.getRowNum(), 8, LAST_COL);
-        }
-        for (int i = 1; i <= controlPointCount; i++) {
-            Row dataRow = sheet.createRow(rowIndex++);
-            dataRow.setHeightInPoints(defaultHeight * 3f);
-            setCellValue(dataRow, 0, String.valueOf(sequence++), dataCenterStyle);
-            mergeCellRange(sheet, dataRow.getRowNum(), 1, 7, "Контрольная точка " + i, dataLeftStyle);
+            mergeCellRange(sheet, dataRow.getRowNum(), 1, 7, label == null ? "" : label, dataLeftStyle);
             mergeCellRange(sheet, dataRow.getRowNum(), 8, LAST_COL, "", dataCenterStyle);
             applyBorders(sheet, dataRow.getRowNum(), 0, 0);
             applyBorders(sheet, dataRow.getRowNum(), 1, 7);

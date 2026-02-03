@@ -14,8 +14,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.List;
 
 import static ru.citlab24.protokol.protocolmap.PhysicalFactorsMapExporter.hasSheetWithName;
 
@@ -40,14 +40,14 @@ final class AreaRadiationMapExporter {
             return;
         }
         boolean hasMedSheet = hasSheetWithName(sourceFile, "МЭД");
-        int[] counts = hasMedSheet ? resolveMedProfileAndControlPointCounts(sourceFile) : new int[]{0, 0};
+        List<String> medLocationLabels = hasMedSheet ? resolveMedLocationLabels(sourceFile) : List.of();
 
         try (InputStream in = new FileInputStream(mapFile);
              Workbook workbook = WorkbookFactory.create(in)) {
             removeSheetIfExists(workbook, "Вентиляция");
             if (hasMedSheet) {
                 removeSheetIfExists(workbook, "МЭД");
-                Sheet medSheet = AreaRadiationMedMapTabBuilder.createSheet(workbook, counts[0], counts[1]);
+                Sheet medSheet = AreaRadiationMedMapTabBuilder.createSheet(workbook, medLocationLabels);
                 applyHeadersFromMainSheet(workbook, medSheet);
             }
             try (FileOutputStream out = new FileOutputStream(mapFile)) {
@@ -86,24 +86,24 @@ final class AreaRadiationMapExporter {
         targetHeader.setRight(sourceHeader.getRight());
     }
 
-    private static int[] resolveMedProfileAndControlPointCounts(File sourceFile) {
-        int maxProfile = 0;
-        int maxControlPoint = 0;
+    private static List<String> resolveMedLocationLabels(File sourceFile) {
+        List<String> labels = new ArrayList<>();
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook sourceWorkbook = WorkbookFactory.create(in)) {
             Sheet sourceSheet = findSheetWithName(sourceWorkbook, "МЭД");
             if (sourceSheet == null) {
-                return new int[]{0, 0};
+                return labels;
             }
             DataFormatter formatter = new DataFormatter();
             FormulaEvaluator evaluator = sourceWorkbook.getCreationHelper().createFormulaEvaluator();
-            Pattern profilePattern = Pattern.compile("(?i)профиль\\s*(\\d+)");
-            Pattern controlPattern = Pattern.compile("(?i)контрольная\\s*точка\\s*(\\d+)");
             int lastRow = sourceSheet.getLastRowNum();
             int emptyStreak = 0;
             for (int rowIndex = 6; rowIndex <= lastRow; rowIndex++) {
-                String bValue = readMergedCellValue(sourceSheet, rowIndex, 1, formatter, evaluator);
-                String normalized = normalizeText(bValue);
+                String mergedValue = readMergedCellValue(sourceSheet, rowIndex, 1, formatter, evaluator);
+                String normalized = normalizeText(mergedValue);
+                if (normalized.isBlank()) {
+                    normalized = normalizeText(readCellValue(sourceSheet, rowIndex, 1, formatter, evaluator));
+                }
                 if (normalized.isBlank()) {
                     emptyStreak++;
                     if (emptyStreak >= 20) {
@@ -112,22 +112,15 @@ final class AreaRadiationMapExporter {
                     continue;
                 }
                 emptyStreak = 0;
-                Matcher profileMatcher = profilePattern.matcher(normalized);
-                if (profileMatcher.find()) {
-                    maxProfile = Math.max(maxProfile, Integer.parseInt(profileMatcher.group(1)));
-                }
-                Matcher controlMatcher = controlPattern.matcher(normalized);
-                if (controlMatcher.find()) {
-                    maxControlPoint = Math.max(maxControlPoint, Integer.parseInt(controlMatcher.group(1)));
-                }
+                labels.add(normalized);
             }
         } catch (Exception ex) {
-            return new int[]{0, 0};
+            return labels;
         }
-        if (maxProfile <= 0) {
-            maxProfile = 1;
+        if (labels.isEmpty()) {
+            labels.add("");
         }
-        return new int[]{maxProfile, maxControlPoint};
+        return labels;
     }
 
     private static Sheet findSheetWithName(Workbook workbook, String name) {
@@ -159,6 +152,22 @@ final class AreaRadiationMapExporter {
             }
             org.apache.poi.ss.usermodel.Cell cell = row.getCell(region.getFirstColumn());
             return normalizeText(cell == null ? "" : formatter.formatCellValue(cell, evaluator));
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return "";
+        }
+        org.apache.poi.ss.usermodel.Cell cell = row.getCell(colIndex);
+        return normalizeText(cell == null ? "" : formatter.formatCellValue(cell, evaluator));
+    }
+
+    private static String readCellValue(Sheet sheet,
+                                        int rowIndex,
+                                        int colIndex,
+                                        DataFormatter formatter,
+                                        FormulaEvaluator evaluator) {
+        if (sheet == null) {
+            return "";
         }
         Row row = sheet.getRow(rowIndex);
         if (row == null) {
