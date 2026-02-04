@@ -68,7 +68,7 @@ public final class PhysicalFactorsValuesGuideExporter {
                             + "нужно указать обязательно. Всего требуется не менее 20 точек на этаж.");
 
             addSectionTitle(document, "3. Освещение на улице");
-            addParagraph(document, "Таблица значений из протокола (лист «Иск освещение (2)», колонки K–AD):");
+            addParagraph(document, "Таблица значений из протокола (лист «Иск освещение (2)», колонки C, K–AD, G):");
             addStreetLightingValuesTable(document, sourceProtocolFile);
 
             try (FileOutputStream out = new FileOutputStream(guideFile)) {
@@ -129,7 +129,7 @@ public final class PhysicalFactorsValuesGuideExporter {
             return;
         }
 
-        final int columnCount = 20; // K..AD
+        final int columnCount = 22; // C, K..AD, G
         XWPFTable table = document.createTable(rows.size(), columnCount);
 
         for (int r = 0; r < rows.size(); r++) {
@@ -178,8 +178,10 @@ public final class PhysicalFactorsValuesGuideExporter {
             DataFormatter formatter = new DataFormatter(new Locale("ru", "RU"));
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
 
+            final int placeCol = CellReference.convertColStringToIndex("C"); // 2
             final int fromCol = CellReference.convertColStringToIndex("K");  // 10
             final int toCol   = CellReference.convertColStringToIndex("AD"); // 29
+            final int averageCol = CellReference.convertColStringToIndex("G"); // 6
 
             int lastRow = sheet.getLastRowNum();
 
@@ -190,8 +192,14 @@ public final class PhysicalFactorsValuesGuideExporter {
                     continue;
                 }
 
-                List<String> values = new ArrayList<>(toCol - fromCol + 1);
+                List<String> values = new ArrayList<>(toCol - fromCol + 3);
                 boolean hasAny = false;
+
+                String place = formatCellValue(row.getCell(placeCol), formatter, evaluator);
+                values.add(place);
+                if (!place.isEmpty()) {
+                    hasAny = true;
+                }
 
                 for (int colIndex = fromCol; colIndex <= toCol; colIndex++) {
                     Cell cell = row.getCell(colIndex);
@@ -200,6 +208,12 @@ public final class PhysicalFactorsValuesGuideExporter {
                     if (!v.isEmpty()) {
                         hasAny = true;
                     }
+                }
+
+                String average = formatCellValue(row.getCell(averageCol), formatter, evaluator);
+                values.add(average);
+                if (!average.isEmpty()) {
+                    hasAny = true;
                 }
 
                 // по всем строкам: добавляем только те, где реально есть значения в K–AD
