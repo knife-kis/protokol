@@ -12,6 +12,7 @@ import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJcTable;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
@@ -25,6 +26,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STFldCharType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STJcTable;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
 import org.apache.xmlbeans.impl.xb.xmlschema.SpaceAttribute;
@@ -51,6 +53,7 @@ final class EquipmentControlSheetExporter {
         generateControlSheet(
                 mapFile,
                 CONTROL_SHEET_COAL_NAME,
+                "Лист контроля оборудования Уголь",
                 "Камера-01",
                 "631",
                 "Измерения фона активированного угля",
@@ -62,6 +65,7 @@ final class EquipmentControlSheetExporter {
         generateControlSheet(
                 mapFile,
                 CONTROL_SHEET_SOURCE_NAME,
+                "Лист контроля оборудования Источник",
                 "Камера-01",
                 "631",
                 "измерения по контрольному источнику №647",
@@ -92,6 +96,7 @@ final class EquipmentControlSheetExporter {
     private static void generateControlSheet(
             File mapFile,
             String fileName,
+            String controlSheetTitle,
             String equipmentName,
             String inventoryNumber,
             String controlNotes,
@@ -100,9 +105,10 @@ final class EquipmentControlSheetExporter {
         File targetFile = resolveControlSheetFile(mapFile, fileName);
 
         try (XWPFDocument document = new XWPFDocument()) {
-            applyControlSheetHeader(document);
+            applyControlSheetHeader(document, controlSheetTitle);
             addControlSheetSection(
                     document,
+                    controlSheetTitle,
                     equipmentName,
                     inventoryNumber,
                     controlNotes,
@@ -118,11 +124,12 @@ final class EquipmentControlSheetExporter {
         }
     }
 
-    private static void applyControlSheetHeader(XWPFDocument document) {
+    private static void applyControlSheetHeader(XWPFDocument document, String controlSheetTitle) {
         CTSectPr sectPr = document.getDocument().getBody().getSectPr();
         if (sectPr == null) {
             sectPr = document.getDocument().getBody().addNewSectPr();
         }
+        applyLandscapePageSettings(sectPr);
         XWPFHeaderFooterPolicy policy = new XWPFHeaderFooterPolicy(document, sectPr);
         XWPFHeader header = policy.createHeader(XWPFHeaderFooterPolicy.DEFAULT);
 
@@ -130,7 +137,7 @@ final class EquipmentControlSheetExporter {
         configureHeaderTableLikeTemplate(table);
 
         setHeaderCellText(table.getRow(0).getCell(0), "Испытательная лаборатория ООО «ЦИТ»");
-        setHeaderCellText(table.getRow(0).getCell(1), "Лист контроля оборудования\nФ1 РИ ИЛ 2-2023");
+        setHeaderCellText(table.getRow(0).getCell(1), controlSheetTitle + "\nФ1 РИ ИЛ 2-2023");
         setHeaderCellText(table.getRow(0).getCell(2), "Дата утверждения бланка формуляра: 01.01.2023г.");
         setHeaderCellText(table.getRow(1).getCell(2), "Редакция № 1");
         setHeaderCellPageCount(table.getRow(2).getCell(2));
@@ -141,6 +148,7 @@ final class EquipmentControlSheetExporter {
 
     private static void addControlSheetSection(
             XWPFDocument document,
+            String controlSheetTitle,
             String equipmentName,
             String inventoryNumber,
             String controlNotes,
@@ -151,7 +159,7 @@ final class EquipmentControlSheetExporter {
         title.setAlignment(ParagraphAlignment.CENTER);
         setParagraphSpacing(title);
         XWPFRun titleRun = title.createRun();
-        titleRun.setText("Лист контроля оборудования");
+        titleRun.setText(controlSheetTitle);
         titleRun.setFontFamily(FONT_NAME);
         titleRun.setFontSize(FONT_SIZE);
         titleRun.setBold(true);
@@ -211,6 +219,13 @@ final class EquipmentControlSheetExporter {
         setParagraphSpacing(pageBreak);
         XWPFRun run = pageBreak.createRun();
         run.addBreak(BreakType.PAGE);
+    }
+
+    private static void applyLandscapePageSettings(CTSectPr sectPr) {
+        CTPageSz pageSize = sectPr.isSetPgSz() ? sectPr.getPgSz() : sectPr.addNewPgSz();
+        pageSize.setOrient(STPageOrientation.LANDSCAPE);
+        pageSize.setW(BigInteger.valueOf(16838));
+        pageSize.setH(BigInteger.valueOf(11906));
     }
 
     private static void configureHeaderTableLikeTemplate(XWPFTable table) {
