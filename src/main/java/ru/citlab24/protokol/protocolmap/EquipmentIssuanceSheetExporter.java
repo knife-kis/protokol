@@ -52,6 +52,8 @@ public final class EquipmentIssuanceSheetExporter {
     private static final String OBJECT_PREFIX = "4. Наименование объекта:";
     private static final String INSTRUMENTS_PREFIX = "5.3. Приборы для измерения (используемое отметить):";
     private static final int NOISE_MERGED_DATE_LAST_COLUMN = 23;
+    private static final int NOISE_PROTOCOL_DATE_START_ROW = 0;
+    private static final int NOISE_PROTOCOL_MERGED_DATE_LAST_COLUMN = NOISE_MERGED_DATE_LAST_COLUMN;
     static final Pattern DATE_PATTERN = Pattern.compile("\\b\\d{2}\\.\\d{2}\\.(?:\\d{2}|\\d{4})\\b");
 
     private EquipmentIssuanceSheetExporter() {
