@@ -39,6 +39,7 @@ import java.util.List;
 final class EquipmentControlSheetExporter {
     private static final String CONTROL_SHEET_COAL_NAME = "Лист контроля оборудования Уголь.docx";
     private static final String CONTROL_SHEET_SOURCE_NAME = "Лист контроля оборудования Источник.docx";
+    private static final String CONTROL_SHEET_TITLE = "Лист контроля оборудования";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
     private static final int TABLE_WIDTH = 12560;
@@ -53,7 +54,7 @@ final class EquipmentControlSheetExporter {
         generateControlSheet(
                 mapFile,
                 CONTROL_SHEET_COAL_NAME,
-                "Лист контроля оборудования Уголь",
+                CONTROL_SHEET_TITLE,
                 "Камера-01",
                 "631",
                 "Измерения фона активированного угля",
@@ -65,7 +66,7 @@ final class EquipmentControlSheetExporter {
         generateControlSheet(
                 mapFile,
                 CONTROL_SHEET_SOURCE_NAME,
-                "Лист контроля оборудования Источник",
+                CONTROL_SHEET_TITLE,
                 "Камера-01",
                 "631",
                 "измерения по контрольному источнику №647",
@@ -113,7 +114,7 @@ final class EquipmentControlSheetExporter {
                     inventoryNumber,
                     controlNotes,
                     controlRows,
-                    7
+                    4
             );
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
@@ -137,7 +138,7 @@ final class EquipmentControlSheetExporter {
         configureHeaderTableLikeTemplate(table);
 
         setHeaderCellText(table.getRow(0).getCell(0), "Испытательная лаборатория ООО «ЦИТ»");
-        setHeaderCellText(table.getRow(0).getCell(1), controlSheetTitle + "\nФ1 РИ ИЛ 2-2023");
+        setHeaderCellText(table.getRow(0).getCell(1), CONTROL_SHEET_TITLE + "\nФ1 РИ ИЛ 2-2023");
         setHeaderCellText(table.getRow(0).getCell(2), "Дата утверждения бланка формуляра: 01.01.2023г.");
         setHeaderCellText(table.getRow(1).getCell(2), "Редакция № 1");
         setHeaderCellPageCount(table.getRow(2).getCell(2));
@@ -164,8 +165,6 @@ final class EquipmentControlSheetExporter {
         titleRun.setFontSize(FONT_SIZE);
         titleRun.setBold(true);
 
-        addSpacer(document);
-
         XWPFTable equipmentTable = document.createTable(2, 3);
         configureTableLayout(equipmentTable, new int[]{4187, 4187, 4186});
         setTableCellText(equipmentTable.getRow(0).getCell(0), "Наименование оборудования",
@@ -184,7 +183,7 @@ final class EquipmentControlSheetExporter {
         addSpacer(document);
 
         XWPFTable controlTable = document.createTable(3, 5);
-        configureTableLayout(controlTable, new int[]{2512, 2512, 2512, 2512, 2512});
+        configureTableLayout(controlTable, new int[]{2323, 2323, 2323, 2323, 3268});
         String[] headerCells = new String[]{
                 "Дата проведения контроля",
                 "Результат контроля, ед.из.",
