@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
+import org.apache.poi.xwpf.usermodel.LineSpacingRule;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
@@ -29,6 +30,8 @@ import java.util.List;
 
 public final class PhysicalFactorsValuesGuideExporter {
     private static final String GUIDE_NAME = "Справка по значениям.docx";
+    private static final String FONT_FAMILY = "Arial";
+    private static final int FONT_SIZE = 10;
 
     private PhysicalFactorsValuesGuideExporter() {
     }
@@ -89,34 +92,38 @@ public final class PhysicalFactorsValuesGuideExporter {
     private static void addTitle(XWPFDocument document, String text) {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setAlignment(ParagraphAlignment.CENTER);
+        applyParagraphFormatting(paragraph);
         XWPFRun run = paragraph.createRun();
         run.setBold(true);
-        run.setFontSize(14);
+        applyRunFormatting(run);
         run.setText(text);
     }
 
     private static void addSectionTitle(XWPFDocument document, String text) {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setAlignment(ParagraphAlignment.LEFT);
+        applyParagraphFormatting(paragraph);
         XWPFRun run = paragraph.createRun();
         run.setBold(true);
-        run.setFontSize(12);
+        applyRunFormatting(run);
         run.setText(text);
     }
 
     private static void addBullet(XWPFDocument document, String text) {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setAlignment(ParagraphAlignment.LEFT);
+        applyParagraphFormatting(paragraph);
         XWPFRun run = paragraph.createRun();
-        run.setFontSize(11);
+        applyRunFormatting(run);
         run.setText("• " + text);
     }
 
     private static void addParagraph(XWPFDocument document, String text) {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setAlignment(ParagraphAlignment.LEFT);
+        applyParagraphFormatting(paragraph);
         XWPFRun run = paragraph.createRun();
-        run.setFontSize(11);
+        applyRunFormatting(run);
         run.setText(text);
     }
 
@@ -144,9 +151,21 @@ public final class PhysicalFactorsValuesGuideExporter {
     private static void setCellText(XWPFTableCell cell, String text) {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
+        applyParagraphFormatting(paragraph);
         XWPFRun run = paragraph.createRun();
-        run.setFontSize(11);
+        applyRunFormatting(run);
         run.setText(text);
+    }
+
+    private static void applyParagraphFormatting(XWPFParagraph paragraph) {
+        paragraph.setSpacingBefore(0);
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBetween(1.0, LineSpacingRule.AUTO);
+    }
+
+    private static void applyRunFormatting(XWPFRun run) {
+        run.setFontFamily(FONT_FAMILY);
+        run.setFontSize(FONT_SIZE);
     }
 
     private static void mergeCellsHorizontally(XWPFTable table, int row, int fromCol, int toCol) {
