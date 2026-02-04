@@ -69,7 +69,7 @@ final class RadiationJournalWordExporter {
             buildEnvironmentSection(document);
             List<String> sk13Numbers = buildSamplingSection(document, data);
             buildSamplingFooter(document, data, sk13Numbers);
-            buildDistributionSection(document);
+            buildDistributionSection(document, data);
             buildChangeLogSection(document);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
@@ -465,7 +465,8 @@ final class RadiationJournalWordExporter {
         }
     }
 
-    private static void buildDistributionSection(XWPFDocument document) {
+    private static void buildDistributionSection(XWPFDocument document, RadiationJournalData.ProtocolData data) {
+        addDistributionControlNote(document, data);
         addPageBreak(document);
         addParagraphText(document,
                 "ЛИСТ РАССЫЛКИ ДОКУМЕНТОВ",
@@ -492,6 +493,24 @@ final class RadiationJournalWordExporter {
                         "", TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
             }
         }
+    }
+
+    private static void addDistributionControlNote(XWPFDocument document, RadiationJournalData.ProtocolData data) {
+        if (data == null) {
+            return;
+        }
+        String preparedLine = data.preparedLine() == null ? "" : data.preparedLine();
+        boolean hasTarnovsky = preparedLine.toLowerCase(Locale.ROOT).contains("тарновский");
+        StringBuilder text = new StringBuilder();
+        if (hasTarnovsky) {
+            text.append("Контроль ведения записей осуществен: Инженер Белов Д.А.");
+        }
+        String controlDate = data.controlDate() == null ? "" : data.controlDate();
+        if (text.length() > 0) {
+            text.append("\n");
+        }
+        text.append("результат контроля").append(" ".repeat(20)).append("Дата контроля: ").append(controlDate);
+        addParagraphText(document, text.toString(), TEXT_FONT_SIZE, ParagraphAlignment.LEFT, false);
     }
 
     private static void buildChangeLogSection(XWPFDocument document) {
