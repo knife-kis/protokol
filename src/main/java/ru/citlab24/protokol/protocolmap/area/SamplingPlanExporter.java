@@ -927,6 +927,10 @@ final class SamplingPlanExporter {
              Workbook workbook = WorkbookFactory.create(in)) {
             DataFormatter formatter = new DataFormatter();
             FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            String methodFromNormDocs = resolvePlanMeasurementMethodFromNormDocs(workbook, formatter, evaluator);
+            if (!methodFromNormDocs.isBlank()) {
+                return methodFromNormDocs;
+            }
             boolean inPlanSection = false;
             for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
                 Sheet sheet = workbook.getSheetAt(sheetIndex);
@@ -957,6 +961,76 @@ final class SamplingPlanExporter {
             return "";
         }
         return "";
+    }
+
+    private static String resolvePlanMeasurementMethodFromNormDocs(Workbook workbook,
+                                                                   DataFormatter formatter,
+                                                                   FormulaEvaluator evaluator) {
+        if (workbook == null || workbook.getNumberOfSheets() == 0) {
+            return "";
+        }
+        String sectionTitle = "Сведения о нормативных документах (НД), " +
+                "регламентирующих значения показателей и НД на методы (методики) измерений:";
+        String targetLabel = "Мощность дозы гамма-излучения";
+        Sheet sheet = workbook.getSheetAt(0);
+        int startRow = -1;
+        for (Row row : sheet) {
+            if (row == null) {
+                continue;
+            }
+            for (int colIndex = 0; colIndex < row.getLastCellNum(); colIndex++) {
+                String text = readMergedCellValue(sheet, row.getRowNum(), colIndex, formatter, evaluator);
+                if (text.contains(sectionTitle)) {
+                    startRow = row.getRowNum() + 1;
+                    break;
+                }
+            }
+            if (startRow >= 0) {
+                break;
+            }
+        }
+        if (startRow < 0) {
+            return "";
+        }
+        int lastRow = sheet.getLastRowNum();
+        for (int rowIndex = startRow; rowIndex <= lastRow; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                continue;
+            }
+            for (int colIndex = 0; colIndex < row.getLastCellNum(); colIndex++) {
+                String text = readMergedCellValue(sheet, rowIndex, colIndex, formatter, evaluator);
+                if (!text.contains(targetLabel)) {
+                    continue;
+                }
+                CellRangeAddress targetRegion = findMergedRegion(sheet, rowIndex, colIndex);
+                if (targetRegion != null && colIndex != targetRegion.getFirstColumn()) {
+                    continue;
+                }
+                int firstNextCol = (targetRegion == null ? colIndex : targetRegion.getLastColumn()) + 1;
+                CellRangeAddress firstNextRegion = findNextMergedRegionInRow(sheet, rowIndex, firstNextCol);
+                int secondNextCol = (firstNextRegion == null ? firstNextCol : firstNextRegion.getLastColumn()) + 1;
+                String value = readMergedCellValue(sheet, rowIndex, secondNextCol, formatter, evaluator);
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private static CellRangeAddress findNextMergedRegionInRow(Sheet sheet, int rowIndex, int colIndex) {
+        CellRangeAddress best = null;
+        for (CellRangeAddress region : sheet.getMergedRegions()) {
+            if (!region.isInRange(rowIndex, region.getFirstColumn())) {
+                continue;
+            }
+            if (region.getFirstColumn() < colIndex) {
+                continue;
+            }
+            if (best == null || region.getFirstColumn() < best.getFirstColumn()) {
+                best = region;
+            }
+        }
+        return best;
     }
 
     private static String trimLeadingPunctuation(String value) {
