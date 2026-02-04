@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.protocolmap.area;
 
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
+import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.TableWidthType;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -100,6 +101,7 @@ final class RadiationJournalWordExporter {
                 TEXT_FONT_SIZE,
                 ParagraphAlignment.LEFT,
                 false);
+        addPageBreak(document);
     }
 
     private static void buildResponsibleSection(XWPFDocument document, RadiationJournalData.ProtocolData data) {
@@ -188,6 +190,7 @@ final class RadiationJournalWordExporter {
                         "", TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
             }
         }
+        addPageBreak(document);
     }
 
     private static void buildProtocolInfoSection(XWPFDocument document, RadiationJournalData.ProtocolData data) {
@@ -463,6 +466,7 @@ final class RadiationJournalWordExporter {
     }
 
     private static void buildDistributionSection(XWPFDocument document) {
+        addPageBreak(document);
         addParagraphText(document,
                 "ЛИСТ РАССЫЛКИ ДОКУМЕНТОВ",
                 TEXT_FONT_SIZE,
@@ -807,6 +811,14 @@ final class RadiationJournalWordExporter {
         for (int i = 0; i < lines; i++) {
             run.addBreak();
         }
+    }
+
+    private static void addPageBreak(XWPFDocument document) {
+        XWPFParagraph paragraph = document.createParagraph();
+        paragraph.setSpacingAfter(0);
+        paragraph.setSpacingBefore(0);
+        XWPFRun run = paragraph.createRun();
+        run.addBreak(BreakType.PAGE);
     }
 
     private static void tightenHeaderRowHeights(XWPFTable table) {
