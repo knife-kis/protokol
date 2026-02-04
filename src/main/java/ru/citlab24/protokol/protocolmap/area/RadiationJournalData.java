@@ -37,6 +37,7 @@ final class RadiationJournalData {
         String customerPresence = "";
         String observationLocation = "";
         int pointCount = DEFAULT_POINT_COUNT;
+        String controlDate = "";
 
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
@@ -53,6 +54,7 @@ final class RadiationJournalData {
             observationLocation = resolveValueByPrefix(workbook,
                     "Наименование предприятия, организации, объекта, где производились измерения:");
             pointCount = Math.max(DEFAULT_POINT_COUNT, countSamplingPoints(workbook));
+            controlDate = resolveControlDate(workbook);
         } catch (Exception ignored) {
             return ProtocolData.empty();
         }
@@ -66,8 +68,39 @@ final class RadiationJournalData {
                 customerRequest,
                 customerPresence,
                 observationLocation,
-                pointCount
+                pointCount,
+                controlDate
         );
+    }
+
+    private static String resolveControlDate(Workbook workbook) {
+        if (workbook == null || workbook.getNumberOfSheets() == 0) {
+            return "";
+        }
+        Sheet sheet = workbook.getSheetAt(0);
+        if (sheet == null) {
+            return "";
+        }
+        int targetRowIndex = 6;
+        Row row = sheet.getRow(targetRowIndex);
+        if (row == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+        Pattern pattern = Pattern.compile("\\b\\d{1,2}\\s+[а-яА-Я]+\\s+\\d{4}\\s*г?\\.?\\b");
+        for (int colIndex = 0; colIndex < row.getLastCellNum(); colIndex++) {
+            Cell cell = row.getCell(colIndex);
+            String value = formatter.formatCellValue(cell, evaluator).trim();
+            if (value.isEmpty()) {
+                continue;
+            }
+            Matcher matcher = pattern.matcher(value);
+            if (matcher.find()) {
+                return matcher.group().trim();
+            }
+        }
+        return "";
     }
 
     private static String resolvePreparedLine(Workbook workbook) {
@@ -345,7 +378,8 @@ final class RadiationJournalData {
                         String customerRequest,
                         String customerPresence,
                         String observationLocation,
-                        int pointCount) {
+                        int pointCount,
+                        String controlDate) {
         static ProtocolData empty() {
             return new ProtocolData(
                     "Заведующий лабораторией Тарновский М.О.",
@@ -356,7 +390,8 @@ final class RadiationJournalData {
                     "",
                     "",
                     "",
-                    DEFAULT_POINT_COUNT
+                    DEFAULT_POINT_COUNT,
+                    ""
             );
         }
     }

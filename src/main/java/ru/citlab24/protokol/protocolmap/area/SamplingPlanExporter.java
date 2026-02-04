@@ -83,7 +83,9 @@ final class SamplingPlanExporter {
         // а если не получилось — пробуем из карты (на случай других сценариев)
         int pointCount = resolveSamplingPointCount(sourceProtocolFile, mapFile);
 
-        PerformerInfo performerInfo = resolvePerformerInfo(mapFile);
+        String samplingLocation = resolveSamplingLocation(sourceProtocolFile);
+        String measurementMethod = resolvePlanMeasurementMethod(sourceProtocolFile);
+        PerformerInfo performerInfo = resolvePerformerInfo(sourceProtocolFile, mapFile);
 
         try (XWPFDocument document = new XWPFDocument()) {
             applySamplingHeader(document);
@@ -140,17 +142,29 @@ final class SamplingPlanExporter {
 
             for (int index = 0; index < pointCount; index++) {
                 int rowIndex = index + 1;
+                boolean isFirst = index == 0;
                 setTableCellText(planTable.getRow(rowIndex).getCell(0), String.valueOf(index + 1),
+                        TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
+                setTableCellText(planTable.getRow(rowIndex).getCell(1),
+                        isFirst ? samplingLocation : "",
                         TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
                 setTableCellText(planTable.getRow(rowIndex).getCell(2), "т" + (index + 1),
                         TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
-                for (int colIndex = 1; colIndex < 8; colIndex++) {
-                    if (colIndex == 2) {
-                        continue;
-                    }
-                    setTableCellText(planTable.getRow(rowIndex).getCell(colIndex), "",
-                            TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
-                }
+                setTableCellText(planTable.getRow(rowIndex).getCell(3),
+                        isFirst ? "Земельный участок" : "",
+                        TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
+                setTableCellText(planTable.getRow(rowIndex).getCell(4),
+                        isFirst ? "Значение плотности потока радона, мБк/м^2с" : "",
+                        TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
+                setTableCellText(planTable.getRow(rowIndex).getCell(5),
+                        isFirst ? "1 раз" : "",
+                        TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
+                setTableCellText(planTable.getRow(rowIndex).getCell(6),
+                        isFirst ? measurementMethod : "",
+                        TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
+                setTableCellText(planTable.getRow(rowIndex).getCell(7),
+                        isFirst ? "-" : "",
+                        TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
             }
 
             if (pointCount > 1) {
@@ -797,8 +811,12 @@ final class SamplingPlanExporter {
         return text.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
     }
 
-    private static PerformerInfo resolvePerformerInfo(File mapFile) {
-        PerformerInfo info = PerformerInfo.empty();
+    private static PerformerInfo resolvePerformerInfo(File sourceProtocolFile, File mapFile) {
+        PerformerInfo info = resolvePerformerInfoFromProtocol(sourceProtocolFile);
+        if (!info.fullName.isBlank()) {
+            return info;
+        }
+        info = PerformerInfo.empty();
         if (mapFile == null || !mapFile.exists()) {
             return info;
         }
@@ -827,6 +845,129 @@ final class SamplingPlanExporter {
             return info;
         }
         return info;
+    }
+
+    private static PerformerInfo resolvePerformerInfoFromProtocol(File sourceProtocolFile) {
+        if (sourceProtocolFile == null || !sourceProtocolFile.exists()) {
+            return PerformerInfo.empty();
+        }
+        try (InputStream in = new FileInputStream(sourceProtocolFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = workbook.getSheet("ППР");
+            if (sheet == null) {
+                return PerformerInfo.empty();
+            }
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            for (Row row : sheet) {
+                if (row == null) {
+                    continue;
+                }
+                short lastCellNum = row.getLastCellNum();
+                for (int colIndex = 0; colIndex < lastCellNum; colIndex++) {
+                    org.apache.poi.ss.usermodel.Cell cell = row.getCell(colIndex);
+                    String text = formatter.formatCellValue(cell, evaluator);
+                    if (text == null || text.isBlank()) {
+                        continue;
+                    }
+                    if (text.contains("Протокол подготовил:")
+                            && text.toLowerCase(Locale.ROOT).contains("тарновский")) {
+                        return PerformerInfo.tarnovsky();
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            return PerformerInfo.empty();
+        }
+        return PerformerInfo.empty();
+    }
+
+    private static String resolveSamplingLocation(File sourceProtocolFile) {
+        String prefix = "Наименование предприятия, организации, объекта, где производились измерения:";
+        if (sourceProtocolFile == null || !sourceProtocolFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceProtocolFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            for (Row row : sheet) {
+                for (int colIndex = 0; colIndex < row.getLastCellNum(); colIndex++) {
+                    org.apache.poi.ss.usermodel.Cell cell = row.getCell(colIndex);
+                    String text = formatter.formatCellValue(cell, evaluator).trim();
+                    if (text.isEmpty()) {
+                        continue;
+                    }
+                    if (text.contains(prefix)) {
+                        String tail = text.substring(text.indexOf(prefix) + prefix.length()).trim();
+                        if (!tail.isEmpty()) {
+                            return trimLeadingPunctuation(tail);
+                        }
+                        org.apache.poi.ss.usermodel.Cell next = row.getCell(colIndex + 1);
+                        String nextValue = formatter.formatCellValue(next, evaluator).trim();
+                        return trimLeadingPunctuation(nextValue);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            return "";
+        }
+        return "";
+    }
+
+    private static String resolvePlanMeasurementMethod(File sourceProtocolFile) {
+        if (sourceProtocolFile == null || !sourceProtocolFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceProtocolFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            boolean inPlanSection = false;
+            for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
+                Sheet sheet = workbook.getSheetAt(sheetIndex);
+                for (Row row : sheet) {
+                    if (row == null) {
+                        continue;
+                    }
+                    for (int colIndex = 0; colIndex < row.getLastCellNum(); colIndex++) {
+                        org.apache.poi.ss.usermodel.Cell cell = row.getCell(colIndex);
+                        String text = formatter.formatCellValue(cell, evaluator).trim();
+                        if (text.isEmpty()) {
+                            continue;
+                        }
+                        if (!inPlanSection && text.contains("ПЛАН ИЗМЕРЕНИЙ")) {
+                            inPlanSection = true;
+                        }
+                        if (inPlanSection && text.contains("Метод (методика) измерений (шифр)")) {
+                            String value = readMergedCellValue(sheet, row.getRowNum() + 1, colIndex,
+                                    formatter, evaluator);
+                            if (!value.isBlank()) {
+                                return value;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            return "";
+        }
+        return "";
+    }
+
+    private static String trimLeadingPunctuation(String value) {
+        if (value == null) {
+            return "";
+        }
+        int index = 0;
+        while (index < value.length() && !Character.isLetterOrDigit(value.charAt(index))) {
+            index++;
+        }
+        return value.substring(index).trim();
     }
 
     private static final class PerformerInfo {

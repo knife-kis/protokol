@@ -121,7 +121,7 @@ public final class RequestFormExporter {
         }
         String protocolDate = resolveProtocolDateFromSource(sourceFile);
         String deadlineText = workDeadline == null ? "" : workDeadline.trim();
-        String planDeadline = deadlineText.isEmpty() ? protocolDate : deadlineText;
+        String planDeadline = deadlineText;
         String innText = customerInn == null ? "" : customerInn.trim();
 
         try (XWPFDocument document = new XWPFDocument()) {
@@ -1300,14 +1300,15 @@ public final class RequestFormExporter {
                     }
                     String normalized = text.replace('\u00A0', ' ').trim();
                     if (normalized.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT))) {
-                        String tail = normalized.substring(prefix.length()).trim();
+                        String tail = extractAreaTail(normalized, prefix);
                         if (tail.isEmpty()) {
                             Cell next = row.getCell(cell.getColumnIndex() + 1);
                             if (next != null) {
-                                tail = formatter.formatCellValue(next).trim();
+                                String nextValue = formatter.formatCellValue(next).trim();
+                                tail = extractAreaTail(nextValue, "");
                             }
                         }
-                        return trimAreaValue(tail);
+                        return tail;
                     }
                 }
             }
@@ -1317,30 +1318,28 @@ public final class RequestFormExporter {
         return "";
     }
 
-    private static String trimAreaValue(String value) {
+    private static String extractAreaTail(String value, String prefix) {
         if (value == null) {
             return "";
         }
-        String trimmed = value.replace('\u00A0', ' ').trim();
-        if (trimmed.isEmpty()) {
+        String normalized = value.replace('\u00A0', ' ').trim();
+        if (!prefix.isEmpty() && normalized.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT))) {
+            normalized = normalized.substring(prefix.length()).trim();
+        }
+        normalized = trimLeadingPunctuation(normalized);
+        if (normalized.isEmpty()) {
             return "";
         }
-        int index = findFirstUnitIndex(trimmed);
-        if (index >= 0) {
-            return trimmed.substring(0, index + 1).trim();
-        }
-        return trimmed;
+        int endIndex = indexOfIgnoreCase(normalized, "Измерения ППР");
+        String sliced = endIndex >= 0 ? normalized.substring(0, endIndex).trim() : normalized;
+        return sliced.trim();
     }
 
-    private static int findFirstUnitIndex(String value) {
-        for (int i = 0; i < value.length(); i++) {
-            char ch = value.charAt(i);
-            if (ch == 'м' || ch == 'М' || ch == 'а' || ch == 'А'
-                    || ch == 'm' || ch == 'M' || ch == 'a' || ch == 'A') {
-                return i;
-            }
+    private static int indexOfIgnoreCase(String value, String needle) {
+        if (value == null || needle == null) {
+            return -1;
         }
-        return -1;
+        return value.toLowerCase(Locale.ROOT).indexOf(needle.toLowerCase(Locale.ROOT));
     }
 
     private static String buildRadiationAppendixText(String areaSize) {

@@ -137,7 +137,7 @@ public final class MeasurementPlanExporter {
                     setTableCellText(mainTable.getRow(rowIndex).getCell(0), objectName, TABLE_FONT_SIZE, false);
                     setTableCellText(mainTable.getRow(rowIndex).getCell(1), objectAddress, TABLE_FONT_SIZE, false);
                     setTableCellText(mainTable.getRow(rowIndex).getCell(2), responsibleText, TABLE_FONT_SIZE, false);
-                    String deadlineValue = hasWorkDeadline ? deadlineText : protocolDate;
+                    String deadlineValue = deadlineText;
                     setTableCellText(mainTable.getRow(rowIndex).getCell(5), deadlineValue, TABLE_FONT_SIZE, false);
                 } else {
                     setTableCellText(mainTable.getRow(rowIndex).getCell(0), "", TABLE_FONT_SIZE, false);
