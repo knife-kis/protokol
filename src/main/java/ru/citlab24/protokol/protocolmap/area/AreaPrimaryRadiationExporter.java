@@ -16,7 +16,6 @@ final class AreaPrimaryRadiationExporter {
         }
         SamplingPlanExporter.generate(sourceFile, mapFile);
         EquipmentControlSheetExporter.generate(mapFile);
-        RadiationJournalExporter.generate(sourceFile, mapFile);
         RadiationJournalWordExporter.generate(sourceFile, mapFile);
         return mapFile;
     }

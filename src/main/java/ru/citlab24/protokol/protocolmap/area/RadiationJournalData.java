@@ -147,21 +147,46 @@ final class RadiationJournalData {
         if (sheet == null) {
             return "";
         }
+        String sectionHeader = "Сведения о нормативных документах (НД), " +
+                "регламентирующих значения показателей и НД на методы (методики) измерений:";
         DataFormatter formatter = new DataFormatter();
         FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+        boolean inSection = false;
         for (Row row : sheet) {
             if (row == null) {
                 continue;
             }
-            for (Cell cell : row) {
-                String value = formatter.formatCellValue(cell, evaluator).trim();
-                if (value.contains("Мощность дозы гамма-излучения")) {
-                    int nextCol = cell.getColumnIndex() + 1;
-                    String nextValue = readMergedCellValue(sheet, row.getRowNum(), nextCol, formatter, evaluator);
-                    if (!nextValue.isBlank()) {
-                        return nextValue;
+            if (!inSection) {
+                for (Cell cell : row) {
+                    String value = formatter.formatCellValue(cell, evaluator).trim();
+                    if (value.contains(sectionHeader)) {
+                        inSection = true;
+                        break;
                     }
                 }
+                if (!inSection) {
+                    continue;
+                }
+            }
+            for (Cell cell : row) {
+                String value = formatter.formatCellValue(cell, evaluator).trim();
+                if (!value.contains("Мощность дозы гамма-излучения")) {
+                    continue;
+                }
+                int baseCol = cell.getColumnIndex();
+                CellRangeAddress currentRegion = findMergedRegion(sheet, row.getRowNum(), baseCol);
+                int nextCol = currentRegion != null ? currentRegion.getLastColumn() + 1 : baseCol + 1;
+                CellRangeAddress nextRegion = findMergedRegion(sheet, row.getRowNum(), nextCol);
+                int nextNextCol = nextRegion != null ? nextRegion.getLastColumn() + 1 : nextCol + 1;
+                String rightValue = readMergedCellValue(sheet, row.getRowNum(), nextCol, formatter, evaluator);
+                String rightRightValue = readMergedCellValue(sheet, row.getRowNum(), nextNextCol, formatter, evaluator);
+                if (!rightRightValue.isBlank()) {
+                    return rightRightValue;
+                }
+                if (!rightValue.isBlank()) {
+                    return rightValue;
+                }
+                return "";
             }
         }
         return "";
