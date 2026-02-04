@@ -10,24 +10,33 @@ import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTJcTable;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblBorders;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblCellMar;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblWidth;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STFldCharType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STJcTable;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
+import org.apache.xmlbeans.impl.xb.xmlschema.SpaceAttribute;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.math.BigInteger;
+import java.util.List;
 
 final class EquipmentControlSheetExporter {
-    private static final String CONTROL_SHEET_NAME = "лист контроля оборудования.docx";
+    private static final String CONTROL_SHEET_COAL_NAME = "Лист контроля оборудования Уголь.docx";
+    private static final String CONTROL_SHEET_SOURCE_NAME = "Лист контроля оборудования Источник.docx";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
     private static final int TABLE_WIDTH = 12560;
@@ -39,31 +48,65 @@ final class EquipmentControlSheetExporter {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
-        File targetFile = resolveControlSheetFile(mapFile);
+        generateControlSheet(
+                mapFile,
+                CONTROL_SHEET_COAL_NAME,
+                "Камера-01",
+                "631",
+                "Измерения фона активированного угля",
+                new String[][]{
+                        {"", "БДБ-2009", "", "Выбираем среднее значение", ""},
+                        {"", "БДБ-2010", "", "Выбираем среднее значение", ""}
+                }
+        );
+        generateControlSheet(
+                mapFile,
+                CONTROL_SHEET_SOURCE_NAME,
+                "Камера-01",
+                "631",
+                "измерения по контрольному источнику №647",
+                new String[][]{
+                        {"", "БДБ-2009", "от 93 имп/с до 123 имп/с", "", ""},
+                        {"", "БДБ-2010", "от 93 имп/с до 123 имп/с", "", ""}
+                }
+        );
+    }
+
+    static File resolveControlSheetFile(File mapFile, String fileName) {
+        if (mapFile == null) {
+            return null;
+        }
+        return new File(mapFile.getParentFile(), fileName);
+    }
+
+    static List<File> resolveControlSheetFiles(File mapFile) {
+        if (mapFile == null) {
+            return List.of();
+        }
+        return List.of(
+                resolveControlSheetFile(mapFile, CONTROL_SHEET_COAL_NAME),
+                resolveControlSheetFile(mapFile, CONTROL_SHEET_SOURCE_NAME)
+        );
+    }
+
+    private static void generateControlSheet(
+            File mapFile,
+            String fileName,
+            String equipmentName,
+            String inventoryNumber,
+            String controlNotes,
+            String[][] controlRows
+    ) {
+        File targetFile = resolveControlSheetFile(mapFile, fileName);
 
         try (XWPFDocument document = new XWPFDocument()) {
             applyControlSheetHeader(document);
             addControlSheetSection(
                     document,
-                    "Камера-01",
-                    "631",
-                    "Измерения фона активированного угля",
-                    new String[][]{
-                            {"", "БДБ-2009", "", "Выбираем среднее значение", ""},
-                            {"", "БДБ-2010", "", "Выбираем среднее значение", ""}
-                    },
-                    7
-            );
-            addPageBreak(document);
-            addControlSheetSection(
-                    document,
-                    "Камера-01",
-                    "631",
-                    "измерения по контрольному источнику №647",
-                    new String[][]{
-                            {"", "БДБ-2009", "от 93 имп/с до 123 имп/с", "", ""},
-                            {"", "БДБ-2010", "от 93 имп/с до 123 имп/с", "", ""}
-                    },
+                    equipmentName,
+                    inventoryNumber,
+                    controlNotes,
+                    controlRows,
                     7
             );
 
@@ -75,13 +118,6 @@ final class EquipmentControlSheetExporter {
         }
     }
 
-    static File resolveControlSheetFile(File mapFile) {
-        if (mapFile == null) {
-            return null;
-        }
-        return new File(mapFile.getParentFile(), CONTROL_SHEET_NAME);
-    }
-
     private static void applyControlSheetHeader(XWPFDocument document) {
         CTSectPr sectPr = document.getDocument().getBody().getSectPr();
         if (sectPr == null) {
@@ -89,15 +125,18 @@ final class EquipmentControlSheetExporter {
         }
         XWPFHeaderFooterPolicy policy = new XWPFHeaderFooterPolicy(document, sectPr);
         XWPFHeader header = policy.createHeader(XWPFHeaderFooterPolicy.DEFAULT);
-        XWPFParagraph headerParagraph = header.createParagraph();
-        headerParagraph.setAlignment(ParagraphAlignment.CENTER);
-        setParagraphSpacing(headerParagraph);
-        XWPFRun headerRun = headerParagraph.createRun();
-        headerRun.setFontFamily(FONT_NAME);
-        headerRun.setFontSize(FONT_SIZE);
-        headerRun.setText("Лист контроля оборудования");
-        headerRun.addBreak();
-        headerRun.setText("Ф1 РИ ИЛ 2-2023 ");
+
+        XWPFTable table = header.createTable(3, 3);
+        configureHeaderTableLikeTemplate(table);
+
+        setHeaderCellText(table.getRow(0).getCell(0), "Испытательная лаборатория ООО «ЦИТ»");
+        setHeaderCellText(table.getRow(0).getCell(1), "Лист контроля оборудования\nФ1 РИ ИЛ 2-2023");
+        setHeaderCellText(table.getRow(0).getCell(2), "Дата утверждения бланка формуляра: 01.01.2023г.");
+        setHeaderCellText(table.getRow(1).getCell(2), "Редакция № 1");
+        setHeaderCellPageCount(table.getRow(2).getCell(2));
+
+        mergeCellsVertically(table, 0, 0, 2);
+        mergeCellsVertically(table, 1, 0, 2);
     }
 
     private static void addControlSheetSection(
@@ -172,6 +211,162 @@ final class EquipmentControlSheetExporter {
         setParagraphSpacing(pageBreak);
         XWPFRun run = pageBreak.createRun();
         run.addBreak(BreakType.PAGE);
+    }
+
+    private static void configureHeaderTableLikeTemplate(XWPFTable table) {
+        CTTbl ct = table.getCTTbl();
+        CTTblPr pr = ct.getTblPr() != null ? ct.getTblPr() : ct.addNewTblPr();
+
+        CTTblWidth tblW = pr.isSetTblW() ? pr.getTblW() : pr.addNewTblW();
+        tblW.setType(STTblWidth.DXA);
+        tblW.setW(BigInteger.valueOf(9639));
+
+        CTJcTable jc = pr.isSetJc() ? pr.getJc() : pr.addNewJc();
+        jc.setVal(STJcTable.CENTER);
+
+        CTTblLayoutType layout = pr.isSetTblLayout() ? pr.getTblLayout() : pr.addNewTblLayout();
+        layout.setType(STTblLayoutType.FIXED);
+
+        CTTblBorders borders = pr.isSetTblBorders() ? pr.getTblBorders() : pr.addNewTblBorders();
+        setBorder(borders.isSetTop() ? borders.getTop() : borders.addNewTop());
+        setBorder(borders.isSetLeft() ? borders.getLeft() : borders.addNewLeft());
+        setBorder(borders.isSetBottom() ? borders.getBottom() : borders.addNewBottom());
+        setBorder(borders.isSetRight() ? borders.getRight() : borders.addNewRight());
+        setBorder(borders.isSetInsideH() ? borders.getInsideH() : borders.addNewInsideH());
+        setBorder(borders.isSetInsideV() ? borders.getInsideV() : borders.addNewInsideV());
+        applyMinimalHeaderCellMargins(pr);
+
+        CTTblGrid grid = ct.getTblGrid();
+        if (grid == null) {
+            grid = ct.addNewTblGrid();
+        } else {
+            while (grid.sizeOfGridColArray() > 0) {
+                grid.removeGridCol(0);
+            }
+        }
+        grid.addNewGridCol().setW(BigInteger.valueOf(2951));
+        grid.addNewGridCol().setW(BigInteger.valueOf(3140));
+        grid.addNewGridCol().setW(BigInteger.valueOf(3548));
+
+        setCellWidth(table, 0, 0, 2951);
+        setCellWidth(table, 1, 0, 2951);
+        setCellWidth(table, 2, 0, 2951);
+
+        setCellWidth(table, 0, 1, 3140);
+        setCellWidth(table, 1, 1, 3140);
+        setCellWidth(table, 2, 1, 3140);
+
+        setCellWidth(table, 0, 2, 3548);
+        setCellWidth(table, 1, 2, 3548);
+        setCellWidth(table, 2, 2, 3548);
+    }
+
+    private static void setBorder(CTBorder border) {
+        border.setVal(STBorder.SINGLE);
+        border.setSz(BigInteger.valueOf(4));
+        border.setSpace(BigInteger.ZERO);
+        border.setColor("auto");
+    }
+
+    private static void applyMinimalHeaderCellMargins(CTTblPr pr) {
+        CTTblCellMar cellMar = pr.isSetTblCellMar() ? pr.getTblCellMar() : pr.addNewTblCellMar();
+        setCellMargin(cellMar.isSetTop() ? cellMar.getTop() : cellMar.addNewTop());
+        setCellMargin(cellMar.isSetLeft() ? cellMar.getLeft() : cellMar.addNewLeft());
+        setCellMargin(cellMar.isSetBottom() ? cellMar.getBottom() : cellMar.addNewBottom());
+        setCellMargin(cellMar.isSetRight() ? cellMar.getRight() : cellMar.addNewRight());
+    }
+
+    private static void setCellMargin(CTTblWidth margin) {
+        margin.setType(STTblWidth.DXA);
+        margin.setW(BigInteger.ZERO);
+    }
+
+    private static void setHeaderCellText(XWPFTableCell cell, String text) {
+        cell.removeParagraph(0);
+        XWPFParagraph paragraph = cell.addParagraph();
+        paragraph.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(paragraph);
+
+        String[] lines = text == null ? new String[]{""} : text.split("\\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            XWPFRun run = paragraph.createRun();
+            run.setText(lines[i]);
+            run.setFontFamily(FONT_NAME);
+            run.setFontSize(FONT_SIZE);
+            if (i < lines.length - 1) {
+                run.addBreak();
+            }
+        }
+    }
+
+    private static void setHeaderCellPageCount(XWPFTableCell cell) {
+        cell.removeParagraph(0);
+        XWPFParagraph paragraph = cell.addParagraph();
+        paragraph.setAlignment(ParagraphAlignment.CENTER);
+        setParagraphSpacing(paragraph);
+
+        XWPFRun run = paragraph.createRun();
+        run.setText("Количество страниц: ");
+        run.setFontFamily(FONT_NAME);
+        run.setFontSize(FONT_SIZE);
+
+        XWPFRun fieldBegin = paragraph.createRun();
+        fieldBegin.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
+
+        XWPFRun fieldCode = paragraph.createRun();
+        fieldCode.getCTR().addNewInstrText().setStringValue("PAGE ");
+        fieldCode.getCTR().getInstrTextArray(0).setSpace(SpaceAttribute.Space.PRESERVE);
+
+        XWPFRun fieldSeparator = paragraph.createRun();
+        fieldSeparator.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
+
+        XWPFRun fieldValue = paragraph.createRun();
+        fieldValue.setText("1");
+        fieldValue.setFontFamily(FONT_NAME);
+        fieldValue.setFontSize(FONT_SIZE);
+
+        XWPFRun fieldEnd = paragraph.createRun();
+        fieldEnd.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
+
+        XWPFRun runTotal = paragraph.createRun();
+        runTotal.setText(" / ");
+        runTotal.setFontFamily(FONT_NAME);
+        runTotal.setFontSize(FONT_SIZE);
+
+        XWPFRun fieldBeginTotal = paragraph.createRun();
+        fieldBeginTotal.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
+
+        XWPFRun fieldCodeTotal = paragraph.createRun();
+        fieldCodeTotal.getCTR().addNewInstrText().setStringValue("NUMPAGES ");
+        fieldCodeTotal.getCTR().getInstrTextArray(0).setSpace(SpaceAttribute.Space.PRESERVE);
+
+        XWPFRun fieldSeparatorTotal = paragraph.createRun();
+        fieldSeparatorTotal.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
+
+        XWPFRun fieldValueTotal = paragraph.createRun();
+        fieldValueTotal.setText("1");
+        fieldValueTotal.setFontFamily(FONT_NAME);
+        fieldValueTotal.setFontSize(FONT_SIZE);
+
+        XWPFRun fieldEndTotal = paragraph.createRun();
+        fieldEndTotal.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
+    }
+
+    private static void mergeCellsVertically(XWPFTable table, int column, int fromRow, int toRow) {
+        for (int rowIndex = fromRow; rowIndex <= toRow; rowIndex++) {
+            XWPFTableCell cell = table.getRow(rowIndex).getCell(column);
+            if (cell == null) {
+                continue;
+            }
+            if (cell.getCTTc().getTcPr() == null) {
+                cell.getCTTc().addNewTcPr();
+            }
+            if (rowIndex == fromRow) {
+                cell.getCTTc().getTcPr().addNewVMerge().setVal(STMerge.RESTART);
+            } else {
+                cell.getCTTc().getTcPr().addNewVMerge().setVal(STMerge.CONTINUE);
+            }
+        }
     }
 
     private static void configureTableLayout(XWPFTable table, int[] columnWidths) {
