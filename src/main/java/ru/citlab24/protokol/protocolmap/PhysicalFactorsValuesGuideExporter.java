@@ -14,6 +14,11 @@ import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
+import org.apache.poi.ss.util.CellReference;
+
+import java.io.FileInputStream;
+import java.util.Locale;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -29,6 +34,11 @@ public final class PhysicalFactorsValuesGuideExporter {
     }
 
     public static File generate(File mapFile) throws IOException {
+        // старый контракт оставляем, но теперь это "читай и пиши из одного файла"
+        return generate(mapFile, mapFile);
+    }
+
+    public static File generate(File sourceProtocolFile, File mapFile) throws IOException {
         File guideFile = resolveGuideFile(mapFile);
         if (guideFile == null) {
             return null;
@@ -58,10 +68,8 @@ public final class PhysicalFactorsValuesGuideExporter {
                             + "нужно указать обязательно. Всего требуется не менее 20 точек на этаж.");
 
             addSectionTitle(document, "3. Освещение на улице");
-            addParagraph(document,
-                    "В графе «средняя горизонтальная освещенность» заполняем два столбца:");
-            addParagraph(document, "Список значений (место / значение):");
-            addStreetLightingValuesTable(document, mapFile);
+            addParagraph(document, "Таблица значений из протокола (лист «Иск освещение (2)», колонки K–AD):");
+            addStreetLightingValuesTable(document, sourceProtocolFile);
 
             try (FileOutputStream out = new FileOutputStream(guideFile)) {
                 document.write(out);
@@ -112,28 +120,24 @@ public final class PhysicalFactorsValuesGuideExporter {
         run.setText(text);
     }
 
-    private static void addStreetLightingValuesTable(XWPFDocument document, File mapFile) throws IOException {
-        List<StreetLightingRow> rows = readStreetLightingRows(mapFile);
+    private static void addStreetLightingValuesTable(XWPFDocument document, File sourceProtocolFile) throws IOException {
+        List<List<String>> rows = readStreetLightingValuesRows(sourceProtocolFile);
         if (rows.isEmpty()) {
-            addParagraph(document, "Данные по листу «Иск освещение (2)» не найдены.");
+            addParagraph(document,
+                    "Данные по листу «Иск освещение (2)» (K–AD) не найдены. " +
+                            "Проверь: справка должна читать ИСХОДНЫЙ протокол, а не сформированную карту.");
             return;
         }
 
-        int columnCount = 22;
-        XWPFTable table = document.createTable(rows.size() + 1, columnCount);
-        setCellText(table.getRow(0).getCell(0), "Место");
-        setCellText(table.getRow(0).getCell(1), "Значение");
-        mergeCellsHorizontally(table, 0, 1, 20);
-        setCellText(table.getRow(0).getCell(21), "Среднее знач");
+        final int columnCount = 20; // K..AD
+        XWPFTable table = document.createTable(rows.size(), columnCount);
 
-        for (int i = 0; i < rows.size(); i++) {
-            StreetLightingRow row = rows.get(i);
-            setCellText(table.getRow(i + 1).getCell(0), row.place());
-            List<String> values = row.values();
-            for (int colIndex = 0; colIndex < values.size(); colIndex++) {
-                setCellText(table.getRow(i + 1).getCell(colIndex + 1), values.get(colIndex));
+        for (int r = 0; r < rows.size(); r++) {
+            List<String> values = rows.get(r);
+            for (int c = 0; c < columnCount; c++) {
+                String v = (c < values.size()) ? values.get(c) : "";
+                setCellText(table.getRow(r).getCell(c), v);
             }
-            setCellText(table.getRow(i + 1).getCell(21), row.average());
         }
     }
 
@@ -157,44 +161,119 @@ public final class PhysicalFactorsValuesGuideExporter {
             }
         }
     }
+    private static List<List<String>> readStreetLightingValuesRows(File sourceProtocolFile) throws IOException {
+        List<List<String>> rows = new ArrayList<>();
+        if (sourceProtocolFile == null || !sourceProtocolFile.exists()) {
+            return rows;
+        }
+
+        try (InputStream in = new FileInputStream(sourceProtocolFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+
+            Sheet sheet = workbook.getSheet("Иск освещение (2)");
+            if (sheet == null) {
+                return rows;
+            }
+
+            DataFormatter formatter = new DataFormatter(new Locale("ru", "RU"));
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+
+            final int fromCol = CellReference.convertColStringToIndex("K");  // 10
+            final int toCol   = CellReference.convertColStringToIndex("AD"); // 29
+
+            int lastRow = sheet.getLastRowNum();
+
+            // строго с 8-й строки Excel (0-based индекс 7)
+            for (int rowIndex = 7; rowIndex <= lastRow; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    continue;
+                }
+
+                List<String> values = new ArrayList<>(toCol - fromCol + 1);
+                boolean hasAny = false;
+
+                for (int colIndex = fromCol; colIndex <= toCol; colIndex++) {
+                    Cell cell = row.getCell(colIndex);
+                    String v = formatCellValue(cell, formatter, evaluator);
+                    values.add(v);
+                    if (!v.isEmpty()) {
+                        hasAny = true;
+                    }
+                }
+
+                // по всем строкам: добавляем только те, где реально есть значения в K–AD
+                if (hasAny) {
+                    rows.add(values);
+                }
+            }
+        }
+
+        return rows;
+    }
 
     private static List<StreetLightingRow> readStreetLightingRows(File mapFile) throws IOException {
         List<StreetLightingRow> rows = new ArrayList<>();
         if (mapFile == null || !mapFile.exists()) {
             return rows;
         }
-        try (InputStream in = new java.io.FileInputStream(mapFile);
+
+        try (InputStream in = new FileInputStream(mapFile);
              Workbook workbook = WorkbookFactory.create(in)) {
+
             Sheet sheet = workbook.getSheet("Иск освещение (2)");
             if (sheet == null) {
                 return rows;
             }
-            DataFormatter formatter = new DataFormatter();
+
+            // Важно: формулы в G считаем, а колонки берём по буквам (не руками индексами)
+            DataFormatter formatter = new DataFormatter(new Locale("ru", "RU"));
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+
+            final int placeCol = CellReference.convertColStringToIndex("C");    // C
+            final int averageCol = CellReference.convertColStringToIndex("G");  // G
+            final int fromCol = CellReference.convertColStringToIndex("K");     // K
+            final int toCol = CellReference.convertColStringToIndex("AD");      // AD
+
             int lastRow = sheet.getLastRowNum();
+
+            // Начинаем с 8-й строки Excel => индекс 7 (0-based)
             for (int rowIndex = 7; rowIndex <= lastRow; rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null) {
-                    continue;
+                    break; // таблица закончилась
                 }
-                String place = formatter.formatCellValue(row.getCell(2)).trim();
-                String average = formatter.formatCellValue(row.getCell(6)).trim();
-                List<String> values = new ArrayList<>();
+
+                String place = formatCellValue(row.getCell(placeCol), formatter, evaluator);
+                String average = formatCellValue(row.getCell(averageCol), formatter, evaluator);
+
+                List<String> values = new ArrayList<>(toCol - fromCol + 1);
                 boolean hasValues = false;
-                for (int colIndex = 10; colIndex <= 29; colIndex++) {
-                    Cell cell = row.getCell(colIndex);
-                    String value = formatter.formatCellValue(cell).trim();
+
+                for (int colIndex = fromCol; colIndex <= toCol; colIndex++) {
+                    String value = formatCellValue(row.getCell(colIndex), formatter, evaluator);
                     values.add(value);
                     if (!value.isEmpty()) {
                         hasValues = true;
                     }
                 }
+
+                // По вашему требованию: "начиная с 8 пока есть значения"
                 if (place.isEmpty() && average.isEmpty() && !hasValues) {
-                    continue;
+                    break;
                 }
+
                 rows.add(new StreetLightingRow(place, average, values));
             }
         }
+
         return rows;
+    }
+    private static String formatCellValue(Cell cell, DataFormatter formatter, FormulaEvaluator evaluator) {
+        if (cell == null) {
+            return "";
+        }
+        return formatter.formatCellValue(cell, evaluator).trim();
     }
 
     private record StreetLightingRow(String place, String average, List<String> values) {
