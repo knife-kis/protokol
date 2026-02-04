@@ -1,6 +1,7 @@
 package ru.citlab24.protokol.protocolmap.house;
 
 import ru.citlab24.protokol.protocolmap.EquipmentIssuanceSheetExporter;
+import ru.citlab24.protokol.protocolmap.HouseNoiseEquipmentIssuanceSheetExporter;
 import ru.citlab24.protokol.protocolmap.MeasurementCardRegistrationSheetExporter;
 import ru.citlab24.protokol.protocolmap.MeasurementPlanExporter;
 import ru.citlab24.protokol.protocolmap.NoiseMapExporter;
@@ -38,9 +39,9 @@ public class ProtocolMapPanel extends JPanel {
 
         JPanel grid = new JPanel(new GridLayout(1, 3, 16, 0));
         grid.add(new DropZonePanel("Шумы", "Перетащите Excel или Word файл",
-                NoiseMapExporter::generateMap));
+                NoiseMapExporter::generateMap, true));
         grid.add(new DropZonePanel("Физфакторы", "Перетащите Excel или Word файл",
-                PhysicalFactorsMapExporter::generateMap));
+                PhysicalFactorsMapExporter::generateMap, false));
         grid.add(new SoundInsulationPanel());
         add(grid, BorderLayout.CENTER);
     }
@@ -53,11 +54,13 @@ public class ProtocolMapPanel extends JPanel {
         private final DefaultListModel<String> listModel = new DefaultListModel<>();
         private final MapGenerator generator;
         private final JButton downloadButton;
+        private final boolean isNoisePanel;
         private File generatedMapFile;
 
-        DropZonePanel(String titleText, String hintText, MapGenerator generator) {
+        DropZonePanel(String titleText, String hintText, MapGenerator generator, boolean isNoisePanel) {
             super(new BorderLayout(8, 8));
             this.generator = generator;
+            this.isNoisePanel = isNoisePanel;
             setBorder(createDropBorder());
             setBackground(UIManager.getColor("Panel.background"));
 
@@ -113,7 +116,9 @@ public class ProtocolMapPanel extends JPanel {
             if (registrationSheet != null && registrationSheet.exists()) {
                 listModel.addElement("Сформирован лист регистрации карт замеров: " + registrationSheet.getName());
             }
-            List<File> equipmentSheets = EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(generatedFile);
+            List<File> equipmentSheets = isNoisePanel
+                    ? HouseNoiseEquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(sourceFile, generatedFile)
+                    : EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(generatedFile);
             for (File equipmentSheet : equipmentSheets) {
                 if (equipmentSheet != null && equipmentSheet.exists()) {
                     listModel.addElement("Сформирован лист выдачи приборов: " + equipmentSheet.getName());
@@ -208,6 +213,9 @@ public class ProtocolMapPanel extends JPanel {
                         }
                         try {
                             generated = generator.generate(source, workDeadline.trim(), customerInn.trim());
+                            if (isNoisePanel) {
+                                HouseNoiseEquipmentIssuanceSheetExporter.generate(source, generated);
+                            }
                         } catch (Exception ex) { // ВАЖНО: ловим ВСЁ, не только IOException
                             ex.printStackTrace();
                             JOptionPane.showMessageDialog(

@@ -1,5 +1,6 @@
 package ru.citlab24.protokol.protocolmap.area;
 
+import ru.citlab24.protokol.protocolmap.AreaNoiseEquipmentIssuanceSheetExporter;
 import ru.citlab24.protokol.protocolmap.NoiseMapExporter;
 import ru.citlab24.protokol.protocolmap.area.noise.AreaNoisePrimaryFiles;
 
@@ -21,8 +22,10 @@ final class AreaPrimaryNoiseExporter {
             return mapFile;
         }
 
+        AreaNoiseEquipmentIssuanceSheetExporter.generate(sourceFile, mapFile);
+
         File targetFolder = ensurePrimaryFolder(mapFile);
-        List<File> filesToMove = AreaNoisePrimaryFiles.collect(mapFile);
+        List<File> filesToMove = AreaNoisePrimaryFiles.collect(mapFile, sourceFile);
 
         for (File file : filesToMove) {
             if (file == null || !file.exists()) {

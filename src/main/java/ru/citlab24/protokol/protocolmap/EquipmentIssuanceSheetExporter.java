@@ -52,9 +52,7 @@ public final class EquipmentIssuanceSheetExporter {
     private static final String OBJECT_PREFIX = "4. Наименование объекта:";
     private static final String INSTRUMENTS_PREFIX = "5.3. Приборы для измерения (используемое отметить):";
     private static final int NOISE_MERGED_DATE_LAST_COLUMN = 23;
-    private static final int NOISE_PROTOCOL_MERGED_DATE_LAST_COLUMN = 24;
-    private static final int NOISE_PROTOCOL_DATE_START_ROW = 5;
-    private static final Pattern DATE_PATTERN = Pattern.compile("\\b\\d{2}\\.\\d{2}\\.(?:\\d{2}|\\d{4})\\b");
+    static final Pattern DATE_PATTERN = Pattern.compile("\\b\\d{2}\\.\\d{2}\\.(?:\\d{2}|\\d{4})\\b");
 
     private EquipmentIssuanceSheetExporter() {
     }
@@ -94,11 +92,11 @@ public final class EquipmentIssuanceSheetExporter {
         return files;
     }
 
-    private static void writeIssuanceSheet(File targetFile,
-                                           String objectName,
-                                           String performer,
-                                           List<InstrumentEntry> instruments,
-                                           String measurementDate) {
+    static void writeIssuanceSheet(File targetFile,
+                                   String objectName,
+                                   String performer,
+                                   List<InstrumentEntry> instruments,
+                                   String measurementDate) {
         try (XWPFDocument document = new XWPFDocument()) {
             applyStandardHeader(document);
 
@@ -491,11 +489,11 @@ public final class EquipmentIssuanceSheetExporter {
                 && region.getLastColumn() >= NOISE_PROTOCOL_MERGED_DATE_LAST_COLUMN;
     }
 
-    private static String readCellText(Sheet sheet,
-                                       int rowIndex,
-                                       int columnIndex,
-                                       DataFormatter formatter,
-                                       org.apache.poi.ss.usermodel.FormulaEvaluator evaluator) {
+    static String readCellText(Sheet sheet,
+                               int rowIndex,
+                               int columnIndex,
+                               DataFormatter formatter,
+                               org.apache.poi.ss.usermodel.FormulaEvaluator evaluator) {
         Row row = sheet.getRow(rowIndex);
         if (row == null) {
             return "";
@@ -507,7 +505,7 @@ public final class EquipmentIssuanceSheetExporter {
         return formatter.formatCellValue(cell, evaluator).trim();
     }
 
-    private static void addDatesFromText(String text, Set<String> dates) {
+    static void addDatesFromText(String text, Set<String> dates) {
         Matcher matcher = DATE_PATTERN.matcher(text);
         while (matcher.find()) {
             String date = matcher.group();
@@ -517,7 +515,7 @@ public final class EquipmentIssuanceSheetExporter {
         }
     }
 
-    private static String resolveObjectName(File mapFile) {
+    static String resolveObjectName(File mapFile) {
         String value = findValueByPrefix(mapFile, OBJECT_PREFIX);
         if (value.isBlank()) {
             value = findValueByPrefix(mapFile, "4. Наименование объекта");
@@ -525,7 +523,7 @@ public final class EquipmentIssuanceSheetExporter {
         return value;
     }
 
-    private static String resolveMeasurementPerformer(File mapFile) {
+    static String resolveMeasurementPerformer(File mapFile) {
         String value = findValueByPrefix(mapFile, PERFORMER_PREFIX);
         if (value.isBlank()) {
             value = findValueByPrefix(mapFile, "3. Измерения провел, подпись");
@@ -533,7 +531,7 @@ public final class EquipmentIssuanceSheetExporter {
         return value;
     }
 
-    private static List<InstrumentEntry> resolveInstruments(File mapFile) {
+    static List<InstrumentEntry> resolveInstruments(File mapFile) {
         if (mapFile == null || !mapFile.exists()) {
             return Collections.emptyList();
         }
@@ -675,7 +673,7 @@ public final class EquipmentIssuanceSheetExporter {
         return new File(mapFile.getParentFile(), name + ".docx");
     }
 
-    private static String sanitizeFileComponent(String value) {
+    static String sanitizeFileComponent(String value) {
         if (value == null) {
             return "";
         }
@@ -686,126 +684,13 @@ public final class EquipmentIssuanceSheetExporter {
         return value == null ? "" : value;
     }
 
-    private static final class InstrumentEntry {
-        private final String name;
-        private final String serialNumber;
+    static final class InstrumentEntry {
+        final String name;
+        final String serialNumber;
 
         private InstrumentEntry(String name, String serialNumber) {
             this.name = name;
             this.serialNumber = serialNumber;
         }
     }
-    static void generateForNoise(File sourceNoiseProtocolFile, File mapFile) {
-        if (mapFile == null || !mapFile.exists()) {
-            return;
-        }
-
-        // 1) Даты шумов берём из ИСХОДНОГО файла протокола шумов
-        List<String> measurementDates = resolveNoiseMeasurementDatesFromProtocol(sourceNoiseProtocolFile);
-
-        // 2) Если почему-то не нашли — оставляем один пустой лист (как было раньше)
-        if (measurementDates.isEmpty()) {
-            measurementDates = List.of("");
-        }
-
-        // остальное (объект, исполнитель, приборы) берём из карты (там всё уже собрано)
-        String objectName = resolveObjectName(mapFile);
-        String performer = resolveMeasurementPerformer(mapFile);
-        List<InstrumentEntry> instruments = resolveInstruments(mapFile);
-
-        for (int index = 0; index < measurementDates.size(); index++) {
-            String date = measurementDates.get(index);
-
-            // ШУМЫ: дату в имя файла пишем всегда, если она есть
-            File targetFile = resolveIssuanceSheetFileForNoise(mapFile, date, index, measurementDates.size());
-
-            writeIssuanceSheet(targetFile, objectName, performer, instruments, date);
-        }
-    }
-
-    static List<File> resolveIssuanceSheetFilesForNoise(File sourceNoiseProtocolFile, File mapFile) {
-        if (mapFile == null || !mapFile.exists()) {
-            return Collections.emptyList();
-        }
-
-        List<String> measurementDates = resolveNoiseMeasurementDatesFromProtocol(sourceNoiseProtocolFile);
-        if (measurementDates.isEmpty()) {
-            measurementDates = List.of("");
-        }
-
-        List<File> files = new ArrayList<>();
-        for (int index = 0; index < measurementDates.size(); index++) {
-            String date = measurementDates.get(index);
-            files.add(resolveIssuanceSheetFileForNoise(mapFile, date, index, measurementDates.size()));
-        }
-        return files;
-    }
-
-    private static List<String> resolveNoiseMeasurementDatesFromProtocol(File sourceNoiseProtocolFile) {
-        if (sourceNoiseProtocolFile == null || !sourceNoiseProtocolFile.exists()) {
-            return Collections.emptyList();
-        }
-
-        try (InputStream in = new FileInputStream(sourceNoiseProtocolFile);
-             Workbook workbook = WorkbookFactory.create(in)) {
-
-            // “смотрим на все вкладки кроме первой”
-            if (workbook.getNumberOfSheets() <= 1) {
-                return Collections.emptyList();
-            }
-
-            DataFormatter formatter = new DataFormatter();
-            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
-
-            Set<String> dates = new LinkedHashSet<>();
-
-            for (int sheetIndex = 1; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
-                Sheet sheet = workbook.getSheetAt(sheetIndex);
-                if (sheet == null) {
-                    continue;
-                }
-
-                // Ищем объединённую строку A..Y (0..24) начиная с 6-й строки, читаем текст и выдёргиваем даты
-                List<org.apache.poi.ss.util.CellRangeAddress> candidates = new ArrayList<>();
-                for (org.apache.poi.ss.util.CellRangeAddress region : sheet.getMergedRegions()) {
-                    if (isNoiseProtocolDateRegion(region)) {
-                        candidates.add(region);
-                    }
-                }
-                candidates.sort(java.util.Comparator.comparingInt(org.apache.poi.ss.util.CellRangeAddress::getFirstRow));
-
-                for (org.apache.poi.ss.util.CellRangeAddress region : candidates) {
-                    String text = readCellText(sheet,
-                            region.getFirstRow(),
-                            region.getFirstColumn(),
-                            formatter,
-                            evaluator);
-                    if (!text.isEmpty()) {
-                        addDatesFromText(text, dates);
-                    }
-                }
-            }
-
-            return new ArrayList<>(dates);
-
-        } catch (Exception ignored) {
-            return Collections.emptyList();
-        }
-    }
-
-    private static File resolveIssuanceSheetFileForNoise(File mapFile, String date, int index, int total) {
-        String name = ISSUANCE_SHEET_BASE_NAME;
-        String safeDate = sanitizeFileComponent(date);
-
-        // для шумов: если дата есть — всегда добавляем её к имени
-        if (!safeDate.isBlank()) {
-            name = name + " " + safeDate;
-        } else if (total > 1) {
-            // если даты нет, но листов несколько — нумеруем
-            name = name + " " + (index + 1);
-        }
-
-        return new File(mapFile.getParentFile(), name + ".docx");
-    }
-
 }
