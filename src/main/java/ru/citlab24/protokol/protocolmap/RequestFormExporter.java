@@ -1299,13 +1299,14 @@ public final class RequestFormExporter {
                         continue;
                     }
                     String normalized = text.replace('\u00A0', ' ').trim();
-                    if (normalized.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT))) {
-                        String tail = extractAreaTail(normalized, prefix);
+                    int prefixIndex = indexOfIgnoreCase(normalized, prefix);
+                    if (prefixIndex >= 0) {
+                        String tail = extractAreaTail(normalized, prefix, prefixIndex);
                         if (tail.isEmpty()) {
                             Cell next = row.getCell(cell.getColumnIndex() + 1);
                             if (next != null) {
                                 String nextValue = formatter.formatCellValue(next).trim();
-                                tail = extractAreaTail(nextValue, "");
+                                tail = extractAreaTail(nextValue, "", 0);
                             }
                         }
                         return tail;
@@ -1318,19 +1319,19 @@ public final class RequestFormExporter {
         return "";
     }
 
-    private static String extractAreaTail(String value, String prefix) {
+    private static String extractAreaTail(String value, String prefix, int prefixIndex) {
         if (value == null) {
             return "";
         }
         String normalized = value.replace('\u00A0', ' ').trim();
-        if (!prefix.isEmpty() && normalized.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT))) {
-            normalized = normalized.substring(prefix.length()).trim();
+        if (!prefix.isEmpty() && prefixIndex >= 0) {
+            normalized = normalized.substring(prefixIndex + prefix.length()).trim();
         }
         normalized = trimLeadingPunctuation(normalized);
         if (normalized.isEmpty()) {
             return "";
         }
-        int endIndex = indexOfIgnoreCase(normalized, "Измерения ППР");
+        int endIndex = indexOfIgnoreCase(normalized, "Измерения");
         String sliced = endIndex >= 0 ? normalized.substring(0, endIndex).trim() : normalized;
         return sliced.trim();
     }
