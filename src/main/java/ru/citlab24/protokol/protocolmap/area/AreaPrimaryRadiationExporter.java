@@ -14,7 +14,7 @@ final class AreaPrimaryRadiationExporter {
         if (mapFile == null || !mapFile.exists()) {
             return mapFile;
         }
-        SamplingPlanExporter.generate(mapFile);
+        SamplingPlanExporter.generate(sourceFile, mapFile);
         EquipmentControlSheetExporter.generate(mapFile);
         return mapFile;
     }

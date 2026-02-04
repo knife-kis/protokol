@@ -77,6 +77,7 @@ final class SamplingPlanExporter {
         String applicationNumber = RequestFormExporter.resolveApplicationNumberFromMap(mapFile);
         String registrationDate = resolveRegistrationDate(mapFile);
         String approvalDate = formatApprovalDate(registrationDate);
+        ApprovalBlock approvalBlock = resolveApprovalBlock(sourceProtocolFile);
 
         // ВАЖНО: точки считаем из ИСХОДНОГО протокола (sheet "ППР"),
         // а если не получилось — пробуем из карты (на случай других сценариев)
@@ -95,7 +96,7 @@ final class SamplingPlanExporter {
             setTableCellText(approvalTable.getRow(0).getCell(0), "", TITLE_FONT_SIZE, false,
                     ParagraphAlignment.LEFT);
 
-            setTableCellText(approvalTable.getRow(0).getCell(1), buildApprovalText(approvalDate),
+            setTableCellText(approvalTable.getRow(0).getCell(1), buildApprovalText(approvalDate, approvalBlock),
                     TITLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
 
             XWPFParagraph spacer = document.createParagraph();
@@ -534,15 +535,75 @@ final class SamplingPlanExporter {
         border.setColor("auto");
     }
 
-    private static String buildApprovalText(String approvalDate) {
+    private static String buildApprovalText(String approvalDate, ApprovalBlock approvalBlock) {
         String dateValue = approvalDate == null || approvalDate.isBlank()
                 ? "«17» февраля 2025 г."
                 : approvalDate;
         return "УТВЕРЖДАЮ:" +
-                "\nЗаместитель заведующего лабораторией" +
-                "\n_____________________Гаврилова М.Е." +
+                "\n" + approvalBlock.title() +
+                "\n" + approvalBlock.signature() +
                 "\n(подпись, инициалы, фамилия)" +
                 "\n" + dateValue;
+    }
+
+    private static ApprovalBlock resolveApprovalBlock(File sourceProtocolFile) {
+        ApprovalBlock defaultBlock = new ApprovalBlock(
+                "Заместитель заведующего лабораторией",
+                "_____________________Гаврилова М.Е.");
+        if (sourceProtocolFile == null || !sourceProtocolFile.exists()) {
+            return defaultBlock;
+        }
+        try (InputStream in = new FileInputStream(sourceProtocolFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = workbook.getSheet("ППР");
+            if (sheet == null) {
+                return defaultBlock;
+            }
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            for (Row row : sheet) {
+                if (row == null) {
+                    continue;
+                }
+                StringBuilder rowText = new StringBuilder();
+                boolean hasProtocolPrepared = false;
+                short lastCellNum = row.getLastCellNum();
+                for (int cellIndex = 0; cellIndex < lastCellNum; cellIndex++) {
+                    String value = formatter.formatCellValue(row.getCell(cellIndex), evaluator).trim();
+                    if (value.isEmpty()) {
+                        continue;
+                    }
+                    if (rowText.length() > 0) {
+                        rowText.append(' ');
+                    }
+                    rowText.append(value);
+                    if (value.contains("Протокол подготовил:")) {
+                        hasProtocolPrepared = true;
+                    }
+                }
+                if (!hasProtocolPrepared && rowText.toString().contains("Протокол подготовил:")) {
+                    hasProtocolPrepared = true;
+                }
+                if (hasProtocolPrepared) {
+                    String lowerRow = rowText.toString().toLowerCase(Locale.ROOT);
+                    if (lowerRow.contains("белов")) {
+                        return new ApprovalBlock(
+                                "заведующий лабораторией",
+                                "___________________Тарновский М.О.");
+                    }
+                    if (lowerRow.contains("тарновский")) {
+                        return defaultBlock;
+                    }
+                    return defaultBlock;
+                }
+            }
+        } catch (Exception ex) {
+            return defaultBlock;
+        }
+        return defaultBlock;
+    }
+
+    private record ApprovalBlock(String title, String signature) {
     }
 
     private static String resolveRegistrationDate(File mapFile) {
