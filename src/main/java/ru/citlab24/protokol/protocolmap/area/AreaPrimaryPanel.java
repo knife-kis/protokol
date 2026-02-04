@@ -150,9 +150,11 @@ public class AreaPrimaryPanel extends JPanel {
                     listModel.addElement("Сформирован лист выдачи приборов: " + equipmentSheet.getName());
                 }
             }
-            File controlSheet = EquipmentControlSheetExporter.resolveControlSheetFile(mapFile);
-            if (controlSheet != null && controlSheet.exists()) {
-                listModel.addElement("Сформирован лист контроля оборудования: " + controlSheet.getName());
+            List<File> controlSheets = EquipmentControlSheetExporter.resolveControlSheetFiles(mapFile);
+            for (File controlSheet : controlSheets) {
+                if (controlSheet != null && controlSheet.exists()) {
+                    listModel.addElement("Сформирован лист контроля оборудования: " + controlSheet.getName());
+                }
             }
             File issuanceSheet = ProtocolIssuanceSheetExporter.resolveIssuanceSheetFile(mapFile);
             if (issuanceSheet != null && issuanceSheet.exists()) {
