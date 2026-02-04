@@ -119,7 +119,7 @@ public class AreaPrimaryPanel extends JPanel {
             if (kind == PrimaryKind.RADIATION) {
                 showRadiationPrimary(mapFile);
             } else {
-                showNoisePrimary(mapFile);
+                showNoisePrimary(sourceFile, mapFile);
             }
         }
 
@@ -169,7 +169,7 @@ public class AreaPrimaryPanel extends JPanel {
             downloadButton.setEnabled(downloadFile.exists());
         }
 
-        private void showNoisePrimary(File mapFile) {
+        private void showNoisePrimary(File sourceFile, File mapFile) {
             File requestForm = AreaNoisePrimaryFiles.resolveRequestFormFile(mapFile);
             if (requestForm != null && requestForm.exists()) {
                 listModel.addElement("Сформирована заявка: " + requestForm.getName());
@@ -186,7 +186,7 @@ public class AreaPrimaryPanel extends JPanel {
             if (registrationSheet != null && registrationSheet.exists()) {
                 listModel.addElement("Сформирован лист регистрации карт замеров: " + registrationSheet.getName());
             }
-            List<File> equipmentSheets = AreaNoisePrimaryFiles.resolveEquipmentIssuanceFiles(mapFile);
+            List<File> equipmentSheets = AreaNoisePrimaryFiles.resolveEquipmentIssuanceFiles(sourceFile, mapFile);
             for (File equipmentSheet : equipmentSheets) {
                 if (equipmentSheet != null && equipmentSheet.exists()) {
                     listModel.addElement("Сформирован лист выдачи приборов: " + equipmentSheet.getName());

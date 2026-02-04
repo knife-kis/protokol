@@ -1,6 +1,6 @@
 package ru.citlab24.protokol.protocolmap.area.noise;
 
-import ru.citlab24.protokol.protocolmap.EquipmentIssuanceSheetExporter;
+import ru.citlab24.protokol.protocolmap.AreaNoiseEquipmentIssuanceSheetExporter;
 import ru.citlab24.protokol.protocolmap.MeasurementCardRegistrationSheetExporter;
 import ru.citlab24.protokol.protocolmap.MeasurementPlanExporter;
 import ru.citlab24.protokol.protocolmap.ProtocolIssuanceSheetExporter;
@@ -15,7 +15,7 @@ public final class AreaNoisePrimaryFiles {
     private AreaNoisePrimaryFiles() {
     }
 
-    public static List<File> collect(File mapFile) {
+    public static List<File> collect(File mapFile, File sourceNoiseProtocolFile) {
         List<File> files = new ArrayList<>();
         if (mapFile != null) {
             files.add(mapFile);
@@ -36,7 +36,8 @@ public final class AreaNoisePrimaryFiles {
         if (registrationSheet != null) {
             files.add(registrationSheet);
         }
-        List<File> equipmentSheets = EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(mapFile);
+        List<File> equipmentSheets = AreaNoiseEquipmentIssuanceSheetExporter
+                .resolveIssuanceSheetFiles(sourceNoiseProtocolFile, mapFile);
         if (equipmentSheets != null) {
             files.addAll(equipmentSheets);
         }
@@ -63,8 +64,8 @@ public final class AreaNoisePrimaryFiles {
         return MeasurementCardRegistrationSheetExporter.resolveRegistrationSheetFile(mapFile);
     }
 
-    public static List<File> resolveEquipmentIssuanceFiles(File mapFile) {
-        return EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(mapFile);
+    public static List<File> resolveEquipmentIssuanceFiles(File sourceNoiseProtocolFile, File mapFile) {
+        return AreaNoiseEquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(sourceNoiseProtocolFile, mapFile);
     }
 
     public static File resolveProtocolIssuanceSheetFile(File mapFile) {
