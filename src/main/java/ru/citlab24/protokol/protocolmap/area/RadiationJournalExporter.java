@@ -33,6 +33,8 @@ final class RadiationJournalExporter {
     private static final String JOURNAL_FILE_NAME = "Журнал.xlsx";
     private static final int DEFAULT_POINT_COUNT = 1;
     private static final int START_SK13_NUMBER = 17;
+    private static final int TITLE_TOP_OFFSET = 2;
+    private static final double JOURNAL_COLUMN_SCALE = 0.25;
 
     private RadiationJournalExporter() {
     }
@@ -79,18 +81,22 @@ final class RadiationJournalExporter {
 
         double[] widths = new double[]{14, 18, 14, 14, 14, 14, 14, 18, 18};
         for (int col = 0; col < widths.length; col++) {
-            sheet.setColumnWidth(col, (int) Math.round(widths[col] * 256));
+            double scaled = widths[col] * JOURNAL_COLUMN_SCALE;
+            sheet.setColumnWidth(col, (int) Math.round(scaled * 256));
         }
         sheet.setDefaultRowHeightInPoints(15);
     }
 
     private static void applyHeader(Sheet sheet) {
         Header header = sheet.getHeader();
-        header.setCenter("&\"Arial\"&9Журнал регистрации результатов определения плотности потока радона Ф6 РИ ИЛ 2-2023");
+        String font = "&\"Arial\"&9";
+        header.setLeft(font + "Испытательная лаборатория\nООО «ЦИТ»");
+        header.setCenter(font + "Журнал регистрации результатов\nопределения плотности потока радона\nФ6 РИ ИЛ 2-2023");
+        header.setRight(font + "\nКоличество страниц: &[Страница] / &[Страниц] \n ");
     }
 
     private static void buildJournalSheet(Sheet sheet, Styles styles, ProtocolData data) {
-        int row = 0;
+        int row = TITLE_TOP_OFFSET;
 
         mergeWithValue(sheet, row, row + 3, 0, 8,
                 "ЖУРНАЛ\nРегистрации результатов определения плотности потока радона\n№5/2023",
@@ -117,7 +123,7 @@ final class RadiationJournalExporter {
         }
 
         mergeWithValue(sheet, tableStart, tableStart, 0, 5,
-                "Ответственный за ведение журнала,\n Должность, Фамилия, Инициалы.",
+                "Ответственный за ведение журнала, Должность, Фамилия, Инициалы.",
                 styles.table9Header, true);
         mergeWithValue(sheet, tableStart, tableStart, 6, 8,
                 "Образец подписи", styles.table9Header, true);
@@ -129,7 +135,7 @@ final class RadiationJournalExporter {
                 "", styles.table9Center, true);
 
         mergeWithValue(sheet, tableStart + 2, tableStart + 2, 0, 5,
-                "Допущены к ведению журнала\nДолжность, Фамилия, Инициалы.",
+                "Допущены к ведению журнала, Должность, Фамилия, Инициалы.",
                 styles.table9Header, true);
         mergeWithValue(sheet, tableStart + 2, tableStart + 2, 6, 8,
                 "Образец подписи", styles.table9Header, true);
@@ -270,7 +276,7 @@ final class RadiationJournalExporter {
                 "Шифр методики/ описание деятельности", styles.table9Header, true);
         mergeWithValue(sheet, envTableStart, envTableStart, 2, 6,
                 "Рабочие условия", styles.table9Header, true);
-        mergeWithValue(sheet, envTableStart, envTableStart + 1, 7, 7,
+        mergeWithValue(sheet, envTableStart, envTableStart + 1, 7, 8,
                 "Дополнительные сведения", styles.table9Header, true);
 
         setCell(sheet, envTableStart + 1, 2, "Т, °С", styles.table9Header);
@@ -298,7 +304,7 @@ final class RadiationJournalExporter {
         for (int c = 2; c <= 6; c++) {
             setCell(sheet, envTableStart + 5, c, "", styles.table9Center);
         }
-        mergeWithValue(sheet, envTableStart + 2, envTableStart + 5, 7, 7,
+        mergeWithValue(sheet, envTableStart + 2, envTableStart + 5, 7, 8,
                 "Контроль осуществляется в течение времени пассивного отбора образцов, " +
                         "для чего используется сигнализатор, который световым сигналом оповещает " +
                         "работника ИЛ о выходе за пределы температурного \nрежима, которые влияют " +
@@ -323,12 +329,12 @@ final class RadiationJournalExporter {
         for (int c = 2; c <= 6; c++) {
             setCell(sheet, envTableStart + 9, c, "", styles.table9Center);
         }
-        mergeWithValue(sheet, envTableStart + 6, envTableStart + 9, 7, 7,
+        mergeWithValue(sheet, envTableStart + 6, envTableStart + 9, 7, 8,
                 "Руководство по эксплуатации  \nФМКТ.136132.134 РЭ \n" +
                         "Комплекс измерительный для мониторинга радона «КАМЕРА-01» ",
                 styles.table9Left, true);
 
-        addRegionBorders(sheet, envTableStart, envTableStart + 9, 0, 7);
+        addRegionBorders(sheet, envTableStart, envTableStart + 9, 0, 8);
 
         row = envTableStart + 10;
         sheet.setRowBreak(row);
@@ -671,7 +677,13 @@ final class RadiationJournalExporter {
             dates.add(matcher.group());
         }
         if (!dates.isEmpty()) {
-            return String.join("; ", dates);
+            List<String> uniqueDates = new ArrayList<>();
+            for (String date : dates) {
+                if (!uniqueDates.contains(date)) {
+                    uniqueDates.add(date);
+                }
+            }
+            return String.join("; ", uniqueDates);
         }
         return text.replace(",", ";");
     }
