@@ -32,6 +32,7 @@ public final class PhysicalFactorsValuesGuideExporter {
     private static final String GUIDE_NAME = "Справка по значениям.docx";
     private static final String FONT_FAMILY = "Arial";
     private static final int FONT_SIZE = 10;
+    private static final int TABLE_FONT_SIZE = 9;
 
     private PhysicalFactorsValuesGuideExporter() {
     }
@@ -153,7 +154,7 @@ public final class PhysicalFactorsValuesGuideExporter {
         XWPFParagraph paragraph = cell.addParagraph();
         applyParagraphFormatting(paragraph);
         XWPFRun run = paragraph.createRun();
-        applyRunFormatting(run);
+        applyTableRunFormatting(run);
         run.setText(text);
     }
 
@@ -166,6 +167,11 @@ public final class PhysicalFactorsValuesGuideExporter {
     private static void applyRunFormatting(XWPFRun run) {
         run.setFontFamily(FONT_FAMILY);
         run.setFontSize(FONT_SIZE);
+    }
+
+    private static void applyTableRunFormatting(XWPFRun run) {
+        run.setFontFamily(FONT_FAMILY);
+        run.setFontSize(TABLE_FONT_SIZE);
     }
 
     private static void mergeCellsHorizontally(XWPFTable table, int row, int fromCol, int toCol) {
