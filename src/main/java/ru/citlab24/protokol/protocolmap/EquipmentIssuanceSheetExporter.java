@@ -52,6 +52,8 @@ public final class EquipmentIssuanceSheetExporter {
     private static final String OBJECT_PREFIX = "4. Наименование объекта:";
     private static final String INSTRUMENTS_PREFIX = "5.3. Приборы для измерения (используемое отметить):";
     private static final int NOISE_MERGED_DATE_LAST_COLUMN = 24;
+    private static final int NOISE_PROTOCOL_MERGED_DATE_LAST_COLUMN = 23;
+    private static final int NOISE_PROTOCOL_DATE_START_ROW = 5;
     private static final Pattern DATE_PATTERN = Pattern.compile("\\b\\d{2}\\.\\d{2}\\.(?:\\d{2}|\\d{4})\\b");
 
     private EquipmentIssuanceSheetExporter() {
@@ -482,6 +484,13 @@ public final class EquipmentIssuanceSheetExporter {
                 && region.getLastColumn() >= NOISE_MERGED_DATE_LAST_COLUMN;
     }
 
+    private static boolean isNoiseProtocolDateRegion(org.apache.poi.ss.util.CellRangeAddress region) {
+        return region.getFirstRow() == region.getLastRow()
+                && region.getFirstRow() >= NOISE_PROTOCOL_DATE_START_ROW
+                && region.getFirstColumn() == 0
+                && region.getLastColumn() >= NOISE_PROTOCOL_MERGED_DATE_LAST_COLUMN;
+    }
+
     private static String readCellText(Sheet sheet,
                                        int rowIndex,
                                        int columnIndex,
@@ -756,10 +765,10 @@ public final class EquipmentIssuanceSheetExporter {
                     continue;
                 }
 
-                // Ищем объединённую строку A..Y (0..24) на ОДНОЙ строке, читаем текст и выдёргиваем даты
+                // Ищем объединённую строку A..X (0..23) начиная с 6-й строки, читаем текст и выдёргиваем даты
                 List<org.apache.poi.ss.util.CellRangeAddress> candidates = new ArrayList<>();
                 for (org.apache.poi.ss.util.CellRangeAddress region : sheet.getMergedRegions()) {
-                    if (isNoiseDateRegion(region)) {
+                    if (isNoiseProtocolDateRegion(region)) {
                         candidates.add(region);
                     }
                 }

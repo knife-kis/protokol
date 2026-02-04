@@ -77,6 +77,18 @@ public final class RequestFormExporter {
     }
 
     static void generate(File sourceFile, File mapFile, String workDeadline, String customerInn) {
+        generate(sourceFile, mapFile, workDeadline, customerInn, true);
+    }
+
+    static void generateForNoise(File sourceFile, File mapFile, String workDeadline, String customerInn) {
+        generate(sourceFile, mapFile, workDeadline, customerInn, false);
+    }
+
+    private static void generate(File sourceFile,
+                                 File mapFile,
+                                 String workDeadline,
+                                 String customerInn,
+                                 boolean includeRequestSection) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
@@ -127,46 +139,48 @@ public final class RequestFormExporter {
         try (XWPFDocument document = new XWPFDocument()) {
             applyStandardHeader(document);
 
-            XWPFParagraph title = document.createParagraph();
-            title.setAlignment(ParagraphAlignment.CENTER);
-            setParagraphSpacing(title);
-            XWPFRun titleRun = title.createRun();
-            titleRun.setText("Заявка № " + applicationNumber);
-            titleRun.setFontFamily(FONT_NAME);
-            titleRun.setFontSize(FONT_SIZE);
-            titleRun.setBold(true);
+            if (includeRequestSection) {
+                XWPFParagraph title = document.createParagraph();
+                title.setAlignment(ParagraphAlignment.CENTER);
+                setParagraphSpacing(title);
+                XWPFRun titleRun = title.createRun();
+                titleRun.setText("Заявка № " + applicationNumber);
+                titleRun.setFontFamily(FONT_NAME);
+                titleRun.setFontSize(FONT_SIZE);
+                titleRun.setBold(true);
 
-            XWPFParagraph spacerAfterTitle = document.createParagraph();
-            setParagraphSpacing(spacerAfterTitle);
+                XWPFParagraph spacerAfterTitle = document.createParagraph();
+                setParagraphSpacing(spacerAfterTitle);
 
-            XWPFParagraph requestText = document.createParagraph();
-            setParagraphSpacing(requestText);
-            XWPFRun requestRun = requestText.createRun();
-            requestRun.setText("Прошу провести работы по проведению измерений в целях:");
-            requestRun.setFontFamily(FONT_NAME);
-            requestRun.setFontSize(FONT_SIZE);
-            requestRun.setBold(true);
+                XWPFParagraph requestText = document.createParagraph();
+                setParagraphSpacing(requestText);
+                XWPFRun requestRun = requestText.createRun();
+                requestRun.setText("Прошу провести работы по проведению измерений в целях:");
+                requestRun.setFontFamily(FONT_NAME);
+                requestRun.setFontSize(FONT_SIZE);
+                requestRun.setBold(true);
 
-            XWPFTable purposeTable = document.createTable(2, 2);
-            configureTableLayout(purposeTable, new int[]{6280, 6280});
-            setTableCellText(purposeTable.getRow(0).getCell(0), "Поставить отметку", false, ParagraphAlignment.LEFT);
-            setTableCellText(purposeTable.getRow(0).getCell(1), "Цель", false, ParagraphAlignment.LEFT);
-            setTableCellText(purposeTable.getRow(1).getCell(0), "Χ", false, ParagraphAlignment.LEFT);
-            String purposeText = isRadiationArea
-                    ? "Иная цель:\nПроектирование"
-                    : "Иная цель:\nВвод здания в эксплуатацию";
-            setTableCellText(purposeTable.getRow(1).getCell(1), purposeText, false, ParagraphAlignment.LEFT);
+                XWPFTable purposeTable = document.createTable(2, 2);
+                configureTableLayout(purposeTable, new int[]{6280, 6280});
+                setTableCellText(purposeTable.getRow(0).getCell(0), "Поставить отметку", false,
+                        ParagraphAlignment.LEFT);
+                setTableCellText(purposeTable.getRow(0).getCell(1), "Цель", false, ParagraphAlignment.LEFT);
+                setTableCellText(purposeTable.getRow(1).getCell(0), "Χ", false, ParagraphAlignment.LEFT);
+                String purposeText = isRadiationArea
+                        ? "Иная цель:\nПроектирование"
+                        : "Иная цель:\nВвод здания в эксплуатацию";
+                setTableCellText(purposeTable.getRow(1).getCell(1), purposeText, false, ParagraphAlignment.LEFT);
 
-            XWPFParagraph spacerAfterPurpose = document.createParagraph();
-            setParagraphSpacing(spacerAfterPurpose);
+                XWPFParagraph spacerAfterPurpose = document.createParagraph();
+                setParagraphSpacing(spacerAfterPurpose);
 
-            XWPFTable optionsTable = document.createTable(16, 3);
-            configureTableLayout(optionsTable, new int[]{5652, 5652, 1256});
-            setTableCellText(optionsTable.getRow(0).getCell(0), "Протоколы измерений", false,
-                    ParagraphAlignment.CENTER);
-            setTableCellText(optionsTable.getRow(0).getCell(1), "выдать на руки", false,
-                    ParagraphAlignment.LEFT);
-            setTableCellText(optionsTable.getRow(0).getCell(2), "Х", false, ParagraphAlignment.CENTER);
+                XWPFTable optionsTable = document.createTable(16, 3);
+                configureTableLayout(optionsTable, new int[]{5652, 5652, 1256});
+                setTableCellText(optionsTable.getRow(0).getCell(0), "Протоколы измерений", false,
+                        ParagraphAlignment.CENTER);
+                setTableCellText(optionsTable.getRow(0).getCell(1), "выдать на руки", false,
+                        ParagraphAlignment.LEFT);
+                setTableCellText(optionsTable.getRow(0).getCell(2), "Х", false, ParagraphAlignment.CENTER);
 
             setTableCellText(optionsTable.getRow(1).getCell(1), "направить электронной почтой", false,
                     ParagraphAlignment.LEFT);
@@ -319,9 +333,10 @@ public final class RequestFormExporter {
             setTableCellText(signatureTable.getRow(1).getCell(2), "инициалы, фамилия", false,
                     ParagraphAlignment.CENTER);
 
-            XWPFParagraph pageBreak = document.createParagraph();
-            setParagraphSpacing(pageBreak);
-            pageBreak.createRun().addBreak(BreakType.PAGE);
+                XWPFParagraph pageBreak = document.createParagraph();
+                setParagraphSpacing(pageBreak);
+                pageBreak.createRun().addBreak(BreakType.PAGE);
+            }
 
             XWPFParagraph appendixHeader = document.createParagraph();
             appendixHeader.setAlignment(ParagraphAlignment.RIGHT);

@@ -73,7 +73,7 @@ public final class NoiseMapExporter {
         EquipmentIssuanceSheetExporter.generateForNoise(sourceFile, targetFile);
 
         MeasurementPlanExporter.generate(sourceFile, targetFile, workDeadline);
-        RequestFormExporter.generate(sourceFile, targetFile, workDeadline, customerInn);
+        RequestFormExporter.generateForNoise(sourceFile, targetFile, workDeadline, customerInn);
         RequestAnalysisSheetExporter.generate(targetFile);
 
         return targetFile;
