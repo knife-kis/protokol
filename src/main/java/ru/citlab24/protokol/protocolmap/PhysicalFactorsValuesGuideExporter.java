@@ -12,6 +12,8 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -117,14 +119,21 @@ public final class PhysicalFactorsValuesGuideExporter {
             return;
         }
 
-        XWPFTable table = document.createTable(rows.size() + 1, 2);
+        int columnCount = 22;
+        XWPFTable table = document.createTable(rows.size() + 1, columnCount);
         setCellText(table.getRow(0).getCell(0), "Место");
         setCellText(table.getRow(0).getCell(1), "Значение");
+        mergeCellsHorizontally(table, 0, 1, 20);
+        setCellText(table.getRow(0).getCell(21), "Среднее знач");
 
         for (int i = 0; i < rows.size(); i++) {
             StreetLightingRow row = rows.get(i);
             setCellText(table.getRow(i + 1).getCell(0), row.place());
-            setCellText(table.getRow(i + 1).getCell(1), row.values());
+            List<String> values = row.values();
+            for (int colIndex = 0; colIndex < values.size(); colIndex++) {
+                setCellText(table.getRow(i + 1).getCell(colIndex + 1), values.get(colIndex));
+            }
+            setCellText(table.getRow(i + 1).getCell(21), row.average());
         }
     }
 
@@ -134,6 +143,19 @@ public final class PhysicalFactorsValuesGuideExporter {
         XWPFRun run = paragraph.createRun();
         run.setFontSize(11);
         run.setText(text);
+    }
+
+    private static void mergeCellsHorizontally(XWPFTable table, int row, int fromCol, int toCol) {
+        for (int colIndex = fromCol; colIndex <= toCol; colIndex++) {
+            XWPFTableCell cell = table.getRow(row).getCell(colIndex);
+            CTTcPr cellProps = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
+            if (colIndex == fromCol) {
+                cellProps.addNewHMerge().setVal(STMerge.RESTART);
+            } else {
+                cellProps.addNewHMerge().setVal(STMerge.CONTINUE);
+                setCellText(cell, "");
+            }
+        }
     }
 
     private static List<StreetLightingRow> readStreetLightingRows(File mapFile) throws IOException {
@@ -155,23 +177,26 @@ public final class PhysicalFactorsValuesGuideExporter {
                     continue;
                 }
                 String place = formatter.formatCellValue(row.getCell(2)).trim();
+                String average = formatter.formatCellValue(row.getCell(6)).trim();
                 List<String> values = new ArrayList<>();
+                boolean hasValues = false;
                 for (int colIndex = 10; colIndex <= 29; colIndex++) {
                     Cell cell = row.getCell(colIndex);
                     String value = formatter.formatCellValue(cell).trim();
+                    values.add(value);
                     if (!value.isEmpty()) {
-                        values.add(value);
+                        hasValues = true;
                     }
                 }
-                if (place.isEmpty() && values.isEmpty()) {
+                if (place.isEmpty() && average.isEmpty() && !hasValues) {
                     continue;
                 }
-                rows.add(new StreetLightingRow(place, String.join("; ", values)));
+                rows.add(new StreetLightingRow(place, average, values));
             }
         }
         return rows;
     }
 
-    private record StreetLightingRow(String place, String values) {
+    private record StreetLightingRow(String place, String average, List<String> values) {
     }
 }
