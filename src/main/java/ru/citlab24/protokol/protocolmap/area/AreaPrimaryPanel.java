@@ -6,6 +6,7 @@ import ru.citlab24.protokol.protocolmap.MeasurementPlanExporter;
 import ru.citlab24.protokol.protocolmap.ProtocolIssuanceSheetExporter;
 import ru.citlab24.protokol.protocolmap.RequestAnalysisSheetExporter;
 import ru.citlab24.protokol.protocolmap.RequestFormExporter;
+import ru.citlab24.protokol.protocolmap.area.noise.AreaNoisePrimaryFiles;
 
 import javax.swing.*;
 import javax.swing.border.Border;
@@ -169,29 +170,33 @@ public class AreaPrimaryPanel extends JPanel {
         }
 
         private void showNoisePrimary(File mapFile) {
-            File shortRequest = ShortRequestFormExporter.resolveRequestFormFile(mapFile);
-            if (shortRequest != null && shortRequest.exists()) {
-                listModel.addElement("Сформирована заявка (краткая): " + shortRequest.getName());
+            File requestForm = AreaNoisePrimaryFiles.resolveRequestFormFile(mapFile);
+            if (requestForm != null && requestForm.exists()) {
+                listModel.addElement("Сформирована заявка: " + requestForm.getName());
             }
-            File analysisSheet = RequestAnalysisSheetExporter.resolveAnalysisSheetFile(mapFile);
+            File analysisSheet = AreaNoisePrimaryFiles.resolveAnalysisSheetFile(mapFile);
             if (analysisSheet != null && analysisSheet.exists()) {
                 listModel.addElement("Сформирован лист анализа заявки: " + analysisSheet.getName());
             }
-            File measurementPlan = MeasurementPlanExporter.resolveMeasurementPlanFile(mapFile);
+            File measurementPlan = AreaNoisePrimaryFiles.resolveMeasurementPlanFile(mapFile);
             if (measurementPlan != null && measurementPlan.exists()) {
                 listModel.addElement("Сформирован план измерений: " + measurementPlan.getName());
             }
-            List<File> equipmentSheets = EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(mapFile);
+            File registrationSheet = AreaNoisePrimaryFiles.resolveRegistrationSheetFile(mapFile);
+            if (registrationSheet != null && registrationSheet.exists()) {
+                listModel.addElement("Сформирован лист регистрации карт замеров: " + registrationSheet.getName());
+            }
+            List<File> equipmentSheets = AreaNoisePrimaryFiles.resolveEquipmentIssuanceFiles(mapFile);
             for (File equipmentSheet : equipmentSheets) {
                 if (equipmentSheet != null && equipmentSheet.exists()) {
                     listModel.addElement("Сформирован лист выдачи приборов: " + equipmentSheet.getName());
                 }
             }
-            File issuanceSheet = ProtocolIssuanceSheetExporter.resolveIssuanceSheetFile(mapFile);
+            File issuanceSheet = AreaNoisePrimaryFiles.resolveProtocolIssuanceSheetFile(mapFile);
             if (issuanceSheet != null && issuanceSheet.exists()) {
                 listModel.addElement("Сформирован лист выдачи протоколов: " + issuanceSheet.getName());
             }
-            downloadFile = shortRequest != null && shortRequest.exists() ? shortRequest : mapFile;
+            downloadFile = requestForm != null && requestForm.exists() ? requestForm : mapFile;
             downloadButton.setEnabled(downloadFile != null && downloadFile.exists());
         }
 

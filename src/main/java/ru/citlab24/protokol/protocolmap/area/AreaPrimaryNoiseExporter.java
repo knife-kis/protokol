@@ -1,18 +1,12 @@
 package ru.citlab24.protokol.protocolmap.area;
 
-import ru.citlab24.protokol.protocolmap.EquipmentIssuanceSheetExporter;
-import ru.citlab24.protokol.protocolmap.MeasurementCardRegistrationSheetExporter;
-import ru.citlab24.protokol.protocolmap.MeasurementPlanExporter;
 import ru.citlab24.protokol.protocolmap.NoiseMapExporter;
-import ru.citlab24.protokol.protocolmap.ProtocolIssuanceSheetExporter;
-import ru.citlab24.protokol.protocolmap.RequestAnalysisSheetExporter;
-import ru.citlab24.protokol.protocolmap.RequestFormExporter;
+import ru.citlab24.protokol.protocolmap.area.noise.AreaNoisePrimaryFiles;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.List;
 
 final class AreaPrimaryNoiseExporter {
@@ -27,27 +21,8 @@ final class AreaPrimaryNoiseExporter {
             return mapFile;
         }
 
-        File requestForm = RequestFormExporter.resolveRequestFormFile(mapFile);
-        deleteIfExists(requestForm);
-        File registrationSheet = MeasurementCardRegistrationSheetExporter.resolveRegistrationSheetFile(mapFile);
-        deleteIfExists(registrationSheet);
-
         File targetFolder = ensurePrimaryFolder(mapFile);
-        List<File> filesToMove = new ArrayList<>();
-        filesToMove.add(mapFile);
-        File analysisSheet = RequestAnalysisSheetExporter.resolveAnalysisSheetFile(mapFile);
-        if (analysisSheet != null) {
-            filesToMove.add(analysisSheet);
-        }
-        File measurementPlan = MeasurementPlanExporter.resolveMeasurementPlanFile(mapFile);
-        if (measurementPlan != null) {
-            filesToMove.add(measurementPlan);
-        }
-        File issuanceSheet = ProtocolIssuanceSheetExporter.resolveIssuanceSheetFile(mapFile);
-        if (issuanceSheet != null) {
-            filesToMove.add(issuanceSheet);
-        }
-        filesToMove.addAll(EquipmentIssuanceSheetExporter.resolveIssuanceSheetFiles(mapFile));
+        List<File> filesToMove = AreaNoisePrimaryFiles.collect(mapFile);
 
         for (File file : filesToMove) {
             if (file == null || !file.exists()) {
@@ -61,15 +36,7 @@ final class AreaPrimaryNoiseExporter {
         if (!newMapFile.exists()) {
             return mapFile;
         }
-        ShortRequestFormExporter.generate(newMapFile);
         return newMapFile;
-    }
-
-    private static void deleteIfExists(File file) throws IOException {
-        if (file == null) {
-            return;
-        }
-        Files.deleteIfExists(file.toPath());
     }
 
     private static File ensurePrimaryFolder(File mapFile) {
