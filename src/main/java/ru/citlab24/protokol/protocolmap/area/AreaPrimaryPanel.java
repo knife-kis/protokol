@@ -156,6 +156,10 @@ public class AreaPrimaryPanel extends JPanel {
                     listModel.addElement("Сформирован лист контроля оборудования: " + controlSheet.getName());
                 }
             }
+            File journalFile = RadiationJournalExporter.resolveJournalFile(mapFile);
+            if (journalFile != null && journalFile.exists()) {
+                listModel.addElement("Сформирован журнал: " + journalFile.getName());
+            }
             File issuanceSheet = ProtocolIssuanceSheetExporter.resolveIssuanceSheetFile(mapFile);
             if (issuanceSheet != null && issuanceSheet.exists()) {
                 listModel.addElement("Сформирован лист выдачи протоколов: " + issuanceSheet.getName());
