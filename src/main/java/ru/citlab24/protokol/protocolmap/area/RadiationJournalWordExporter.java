@@ -1,7 +1,6 @@
 package ru.citlab24.protokol.protocolmap.area;
 
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
-import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.TableWidthType;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -34,6 +33,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.math.BigInteger;
+import java.util.List;
 import java.util.Locale;
 
 final class RadiationJournalWordExporter {
@@ -43,6 +43,8 @@ final class RadiationJournalWordExporter {
     private static final int TABLE_FONT_SIZE = 9;
     private static final int TITLE_FONT_SIZE = 28;
     private static final int START_SK13_NUMBER = 17;
+    private static final String HEADER_APPROVAL_DATE = "Дата утверждения бланка формуляра; 01.01.2023г.";
+    private static final String HEADER_REVISION = "Редакция №1";
 
     private RadiationJournalWordExporter() {
     }
@@ -59,19 +61,14 @@ final class RadiationJournalWordExporter {
             applyStandardHeader(document);
 
             buildTitlePage(document);
-            addPageBreak(document);
             buildResponsibleSection(document, data);
             buildCheckSection(document);
-            addPageBreak(document);
             buildProtocolInfoSection(document, data);
             buildPreparationSection(document);
             buildEnvironmentSection(document);
-            addPageBreak(document);
-            buildSamplingSection(document, data);
-            buildSamplingFooter(document, data);
-            addPageBreak(document);
+            List<String> sk13Numbers = buildSamplingSection(document, data);
+            buildSamplingFooter(document, data, sk13Numbers);
             buildDistributionSection(document);
-            addPageBreak(document);
             buildChangeLogSection(document);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
@@ -332,7 +329,7 @@ final class RadiationJournalWordExporter {
                 TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
     }
 
-    private static void buildSamplingSection(XWPFDocument document, RadiationJournalData.ProtocolData data) {
+    private static List<String> buildSamplingSection(XWPFDocument document, RadiationJournalData.ProtocolData data) {
         addParagraphText(document, "Сведения об отборе:",
                 TEXT_FONT_SIZE, ParagraphAlignment.LEFT, false);
 
@@ -380,11 +377,14 @@ final class RadiationJournalWordExporter {
         }
 
         int seq = START_SK13_NUMBER;
+        List<String> sk13Numbers = new java.util.ArrayList<>();
         for (int i = 0; i < pointCount; i++) {
             int rowIndex = 2 + i;
             XWPFTableRow row = table.getRow(rowIndex);
             setTableCellText(row.getCell(1), "", TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
-            setTableCellText(row.getCell(2), String.format("%04d", seq++),
+            String sk13Number = String.format("%04d", seq++);
+            sk13Numbers.add(sk13Number);
+            setTableCellText(row.getCell(2), sk13Number,
                     TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
             setTableCellText(row.getCell(3), "1", TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
             setTableCellText(row.getCell(4), "т" + (i + 1),
@@ -394,9 +394,12 @@ final class RadiationJournalWordExporter {
             setTableCellText(row.getCell(7), "", TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
             setTableCellText(row.getCell(8), "", TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
         }
+        return sk13Numbers;
     }
 
-    private static void buildSamplingFooter(XWPFDocument document, RadiationJournalData.ProtocolData data) {
+    private static void buildSamplingFooter(XWPFDocument document,
+                                            RadiationJournalData.ProtocolData data,
+                                            List<String> sk13Numbers) {
         addParagraphText(document,
                 "Условные обозначения: + выполнено; - не выполнено.",
                 TEXT_FONT_SIZE, ParagraphAlignment.LEFT, false);
@@ -451,6 +454,11 @@ final class RadiationJournalWordExporter {
                 setTableCellText(measurementTable.getRow(row).getCell(col),
                         "", TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
             }
+        }
+        for (int row = 1; row <= pointCount; row++) {
+            String sk13Number = row - 1 < sk13Numbers.size() ? sk13Numbers.get(row - 1) : "";
+            setTableCellText(measurementTable.getRow(row).getCell(0),
+                    sk13Number, TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
         }
     }
 
@@ -559,14 +567,17 @@ final class RadiationJournalWordExporter {
         XWPFTable table = header.createTable(3, 3);
         configureHeaderTableLikeTemplate(table);
 
-        setHeaderCellText(table.getRow(0).getCell(0), "Испытательная лаборатория\nООО «ЦИТ»");
+        setHeaderCellText(table.getRow(0).getCell(0), "Испытательная лаборатория\nООО «ЦИТ»",
+                ParagraphAlignment.CENTER);
         setHeaderCellText(table.getRow(0).getCell(1),
                 "Журнал регистрации результатов\nопределения плотности потока радона\nФ6 РИ ИЛ 2-2023");
-        setHeaderCellPageCount(table.getRow(0).getCell(2));
+        setHeaderCellText(table.getRow(0).getCell(2), HEADER_APPROVAL_DATE, ParagraphAlignment.RIGHT);
+        setHeaderCellText(table.getRow(1).getCell(2), HEADER_REVISION, ParagraphAlignment.RIGHT);
+        setHeaderCellPageCount(table.getRow(2).getCell(2), ParagraphAlignment.RIGHT);
 
         mergeCellsVertically(table, 0, 0, 2);
         mergeCellsVertically(table, 1, 0, 2);
-        mergeCellsVertically(table, 2, 0, 2);
+        tightenHeaderRowHeights(table);
     }
 
     private static void configureHeaderTableLikeTemplate(XWPFTable table) {
@@ -627,7 +638,7 @@ final class RadiationJournalWordExporter {
 
     private static void setCellMargin(CTTblWidth width) {
         width.setType(STTblWidth.DXA);
-        width.setW(BigInteger.valueOf(40));
+        width.setW(BigInteger.valueOf(20));
     }
 
     private static void setBorder(CTBorder border) {
@@ -638,9 +649,13 @@ final class RadiationJournalWordExporter {
     }
 
     private static void setHeaderCellText(XWPFTableCell cell, String text) {
+        setHeaderCellText(cell, text, ParagraphAlignment.CENTER);
+    }
+
+    private static void setHeaderCellText(XWPFTableCell cell, String text, ParagraphAlignment alignment) {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
-        paragraph.setAlignment(ParagraphAlignment.CENTER);
+        paragraph.setAlignment(alignment);
         paragraph.setSpacingAfter(0);
         paragraph.setSpacingBefore(0);
         XWPFRun run = paragraph.createRun();
@@ -656,10 +671,10 @@ final class RadiationJournalWordExporter {
         }
     }
 
-    private static void setHeaderCellPageCount(XWPFTableCell cell) {
+    private static void setHeaderCellPageCount(XWPFTableCell cell, ParagraphAlignment alignment) {
         cell.removeParagraph(0);
         XWPFParagraph paragraph = cell.addParagraph();
-        paragraph.setAlignment(ParagraphAlignment.CENTER);
+        paragraph.setAlignment(alignment);
         paragraph.setSpacingAfter(0);
         paragraph.setSpacingBefore(0);
         XWPFRun run = paragraph.createRun();
@@ -794,10 +809,12 @@ final class RadiationJournalWordExporter {
         }
     }
 
-    private static void addPageBreak(XWPFDocument document) {
-        XWPFParagraph paragraph = document.createParagraph();
-        paragraph.setPageBreak(true);
-        XWPFRun run = paragraph.createRun();
-        run.addBreak(BreakType.PAGE);
+    private static void tightenHeaderRowHeights(XWPFTable table) {
+        for (int rowIndex = 0; rowIndex < table.getNumberOfRows(); rowIndex++) {
+            XWPFTableRow row = table.getRow(rowIndex);
+            if (row != null) {
+                row.setHeight(360);
+            }
+        }
     }
 }
