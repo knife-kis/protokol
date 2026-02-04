@@ -1,13 +1,24 @@
 package ru.citlab24.protokol.protocolmap;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class PhysicalFactorsValuesGuideExporter {
     private static final String GUIDE_NAME = "Справка по значениям.docx";
@@ -47,12 +58,8 @@ public final class PhysicalFactorsValuesGuideExporter {
             addSectionTitle(document, "3. Освещение на улице");
             addParagraph(document,
                     "В графе «средняя горизонтальная освещенность» заполняем два столбца:");
-            addBullet(document,
-                    "Первый столбец берём из файла, который подгружали для формирования первички: "
-                            + "вкладка «Иск освещение (2)», столбец C, начиная с 8 строки.");
-            addBullet(document,
-                    "Второй столбец берём из той же вкладки «Иск освещение (2)»: "
-                            + "ячейки K, L, M, N, …, AD (всего 20 значений, указываем через точку с запятой).");
+            addParagraph(document, "Список значений (место / значение):");
+            addStreetLightingValuesTable(document, mapFile);
 
             try (FileOutputStream out = new FileOutputStream(guideFile)) {
                 document.write(out);
@@ -101,5 +108,70 @@ public final class PhysicalFactorsValuesGuideExporter {
         XWPFRun run = paragraph.createRun();
         run.setFontSize(11);
         run.setText(text);
+    }
+
+    private static void addStreetLightingValuesTable(XWPFDocument document, File mapFile) throws IOException {
+        List<StreetLightingRow> rows = readStreetLightingRows(mapFile);
+        if (rows.isEmpty()) {
+            addParagraph(document, "Данные по листу «Иск освещение (2)» не найдены.");
+            return;
+        }
+
+        XWPFTable table = document.createTable(rows.size() + 1, 2);
+        setCellText(table.getRow(0).getCell(0), "Место");
+        setCellText(table.getRow(0).getCell(1), "Значение");
+
+        for (int i = 0; i < rows.size(); i++) {
+            StreetLightingRow row = rows.get(i);
+            setCellText(table.getRow(i + 1).getCell(0), row.place());
+            setCellText(table.getRow(i + 1).getCell(1), row.values());
+        }
+    }
+
+    private static void setCellText(XWPFTableCell cell, String text) {
+        cell.removeParagraph(0);
+        XWPFParagraph paragraph = cell.addParagraph();
+        XWPFRun run = paragraph.createRun();
+        run.setFontSize(11);
+        run.setText(text);
+    }
+
+    private static List<StreetLightingRow> readStreetLightingRows(File mapFile) throws IOException {
+        List<StreetLightingRow> rows = new ArrayList<>();
+        if (mapFile == null || !mapFile.exists()) {
+            return rows;
+        }
+        try (InputStream in = new java.io.FileInputStream(mapFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = workbook.getSheet("Иск освещение (2)");
+            if (sheet == null) {
+                return rows;
+            }
+            DataFormatter formatter = new DataFormatter();
+            int lastRow = sheet.getLastRowNum();
+            for (int rowIndex = 7; rowIndex <= lastRow; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null) {
+                    continue;
+                }
+                String place = formatter.formatCellValue(row.getCell(2)).trim();
+                List<String> values = new ArrayList<>();
+                for (int colIndex = 10; colIndex <= 29; colIndex++) {
+                    Cell cell = row.getCell(colIndex);
+                    String value = formatter.formatCellValue(cell).trim();
+                    if (!value.isEmpty()) {
+                        values.add(value);
+                    }
+                }
+                if (place.isEmpty() && values.isEmpty()) {
+                    continue;
+                }
+                rows.add(new StreetLightingRow(place, String.join("; ", values)));
+            }
+        }
+        return rows;
+    }
+
+    private record StreetLightingRow(String place, String values) {
     }
 }
