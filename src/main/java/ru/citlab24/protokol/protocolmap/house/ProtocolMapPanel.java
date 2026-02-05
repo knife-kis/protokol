@@ -323,32 +323,23 @@ public class ProtocolMapPanel extends JPanel {
                         "Нет файлов", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            List<String> missing = new ArrayList<>();
-            for (FileKind kind : FileKind.values()) {
-                if (!uploadedFiles.containsKey(kind)) {
-                    missing.add(kind.label);
-                }
-            }
-            if (!missing.isEmpty()) {
-                JOptionPane.showMessageDialog(this,
-                        "Не загружены: " + String.join(", ", missing),
-                        "Звукоизоляция",
-                        JOptionPane.WARNING_MESSAGE);
-                return;
-            }
             List<File> impactFiles = uploadedFiles.get(FileKind.IMPACT);
             List<File> wallFiles = uploadedFiles.get(FileKind.WALL);
             List<File> slabFiles = uploadedFiles.get(FileKind.SLAB);
             List<File> protocolFiles = uploadedFiles.get(FileKind.PROTOCOL);
             File protocolFile = (protocolFiles != null && !protocolFiles.isEmpty()) ? protocolFiles.get(0) : null;
-            if (impactFiles == null || impactFiles.isEmpty()
-                    || wallFiles == null || wallFiles.isEmpty()
-                    || slabFiles == null || slabFiles.isEmpty()
-                    || protocolFile == null) {
+            if (protocolFile == null) {
                 JOptionPane.showMessageDialog(this,
-                        "Не удалось определить исходный Excel файл.",
+                        "Не загружен протокол (Word).",
                         "Звукоизоляция",
-                        JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (isEmpty(impactFiles) && isEmpty(wallFiles) && isEmpty(slabFiles)) {
+                JOptionPane.showMessageDialog(this,
+                        "Загрузите хотя бы один Excel-файл: ударка, стена или перекрытие.",
+                        "Звукоизоляция",
+                        JOptionPane.WARNING_MESSAGE);
                 return;
             }
             String workDeadline = JOptionPane.showInputDialog(
@@ -389,6 +380,10 @@ public class ProtocolMapPanel extends JPanel {
             if (!generatedFiles.isEmpty()) {
                 showGeneratedMaps(generatedFiles);
             }
+        }
+
+        private boolean isEmpty(List<File> files) {
+            return files == null || files.isEmpty();
         }
 
         private void handleFiles(List<File> files) {
