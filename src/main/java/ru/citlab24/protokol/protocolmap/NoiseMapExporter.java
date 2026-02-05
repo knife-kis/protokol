@@ -486,13 +486,13 @@ public final class NoiseMapExporter {
 
         // Excel 2007+ (.xlsx): 1 048 576 строк => последний индекс 1 048 575
         int maxRow = 1_048_575;
-        workbook.setPrintArea(workbook.getSheetIndex(sheet), 0, 23, 0, maxRow);
+        workbook.setPrintArea(workbook.getSheetIndex(sheet), 0, 22, 0, maxRow);
     }
 
 
     private static int[] buildNoiseResultsColumnWidthsPx() {
         return new int[]{
-                28, 28, 160, 130, 25, 25, 25, 25, 25, 25, 34, 34, 34, 34, 34, 34,
+                28, 28, 160, 130, 25, 25, 25, 25, 25, 34, 34, 34, 34, 34, 34,
                 34, 34, 34, 34, 26, 11, 20, 43
         };
     }
@@ -532,8 +532,8 @@ public final class NoiseMapExporter {
         numberStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
         setThinBorders(numberStyle);
 
-        setMergedRegionWithStyle(sheet, 0, 0, 0, 23, titleStyle, "7.6 Результаты измерений шума");
-        setMergedRegionWithStyle(sheet, 1, 1, 0, 23, titleStyle, "7.6.1. Шум:");
+        setMergedRegionWithStyle(sheet, 0, 0, 0, 22, titleStyle, "7.6 Результаты измерений шума");
+        setMergedRegionWithStyle(sheet, 1, 1, 0, 22, titleStyle, "7.6.2. Шум:");
 
         Row headerTopRow = sheet.createRow(2);
         Row headerMiddleRow = sheet.createRow(3);
@@ -548,45 +548,43 @@ public final class NoiseMapExporter {
         setMergedRegionWithStyle(sheet, 2, 4, 3, 3, headerStyle,
                 "Источник шума \n(тип, вид, марка, условия замера)");
 
-        setMergedRegionWithStyle(sheet, 2, 2, 4, 9, headerStyle, "Характер шума");
+        setMergedRegionWithStyle(sheet, 2, 2, 4, 8, headerStyle, "Характер шума");
         setMergedRegionWithStyle(sheet, 3, 3, 4, 5, headerSmallStyle, "по спектру");
-        setMergedRegionWithStyle(sheet, 3, 3, 6, 9, headerSmallStyle,
+        setMergedRegionWithStyle(sheet, 3, 3, 6, 8, headerSmallStyle,
                 "по временным\nхарактеристикам");
 
         setCellValueWithStyle(sheet, 4, 4, "широкополосный", headerVerticalStyle);
         setCellValueWithStyle(sheet, 4, 5, "тональный", headerVerticalStyle);
         setCellValueWithStyle(sheet, 4, 6, "постоянный", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 7, "колеблющийся", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 8, "прерывистый", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 9, "импульсный", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 7, "непостоянный", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 8, "импульсный", headerVerticalStyle);
 
-        setMergedRegionWithStyle(sheet, 2, 3, 10, 18, headerStyle,
+        setMergedRegionWithStyle(sheet, 2, 3, 9, 17, headerStyle,
                 "Уровни звукового давления (дБ) ± U (дБ) в октавных полосах частот " +
                         "со среднегеометрическими частотами (Гц)");
 
-        setCellValueWithStyle(sheet, 4, 10, "31,5", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 11, "63", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 12, "125", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 13, "250", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 14, "500", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 15, "1000", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 16, "2000", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 17, "4000", headerVerticalStyle);
-        setCellValueWithStyle(sheet, 4, 18, "8000", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 9, "31,5", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 10, "63", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 11, "125", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 12, "250", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 13, "500", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 14, "1000", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 15, "2000", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 16, "4000", headerVerticalStyle);
+        setCellValueWithStyle(sheet, 4, 17, "8000", headerVerticalStyle);
 
-        setMergedRegionWithStyle(sheet, 2, 4, 19, 19, headerVerticalStyle,
+        setMergedRegionWithStyle(sheet, 2, 4, 18, 18, headerVerticalStyle,
                 "Уровни звука (дБА) \n±U (дБ)");
-        setMergedRegionWithStyle(sheet, 2, 4, 20, 22, headerVerticalStyle,
+        setMergedRegionWithStyle(sheet, 2, 4, 19, 21, headerVerticalStyle,
                 "Эквивалентные уровни звука,  (дБА) ±U (дБ)");
-        setMergedRegionWithStyle(sheet, 2, 4, 23, 23, headerVerticalStyle,
+        setMergedRegionWithStyle(sheet, 2, 4, 22, 22, headerVerticalStyle,
                 "Максимальные уровни звука  (дБА)");
 
         Row numberingRow = sheet.createRow(5);
-        for (int col = 0; col <= 19; col++) {
+        for (int col = 0; col <= 21; col++) {
             setCellValueWithStyle(numberingRow, col, String.valueOf(col + 1), numberStyle);
         }
-        setMergedRegionWithStyle(sheet, 5, 5, 20, 22, numberStyle, "21");
-        setCellValueWithStyle(numberingRow, 23, "22", numberStyle);
+        setCellValueWithStyle(numberingRow, 22, "22", numberStyle);
     }
 
     private static void addSimpleNumberingRow(Workbook workbook, Sheet sheet) {
@@ -601,11 +599,10 @@ public final class NoiseMapExporter {
         setThinBorders(numberStyle);
 
         Row numberingRow = sheet.createRow(0);
-        for (int col = 0; col <= 19; col++) {
+        for (int col = 0; col <= 21; col++) {
             setCellValueWithStyle(numberingRow, col, String.valueOf(col + 1), numberStyle);
         }
-        setMergedRegionWithStyle(sheet, 0, 0, 20, 22, numberStyle, "21");
-        setCellValueWithStyle(numberingRow, 23, "22", numberStyle);
+        setCellValueWithStyle(numberingRow, 22, "22", numberStyle);
     }
 
     private static void fillNoiseResultsFromProtocol(Sheet sourceSheet,
@@ -634,8 +631,8 @@ public final class NoiseMapExporter {
                 if (isMergedDateRow(mergedRegion)) {
                     String text = "Дата, время проведения измерений ____________________________";
                     setMergedRegionWithStyle(targetSheet, targetRowIndex, targetRowIndex,
-                            0, 23, leftStyle, text);
-                    adjustRowHeightForMergedText(targetSheet, targetRowIndex, 0, 23, text);
+                            0, 22, leftStyle, text);
+                    adjustRowHeightForMergedText(targetSheet, targetRowIndex, 0, 22, text);
                     targetRowIndex++;
                     sourceRowIndex = mergedRegion.getLastRow() + 1;
                     continue;
@@ -697,38 +694,38 @@ public final class NoiseMapExporter {
 
         setCellValueWithStyle(sheet, startRow, 2, safe(cValue), leftStyle);
         setCellValueWithStyle(sheet, startRow, 3, safe(dValue), leftStyle);
-        fillRowCells(sheet, startRow, 4, 19, "", centerStyle);
-        setMergedRegionWithStyle(sheet, startRow, startRow, 20, 22, centerStyle, "");
-        setCellValueWithStyle(sheet, startRow, 23, "", centerStyle);
+        fillRowCells(sheet, startRow, 4, 18, "", centerStyle);
+        setMergedRegionWithStyle(sheet, startRow, startRow, 19, 21, centerStyle, "");
+        setCellValueWithStyle(sheet, startRow, 22, "", centerStyle);
 
         int row2 = startRow + 1;
         setMergedRegionWithStyle(sheet, row2, row2, 2, 3, leftStyle, "Фон");
-        fillRowCells(sheet, row2, 4, 19, "", centerStyle);
-        setMergedRegionWithStyle(sheet, row2, row2, 20, 22, centerStyle, "");
-        setCellValueWithStyle(sheet, row2, 23, "", centerStyle);
+        fillRowCells(sheet, row2, 4, 18, "", centerStyle);
+        setMergedRegionWithStyle(sheet, row2, row2, 19, 21, centerStyle, "");
+        setCellValueWithStyle(sheet, row2, 22, "", centerStyle);
 
         int row3 = startRow + 2;
         String correctionSpectra = "Поправка (МИ Ш.13-2021 п.12.3.2.1.3) дБА (дБ) ";
-        setMergedRegionWithStyle(sheet, row3, row3, 2, 9, leftStyle, correctionSpectra);
-        fillRowCells(sheet, row3, 10, 19, "", centerStyle);
-        setMergedRegionWithStyle(sheet, row3, row3, 20, 22, centerStyle, "");
-        setCellValueWithStyle(sheet, row3, 23, "", centerStyle);
-        adjustRowHeightForMergedText(sheet, row3, 2, 9, correctionSpectra);
+        setMergedRegionWithStyle(sheet, row3, row3, 2, 8, leftStyle, correctionSpectra);
+        fillRowCells(sheet, row3, 9, 18, "", centerStyle);
+        setMergedRegionWithStyle(sheet, row3, row3, 19, 21, centerStyle, "");
+        setCellValueWithStyle(sheet, row3, 22, "", centerStyle);
+        adjustRowHeightForMergedText(sheet, row3, 2, 8, correctionSpectra);
 
         int row4 = startRow + 3;
         String correctionTime = "Поправка (МИ Ш.13-2021 п.12.3.2.1.1) дБА (дБ) ";
-        setMergedRegionWithStyle(sheet, row4, row4, 2, 9, leftStyle, correctionTime);
-        fillRowCells(sheet, row4, 10, 19, "2", centerStyle);
-        setMergedRegionWithStyle(sheet, row4, row4, 20, 22, centerStyle, "2");
-        setCellValueWithStyle(sheet, row4, 23, "2", centerStyle);
-        adjustRowHeightForMergedText(sheet, row4, 2, 9, correctionTime);
+        setMergedRegionWithStyle(sheet, row4, row4, 2, 8, leftStyle, correctionTime);
+        fillRowCells(sheet, row4, 9, 18, "2", centerStyle);
+        setMergedRegionWithStyle(sheet, row4, row4, 19, 21, centerStyle, "2");
+        setCellValueWithStyle(sheet, row4, 22, "2", centerStyle);
+        adjustRowHeightForMergedText(sheet, row4, 2, 8, correctionTime);
 
         int row5 = startRow + 4;
         String levelsText = "Уровни звука (уровни звукового давления) с учетом поправок, дБА (дБ) ";
-        setMergedRegionWithStyle(sheet, row5, row5, 2, 9, leftStyle, levelsText);
-        fillRowCells(sheet, row5, 10, 19, "", centerStyle);
-        setMergedRegionWithStyle(sheet, row5, row5, 20, 22, centerStyle, "");
-        setCellValueWithStyle(sheet, row5, 23, "", centerStyle);
+        setMergedRegionWithStyle(sheet, row5, row5, 2, 8, leftStyle, levelsText);
+        fillRowCells(sheet, row5, 9, 18, "", centerStyle);
+        setMergedRegionWithStyle(sheet, row5, row5, 19, 21, centerStyle, "");
+        setCellValueWithStyle(sheet, row5, 22, "", centerStyle);
         Row row5Ref = sheet.getRow(row5);
         if (row5Ref != null) {
             row5Ref.setHeightInPoints(sheet.getDefaultRowHeightInPoints());
@@ -766,9 +763,9 @@ public final class NoiseMapExporter {
                 String value = sourceRowIndex == sourceStartRow ? dValue : "";
                 setCellValueWithStyle(targetSheet, targetRowIndex, 3, value, leftStyle);
             }
-            fillRowCells(targetSheet, targetRowIndex, 4, 19, "", centerStyle);
-            setMergedRegionWithStyle(targetSheet, targetRowIndex, targetRowIndex, 20, 22, centerStyle, "");
-            setCellValueWithStyle(targetSheet, targetRowIndex, 23, "", centerStyle);
+            fillRowCells(targetSheet, targetRowIndex, 4, 18, "", centerStyle);
+            setMergedRegionWithStyle(targetSheet, targetRowIndex, targetRowIndex, 19, 21, centerStyle, "");
+            setCellValueWithStyle(targetSheet, targetRowIndex, 22, "", centerStyle);
             targetRowIndex++;
         }
         if (dRegion != null && sourceEndRow > sourceStartRow) {
@@ -1689,7 +1686,7 @@ public final class NoiseMapExporter {
             return;
         }
         for (CellRangeAddress range : sheet.getMergedRegions()) {
-            if (range.getFirstColumn() > 23 || range.getLastColumn() > 23) {
+            if (range.getFirstColumn() > 22 || range.getLastColumn() > 22) {
                 continue;
             }
             Row row = sheet.getRow(range.getFirstRow());
