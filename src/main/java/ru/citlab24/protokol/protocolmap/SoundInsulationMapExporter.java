@@ -1759,6 +1759,10 @@ public final class SoundInsulationMapExporter {
                 || text.equalsIgnoreCase("Оценочная кривая, дБ")) {
             return true;
         }
+        if (text.equalsIgnoreCase("T20 для Д1 и Д2, с")
+                || text.equalsIgnoreCase("Т20 для Д1 и Д2, с")) {
+            return true;
+        }
         Matcher matcher = RW_MEASUREMENT_ROW_PATTERN.matcher(text);
         if (matcher.matches()) {
             int index = Integer.parseInt(matcher.group(1));
