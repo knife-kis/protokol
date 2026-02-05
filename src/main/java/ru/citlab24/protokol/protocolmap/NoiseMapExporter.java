@@ -581,10 +581,11 @@ public final class NoiseMapExporter {
                 "Максимальные уровни звука  (дБА)");
 
         Row numberingRow = sheet.createRow(5);
-        for (int col = 0; col <= 21; col++) {
+        for (int col = 0; col <= 18; col++) {
             setCellValueWithStyle(numberingRow, col, String.valueOf(col + 1), numberStyle);
         }
-        setCellValueWithStyle(numberingRow, 22, "22", numberStyle);
+        setMergedRegionWithStyle(sheet, 5, 5, 19, 21, numberStyle, "20");
+        setCellValueWithStyle(numberingRow, 22, "21", numberStyle);
     }
 
     private static void addSimpleNumberingRow(Workbook workbook, Sheet sheet) {
@@ -599,10 +600,11 @@ public final class NoiseMapExporter {
         setThinBorders(numberStyle);
 
         Row numberingRow = sheet.createRow(0);
-        for (int col = 0; col <= 21; col++) {
+        for (int col = 0; col <= 18; col++) {
             setCellValueWithStyle(numberingRow, col, String.valueOf(col + 1), numberStyle);
         }
-        setCellValueWithStyle(numberingRow, 22, "22", numberStyle);
+        setMergedRegionWithStyle(sheet, 0, 0, 19, 21, numberStyle, "20");
+        setCellValueWithStyle(numberingRow, 22, "21", numberStyle);
     }
 
     private static void fillNoiseResultsFromProtocol(Sheet sourceSheet,
