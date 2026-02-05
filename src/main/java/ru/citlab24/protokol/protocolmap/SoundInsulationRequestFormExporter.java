@@ -46,6 +46,8 @@ final class SoundInsulationRequestFormExporter {
     private static final String ROOM_PARAMS_START = "Параметры помещений и испытываемой поверхности:";
     private static final String ROOM_PARAMS_END = "17. Результаты измерений";
     private static final String ROOM_PARAMS_ALT_START = "16. Параметры помещений и испытываемой поверхности:";
+    private static final String AREA_BETWEEN_ROOMS_MARKER =
+            "Площадь испытываемой поверхности между помещениями";
     private static final String APPLICATION_BASIS_LABEL = "6. Основание для измерений";
     private static final String APPLICATION_BASIS_ALT_LABEL = "Основание для измерений";
 
@@ -63,6 +65,7 @@ final class SoundInsulationRequestFormExporter {
         List<String> customerLines = extractCustomerDataLines(protocolFile);
         List<List<String>> roomParamsRows = extractRoomParamsTable(protocolFile);
         List<String> roomParamsLines = roomParamsRows.isEmpty() ? extractRoomParamsLines(protocolFile) : List.of();
+        String areaBetweenRoomsLine = extractAreaBetweenRoomsLine(protocolFile);
 
         if (planRows.isEmpty()) {
             List<String> empty = new ArrayList<>();
@@ -75,10 +78,6 @@ final class SoundInsulationRequestFormExporter {
 
         try (XWPFDocument document = new XWPFDocument()) {
             RequestFormExporter.applyStandardHeader(document);
-
-            XWPFParagraph initialPageBreak = document.createParagraph();
-            setParagraphSpacing(initialPageBreak);
-            initialPageBreak.createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE);
 
             XWPFParagraph appendixHeader = document.createParagraph();
             appendixHeader.setAlignment(ParagraphAlignment.RIGHT);
@@ -109,6 +108,10 @@ final class SoundInsulationRequestFormExporter {
                     setTableCellText(planTable.getRow(rowIndex).getCell(colIndex), value,
                             PLAN_TABLE_FONT_SIZE, isHeader, alignment);
                 }
+            }
+
+            if (!areaBetweenRoomsLine.isBlank()) {
+                addParagraphWithLineBreaks(document, areaBetweenRoomsLine);
             }
 
             XWPFParagraph spacerAfterPlan = document.createParagraph();
@@ -324,6 +327,26 @@ final class SoundInsulationRequestFormExporter {
             // пропускаем извлечение данных при ошибке
         }
         return lines;
+    }
+
+    private static String extractAreaBetweenRoomsLine(File protocolFile) {
+        if (protocolFile == null || !protocolFile.exists()) {
+            return "";
+        }
+        try (InputStream inputStream = new FileInputStream(protocolFile);
+             XWPFDocument document = new XWPFDocument(inputStream)) {
+            List<String> allLines = extractLines(document, true);
+            for (String line : allLines) {
+                String normalized = normalizeSpace(line);
+                if (normalized.toLowerCase(Locale.ROOT)
+                        .contains(AREA_BETWEEN_ROOMS_MARKER.toLowerCase(Locale.ROOT))) {
+                    return normalized;
+                }
+            }
+        } catch (Exception ignored) {
+            // пропускаем извлечение данных при ошибке
+        }
+        return "";
     }
 
     private static List<List<String>> extractRoomParamsTable(File protocolFile) {
