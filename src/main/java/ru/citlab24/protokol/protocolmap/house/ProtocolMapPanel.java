@@ -263,6 +263,7 @@ public class ProtocolMapPanel extends JPanel {
         private final DefaultListModel<String> listModel = new DefaultListModel<>();
         private final Map<FileKind, List<File>> uploadedFiles = new EnumMap<>(FileKind.class);
         private final JButton analyzeButton;
+        private final JButton resetButton;
 
         SoundInsulationPanel() {
             super(new BorderLayout(8, 8));
@@ -291,9 +292,14 @@ public class ProtocolMapPanel extends JPanel {
             analyzeButton.setEnabled(false);
             analyzeButton.addActionListener(event -> runAnalysis());
 
-            JPanel footer = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+            resetButton = new JButton("Сбросить документы");
+            resetButton.setEnabled(false);
+            resetButton.addActionListener(event -> resetDocuments());
+
+            JPanel footer = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
             footer.setOpaque(false);
             footer.add(analyzeButton);
+            footer.add(resetButton);
 
             add(header, BorderLayout.NORTH);
             add(scrollPane, BorderLayout.CENTER);
@@ -382,6 +388,13 @@ public class ProtocolMapPanel extends JPanel {
             }
         }
 
+        private void resetDocuments() {
+            uploadedFiles.clear();
+            updateList();
+            analyzeButton.setEnabled(false);
+            resetButton.setEnabled(false);
+        }
+
         private boolean isEmpty(List<File> files) {
             return files == null || files.isEmpty();
         }
@@ -406,6 +419,7 @@ public class ProtocolMapPanel extends JPanel {
             if (updated) {
                 updateList();
                 analyzeButton.setEnabled(true);
+                resetButton.setEnabled(true);
             }
         }
 
