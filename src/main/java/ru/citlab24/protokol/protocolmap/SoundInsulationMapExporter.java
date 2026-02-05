@@ -99,6 +99,7 @@ public final class SoundInsulationMapExporter {
         addRwSlabSheets(targetFile, slabFiles);
         addRtSheets(targetFile, slabFiles, wallFiles);
         addBackgroundSheet(targetFile, wallFiles, slabFiles);
+        applyUniformMapSheetLayout(targetFile);
         File renamed = renameSoundInsulationMap(targetFile);
         if (renamed != null) {
             SoundInsulationProtocolIssuanceSheetExporter.generate(protocolFile, renamed);
@@ -913,6 +914,54 @@ public final class SoundInsulationMapExporter {
 
     private static void createRwHeaderRow(Workbook workbook, Sheet sheet, String headerText) {
         createLnwAcHeaderRow(workbook, sheet, headerText);
+    }
+
+    private static void applyUniformMapSheetLayout(File targetFile) throws IOException {
+        if (targetFile == null || !targetFile.exists()) {
+            return;
+        }
+        try (InputStream inputStream = new FileInputStream(targetFile);
+             Workbook workbook = WorkbookFactory.create(inputStream)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return;
+            }
+            Sheet firstSheet = workbook.getSheetAt(0);
+            Header firstHeader = firstSheet.getHeader();
+            Footer firstFooter = firstSheet.getFooter();
+
+            String headerLeft = firstHeader.getLeft();
+            String headerCenter = firstHeader.getCenter();
+            String headerRight = firstHeader.getRight();
+            String footerLeft = firstFooter.getLeft();
+            String footerCenter = firstFooter.getCenter();
+            String footerRight = firstFooter.getRight();
+
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                Sheet sheet = workbook.getSheetAt(i);
+
+                PrintSetup printSetup = sheet.getPrintSetup();
+                printSetup.setLandscape(true);
+                printSetup.setFitWidth((short) 1);
+                printSetup.setFitHeight((short) 0);
+                sheet.setFitToPage(true);
+                sheet.setAutobreaks(true);
+                workbook.setPrintArea(i, "$A:$Q");
+
+                Header header = sheet.getHeader();
+                header.setLeft(headerLeft);
+                header.setCenter(headerCenter);
+                header.setRight(headerRight);
+
+                Footer footer = sheet.getFooter();
+                footer.setLeft(footerLeft);
+                footer.setCenter(footerCenter);
+                footer.setRight(footerRight);
+            }
+
+            try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+                workbook.write(outputStream);
+            }
+        }
     }
 
     private static void copyLnwAcRows(LnwAcSourceData sourceData,
