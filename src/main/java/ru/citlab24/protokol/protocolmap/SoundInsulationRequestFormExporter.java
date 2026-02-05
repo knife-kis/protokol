@@ -110,20 +110,12 @@ final class SoundInsulationRequestFormExporter {
                 }
             }
 
-            if (!areaBetweenRoomsLine.isBlank()) {
-                addParagraphWithLineBreaks(document, areaBetweenRoomsLine);
-            }
-
             XWPFParagraph spacerAfterPlan = document.createParagraph();
             setParagraphSpacing(spacerAfterPlan);
 
             addParagraphWithLineBreaks(document,
                     "Представитель заказчика _______________________________________________\n" +
                             "                                                 (Должность, ФИО, контактные данные)  ");
-
-            XWPFParagraph pageBreak = document.createParagraph();
-            setParagraphSpacing(pageBreak);
-            pageBreak.createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE);
 
             XWPFParagraph customerAppendixHeader = document.createParagraph();
             customerAppendixHeader.setAlignment(ParagraphAlignment.RIGHT);
@@ -165,6 +157,10 @@ final class SoundInsulationRequestFormExporter {
                 for (String line : roomParamsLines) {
                     addParagraphWithLineBreaks(document, line);
                 }
+            }
+
+            if (!areaBetweenRoomsLine.isBlank()) {
+                addParagraphWithLineBreaks(document, areaBetweenRoomsLine);
             }
 
             XWPFParagraph highlightParagraph = document.createParagraph();
