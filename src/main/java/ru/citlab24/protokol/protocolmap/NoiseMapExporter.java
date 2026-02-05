@@ -31,6 +31,8 @@ public final class NoiseMapExporter {
     private static final double BOTTOM_MARGIN_CM = 1.9;
     private static final int TITLE_MEASUREMENT_DATES_ROW = 7;
     private static final String PRIMARY_FOLDER_NAME = "Первичка Шумы";
+    private static final String NOISE_MEASUREMENT_DATE_PLACEHOLDER =
+            "Дата, время проведения измерений__________________";
 
     private NoiseMapExporter() {
     }
@@ -635,7 +637,7 @@ public final class NoiseMapExporter {
             CellRangeAddress mergedRegion = findMergedRegion(sourceSheet, sourceRowIndex, 0);
             if (mergedRegion != null && mergedRegion.getFirstRow() == sourceRowIndex) {
                 if (isMergedDateRow(mergedRegion)) {
-                    String text = "Дата, время проведения измерений ____________________________";
+                    String text = NOISE_MEASUREMENT_DATE_PLACEHOLDER;
                     setMergedRegionWithStyle(targetSheet, targetRowIndex, targetRowIndex,
                             0, 22, leftStyle, text);
                     adjustRowHeightForMergedText(targetSheet, targetRowIndex, 0, 22, text);
@@ -675,7 +677,7 @@ public final class NoiseMapExporter {
 
     private static boolean isMergedDateRow(CellRangeAddress mergedRegion) {
         return mergedRegion.getFirstColumn() == 0
-                && mergedRegion.getLastColumn() >= 23
+                && mergedRegion.getLastColumn() == 24
                 && mergedRegion.getFirstRow() == mergedRegion.getLastRow();
     }
 
