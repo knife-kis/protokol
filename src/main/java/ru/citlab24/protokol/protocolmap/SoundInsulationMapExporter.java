@@ -48,6 +48,7 @@ public final class SoundInsulationMapExporter {
     private static final String OBJECT_ADDRESS_LABEL = "5. Адрес предприятия (объекта):";
     private static final String OBJECT_ADDRESS_SECTION_LABEL = "5. Адрес предприятия";
     private static final String MEASUREMENT_DATES_NOTE = "смотреть п. 7.6.2";
+    private static final String RATING_CURVE_SHIFT_LABEL = "Смещение оценочной кривой";
     private static final String APPROVAL_LABEL = "УТВЕРЖДАЮ";
     private static final Pattern APPROVAL_DATE_PATTERN =
             Pattern.compile("\\b\\d{1,2}\\s+[А-Яа-я]+\\s+\\d{4}\\s*г?\\.?");
@@ -1301,13 +1302,22 @@ public final class SoundInsulationMapExporter {
             return;
         }
         switch (sourceCell.getCellType()) {
-            case STRING -> targetCell.setCellValue(sourceCell.getStringCellValue());
+            case STRING -> targetCell.setCellValue(normalizeRatingCurveShiftText(sourceCell.getStringCellValue()));
             case NUMERIC -> targetCell.setCellValue(sourceCell.getNumericCellValue());
             case BOOLEAN -> targetCell.setCellValue(sourceCell.getBooleanCellValue());
             case FORMULA -> targetCell.setCellFormula(sourceCell.getCellFormula());
             case BLANK -> targetCell.setBlank();
-            default -> targetCell.setCellValue(formatter.formatCellValue(sourceCell));
+            default -> targetCell.setCellValue(normalizeRatingCurveShiftText(formatter.formatCellValue(sourceCell)));
         }
+    }
+
+    private static String normalizeRatingCurveShiftText(String text) {
+        String normalized = normalizeSpace(text);
+        if (normalized.toLowerCase(Locale.ROOT)
+                .contains(RATING_CURVE_SHIFT_LABEL.toLowerCase(Locale.ROOT))) {
+            return RATING_CURVE_SHIFT_LABEL;
+        }
+        return text;
     }
 
     private static void copyMergedRegions(LnwAcSourceData sourceData,
