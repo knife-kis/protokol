@@ -564,20 +564,26 @@ final class SoundInsulationRequestFormExporter {
             String partitionRooms = extractBetweenMarkers(source,
                     "по результатам измерений для перегородки между помещениями",
                     NORMATIVE_REQUIREMENTS_MARKER);
-            String floorRooms = extractBetweenMarkers(source,
-                    "по результатам измерений для перекрытия между помещениями",
-                    NORMATIVE_REQUIREMENTS_MARKER);
+            partitionRooms = takeFirstWords(partitionRooms, 3);
             String requirements = extractTailFromMarker(source, NORMATIVE_REQUIREMENTS_MARKER, true);
             if (!partitionRooms.isBlank() && !requirements.isBlank()) {
-                result.add("По результатам измерений для перегородки между помещениями "
+                result.add("Для перегородки между помещениями "
                         + partitionRooms + ": нормативные требования " + requirements);
-            }
-            if (!floorRooms.isBlank() && !requirements.isBlank()) {
-                result.add("По результатам измерений для перекрытия между помещениями "
-                        + floorRooms + ": нормативные требования " + requirements);
             }
         }
         return result;
+    }
+
+    private static String takeFirstWords(String value, int wordsCount) {
+        String normalized = normalizeSpace(value);
+        if (normalized.isBlank() || wordsCount <= 0) {
+            return "";
+        }
+        String[] words = normalized.split("\\s+");
+        if (words.length <= wordsCount) {
+            return normalized;
+        }
+        return String.join(" ", Arrays.copyOfRange(words, 0, wordsCount));
     }
 
     private static boolean isRwTableHeader(String line) {
