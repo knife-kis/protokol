@@ -557,10 +557,10 @@ final class SoundInsulationRequestFormExporter {
             end = lines.size();
         }
         for (int i = start; i < end; i++) {
-            if (!containsIgnoreCase(lines.get(i), "R, дБ")) {
+            if (!isRwTableHeader(lines.get(i))) {
                 continue;
             }
-            String source = buildSearchWindow(lines, i + 1, end);
+            String source = buildSearchWindow(lines, i + 1, findNextRwHeaderIndex(lines, i + 1, end));
             String partitionRooms = extractBetweenMarkers(source,
                     "по результатам измерений для перегородки между помещениями",
                     NORMATIVE_REQUIREMENTS_MARKER);
@@ -571,12 +571,27 @@ final class SoundInsulationRequestFormExporter {
             if (!partitionRooms.isBlank() && !requirements.isBlank()) {
                 result.add("По результатам измерений для перегородки между помещениями "
                         + partitionRooms + ": нормативные требования " + requirements);
-            } else if (!floorRooms.isBlank() && !requirements.isBlank()) {
+            }
+            if (!floorRooms.isBlank() && !requirements.isBlank()) {
                 result.add("По результатам измерений для перекрытия между помещениями "
                         + floorRooms + ": нормативные требования " + requirements);
             }
         }
         return result;
+    }
+
+    private static boolean isRwTableHeader(String line) {
+        return containsIgnoreCase(line, "R, дБ") || containsIgnoreCase(line, "Rw, дБ");
+    }
+
+    private static int findNextRwHeaderIndex(List<String> lines, int fromIndex, int endExclusive) {
+        int max = Math.min(endExclusive, lines.size());
+        for (int i = Math.max(0, fromIndex); i < max; i++) {
+            if (isRwTableHeader(lines.get(i))) {
+                return i;
+            }
+        }
+        return max;
     }
 
     private static int findLineIndexContaining(List<String> lines, String marker) {
@@ -593,7 +608,7 @@ final class SoundInsulationRequestFormExporter {
 
     private static String buildSearchWindow(List<String> lines, int start, int end) {
         StringBuilder builder = new StringBuilder();
-        int max = Math.min(end, start + 8);
+        int max = Math.min(end, start + 24);
         for (int i = start; i < max; i++) {
             String value = normalizeSpace(lines.get(i));
             if (value.matches("^\\d+\\.\\d+.*") || value.matches("^\\d+\\..*")) {
