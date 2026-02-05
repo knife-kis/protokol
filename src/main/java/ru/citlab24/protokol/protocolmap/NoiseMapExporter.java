@@ -1728,7 +1728,9 @@ public final class NoiseMapExporter {
             return;
         }
         for (CellRangeAddress range : sheet.getMergedRegions()) {
-            if (range.getFirstColumn() > 22 || range.getLastColumn() > 22) {
+            // Ищем даты в объединениях A:Y (включительно), где обычно лежит строка
+            // "Дата, время проведения измерений ..." в шаблонах для шумов.
+            if (range.getFirstColumn() > 24 || range.getLastColumn() > 24) {
                 continue;
             }
             Row row = sheet.getRow(range.getFirstRow());
