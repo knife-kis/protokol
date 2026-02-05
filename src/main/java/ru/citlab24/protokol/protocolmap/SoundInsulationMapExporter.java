@@ -60,6 +60,10 @@ public final class SoundInsulationMapExporter {
             "7\\.8\\.4\\s+Результаты измерения времени реверберации в помещении\\s+([A-Za-zА-Яа-я])",
             Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern BETWEEN_ROOMS_PATTERN = Pattern.compile(
+            "между\\s+помещени(?:ем|ями)\\s+([A-Za-zА-Яа-я0-9]+)\\s+и\\s+([A-Za-zА-Яа-я0-9]+)",
+            Pattern.CASE_INSENSITIVE
+    );
     private static final double SKETCH_HEIGHT_CM = 6.26;
     private static final double SKETCH_WIDTH_CM = 4.08;
     private static final int SKETCH_PADDING_PX = 5;
@@ -697,11 +701,13 @@ public final class SoundInsulationMapExporter {
                             String sheetName = makeUniqueSheetName(targetWorkbook, baseName);
                             Sheet targetSheet = targetWorkbook.createSheet(sheetName);
                             applyLnwAcColumnWidths(targetSheet);
+                            createRwHeaderRow(targetWorkbook, targetSheet,
+                                    buildRtHeaderText(section.sectionLabel));
 
                             if (section.sourceSheet != null
                                     && section.startRow >= 0
                                     && section.endRow >= section.startRow) {
-                                copyRtRows(section, targetWorkbook, targetSheet, 0);
+                                copyRtRows(section, targetWorkbook, targetSheet, 1);
                             }
                         }
                     }
@@ -1475,6 +1481,15 @@ public final class SoundInsulationMapExporter {
         return base + " " + first + " и " + second;
     }
 
+    private static String buildRtHeaderText(String sectionLabel) {
+        String base = "7.8.4 Результаты измерения времени реверберации в помещении";
+        String room = safe(sectionLabel).trim();
+        if (room.isBlank()) {
+            return base;
+        }
+        return base + " " + room;
+    }
+
     private static LnwAcSourceData resolveLnwAcSourceData(Workbook impactWorkbook) {
         DataFormatter formatter = new DataFormatter();
         Sheet lnvSheet = impactWorkbook.getSheet("Lnw");
@@ -1538,6 +1553,15 @@ public final class SoundInsulationMapExporter {
         if (rwSheet != null) {
             firstRoomWord = findRightCellValue(rwSheet, "ПВУ:", formatter);
             secondRoomWord = findRightCellValue(rwSheet, "ПНУ:", formatter);
+            if (firstRoomWord.isBlank() || secondRoomWord.isBlank()) {
+                String[] parsedRooms = findRoomsFromSectionHeader(rwSheet, formatter);
+                if (firstRoomWord.isBlank()) {
+                    firstRoomWord = parsedRooms[0];
+                }
+                if (secondRoomWord.isBlank()) {
+                    secondRoomWord = parsedRooms[1];
+                }
+            }
         }
 
         RwSourceData sourceData = new RwSourceData();
@@ -1593,6 +1617,23 @@ public final class SoundInsulationMapExporter {
             }
         }
         return "";
+    }
+
+    private static String[] findRoomsFromSectionHeader(Sheet sheet, DataFormatter formatter) {
+        if (sheet == null) {
+            return new String[]{"", ""};
+        }
+        for (Row row : sheet) {
+            String rowText = buildRowText(row, formatter);
+            if (rowText.isBlank()) {
+                continue;
+            }
+            Matcher matcher = BETWEEN_ROOMS_PATTERN.matcher(rowText);
+            if (matcher.find()) {
+                return new String[]{normalizeSpace(matcher.group(1)), normalizeSpace(matcher.group(2))};
+            }
+        }
+        return new String[]{"", ""};
     }
 
     private static boolean shouldClearLnwCellValue(Cell cell) {
