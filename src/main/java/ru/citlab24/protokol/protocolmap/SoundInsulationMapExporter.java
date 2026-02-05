@@ -47,6 +47,7 @@ public final class SoundInsulationMapExporter {
             "4. Наименование предприятия, организации, объекта, где производились измерения:";
     private static final String OBJECT_ADDRESS_LABEL = "5. Адрес предприятия (объекта):";
     private static final String OBJECT_ADDRESS_SECTION_LABEL = "5. Адрес предприятия";
+    private static final String MEASUREMENT_DATES_NOTE = "смотреть п. 7.6.2";
     private static final String APPROVAL_LABEL = "УТВЕРЖДАЮ";
     private static final Pattern APPROVAL_DATE_PATTERN =
             Pattern.compile("\\b\\d{1,2}\\s+[А-Яа-я]+\\s+\\d{4}\\s*г?\\.?");
@@ -399,9 +400,10 @@ public final class SoundInsulationMapExporter {
             setMergedCellValueWithPrefix(sheet, 5, "1. Заказчик: ", data.customerNameAndContacts, prefixFont, valueFont);
             adjustRowHeightForMergedTextDoubling(sheet, 5, 0, 31,
                     "1. Заказчик: " + safe(data.customerNameAndContacts));
-            setMergedCellValueWithPrefix(sheet, 7, "2. Дата замеров: ", data.measurementDates, prefixFont, valueFont);
+            String measurementDatesText = appendMeasurementDatesNote(data.measurementDates);
+            setMergedCellValueWithPrefix(sheet, 7, "2. Дата замеров: ", measurementDatesText, prefixFont, valueFont);
             adjustRowHeightForMergedTextDoubling(sheet, 7, 0, 31,
-                    "2. Дата замеров: " + safe(data.measurementDates));
+                    "2. Дата замеров: " + safe(measurementDatesText));
             setMergedCellValueWithPrefix(sheet, 9, "3. Измерения провел, подпись: ",
                     data.measurementPerformer, prefixFont, valueFont);
             setMergedCellValueWithPrefix(sheet, 11, "4. Измерения проведены в присутствии представителя: ",
@@ -436,6 +438,17 @@ public final class SoundInsulationMapExporter {
                 workbook.write(outputStream);
             }
         }
+    }
+
+    private static String appendMeasurementDatesNote(String measurementDates) {
+        String value = safe(measurementDates);
+        if (value.toLowerCase(Locale.ROOT).contains(MEASUREMENT_DATES_NOTE.toLowerCase(Locale.ROOT))) {
+            return value;
+        }
+        if (value.isBlank()) {
+            return MEASUREMENT_DATES_NOTE;
+        }
+        return value + " " + MEASUREMENT_DATES_NOTE;
     }
 
     private static void setCellText(Sheet sheet, int rowIndex, String text) {
