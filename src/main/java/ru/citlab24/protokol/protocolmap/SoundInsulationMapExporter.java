@@ -1548,21 +1548,9 @@ public final class SoundInsulationMapExporter {
         if (rwSheet == null) {
             rwSheet = wallWorkbook.getSheet("RW");
         }
-        String firstRoomWord = "";
-        String secondRoomWord = "";
-        if (rwSheet != null) {
-            firstRoomWord = findRightCellValue(rwSheet, "ПВУ:", formatter);
-            secondRoomWord = findRightCellValue(rwSheet, "ПНУ:", formatter);
-            if (firstRoomWord.isBlank() || secondRoomWord.isBlank()) {
-                String[] parsedRooms = findRoomsFromSectionHeader(rwSheet, formatter);
-                if (firstRoomWord.isBlank()) {
-                    firstRoomWord = parsedRooms[0];
-                }
-                if (secondRoomWord.isBlank()) {
-                    secondRoomWord = parsedRooms[1];
-                }
-            }
-        }
+        String[] roomWords = resolveRoomWordsByNeedles(wallWorkbook, rwSheet, formatter);
+        String firstRoomWord = roomWords[0];
+        String secondRoomWord = roomWords[1];
 
         RwSourceData sourceData = new RwSourceData();
         sourceData.firstRoomWord = firstRoomWord;
@@ -1606,11 +1594,63 @@ public final class SoundInsulationMapExporter {
         return sourceData;
     }
 
+    private static String[] resolveRoomWordsByNeedles(Workbook workbook,
+                                                      Sheet preferredSheet,
+                                                      DataFormatter formatter) {
+        String firstRoomWord = "";
+        String secondRoomWord = "";
+
+        List<Sheet> sheets = new ArrayList<>();
+        if (preferredSheet != null) {
+            sheets.add(preferredSheet);
+        }
+        int sheetCount = workbook.getNumberOfSheets();
+        for (int sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
+            Sheet sheet = workbook.getSheetAt(sheetIndex);
+            if (sheet != null && sheet != preferredSheet) {
+                sheets.add(sheet);
+            }
+        }
+
+        for (Sheet sheet : sheets) {
+            if (firstRoomWord.isBlank()) {
+                firstRoomWord = findRightCellValueByPrefix(sheet, "ПВУ", formatter);
+            }
+            if (secondRoomWord.isBlank()) {
+                secondRoomWord = findRightCellValueByPrefix(sheet, "ПНУ", formatter);
+            }
+            if (!firstRoomWord.isBlank() && !secondRoomWord.isBlank()) {
+                break;
+            }
+        }
+
+        return new String[]{firstRoomWord, secondRoomWord};
+    }
+
     private static String findRightCellValue(Sheet sheet, String needle, DataFormatter formatter) {
         for (Row row : sheet) {
             for (Cell cell : row) {
                 String text = normalizeSpace(formatter.formatCellValue(cell));
                 if (text.equalsIgnoreCase(needle)) {
+                    Cell rightCell = row.getCell(cell.getColumnIndex() + 1);
+                    return normalizeSpace(formatter.formatCellValue(rightCell));
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String findRightCellValueByPrefix(Sheet sheet, String prefix, DataFormatter formatter) {
+        if (sheet == null) {
+            return "";
+        }
+        String normalizedPrefix = normalizeSpace(prefix).toUpperCase(Locale.ROOT);
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = normalizeSpace(formatter.formatCellValue(cell)).toUpperCase(Locale.ROOT);
+                if (text.equals(normalizedPrefix)
+                        || text.equals(normalizedPrefix + ":")
+                        || text.startsWith(normalizedPrefix + " ")) {
                     Cell rightCell = row.getCell(cell.getColumnIndex() + 1);
                     return normalizeSpace(formatter.formatCellValue(rightCell));
                 }
