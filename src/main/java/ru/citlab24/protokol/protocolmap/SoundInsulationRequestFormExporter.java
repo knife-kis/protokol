@@ -26,6 +26,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 final class SoundInsulationRequestFormExporter {
     private static final String FONT_NAME = "Arial";
@@ -48,6 +49,8 @@ final class SoundInsulationRequestFormExporter {
     private static final String ROOM_PARAMS_ALT_START = "16. Параметры помещений и испытываемой поверхности:";
     private static final String AREA_BETWEEN_ROOMS_MARKER =
             "Площадь испытываемой поверхности между помещениями";
+    private static final String NORMATIVE_REQUIREMENTS_MARKER = "нормативные требования";
+    private static final Pattern BRACKETS_PATTERN = Pattern.compile("\\([^)]*\\)");
     private static final String APPLICATION_BASIS_LABEL = "6. Основание для измерений";
     private static final String APPLICATION_BASIS_ALT_LABEL = "Основание для измерений";
 
@@ -66,6 +69,7 @@ final class SoundInsulationRequestFormExporter {
         List<List<String>> roomParamsRows = extractRoomParamsTable(protocolFile);
         List<String> roomParamsLines = roomParamsRows.isEmpty() ? extractRoomParamsLines(protocolFile) : List.of();
         String areaBetweenRoomsLine = extractAreaBetweenRoomsLine(protocolFile);
+        List<String> measurementRequirementLines = extractMeasurementRequirementLines(protocolFile);
 
         if (planRows.isEmpty()) {
             List<String> empty = new ArrayList<>();
@@ -117,6 +121,8 @@ final class SoundInsulationRequestFormExporter {
                     "Представитель заказчика _______________________________________________\n" +
                             "                                                 (Должность, ФИО, контактные данные)  ");
 
+            addPageBreak(document);
+
             XWPFParagraph customerAppendixHeader = document.createParagraph();
             customerAppendixHeader.setAlignment(ParagraphAlignment.RIGHT);
             setParagraphSpacing(customerAppendixHeader);
@@ -163,13 +169,9 @@ final class SoundInsulationRequestFormExporter {
                 addParagraphWithLineBreaks(document, areaBetweenRoomsLine);
             }
 
-            XWPFParagraph highlightParagraph = document.createParagraph();
-            setParagraphSpacing(highlightParagraph);
-            XWPFRun highlightRun = highlightParagraph.createRun();
-            highlightRun.setFontFamily(FONT_NAME);
-            highlightRun.setFontSize(FONT_SIZE);
-            highlightRun.setText("Для перекрытия между помещениями");
-            highlightRun.setTextHighlightColor("yellow");
+            for (String requirementLine : measurementRequirementLines) {
+                addParagraphWithLineBreaks(document, requirementLine);
+            }
 
             XWPFParagraph spacerBeforeSignature = document.createParagraph();
             setParagraphSpacing(spacerBeforeSignature);
@@ -493,6 +495,164 @@ final class SoundInsulationRequestFormExporter {
         run.setFontFamily(FONT_NAME);
         run.setFontSize(FONT_SIZE);
         setRunTextWithBreaks(run, text);
+    }
+
+    private static void addPageBreak(XWPFDocument document) {
+        XWPFParagraph pageBreakParagraph = document.createParagraph();
+        setParagraphSpacing(pageBreakParagraph);
+        pageBreakParagraph.setPageBreak(true);
+    }
+
+    private static List<String> extractMeasurementRequirementLines(File protocolFile) {
+        List<String> result = new ArrayList<>();
+        if (protocolFile == null || !protocolFile.exists()) {
+            return result;
+        }
+        try (InputStream inputStream = new FileInputStream(protocolFile);
+             XWPFDocument document = new XWPFDocument(inputStream)) {
+            List<String> lines = extractLines(document, true);
+            result.addAll(extractLnRequirements(lines));
+            result.addAll(extractRRequirements(lines));
+        } catch (Exception ignored) {
+            // пропускаем извлечение данных при ошибке
+        }
+        return result;
+    }
+
+    private static List<String> extractLnRequirements(List<String> lines) {
+        List<String> result = new ArrayList<>();
+        int start = findLineIndexContaining(lines, "17.1");
+        int end = findLineIndexContaining(lines, "17.2");
+        if (start < 0) {
+            return result;
+        }
+        if (end < 0) {
+            end = lines.size();
+        }
+        for (int i = start; i < end; i++) {
+            if (!containsIgnoreCase(lines.get(i), "Ln, дБ")) {
+                continue;
+            }
+            String source = buildSearchWindow(lines, i + 1, end);
+            String rooms = extractBetweenMarkers(source,
+                    "Индекс приведенного уровня ударного шума (Lnw) по результатам измерений для перекрытия между помещениями",
+                    NORMATIVE_REQUIREMENTS_MARKER);
+            String requirements = extractTailFromMarker(source, NORMATIVE_REQUIREMENTS_MARKER, false);
+            if (rooms.isBlank() || requirements.isBlank()) {
+                continue;
+            }
+            result.add("Для перекрытия между помещениями " + rooms + " нормативные требования " + requirements);
+        }
+        return result;
+    }
+
+    private static List<String> extractRRequirements(List<String> lines) {
+        List<String> result = new ArrayList<>();
+        int start = findLineIndexContaining(lines, "17.2");
+        int end = findLineIndexContaining(lines, "18.");
+        if (start < 0) {
+            return result;
+        }
+        if (end < 0) {
+            end = lines.size();
+        }
+        for (int i = start; i < end; i++) {
+            if (!containsIgnoreCase(lines.get(i), "R, дБ")) {
+                continue;
+            }
+            String source = buildSearchWindow(lines, i + 1, end);
+            String partitionRooms = extractBetweenMarkers(source,
+                    "по результатам измерений для перегородки между помещениями",
+                    NORMATIVE_REQUIREMENTS_MARKER);
+            String floorRooms = extractBetweenMarkers(source,
+                    "по результатам измерений для перекрытия между помещениями",
+                    NORMATIVE_REQUIREMENTS_MARKER);
+            String requirements = extractTailFromMarker(source, NORMATIVE_REQUIREMENTS_MARKER, true);
+            if (!partitionRooms.isBlank() && !requirements.isBlank()) {
+                result.add("По результатам измерений для перегородки между помещениями "
+                        + partitionRooms + ": нормативные требования " + requirements);
+            } else if (!floorRooms.isBlank() && !requirements.isBlank()) {
+                result.add("По результатам измерений для перекрытия между помещениями "
+                        + floorRooms + ": нормативные требования " + requirements);
+            }
+        }
+        return result;
+    }
+
+    private static int findLineIndexContaining(List<String> lines, String marker) {
+        if (lines == null || marker == null || marker.isBlank()) {
+            return -1;
+        }
+        for (int i = 0; i < lines.size(); i++) {
+            if (containsIgnoreCase(lines.get(i), marker)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String buildSearchWindow(List<String> lines, int start, int end) {
+        StringBuilder builder = new StringBuilder();
+        int max = Math.min(end, start + 8);
+        for (int i = start; i < max; i++) {
+            String value = normalizeSpace(lines.get(i));
+            if (value.matches("^\\d+\\.\\d+.*") || value.matches("^\\d+\\..*")) {
+                break;
+            }
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(value);
+        }
+        return builder.toString();
+    }
+
+    private static String extractBetweenMarkers(String source, String startMarker, String endMarker) {
+        if (source == null || source.isBlank()) {
+            return "";
+        }
+        String lower = source.toLowerCase(Locale.ROOT);
+        String lowerStart = startMarker.toLowerCase(Locale.ROOT);
+        String lowerEnd = endMarker.toLowerCase(Locale.ROOT);
+        int startIndex = lower.indexOf(lowerStart);
+        if (startIndex < 0) {
+            return "";
+        }
+        int fromIndex = startIndex + lowerStart.length();
+        int endIndex = lower.indexOf(lowerEnd, fromIndex);
+        if (endIndex < 0) {
+            return "";
+        }
+        return normalizeSpace(source.substring(fromIndex, endIndex));
+    }
+
+    private static String extractTailFromMarker(String source, String marker, boolean removeBrackets) {
+        if (source == null || source.isBlank()) {
+            return "";
+        }
+        String lower = source.toLowerCase(Locale.ROOT);
+        String lowerMarker = marker.toLowerCase(Locale.ROOT);
+        int index = lower.indexOf(lowerMarker);
+        if (index < 0) {
+            return "";
+        }
+        String tail = source.substring(index + marker.length());
+        if (removeBrackets) {
+            tail = BRACKETS_PATTERN.matcher(tail).replaceAll(" ");
+        }
+        tail = normalizeSpace(tail);
+        while (tail.startsWith(":")) {
+            tail = normalizeSpace(tail.substring(1));
+        }
+        return tail;
+    }
+
+    private static boolean containsIgnoreCase(String value, String marker) {
+        if (value == null || marker == null) {
+            return false;
+        }
+        return normalizeSpace(value).toLowerCase(Locale.ROOT)
+                .contains(normalizeSpace(marker).toLowerCase(Locale.ROOT));
     }
 
     private static void setRunTextWithBreaks(XWPFRun run, String text) {
