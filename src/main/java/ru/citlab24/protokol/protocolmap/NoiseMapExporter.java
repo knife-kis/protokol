@@ -30,6 +30,7 @@ public final class NoiseMapExporter {
     private static final double TOP_MARGIN_CM = 3.3;
     private static final double BOTTOM_MARGIN_CM = 1.9;
     private static final int TITLE_MEASUREMENT_DATES_ROW = 7;
+    private static final int NOISE_PROTOCOL_START_ROW_INDEX = 6; // Excel строка 7
     private static final String PRIMARY_FOLDER_NAME = "Первичка Шумы";
     private static final String NOISE_MEASUREMENT_DATE_PLACEHOLDER =
             "Дата, время проведения измерений_____________________";
@@ -629,7 +630,7 @@ public final class NoiseMapExporter {
         CellStyle leftStyle = createNoiseDataStyle(targetWorkbook,
                 org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
 
-        int sourceRowIndex = 7;
+        int sourceRowIndex = NOISE_PROTOCOL_START_ROW_INDEX;
         int targetRowIndex = hasFullHeader ? 6 : 1;
         int lastRow = sourceSheet.getLastRowNum();
 
