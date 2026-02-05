@@ -46,6 +46,7 @@ public final class NoiseMapExporter {
                 ? resolveMeasurementDates(sourceFile)
                 : titleMeasurementDates;
         String controlDate = resolveControlDate(sourceFile);
+        String additionalInfo = resolveAdditionalInfo(sourceFile);
         String specialConditions = resolveSpecialConditions(sourceFile);
         String measurementMethods = resolveMeasurementMethods(sourceFile);
         java.util.List<InstrumentData> instruments = resolveMeasurementInstruments(sourceFile);
@@ -57,7 +58,7 @@ public final class NoiseMapExporter {
             applyHeaders(sheet, registrationNumber);
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, measurementDates, controlDate);
             createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
-                    specialConditions, measurementMethods, instruments);
+                    additionalInfo, specialConditions, measurementMethods, instruments);
             java.util.List<String> measurementDatesList = extractMeasurementDatesList(measurementDates);
             createProtocolTabs(sourceFile, workbook, registrationNumber, measurementDatesList);
 
@@ -287,6 +288,7 @@ public final class NoiseMapExporter {
                                              String protocolNumber,
                                              String contractText,
                                              MapHeaderData headerData,
+                                             String additionalInfo,
                                              String specialConditions,
                                              String measurementMethods,
                                              java.util.List<InstrumentData> instruments) {
@@ -328,7 +330,9 @@ public final class NoiseMapExporter {
         adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, objectAddressText);
         rowIndex++;
 
-        setMergedCellValue(sheet, rowIndex, "5. Дополнительные сведения", plainStyle);
+        String additionalInfoText = "5. Дополнительные сведения (" + safe(additionalInfo) + ")";
+        setMergedCellValue(sheet, rowIndex, additionalInfoText, plainStyle);
+        adjustRowHeightForMergedText(sheet, rowIndex, 0, 31, additionalInfoText);
         rowIndex++;
 
         String specialConditionsText = "5.1. Особые условия: " + safe(specialConditions);
@@ -1373,6 +1377,42 @@ public final class NoiseMapExporter {
         }
     }
 
+    private static String resolveAdditionalInfo(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return "";
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            if (workbook.getNumberOfSheets() == 0) {
+                return "";
+            }
+            Sheet sheet = workbook.getSheetAt(0);
+            return findAdditionalInfo(sheet);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    private static String findAdditionalInfo(Sheet sheet) {
+        if (sheet == null) {
+            return "";
+        }
+        DataFormatter formatter = new DataFormatter();
+        for (Row row : sheet) {
+            for (Cell cell : row) {
+                String text = normalizeText(formatter.formatCellValue(cell));
+                String lower = text.toLowerCase(Locale.ROOT);
+                int markerIndex = lower.indexOf(ADDITIONAL_INFO_PREFIX);
+                if (markerIndex < 0) {
+                    continue;
+                }
+                String tail = text.substring(markerIndex + ADDITIONAL_INFO_PREFIX.length()).trim();
+                return tail;
+            }
+        }
+        return "";
+    }
+
     private static String resolveMeasurementMethods(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return "";
@@ -1949,6 +1989,8 @@ public final class NoiseMapExporter {
     private static final String OBJECT_ADDRESS_PREFIX = "Адрес предприятия (объекта):";
     private static final String METHODS_HEADER =
             "Документы, устанавливающие правила и методы исследований (испытаний) и измерений";
+    private static final String ADDITIONAL_INFO_PREFIX =
+            "дополнительные сведения (характеристика объекта):";
     private static final String INSTRUMENTS_SECTION_HEADER = "сведения о средствах измерения:";
     private static final String INSTRUMENTS_NAME_HEADER = "наименование, тип средства измерения";
     private static final String PROTOCOL_PREFIX = "Протокол испытаний";
