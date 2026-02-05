@@ -441,14 +441,7 @@ public final class SoundInsulationMapExporter {
     }
 
     private static String appendMeasurementDatesNote(String measurementDates) {
-        String value = safe(measurementDates);
-        if (value.toLowerCase(Locale.ROOT).contains(MEASUREMENT_DATES_NOTE.toLowerCase(Locale.ROOT))) {
-            return value;
-        }
-        if (value.isBlank()) {
-            return MEASUREMENT_DATES_NOTE;
-        }
-        return value + " " + MEASUREMENT_DATES_NOTE;
+        return MEASUREMENT_DATES_NOTE;
     }
 
     private static void setCellText(Sheet sheet, int rowIndex, String text) {
