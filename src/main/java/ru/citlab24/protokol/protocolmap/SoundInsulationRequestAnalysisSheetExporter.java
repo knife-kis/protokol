@@ -34,7 +34,7 @@ import java.math.BigInteger;
 import java.util.List;
 
 final class SoundInsulationRequestAnalysisSheetExporter {
-    private static final String ANALYSIS_SHEET_NAME = "лист анализа заявки.docx";
+    private static final String ANALYSIS_SHEET_NAME = "лист анализа заявки звукоизоляции.docx";
     private static final String FONT_NAME = "Arial";
     private static final int TITLE_FONT_SIZE = 12;
     private static final int TABLE_FONT_SIZE = 10;
