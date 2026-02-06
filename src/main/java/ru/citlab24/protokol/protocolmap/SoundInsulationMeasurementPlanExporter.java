@@ -136,39 +136,55 @@ final class SoundInsulationMeasurementPlanExporter {
             XWPFParagraph spacer2 = document.createParagraph();
             setParagraphSpacing(spacer2);
 
-            XWPFTable approvalTable = document.createTable(2, 3);
+            XWPFParagraph creatorCaption = document.createParagraph();
+            setParagraphSpacing(creatorCaption);
+            creatorCaption.createRun().setText("План измерений сформировал:");
+
+            XWPFTable approvalTable = document.createTable(2, 4);
             configureApprovalTableLayout(approvalTable);
             setTableCellText(approvalTable.getRow(0).getCell(0), planCreatorRole,
                     TABLE_FONT_SIZE, false);
-            setTableCellText(approvalTable.getRow(0).getCell(1), planCreatorName,
+            setTableCellText(approvalTable.getRow(0).getCell(1), "",
                     TABLE_FONT_SIZE, false);
-            setTableCellText(approvalTable.getRow(0).getCell(2), planCreatorDate,
+            setTableCellText(approvalTable.getRow(0).getCell(2), planCreatorName,
+                    TABLE_FONT_SIZE, false);
+            setTableCellText(approvalTable.getRow(0).getCell(3), planCreatorDate,
                     TABLE_FONT_SIZE, false);
 
             setTableCellText(approvalTable.getRow(1).getCell(0), "должность",
                     SMALL_FONT_SIZE, false);
-            setTableCellText(approvalTable.getRow(1).getCell(1), "Ф.И.О",
+            setTableCellText(approvalTable.getRow(1).getCell(1), "подпись",
                     SMALL_FONT_SIZE, false);
-            setTableCellText(approvalTable.getRow(1).getCell(2), "дата",
+            setTableCellText(approvalTable.getRow(1).getCell(2), "Ф.И.О",
+                    SMALL_FONT_SIZE, false);
+            setTableCellText(approvalTable.getRow(1).getCell(3), "дата",
                     SMALL_FONT_SIZE, false);
 
             XWPFParagraph spacer3 = document.createParagraph();
             setParagraphSpacing(spacer3);
 
-            XWPFTable copyTable = document.createTable(2, 3);
+            XWPFParagraph copyCaption = document.createParagraph();
+            setParagraphSpacing(copyCaption);
+            copyCaption.createRun().setText("Копию плана получил:");
+
+            XWPFTable copyTable = document.createTable(2, 4);
             configureApprovalTableLayout(copyTable);
             setTableCellText(copyTable.getRow(0).getCell(0), copyRecipientRole,
                     TABLE_FONT_SIZE, false);
-            setTableCellText(copyTable.getRow(0).getCell(1), copyRecipientName,
+            setTableCellText(copyTable.getRow(0).getCell(1), "",
                     TABLE_FONT_SIZE, false);
-            setTableCellText(copyTable.getRow(0).getCell(2), "",
+            setTableCellText(copyTable.getRow(0).getCell(2), copyRecipientName,
+                    TABLE_FONT_SIZE, false);
+            setTableCellText(copyTable.getRow(0).getCell(3), "",
                     TABLE_FONT_SIZE, false);
 
             setTableCellText(copyTable.getRow(1).getCell(0), "должность",
                     SMALL_FONT_SIZE, false);
-            setTableCellText(copyTable.getRow(1).getCell(1), "Ф.И.О",
+            setTableCellText(copyTable.getRow(1).getCell(1), "подпись",
                     SMALL_FONT_SIZE, false);
-            setTableCellText(copyTable.getRow(1).getCell(2), "подпись",
+            setTableCellText(copyTable.getRow(1).getCell(2), "Ф.И.О",
+                    SMALL_FONT_SIZE, false);
+            setTableCellText(copyTable.getRow(1).getCell(3), "дата",
                     SMALL_FONT_SIZE, false);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
@@ -262,7 +278,7 @@ final class SoundInsulationMeasurementPlanExporter {
                 grid.removeGridCol(0);
             }
         }
-        int[] widths = {3590, 3590, 3590};
+        int[] widths = {2692, 2692, 2692, 2692};
         for (int width : widths) {
             grid.addNewGridCol().setW(BigInteger.valueOf(width));
         }
