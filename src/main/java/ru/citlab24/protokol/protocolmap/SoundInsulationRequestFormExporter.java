@@ -514,21 +514,35 @@ final class SoundInsulationRequestFormExporter {
         if (protocolFile == null || !protocolFile.exists()) {
             return result;
         }
+        if (!protocolFile.getName().toLowerCase(Locale.ROOT).endsWith(".docx")) {
+            return result;
+        }
+
         try (InputStream inputStream = new FileInputStream(protocolFile);
              XWPFDocument document = new XWPFDocument(inputStream)) {
-            List<String> lines = extractLines(document, true);
-            List<String> lnRequirements = extractLnRequirements(lines);
-            List<String> rwFloorRequirements = extractRRequirements(lines, RW_FLOOR_SENTENCE_MARKER,
-                    "Для перекрытия между помещениями ");
-            List<String> rwPartitionRequirements = extractRRequirements(lines, RW_PARTITION_SENTENCE_MARKER,
-                    "Для перегородки между помещениями ");
+
+            List<String> lnRequirements = extractLnRequirements(document);
+
+            List<String> rwFloorRequirements = extractRRequirements(
+                    document,
+                    RW_FLOOR_SENTENCE_MARKER,
+                    "Для перекрытия между помещениями "
+            );
+
+            List<String> rwPartitionRequirements = extractRRequirements(
+                    document,
+                    RW_PARTITION_SENTENCE_MARKER,
+                    "Для перегородки между помещениями "
+            );
 
             appendGroup(result, lnRequirements);
             appendGroup(result, rwFloorRequirements);
             appendGroup(result, rwPartitionRequirements);
+
         } catch (Exception ignored) {
             // пропускаем извлечение данных при ошибке
         }
+
         return result;
     }
 
@@ -542,58 +556,95 @@ final class SoundInsulationRequestFormExporter {
         target.addAll(group);
     }
 
-    private static List<String> extractLnRequirements(List<String> lines) {
+    private static List<String> extractLnRequirements(XWPFDocument document) {
         List<String> result = new ArrayList<>();
-        int start = findLineIndexContaining(lines, "17.1");
-        int end = findLineIndexContaining(lines, "17.2");
+        if (document == null) {
+            return result;
+        }
+
+        List<IBodyElement> elements = document.getBodyElements();
+
+        int start = findSectionStartIndex(elements, "17.1", 0);
         if (start < 0) {
             return result;
         }
+
+        int end = findSectionStartIndex(elements, "17.2", start + 1);
         if (end < 0) {
-            end = lines.size();
+            end = elements.size();
         }
+
+        // Логика как ты описал: в 17.1 ищем таблицу где есть "Ln, дБ",
+        // затем берём абзац сразу после этой таблицы и парсим в нём LNW_SENTENCE_MARKER + (нормативные требования ...)
         for (int i = start; i < end; i++) {
-            if (!containsIgnoreCase(lines.get(i), "Ln, дБ")) {
+            IBodyElement element = elements.get(i);
+            if (!(element instanceof XWPFTable table)) {
                 continue;
             }
-            String source = buildSearchWindow(lines, i + 1, end);
-            String rooms = extractBetweenMarkers(source, LNW_SENTENCE_MARKER,
-                    NORMATIVE_REQUIREMENTS_WITH_BRACKET_MARKER);
-            String requirements = extractNormativeRequirements(source);
-            if (rooms.isBlank() || requirements.isBlank()) {
+            if (!tableContainsLnDbMarker(table)) {
                 continue;
             }
-            result.add("(1) - \"Для перекрытия между помещениями " + rooms
-                    + " (нормативные требования " + requirements + ")\"");
+
+            String nextParagraphText = findNextNonEmptyParagraphText(elements, i + 1, end);
+            if (nextParagraphText.isBlank()) {
+                continue;
+            }
+
+            result.addAll(extractRequirementLinesFromText(
+                    nextParagraphText,
+                    LNW_SENTENCE_MARKER,
+                    "Для перекрытия между помещениями "
+            ));
         }
-        return result;
+
+        return distinctPreserveOrder(result);
     }
 
-    private static List<String> extractRRequirements(List<String> lines, String sentenceMarker, String prefix) {
+
+    private static List<String> extractRRequirements(XWPFDocument document, String sentenceMarker, String prefix) {
         List<String> result = new ArrayList<>();
-        int start = findLineIndexContaining(lines, "17.2");
-        int end = findLineIndexContaining(lines, "18.");
+        if (document == null || sentenceMarker == null || sentenceMarker.isBlank()) {
+            return result;
+        }
+
+        List<IBodyElement> elements = document.getBodyElements();
+
+        int start = findSectionStartIndex(elements, "17.2", 0);
         if (start < 0) {
             return result;
         }
+
+        // Важно: конец секции ищем как ЗАГОЛОВОК "18." (в начале абзаца), а не просто contains("18.")
+        int end = findSectionStartIndex(elements, "18.", start + 1);
         if (end < 0) {
-            end = lines.size();
+            end = elements.size();
         }
+
         for (int i = start; i < end; i++) {
-            if (!containsIgnoreCase(lines.get(i), sentenceMarker)) {
+            IBodyElement element = elements.get(i);
+
+            if (element instanceof XWPFParagraph paragraph) {
+                String text = normalizeSpace(paragraph.getText());
+                if (text.isBlank()) {
+                    continue;
+                }
+                result.addAll(extractRequirementLinesFromText(text, sentenceMarker, prefix));
                 continue;
             }
-            String source = buildSearchWindow(lines, i, end);
-            String rooms = extractBetweenMarkers(source, sentenceMarker,
-                    NORMATIVE_REQUIREMENTS_WITH_BRACKET_MARKER);
-            String requirements = extractNormativeRequirements(source);
-            if (!rooms.isBlank() && !requirements.isBlank()) {
-                String itemNumber = prefix.contains("перегородки") ? "(3)" : "(2)";
-                result.add(itemNumber + " - \"" + prefix + rooms
-                        + " (нормативные требования " + requirements + ")\"");
+
+            // На всякий случай: если фраза почему-то попала в таблицу
+            if (element instanceof XWPFTable table) {
+                for (XWPFTableRow row : table.getRows()) {
+                    String rowText = tableRowToText(row);
+                    if (rowText.isBlank()) {
+                        continue;
+                    }
+                    result.addAll(extractRequirementLinesFromText(rowText, sentenceMarker, prefix));
+                }
             }
         }
-        return result;
+
+        return distinctPreserveOrder(result);
     }
 
     private static int findLineIndexContaining(List<String> lines, String marker) {
@@ -805,4 +856,136 @@ final class SoundInsulationRequestFormExporter {
         }
         return false;
     }
+    private static int findSectionStartIndex(List<IBodyElement> elements, String sectionNumber, int fromIndex) {
+        if (elements == null || elements.isEmpty() || sectionNumber == null || sectionNumber.isBlank()) {
+            return -1;
+        }
+
+        // Ищем заголовок вида "17.1." / "17.1 " / "18." и т.п.
+        // Важно: НЕ должны матчиться подзаголовки типа "17.1.1"
+        String base = normalizeSpace(sectionNumber);
+        if (base.endsWith(".")) {
+            base = base.substring(0, base.length() - 1).trim();
+        }
+        if (base.isBlank()) {
+            return -1;
+        }
+
+        Pattern headingPattern = Pattern.compile(
+                "^\\s*" + Pattern.quote(base) + "\\s*\\.?\\s*(?!\\d)",
+                Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+        );
+
+        int start = Math.max(0, fromIndex);
+        for (int i = start; i < elements.size(); i++) {
+            IBodyElement element = elements.get(i);
+            if (element instanceof XWPFParagraph paragraph) {
+                String text = normalizeSpace(paragraph.getText());
+                if (headingPattern.matcher(text).find()) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static String findNextNonEmptyParagraphText(List<IBodyElement> elements, int fromIndex, int endExclusive) {
+        if (elements == null || elements.isEmpty()) {
+            return "";
+        }
+        int to = Math.min(endExclusive, elements.size());
+        for (int i = Math.max(0, fromIndex); i < to; i++) {
+            IBodyElement element = elements.get(i);
+            if (element instanceof XWPFParagraph paragraph) {
+                String text = normalizeSpace(paragraph.getText());
+                if (!text.isBlank()) {
+                    return text;
+                }
+            }
+        }
+        return "";
+    }
+
+    private static boolean tableContainsLnDbMarker(XWPFTable table) {
+        if (table == null) {
+            return false;
+        }
+        Pattern lnPattern = Pattern.compile("Ln\\s*,\\s*дБ", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+        for (XWPFTableRow row : table.getRows()) {
+            for (XWPFTableCell cell : row.getTableCells()) {
+                String text = normalizeSpace(cell.getText());
+                if (lnPattern.matcher(text).find()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String tableRowToText(XWPFTableRow row) {
+        if (row == null) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (XWPFTableCell cell : row.getTableCells()) {
+            String cellText = normalizeSpace(cell.getText());
+            if (cellText.isBlank()) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(cellText);
+        }
+        return builder.toString().trim();
+    }
+
+    private static List<String> extractRequirementLinesFromText(String text, String sentenceMarker, String prefix) {
+        List<String> result = new ArrayList<>();
+        if (text == null || text.isBlank() || sentenceMarker == null || sentenceMarker.isBlank()) {
+            return result;
+        }
+
+        String normalized = normalizeSpace(text);
+
+        // Вытаскиваем строго "A и B" после маркера и норму из "(нормативные требования ...)"
+        Pattern pattern = Pattern.compile(
+                Pattern.quote(sentenceMarker)
+                        + "\\s*([A-Za-zА-Яа-я0-9]+)\\s+и\\s+([A-Za-zА-Яа-я0-9]+).*?"
+                        + "\\(\\s*нормативные требования\\s*([^)]*)\\)",
+                Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+        );
+
+        Matcher matcher = pattern.matcher(normalized);
+        while (matcher.find()) {
+            String first = normalizeSpace(matcher.group(1));
+            String second = normalizeSpace(matcher.group(2));
+            String norm = normalizeSpace(matcher.group(3));
+
+            if (first.isBlank() || second.isBlank() || norm.isBlank()) {
+                continue;
+            }
+
+            String rooms = first + " и " + second;
+            String line = (prefix == null ? "" : prefix) + rooms + " (нормативные требования " + norm + ")";
+            result.add(normalizeSpace(line));
+        }
+
+        return result;
+    }
+
+    private static List<String> distinctPreserveOrder(List<String> values) {
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        if (values != null) {
+            for (String value : values) {
+                String v = normalizeSpace(value);
+                if (!v.isBlank()) {
+                    set.add(v);
+                }
+            }
+        }
+        return new ArrayList<>(set);
+    }
+
 }
