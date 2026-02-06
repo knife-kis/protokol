@@ -899,6 +899,13 @@ public final class RequestFormExporter {
                     }
                     sectionIndex++;
                 }
+
+                XWPFParagraph spacerBeforeFinalSignature = document.createParagraph();
+                setParagraphSpacing(spacerBeforeFinalSignature);
+
+                addParagraphWithLineBreaks(document,
+                        "Представитель заказчика _______________________________________________\n" +
+                                "                                                 (Должность, ФИО, контактные данные) ");
                 }
             }
 
