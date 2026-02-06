@@ -184,7 +184,7 @@ final class SoundInsulationRequestFormExporter {
 
             addParagraphWithLineBreaks(document,
                     "Представитель заказчика _______________________________________________\n" +
-                            "(Должность, ФИО, контактные данные)\n");
+                            "                                                 (Должность, ФИО, контактные данные)  ");
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
                 document.write(out);
