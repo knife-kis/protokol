@@ -24,10 +24,10 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 final class SoundInsulationRequestFormExporter {
     private static final String FONT_NAME = "Arial";
@@ -50,8 +50,13 @@ final class SoundInsulationRequestFormExporter {
     private static final String ROOM_PARAMS_ALT_START = "16. Параметры помещений и испытываемой поверхности:";
     private static final String AREA_BETWEEN_ROOMS_MARKER =
             "Площадь испытываемой поверхности между помещениями";
-    private static final String NORMATIVE_REQUIREMENTS_MARKER = "нормативные требования";
-    private static final Pattern BRACKETS_PATTERN = Pattern.compile("\\([^)]*\\)");
+    private static final String NORMATIVE_REQUIREMENTS_WITH_BRACKET_MARKER = "(нормативные требования";
+    private static final String LNW_SENTENCE_MARKER =
+            "Индекс приведенного уровня ударного шума (Lnw) по результатам измерений для перекрытия между помещениями";
+    private static final String RW_FLOOR_SENTENCE_MARKER =
+            "Индекс изоляции воздушного шума (Rw) по результатам измерений для перекрытия между помещениями";
+    private static final String RW_PARTITION_SENTENCE_MARKER =
+            "Индекс изоляции воздушного шума (Rw) по результатам измерений для перегородки между помещениями";
     private static final String APPLICATION_BASIS_LABEL = "6. Основание для измерений";
     private static final String APPLICATION_BASIS_ALT_LABEL = "Основание для измерений";
 
@@ -512,12 +517,29 @@ final class SoundInsulationRequestFormExporter {
         try (InputStream inputStream = new FileInputStream(protocolFile);
              XWPFDocument document = new XWPFDocument(inputStream)) {
             List<String> lines = extractLines(document, true);
-            result.addAll(extractLnRequirements(lines));
-            result.addAll(extractRRequirements(lines));
+            List<String> lnRequirements = extractLnRequirements(lines);
+            List<String> rwFloorRequirements = extractRRequirements(lines, RW_FLOOR_SENTENCE_MARKER,
+                    "Для перекрытия между помещениями ");
+            List<String> rwPartitionRequirements = extractRRequirements(lines, RW_PARTITION_SENTENCE_MARKER,
+                    "Для перегородки между помещениями ");
+
+            appendGroup(result, lnRequirements);
+            appendGroup(result, rwFloorRequirements);
+            appendGroup(result, rwPartitionRequirements);
         } catch (Exception ignored) {
             // пропускаем извлечение данных при ошибке
         }
         return result;
+    }
+
+    private static void appendGroup(List<String> target, List<String> group) {
+        if (group.isEmpty()) {
+            return;
+        }
+        if (!target.isEmpty()) {
+            target.add("");
+        }
+        target.addAll(group);
     }
 
     private static List<String> extractLnRequirements(List<String> lines) {
@@ -535,19 +557,19 @@ final class SoundInsulationRequestFormExporter {
                 continue;
             }
             String source = buildSearchWindow(lines, i + 1, end);
-            String rooms = extractBetweenMarkers(source,
-                    "Индекс приведенного уровня ударного шума (Lnw) по результатам измерений для перекрытия между помещениями",
-                    NORMATIVE_REQUIREMENTS_MARKER);
-            String requirements = extractTailFromMarker(source, NORMATIVE_REQUIREMENTS_MARKER, false);
+            String rooms = extractBetweenMarkers(source, LNW_SENTENCE_MARKER,
+                    NORMATIVE_REQUIREMENTS_WITH_BRACKET_MARKER);
+            String requirements = extractNormativeRequirements(source);
             if (rooms.isBlank() || requirements.isBlank()) {
                 continue;
             }
-            result.add("Для перекрытия между помещениями " + rooms + " нормативные требования " + requirements);
+            result.add("(1) - \"Для перекрытия между помещениями " + rooms
+                    + " (нормативные требования " + requirements + ")\"");
         }
         return result;
     }
 
-    private static List<String> extractRRequirements(List<String> lines) {
+    private static List<String> extractRRequirements(List<String> lines, String sentenceMarker, String prefix) {
         List<String> result = new ArrayList<>();
         int start = findLineIndexContaining(lines, "17.2");
         int end = findLineIndexContaining(lines, "18.");
@@ -558,47 +580,20 @@ final class SoundInsulationRequestFormExporter {
             end = lines.size();
         }
         for (int i = start; i < end; i++) {
-            if (!isRwTableHeader(lines.get(i))) {
+            if (!containsIgnoreCase(lines.get(i), sentenceMarker)) {
                 continue;
             }
-            String source = buildSearchWindow(lines, i + 1, findNextRwHeaderIndex(lines, i + 1, end));
-            String partitionRooms = extractBetweenMarkers(source,
-                    "по результатам измерений для перегородки между помещениями",
-                    NORMATIVE_REQUIREMENTS_MARKER);
-            partitionRooms = takeFirstWords(partitionRooms, 3);
-            String requirements = extractTailFromMarker(source, NORMATIVE_REQUIREMENTS_MARKER, true);
-            if (!partitionRooms.isBlank() && !requirements.isBlank()) {
-                result.add("Для перегородки между помещениями "
-                        + partitionRooms + ": нормативные требования " + requirements);
+            String source = buildSearchWindow(lines, i, end);
+            String rooms = extractBetweenMarkers(source, sentenceMarker,
+                    NORMATIVE_REQUIREMENTS_WITH_BRACKET_MARKER);
+            String requirements = extractNormativeRequirements(source);
+            if (!rooms.isBlank() && !requirements.isBlank()) {
+                String itemNumber = prefix.contains("перегородки") ? "(3)" : "(2)";
+                result.add(itemNumber + " - \"" + prefix + rooms
+                        + " (нормативные требования " + requirements + ")\"");
             }
         }
         return result;
-    }
-
-    private static String takeFirstWords(String value, int wordsCount) {
-        String normalized = normalizeSpace(value);
-        if (normalized.isBlank() || wordsCount <= 0) {
-            return "";
-        }
-        String[] words = normalized.split("\\s+");
-        if (words.length <= wordsCount) {
-            return normalized;
-        }
-        return String.join(" ", Arrays.copyOfRange(words, 0, wordsCount));
-    }
-
-    private static boolean isRwTableHeader(String line) {
-        return containsIgnoreCase(line, "R, дБ") || containsIgnoreCase(line, "Rw, дБ");
-    }
-
-    private static int findNextRwHeaderIndex(List<String> lines, int fromIndex, int endExclusive) {
-        int max = Math.min(endExclusive, lines.size());
-        for (int i = Math.max(0, fromIndex); i < max; i++) {
-            if (isRwTableHeader(lines.get(i))) {
-                return i;
-            }
-        }
-        return max;
     }
 
     private static int findLineIndexContaining(List<String> lines, String marker) {
@@ -648,25 +643,17 @@ final class SoundInsulationRequestFormExporter {
         return normalizeSpace(source.substring(fromIndex, endIndex));
     }
 
-    private static String extractTailFromMarker(String source, String marker, boolean removeBrackets) {
+    private static String extractNormativeRequirements(String source) {
         if (source == null || source.isBlank()) {
             return "";
         }
-        String lower = source.toLowerCase(Locale.ROOT);
-        String lowerMarker = marker.toLowerCase(Locale.ROOT);
-        int index = lower.indexOf(lowerMarker);
-        if (index < 0) {
+        Pattern pattern = Pattern.compile("\\(\\s*нормативные требования\\s*([^)]*)\\)",
+                Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        Matcher matcher = pattern.matcher(source);
+        if (!matcher.find()) {
             return "";
         }
-        String tail = source.substring(index + marker.length());
-        if (removeBrackets) {
-            tail = BRACKETS_PATTERN.matcher(tail).replaceAll(" ");
-        }
-        tail = normalizeSpace(tail);
-        while (tail.startsWith(":")) {
-            tail = normalizeSpace(tail.substring(1));
-        }
-        return tail;
+        return normalizeSpace(matcher.group(1));
     }
 
     private static boolean containsIgnoreCase(String value, String marker) {
