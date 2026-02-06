@@ -446,6 +446,37 @@ public final class RequestFormExporter {
                     sketchSignatureRun.setFontSize(FONT_SIZE);
                     sketchSignatureRun.setText("Представитель заказчика _______________________________________");
                 } else {
+                    XWPFParagraph sketchHeader = document.createParagraph();
+                    sketchHeader.setAlignment(ParagraphAlignment.RIGHT);
+                    setParagraphSpacing(sketchHeader);
+                    XWPFRun sketchHeaderRun = sketchHeader.createRun();
+                    sketchHeaderRun.setFontFamily(FONT_NAME);
+                    sketchHeaderRun.setFontSize(FONT_SIZE);
+                    setRunTextWithBreaks(sketchHeaderRun,
+                            "Приложения к заявке № " + applicationNumber + "\n" +
+                                    "Приложение – Эскиз");
+
+                    XWPFParagraph sketchTitle = document.createParagraph();
+                    sketchTitle.setAlignment(ParagraphAlignment.CENTER);
+                    setParagraphSpacing(sketchTitle);
+                    XWPFRun sketchTitleRun = sketchTitle.createRun();
+                    sketchTitleRun.setText("Эскиз (ситуационный план), с указанием точек измерения");
+                    sketchTitleRun.setFontFamily(FONT_NAME);
+                    sketchTitleRun.setFontSize(FONT_SIZE);
+
+                    for (int i = 0; i < 8; i++) {
+                        XWPFParagraph spacer = document.createParagraph();
+                        setParagraphSpacing(spacer);
+                    }
+
+                    addParagraphWithLineBreaks(document,
+                            "Представитель заказчика _______________________________________________\n" +
+                                    "(Должность, ФИО, контактные данные) ");
+
+                    XWPFParagraph sketchPageBreak = document.createParagraph();
+                    setParagraphSpacing(sketchPageBreak);
+                    sketchPageBreak.createRun().addBreak(BreakType.PAGE);
+
                     XWPFParagraph customerAppendixHeader = document.createParagraph();
                     customerAppendixHeader.setAlignment(ParagraphAlignment.RIGHT);
                     setParagraphSpacing(customerAppendixHeader);
