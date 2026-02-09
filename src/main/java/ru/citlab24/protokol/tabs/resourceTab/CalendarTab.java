@@ -35,8 +35,8 @@ public class CalendarTab extends JPanel {
     private final JCheckBox showAllCheck = new JCheckBox("Показать все");
     private final Map<String, JCheckBox> aspectFilters = new HashMap<>();
 
-    private final JButton prevButton = new JButton("◀");
-    private final JButton nextButton = new JButton("▶");
+    private final JButton prevButton = new JButton("← Назад");
+    private final JButton nextButton = new JButton("Вперёд →");
     private final JButton todayButton = new JButton("Сегодня");
     private final JToggleButton yearScaleToggle = new JToggleButton("Год (мелкий масштаб)");
     private final JLabel monthTitle = new JLabel("", SwingConstants.CENTER);
@@ -91,7 +91,7 @@ public class CalendarTab extends JPanel {
     }
 
     private JComponent createFilterPanel() {
-        JPanel panel = new JPanel(new GridLayout(0, 1, 0, 2));
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         panel.setBorder(new EmptyBorder(0, 8, 0, 0));
 
         showAllCheck.setSelected(true);
@@ -139,7 +139,7 @@ public class CalendarTab extends JPanel {
         detailsPanel.add(new JScrollPane(detailsArea), BorderLayout.CENTER);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, calendarContainer, detailsPanel);
-        splitPane.setResizeWeight(0.75);
+        splitPane.setResizeWeight(0.875);
         return splitPane;
     }
 
@@ -200,7 +200,10 @@ public class CalendarTab extends JPanel {
             grid.add(createDayCell(d, month, false));
         }
 
-        root.add(new JScrollPane(grid), BorderLayout.CENTER);
+        JScrollPane monthScroll = new JScrollPane(grid);
+        monthScroll.getVerticalScrollBar().setUnitIncrement(32);
+        monthScroll.getVerticalScrollBar().setBlockIncrement(128);
+        root.add(monthScroll, BorderLayout.CENTER);
         return root;
     }
 
@@ -213,6 +216,9 @@ public class CalendarTab extends JPanel {
             label.setFont(label.getFont().deriveFont(Font.BOLD, 12f));
             panel.add(label, BorderLayout.NORTH);
 
+            JPanel monthBody = new JPanel(new BorderLayout(2, 2));
+            monthBody.add(createWeekHeader(1, 1, 8f), BorderLayout.NORTH);
+
             JPanel mini = new JPanel(new GridLayout(0, 7, 1, 1));
             LocalDate firstDay = ym.atDay(1);
             LocalDate start = firstDay.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -222,19 +228,27 @@ public class CalendarTab extends JPanel {
                 mini.add(createDayCell(d, ym, true));
             }
 
-            panel.add(mini, BorderLayout.CENTER);
+            monthBody.add(mini, BorderLayout.CENTER);
+            panel.add(monthBody, BorderLayout.CENTER);
             panel.setBorder(BorderFactory.createLineBorder(new Color(220, 220, 220)));
             monthsGrid.add(panel);
         }
-        return new JScrollPane(monthsGrid);
+        JScrollPane yearScroll = new JScrollPane(monthsGrid);
+        yearScroll.getVerticalScrollBar().setUnitIncrement(32);
+        yearScroll.getVerticalScrollBar().setBlockIncrement(128);
+        return yearScroll;
     }
 
     private JComponent createWeekHeader() {
-        JPanel header = new JPanel(new GridLayout(1, 7, 4, 4));
+        return createWeekHeader(4, 4, 12f);
+    }
+
+    private JComponent createWeekHeader(int hGap, int vGap, float fontSize) {
+        JPanel header = new JPanel(new GridLayout(1, 7, hGap, vGap));
         String[] days = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
         for (String day : days) {
             JLabel label = new JLabel(day, SwingConstants.CENTER);
-            label.setFont(label.getFont().deriveFont(Font.BOLD));
+            label.setFont(label.getFont().deriveFont(Font.BOLD, fontSize));
             header.add(label);
         }
         return header;
@@ -248,7 +262,7 @@ public class CalendarTab extends JPanel {
         cell.setBackground(Color.WHITE);
 
         if (!date.getMonth().equals(visibleMonth.getMonth())) {
-            cell.setBackground(new Color(248, 248, 248));
+            cell.setBackground(new Color(230, 230, 230));
         }
         if (date.equals(LocalDate.now())) {
             cell.setBorder(BorderFactory.createLineBorder(new Color(66, 133, 244), 2));
