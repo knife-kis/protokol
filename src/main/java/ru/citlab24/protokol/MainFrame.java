@@ -36,6 +36,8 @@ public class MainFrame extends JFrame {
     private static final String CARD_RESOURCE_PERSONNEL = "resource-personnel";
     private static final String CARD_RESOURCE_EQUIPMENT = "resource-equipment";
     private static final String CARD_RESOURCE_CALENDAR = "resource-calendar";
+    private static final String CARD_QMS_AUDIT = "qms-audit";
+    private static final String CARD_QMS_NONCONFORMITIES = "qms-nonconformities";
 
 
     public MainFrame() {
@@ -64,6 +66,8 @@ public class MainFrame extends JFrame {
         menuBar.add(createProjectMenu(onLoadProject, onSaveProject));
         menuBar.add(Box.createHorizontalStrut(8));
         menuBar.add(createResourceMenu());
+        menuBar.add(Box.createHorizontalStrut(8));
+        menuBar.add(createQmsMenu());
         menuBar.add(Box.createHorizontalStrut(12));
         JLabel versionLabel = new JLabel("v 1.2.2");
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
@@ -101,6 +105,8 @@ public class MainFrame extends JFrame {
         cardPanel.add(createScenePanel(new PersonnelTab()), CARD_RESOURCE_PERSONNEL);
         cardPanel.add(createScenePanel(new EquipmentTab()), CARD_RESOURCE_EQUIPMENT);
         cardPanel.add(createScenePanel(new CalendarTab()), CARD_RESOURCE_CALENDAR);
+        cardPanel.add(createPlaceholderScene(), CARD_QMS_AUDIT);
+        cardPanel.add(createPlaceholderScene(), CARD_QMS_NONCONFORMITIES);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
@@ -260,5 +266,19 @@ public class MainFrame extends JFrame {
         projectMenu.add(loadItem);
         projectMenu.add(saveItem);
         return projectMenu;
+    }
+
+    private JMenu createQmsMenu() {
+        JMenu qmsMenu = new JMenu("СМК");
+
+        JMenuItem auditItem = new JMenuItem("Аудит");
+        auditItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_AUDIT));
+
+        JMenuItem nonconformitiesItem = new JMenuItem("Несоответствия");
+        nonconformitiesItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_NONCONFORMITIES));
+
+        qmsMenu.add(auditItem);
+        qmsMenu.add(nonconformitiesItem);
+        return qmsMenu;
     }
 }
