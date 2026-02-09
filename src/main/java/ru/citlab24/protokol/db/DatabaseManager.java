@@ -123,6 +123,19 @@ public class DatabaseManager {
                     "temp_outside_start VARCHAR(32)," +
                     "temp_outside_end VARCHAR(32))");
 
+
+            stmt.execute("CREATE TABLE IF NOT EXISTS personnel (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "first_name VARCHAR(255)," +
+                    "last_name VARCHAR(255)," +
+                    "middle_name VARCHAR(255))");
+
+            stmt.execute("CREATE TABLE IF NOT EXISTS personnel_unavailability (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "personnel_id INT," +
+                    "unavailable_date VARCHAR(32)," +
+                    "reason VARCHAR(512))");
+
             // миграции
 
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
@@ -154,6 +167,12 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "building", "application_number", "VARCHAR(128)");
             addColumnIfMissing(stmt, "building", "application_date", "VARCHAR(32)");
             addColumnIfMissing(stmt, "building", "representative", "VARCHAR(512)");
+            addColumnIfMissing(stmt, "personnel", "first_name", "VARCHAR(255)");
+            addColumnIfMissing(stmt, "personnel", "last_name", "VARCHAR(255)");
+            addColumnIfMissing(stmt, "personnel", "middle_name", "VARCHAR(255)");
+            addColumnIfMissing(stmt, "personnel_unavailability", "personnel_id", "INT");
+            addColumnIfMissing(stmt, "personnel_unavailability", "unavailable_date", "VARCHAR(32)");
+            addColumnIfMissing(stmt, "personnel_unavailability", "reason", "VARCHAR(512)");
         }
     }
 
@@ -1041,6 +1060,103 @@ public class DatabaseManager {
             }
             ps.executeBatch();
         }
+    }
+
+
+    public static List<PersonnelRecord> getAllPersonnel() throws SQLException {
+        List<PersonnelRecord> result = new ArrayList<>();
+        String sql = "SELECT id, first_name, last_name, middle_name FROM personnel ORDER BY last_name, first_name, middle_name";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                PersonnelRecord p = new PersonnelRecord();
+                p.setId(rs.getInt("id"));
+                p.setFirstName(rs.getString("first_name"));
+                p.setLastName(rs.getString("last_name"));
+                p.setMiddleName(rs.getString("middle_name"));
+                p.getUnavailabilityDates().addAll(getUnavailabilityForPerson(p.getId()));
+                result.add(p);
+            }
+        }
+        return result;
+    }
+
+    public static PersonnelRecord addPersonnel(String firstName, String lastName, String middleName) throws SQLException {
+        String sql = "INSERT INTO personnel (first_name, last_name, middle_name) VALUES (?, ?, ?)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, firstName);
+            stmt.setString(2, lastName);
+            stmt.setString(3, middleName);
+            stmt.executeUpdate();
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                if (rs.next()) {
+                    PersonnelRecord person = new PersonnelRecord();
+                    person.setId(rs.getInt(1));
+                    person.setFirstName(firstName);
+                    person.setLastName(lastName);
+                    person.setMiddleName(middleName);
+                    return person;
+                }
+            }
+        }
+        throw new SQLException("Не удалось создать запись сотрудника");
+    }
+
+    public static void updatePersonnel(int id, String firstName, String lastName, String middleName) throws SQLException {
+        String sql = "UPDATE personnel SET first_name = ?, last_name = ?, middle_name = ? WHERE id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, firstName);
+            stmt.setString(2, lastName);
+            stmt.setString(3, middleName);
+            stmt.setInt(4, id);
+            stmt.executeUpdate();
+        }
+    }
+
+    public static void deletePersonnel(int id) throws SQLException {
+        try (PreparedStatement delDates = connection.prepareStatement("DELETE FROM personnel_unavailability WHERE personnel_id = ?")) {
+            delDates.setInt(1, id);
+            delDates.executeUpdate();
+        }
+        try (PreparedStatement delPerson = connection.prepareStatement("DELETE FROM personnel WHERE id = ?")) {
+            delPerson.setInt(1, id);
+            delPerson.executeUpdate();
+        }
+    }
+
+    public static void addPersonnelUnavailability(int personnelId, String unavailableDate, String reason) throws SQLException {
+        String sql = "INSERT INTO personnel_unavailability (personnel_id, unavailable_date, reason) VALUES (?, ?, ?)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, personnelId);
+            stmt.setString(2, unavailableDate);
+            stmt.setString(3, reason);
+            stmt.executeUpdate();
+        }
+    }
+
+    public static void deletePersonnelUnavailability(int unavailabilityId) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM personnel_unavailability WHERE id = ?")) {
+            stmt.setInt(1, unavailabilityId);
+            stmt.executeUpdate();
+        }
+    }
+
+    private static List<PersonnelRecord.UnavailabilityRecord> getUnavailabilityForPerson(int personnelId) throws SQLException {
+        List<PersonnelRecord.UnavailabilityRecord> dates = new ArrayList<>();
+        String sql = "SELECT id, unavailable_date, reason FROM personnel_unavailability WHERE personnel_id = ? ORDER BY unavailable_date";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, personnelId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    PersonnelRecord.UnavailabilityRecord rec = new PersonnelRecord.UnavailabilityRecord();
+                    rec.setId(rs.getInt("id"));
+                    rec.setUnavailableDate(rs.getString("unavailable_date"));
+                    rec.setReason(rs.getString("reason"));
+                    dates.add(rec);
+                }
+            }
+        }
+        return dates;
     }
 
     private static void setDoubleOrNull(PreparedStatement ps, int idx, double[] arr, int arrIndex) throws SQLException {

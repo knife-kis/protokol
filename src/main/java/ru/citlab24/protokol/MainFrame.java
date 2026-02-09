@@ -12,6 +12,7 @@ import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 import ru.citlab24.protokol.protocolmap.area.AreaPrimaryPanel;
 import ru.citlab24.protokol.protocolmap.house.ProtocolMapPanel;
+import ru.citlab24.protokol.tabs.resourceTab.ResourceTab;
 
 
 import com.formdev.flatlaf.FlatClientProperties;
@@ -30,6 +31,7 @@ public class MainFrame extends JFrame {
     private static final String CARD_PROTOCOL_AREA = "protocol-area";
     private static final String CARD_PROTOCOL_MAP = "protocol-map";
     private static final String CARD_PROTOCOL_REQUEST = "protocol-request";
+    private static final String CARD_RESOURCE = "resource";
 
 
     public MainFrame() {
@@ -56,6 +58,8 @@ public class MainFrame extends JFrame {
         menuBar.add(createFileMenu());
         menuBar.add(Box.createHorizontalStrut(8));
         menuBar.add(createProjectMenu(onLoadProject, onSaveProject));
+        menuBar.add(Box.createHorizontalStrut(8));
+        menuBar.add(createResourceMenu());
         menuBar.add(Box.createHorizontalStrut(12));
         JLabel versionLabel = new JLabel("v 1.2.2");
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
@@ -90,6 +94,7 @@ public class MainFrame extends JFrame {
         cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_AREA);
         cardPanel.add(createScenePanel(new ProtocolMapPanel()), CARD_PROTOCOL_MAP);
         cardPanel.add(createScenePanel(new AreaPrimaryPanel()), CARD_PROTOCOL_REQUEST);
+        cardPanel.add(createScenePanel(new ResourceTab()), CARD_RESOURCE);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
@@ -199,6 +204,15 @@ public class MainFrame extends JFrame {
                 ? "новый проект"
                 : projectName.trim();
         setTitle(title);
+    }
+
+
+    private JMenu createResourceMenu() {
+        JMenu resourceMenu = new JMenu("Ресурс");
+        JMenuItem openResource = new JMenuItem("Открыть");
+        openResource.addActionListener(e -> cardLayout.show(cardPanel, CARD_RESOURCE));
+        resourceMenu.add(openResource);
+        return resourceMenu;
     }
 
     private JMenu createProjectMenu(Runnable onLoadProject, Runnable onSaveProject) {
