@@ -245,7 +245,7 @@ public class PersonnelTab extends JPanel {
         JOptionPane.showMessageDialog(this, title + ": " + ex.getMessage(), "Ошибка", JOptionPane.ERROR_MESSAGE);
     }
 
-    private String formatDateForUi(String rawDate) {
+    private static String formatDateForUi(String rawDate) {
         if (rawDate == null || rawDate.isBlank()) {
             return "";
         }
