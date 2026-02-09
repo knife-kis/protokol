@@ -5,15 +5,12 @@ import ru.citlab24.protokol.db.PersonnelRecord;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
-import javax.swing.text.DateFormatter;
 import java.awt.*;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,6 +25,7 @@ public class PersonnelTab extends JPanel {
 
     private final JTextField searchField = new JTextField();
     private final List<PersonnelRecord> allPersonnel = new ArrayList<>();
+    private static final String DATE_PLACEHOLDER = "дд-мм-гггг";
 
     public PersonnelTab() {
         super(new BorderLayout(8, 8));
@@ -173,14 +171,21 @@ public class PersonnelTab extends JPanel {
             return;
         }
 
-        JSpinner fromDateSpinner = createDateSpinner(new Date());
-        JSpinner toDateSpinner = createDateSpinner(new Date());
+        JTextField fromDateField = new JTextField();
+        fromDateField.setToolTipText("Формат даты: " + DATE_PLACEHOLDER);
+        JTextField toDateField = new JTextField();
+        toDateField.setToolTipText("Формат даты: " + DATE_PLACEHOLDER);
         JTextField reasonField = new JTextField();
+
         JPanel panel = new JPanel(new GridLayout(0, 1, 4, 4));
+        JLabel personLabel = new JLabel(selected.getFullName(), SwingConstants.CENTER);
+        panel.add(personLabel);
         panel.add(new JLabel("Недоступен с:"));
-        panel.add(fromDateSpinner);
+        panel.add(fromDateField);
+        panel.add(new JLabel("Формат: " + DATE_PLACEHOLDER));
         panel.add(new JLabel("Недоступен по:"));
-        panel.add(toDateSpinner);
+        panel.add(toDateField);
+        panel.add(new JLabel("Формат: " + DATE_PLACEHOLDER));
         panel.add(new JLabel("Причина (отпуск, аудит и т.д.):"));
         panel.add(reasonField);
 
@@ -188,8 +193,15 @@ public class PersonnelTab extends JPanel {
                 "Добавить период занятости", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) return;
 
-        LocalDate from = toLocalDate((Date) fromDateSpinner.getValue());
-        LocalDate to = toLocalDate((Date) toDateSpinner.getValue());
+        LocalDate from = parseUiDate(fromDateField.getText());
+        LocalDate to = parseUiDate(toDateField.getText());
+        if (from == null || to == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Введите даты в формате " + DATE_PLACEHOLDER,
+                    "Некорректный формат даты",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
         if (to.isBefore(from)) {
             JOptionPane.showMessageDialog(this, "Дата по не может быть раньше даты с");
@@ -210,19 +222,15 @@ public class PersonnelTab extends JPanel {
         }
     }
 
-    private JSpinner createDateSpinner(Date initialDate) {
-        SpinnerDateModel model = new SpinnerDateModel(initialDate, null, null, java.util.Calendar.DAY_OF_MONTH);
-        JSpinner spinner = new JSpinner(model);
-        JSpinner.DateEditor editor = new JSpinner.DateEditor(spinner, "dd-MM-yyyy");
-        DateFormatter formatter = (DateFormatter) editor.getTextField().getFormatter();
-        formatter.setAllowsInvalid(false);
-        formatter.setOverwriteMode(true);
-        spinner.setEditor(editor);
-        return spinner;
-    }
-
-    private LocalDate toLocalDate(Date date) {
-        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+    private LocalDate parseUiDate(String dateText) {
+        if (dateText == null || dateText.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(dateText.trim(), UI_DATE_FORMAT);
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
     }
 
     private void deleteUnavailableDate() {
@@ -233,6 +241,15 @@ public class PersonnelTab extends JPanel {
             return;
         }
         PersonnelRecord.UnavailabilityRecord rec = unavailabilityModel.getAt(index);
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Удалить выбранную дату занятости?",
+                "Подтверждение удаления",
+                JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
         try {
             DatabaseManager.deletePersonnelUnavailability(rec.getId());
             reloadPersonnel();
