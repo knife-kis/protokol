@@ -13,6 +13,7 @@ import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 import ru.citlab24.protokol.protocolmap.area.AreaPrimaryPanel;
 import ru.citlab24.protokol.protocolmap.house.ProtocolMapPanel;
 import ru.citlab24.protokol.tabs.resourceTab.EquipmentTab;
+import ru.citlab24.protokol.tabs.resourceTab.CalendarTab;
 import ru.citlab24.protokol.tabs.resourceTab.PersonnelTab;
 
 
@@ -34,6 +35,7 @@ public class MainFrame extends JFrame {
     private static final String CARD_PROTOCOL_REQUEST = "protocol-request";
     private static final String CARD_RESOURCE_PERSONNEL = "resource-personnel";
     private static final String CARD_RESOURCE_EQUIPMENT = "resource-equipment";
+    private static final String CARD_RESOURCE_CALENDAR = "resource-calendar";
 
 
     public MainFrame() {
@@ -98,6 +100,7 @@ public class MainFrame extends JFrame {
         cardPanel.add(createScenePanel(new AreaPrimaryPanel()), CARD_PROTOCOL_REQUEST);
         cardPanel.add(createScenePanel(new PersonnelTab()), CARD_RESOURCE_PERSONNEL);
         cardPanel.add(createScenePanel(new EquipmentTab()), CARD_RESOURCE_EQUIPMENT);
+        cardPanel.add(createScenePanel(new CalendarTab()), CARD_RESOURCE_CALENDAR);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
@@ -219,8 +222,12 @@ public class MainFrame extends JFrame {
         JMenuItem equipmentItem = new JMenuItem("Оборудование");
         equipmentItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_RESOURCE_EQUIPMENT));
 
+        JMenuItem calendarItem = new JMenuItem("Календарь");
+        calendarItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_RESOURCE_CALENDAR));
+
         resourceMenu.add(personnelItem);
         resourceMenu.add(equipmentItem);
+        resourceMenu.add(calendarItem);
         return resourceMenu;
     }
 
