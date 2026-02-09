@@ -11,21 +11,26 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class PersonnelTab extends JPanel {
     private static final DateTimeFormatter UI_DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+    private static final String DATE_PLACEHOLDER = "дд-мм-гггг";
+    private static final String YEAR_FILTER_ALL = "Все годы";
 
     private final PersonnelTableModel personnelModel = new PersonnelTableModel();
     private final JTable personnelTable = new JTable(personnelModel);
 
     private final UnavailabilityTableModel unavailabilityModel = new UnavailabilityTableModel();
     private final JTable unavailabilityTable = new JTable(unavailabilityModel);
+    private final JComboBox<String> yearFilterCombo = new JComboBox<>();
 
     private final JTextField searchField = new JTextField();
     private final List<PersonnelRecord> allPersonnel = new ArrayList<>();
-    private static final String DATE_PLACEHOLDER = "дд-мм-гггг";
 
     public PersonnelTab() {
         super(new BorderLayout(8, 8));
@@ -34,8 +39,14 @@ public class PersonnelTab extends JPanel {
 
         personnelTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                PersonnelRecord selected = getSelectedPerson();
-                unavailabilityModel.setData(selected == null ? List.of() : selected.getUnavailabilityDates());
+                refreshUnavailabilityPanel(getSelectedPerson());
+            }
+        });
+
+        yearFilterCombo.addActionListener(e -> {
+            PersonnelRecord selected = getSelectedPerson();
+            if (selected != null) {
+                applyUnavailabilityFilter(selected);
             }
         });
 
@@ -78,9 +89,17 @@ public class PersonnelTab extends JPanel {
     }
 
     private JComponent createContent() {
+        JPanel bottomPanel = new JPanel(new BorderLayout(6, 6));
+        bottomPanel.add(new JScrollPane(unavailabilityTable), BorderLayout.CENTER);
+
+        JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        filterPanel.add(new JLabel("Год:"));
+        filterPanel.add(yearFilterCombo);
+        bottomPanel.add(filterPanel, BorderLayout.SOUTH);
+
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
                 new JScrollPane(personnelTable),
-                new JScrollPane(unavailabilityTable));
+                bottomPanel);
         split.setResizeWeight(0.6);
         return split;
     }
@@ -108,7 +127,99 @@ public class PersonnelTab extends JPanel {
         if (!filtered.isEmpty()) {
             personnelTable.setRowSelectionInterval(0, 0);
         } else {
+            refreshUnavailabilityPanel(null);
+        }
+    }
+
+    private void refreshUnavailabilityPanel(PersonnelRecord selected) {
+        updateYearFilterOptions(selected);
+        if (selected == null) {
             unavailabilityModel.setData(List.of());
+            return;
+        }
+        applyUnavailabilityFilter(selected);
+    }
+
+    private void updateYearFilterOptions(PersonnelRecord selected) {
+        Object previous = yearFilterCombo.getSelectedItem();
+        yearFilterCombo.removeAllItems();
+        yearFilterCombo.addItem(YEAR_FILTER_ALL);
+
+        if (selected != null) {
+            LinkedHashSet<Integer> years = selected.getUnavailabilityDates().stream()
+                    .map(PersonnelRecord.UnavailabilityRecord::getUnavailableDate)
+                    .map(PersonnelTab::parseRawDate)
+                    .filter(Objects::nonNull)
+                    .map(LocalDate::getYear)
+                    .sorted()
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            years.forEach(y -> yearFilterCombo.addItem(String.valueOf(y)));
+        }
+
+        if (previous != null) {
+            yearFilterCombo.setSelectedItem(previous);
+        }
+        if (yearFilterCombo.getSelectedIndex() < 0) {
+            yearFilterCombo.setSelectedIndex(0);
+        }
+    }
+
+    private void applyUnavailabilityFilter(PersonnelRecord selected) {
+        String selectedYearValue = Objects.toString(yearFilterCombo.getSelectedItem(), YEAR_FILTER_ALL);
+        List<PersonnelRecord.UnavailabilityRecord> filtered = selected.getUnavailabilityDates().stream()
+                .filter(rec -> {
+                    if (YEAR_FILTER_ALL.equals(selectedYearValue)) {
+                        return true;
+                    }
+                    LocalDate date = parseRawDate(rec.getUnavailableDate());
+                    return date != null && String.valueOf(date.getYear()).equals(selectedYearValue);
+                })
+                .collect(Collectors.toList());
+        unavailabilityModel.setData(groupUnavailability(filtered));
+    }
+
+    private static List<GroupedUnavailabilityRecord> groupUnavailability(List<PersonnelRecord.UnavailabilityRecord> records) {
+        List<PersonnelRecord.UnavailabilityRecord> sortedRecords = records.stream()
+                .sorted(Comparator.comparing(PersonnelRecord.UnavailabilityRecord::getUnavailableDate)
+                        .thenComparing(r -> r.getReason() == null ? "" : r.getReason()))
+                .toList();
+
+        List<GroupedUnavailabilityRecord> grouped = new ArrayList<>();
+        GroupedUnavailabilityRecord current = null;
+
+        for (PersonnelRecord.UnavailabilityRecord record : sortedRecords) {
+            LocalDate date = parseRawDate(record.getUnavailableDate());
+            if (date == null) {
+                continue;
+            }
+            String reason = record.getReason() == null ? "" : record.getReason().trim();
+            if (current == null
+                    || !current.reason.equals(reason)
+                    || !current.toDate.plusDays(1).equals(date)) {
+                current = new GroupedUnavailabilityRecord(new ArrayList<>(), date, date, reason);
+                grouped.add(current);
+            } else {
+                current.toDate = date;
+            }
+            current.recordIds.add(record.getId());
+        }
+
+        return grouped;
+    }
+
+    private static LocalDate parseRawDate(String rawDate) {
+        if (rawDate == null || rawDate.isBlank()) {
+            return null;
+        }
+        String trimmed = rawDate.trim();
+        try {
+            return LocalDate.parse(trimmed);
+        } catch (DateTimeParseException ignored) {
+            try {
+                return LocalDate.parse(trimmed, UI_DATE_FORMAT);
+            } catch (DateTimeParseException ignoredAgain) {
+                return null;
+            }
         }
     }
 
@@ -240,7 +351,7 @@ public class PersonnelTab extends JPanel {
             JOptionPane.showMessageDialog(this, "Выберите дату в нижней таблице");
             return;
         }
-        PersonnelRecord.UnavailabilityRecord rec = unavailabilityModel.getAt(index);
+        GroupedUnavailabilityRecord rec = unavailabilityModel.getAt(index);
 
         int confirm = JOptionPane.showConfirmDialog(this,
                 "Удалить выбранную дату занятости?",
@@ -251,7 +362,9 @@ public class PersonnelTab extends JPanel {
         }
 
         try {
-            DatabaseManager.deletePersonnelUnavailability(rec.getId());
+            for (Integer recordId : rec.recordIds) {
+                DatabaseManager.deletePersonnelUnavailability(recordId);
+            }
             reloadPersonnel();
         } catch (SQLException ex) {
             showDbError("Ошибка удаления даты", ex);
@@ -260,22 +373,6 @@ public class PersonnelTab extends JPanel {
 
     private void showDbError(String title, Exception ex) {
         JOptionPane.showMessageDialog(this, title + ": " + ex.getMessage(), "Ошибка", JOptionPane.ERROR_MESSAGE);
-    }
-
-    private static String formatDateForUi(String rawDate) {
-        if (rawDate == null || rawDate.isBlank()) {
-            return "";
-        }
-        String trimmed = rawDate.trim();
-        try {
-            return LocalDate.parse(trimmed).format(UI_DATE_FORMAT);
-        } catch (DateTimeParseException ignored) {
-            try {
-                return LocalDate.parse(trimmed, UI_DATE_FORMAT).format(UI_DATE_FORMAT);
-            } catch (DateTimeParseException ignoredAgain) {
-                return trimmed;
-            }
-        }
     }
 
     private static class PersonForm {
@@ -340,15 +437,15 @@ public class PersonnelTab extends JPanel {
     }
 
     private static class UnavailabilityTableModel extends AbstractTableModel {
-        private final String[] columns = {"ID", "Дата недоступности", "Причина"};
-        private List<PersonnelRecord.UnavailabilityRecord> data = List.of();
+        private final String[] columns = {"Дата недоступности", "Причина"};
+        private List<GroupedUnavailabilityRecord> data = List.of();
 
-        void setData(List<PersonnelRecord.UnavailabilityRecord> data) {
+        void setData(List<GroupedUnavailabilityRecord> data) {
             this.data = new ArrayList<>(data);
             fireTableDataChanged();
         }
 
-        PersonnelRecord.UnavailabilityRecord getAt(int row) {
+        GroupedUnavailabilityRecord getAt(int row) {
             return data.get(row);
         }
 
@@ -358,13 +455,36 @@ public class PersonnelTab extends JPanel {
 
         @Override
         public Object getValueAt(int rowIndex, int columnIndex) {
-            PersonnelRecord.UnavailabilityRecord r = data.get(rowIndex);
+            GroupedUnavailabilityRecord r = data.get(rowIndex);
             return switch (columnIndex) {
-                case 0 -> r.getId();
-                case 1 -> formatDateForUi(r.getUnavailableDate());
-                case 2 -> r.getReason();
+                case 0 -> formatDateRangeForUi(r.fromDate, r.toDate);
+                case 1 -> r.reason;
                 default -> "";
             };
+        }
+    }
+
+    private static String formatDateRangeForUi(LocalDate from, LocalDate to) {
+        if (from == null || to == null) {
+            return "";
+        }
+        if (from.equals(to)) {
+            return from.format(UI_DATE_FORMAT);
+        }
+        return from.format(UI_DATE_FORMAT) + " - " + to.format(UI_DATE_FORMAT);
+    }
+
+    private static class GroupedUnavailabilityRecord {
+        private final List<Integer> recordIds;
+        private final LocalDate fromDate;
+        private LocalDate toDate;
+        private final String reason;
+
+        private GroupedUnavailabilityRecord(List<Integer> recordIds, LocalDate fromDate, LocalDate toDate, String reason) {
+            this.recordIds = recordIds;
+            this.fromDate = fromDate;
+            this.toDate = toDate;
+            this.reason = reason;
         }
     }
 }
