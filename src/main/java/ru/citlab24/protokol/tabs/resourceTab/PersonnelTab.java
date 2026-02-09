@@ -10,12 +10,16 @@ import java.awt.*;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class PersonnelTab extends JPanel {
+    private static final DateTimeFormatter UI_DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
     private final PersonnelTableModel personnelModel = new PersonnelTableModel();
     private final JTable personnelTable = new JTable(personnelModel);
 
@@ -209,7 +213,7 @@ public class PersonnelTab extends JPanel {
     private JSpinner createDateSpinner(Date initialDate) {
         SpinnerDateModel model = new SpinnerDateModel(initialDate, null, null, java.util.Calendar.DAY_OF_MONTH);
         JSpinner spinner = new JSpinner(model);
-        JSpinner.DateEditor editor = new JSpinner.DateEditor(spinner, "yyyy-MM-dd");
+        JSpinner.DateEditor editor = new JSpinner.DateEditor(spinner, "dd-MM-yyyy");
         DateFormatter formatter = (DateFormatter) editor.getTextField().getFormatter();
         formatter.setAllowsInvalid(false);
         formatter.setOverwriteMode(true);
@@ -239,6 +243,22 @@ public class PersonnelTab extends JPanel {
 
     private void showDbError(String title, Exception ex) {
         JOptionPane.showMessageDialog(this, title + ": " + ex.getMessage(), "Ошибка", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private String formatDateForUi(String rawDate) {
+        if (rawDate == null || rawDate.isBlank()) {
+            return "";
+        }
+        String trimmed = rawDate.trim();
+        try {
+            return LocalDate.parse(trimmed).format(UI_DATE_FORMAT);
+        } catch (DateTimeParseException ignored) {
+            try {
+                return LocalDate.parse(trimmed, UI_DATE_FORMAT).format(UI_DATE_FORMAT);
+            } catch (DateTimeParseException ignoredAgain) {
+                return trimmed;
+            }
+        }
     }
 
     private static class PersonForm {
@@ -324,7 +344,7 @@ public class PersonnelTab extends JPanel {
             PersonnelRecord.UnavailabilityRecord r = data.get(rowIndex);
             return switch (columnIndex) {
                 case 0 -> r.getId();
-                case 1 -> r.getUnavailableDate();
+                case 1 -> formatDateForUi(r.getUnavailableDate());
                 case 2 -> r.getReason();
                 default -> "";
             };
