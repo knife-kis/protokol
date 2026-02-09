@@ -5,9 +5,13 @@ import ru.citlab24.protokol.db.PersonnelRecord;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.text.DateFormatter;
 import java.awt.*;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -165,24 +169,56 @@ public class PersonnelTab extends JPanel {
             return;
         }
 
-        JTextField dateField = new JTextField();
+        JSpinner fromDateSpinner = createDateSpinner(new Date());
+        JSpinner toDateSpinner = createDateSpinner(new Date());
         JTextField reasonField = new JTextField();
         JPanel panel = new JPanel(new GridLayout(0, 1, 4, 4));
-        panel.add(new JLabel("Дата недоступности (например 2026-02-10):"));
-        panel.add(dateField);
+        panel.add(new JLabel("Недоступен с:"));
+        panel.add(fromDateSpinner);
+        panel.add(new JLabel("Недоступен по:"));
+        panel.add(toDateSpinner);
         panel.add(new JLabel("Причина (отпуск, аудит и т.д.):"));
         panel.add(reasonField);
 
         int result = JOptionPane.showConfirmDialog(this, panel,
-                "Добавить дату занятости", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                "Добавить период занятости", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (result != JOptionPane.OK_OPTION) return;
 
+        LocalDate from = toLocalDate((Date) fromDateSpinner.getValue());
+        LocalDate to = toLocalDate((Date) toDateSpinner.getValue());
+
+        if (to.isBefore(from)) {
+            JOptionPane.showMessageDialog(this, "Дата по не может быть раньше даты с");
+            return;
+        }
+
+        String reason = reasonField.getText().trim();
+
         try {
-            DatabaseManager.addPersonnelUnavailability(selected.getId(), dateField.getText().trim(), reasonField.getText().trim());
+            LocalDate cursor = from;
+            while (!cursor.isAfter(to)) {
+                DatabaseManager.addPersonnelUnavailability(selected.getId(), cursor.toString(), reason);
+                cursor = cursor.plusDays(1);
+            }
             reloadPersonnel();
         } catch (SQLException ex) {
             showDbError("Ошибка сохранения даты недоступности", ex);
         }
+    }
+
+    private JSpinner createDateSpinner(Date initialDate) {
+        SpinnerDateModel model = new SpinnerDateModel(initialDate, null, null, java.util.Calendar.DAY_OF_MONTH);
+        JSpinner spinner = new JSpinner(model);
+        JSpinner.DateEditor editor = new JSpinner.DateEditor(spinner, "yyyy-MM-dd");
+        DateFormatter formatter = (DateFormatter) editor.getTextField().getFormatter();
+        formatter.setAllowsInvalid(false);
+        formatter.setOverwriteMode(true);
+        spinner.setEditor(editor);
+        return spinner;
+    }
+
+    private LocalDate toLocalDate(Date date) {
+        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
     }
 
     private void deleteUnavailableDate() {
