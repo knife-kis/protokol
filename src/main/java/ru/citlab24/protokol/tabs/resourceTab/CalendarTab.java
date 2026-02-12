@@ -2,6 +2,7 @@ package ru.citlab24.protokol.tabs.resourceTab;
 
 import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.db.PersonnelRecord;
+import ru.citlab24.protokol.db.VlkDateRecord;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -31,6 +32,7 @@ public class CalendarTab extends JPanel {
     private static final String ASPECT_TESTS = "Испытания";
     private static final String ASPECT_MSI = "МСИ";
     private static final String ASPECT_VERIFICATION = "Поверка оборудования";
+    private static final String ASPECT_VLK = "ВЛК";
 
     private final JCheckBox showAllCheck = new JCheckBox("Показать все");
     private final Map<String, JCheckBox> aspectFilters = new HashMap<>();
@@ -110,6 +112,7 @@ public class CalendarTab extends JPanel {
         addAspectCheckbox(panel, ASPECT_TESTS);
         addAspectCheckbox(panel, ASPECT_MSI);
         addAspectCheckbox(panel, ASPECT_VERIFICATION);
+        addAspectCheckbox(panel, ASPECT_VLK);
 
         for (JCheckBox box : aspectFilters.values()) {
             box.setEnabled(false);
@@ -159,6 +162,21 @@ public class CalendarTab extends JPanel {
                             : aspect + " " + shortName;
                     allEvents.add(new CalendarEvent(day, aspect, title, person.getFullName()));
                 }
+            }
+
+            for (VlkDateRecord vlkDate : DatabaseManager.getAllVlkDates()) {
+                LocalDate day = parseDate(vlkDate.getVlkDate());
+                if (day == null) {
+                    continue;
+                }
+                String responsible = vlkDate.getResponsible() == null ? "" : vlkDate.getResponsible();
+                String event = vlkDate.getEventName() == null ? "" : vlkDate.getEventName();
+                allEvents.add(new CalendarEvent(
+                        day,
+                        ASPECT_VLK,
+                        "ВЛК: " + responsible,
+                        event
+                ));
             }
             allEvents.sort(Comparator.comparing(CalendarEvent::date).thenComparing(CalendarEvent::title));
         } catch (SQLException ex) {

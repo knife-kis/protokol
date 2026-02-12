@@ -136,6 +136,12 @@ public class DatabaseManager {
                     "unavailable_date VARCHAR(32)," +
                     "reason VARCHAR(512))");
 
+            stmt.execute("CREATE TABLE IF NOT EXISTS vlk_dates (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "vlk_date VARCHAR(32)," +
+                    "responsible VARCHAR(255)," +
+                    "event_name CLOB)");
+
             // миграции
 
             addColumnIfMissing(stmt, "floor", "section_index", "INT");
@@ -173,6 +179,9 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "personnel_unavailability", "personnel_id", "INT");
             addColumnIfMissing(stmt, "personnel_unavailability", "unavailable_date", "VARCHAR(32)");
             addColumnIfMissing(stmt, "personnel_unavailability", "reason", "VARCHAR(512)");
+            addColumnIfMissing(stmt, "vlk_dates", "vlk_date", "VARCHAR(32)");
+            addColumnIfMissing(stmt, "vlk_dates", "responsible", "VARCHAR(255)");
+            addColumnIfMissing(stmt, "vlk_dates", "event_name", "CLOB");
         }
     }
 
@@ -1137,6 +1146,51 @@ public class DatabaseManager {
     public static void deletePersonnelUnavailability(int unavailabilityId) throws SQLException {
         try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM personnel_unavailability WHERE id = ?")) {
             stmt.setInt(1, unavailabilityId);
+            stmt.executeUpdate();
+        }
+    }
+
+    public static List<VlkDateRecord> getAllVlkDates() throws SQLException {
+        List<VlkDateRecord> result = new ArrayList<>();
+        String sql = "SELECT id, vlk_date, responsible, event_name FROM vlk_dates ORDER BY vlk_date, id";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                VlkDateRecord record = new VlkDateRecord();
+                record.setId(rs.getInt("id"));
+                record.setVlkDate(rs.getString("vlk_date"));
+                record.setResponsible(rs.getString("responsible"));
+                record.setEventName(rs.getString("event_name"));
+                result.add(record);
+            }
+        }
+        return result;
+    }
+
+    public static void replaceVlkDates(List<VlkDateRecord> records) throws SQLException {
+        try (PreparedStatement deleteStmt = connection.prepareStatement("DELETE FROM vlk_dates")) {
+            deleteStmt.executeUpdate();
+        }
+
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+
+        String sql = "INSERT INTO vlk_dates (vlk_date, responsible, event_name) VALUES (?, ?, ?)";
+        try (PreparedStatement insertStmt = connection.prepareStatement(sql)) {
+            for (VlkDateRecord record : records) {
+                insertStmt.setString(1, record.getVlkDate());
+                insertStmt.setString(2, record.getResponsible());
+                insertStmt.setString(3, record.getEventName());
+                insertStmt.addBatch();
+            }
+            insertStmt.executeBatch();
+        }
+    }
+
+    public static void deleteVlkDate(int id) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM vlk_dates WHERE id = ?")) {
+            stmt.setInt(1, id);
             stmt.executeUpdate();
         }
     }
