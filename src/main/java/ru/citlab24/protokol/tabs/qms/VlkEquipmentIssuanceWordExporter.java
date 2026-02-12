@@ -1,7 +1,6 @@
 package ru.citlab24.protokol.tabs.qms;
 
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
-import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.TableRowAlign;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -29,20 +28,19 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 
-final class ObservationProtocolWordExporter {
+final class VlkEquipmentIssuanceWordExporter {
 
     private static final int FONT_SIZE = 9;
 
-    private ObservationProtocolWordExporter() {
+    private VlkEquipmentIssuanceWordExporter() {
     }
 
-    static void export(File target, String year, VlkWordExporter.PlanRow row, String controlDate) throws IOException {
+    static void export(File target, VlkWordExporter.PlanRow row) throws IOException {
         try (XWPFDocument document = new XWPFDocument()) {
-            configureLandscapePage(document);
+            configurePortraitPage(document);
             createHeader(document);
-            addTitle(document, year, row.responsible());
-            addMainTable(document, row, controlDate);
-            addSecondPage(document, controlDate);
+            addCenterBlock(document, row);
+            addMainTable(document);
 
             try (FileOutputStream out = new FileOutputStream(target)) {
                 document.write(out);
@@ -50,15 +48,14 @@ final class ObservationProtocolWordExporter {
         }
     }
 
-    private static void configureLandscapePage(XWPFDocument document) {
+    private static void configurePortraitPage(XWPFDocument document) {
         CTSectPr sectPr = document.getDocument().getBody().isSetSectPr()
                 ? document.getDocument().getBody().getSectPr()
                 : document.getDocument().getBody().addNewSectPr();
 
         CTPageSz pageSize = sectPr.isSetPgSz() ? sectPr.getPgSz() : sectPr.addNewPgSz();
-        pageSize.setW(BigInteger.valueOf(16838));
-        pageSize.setH(BigInteger.valueOf(11906));
-        pageSize.setOrient(org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation.LANDSCAPE);
+        pageSize.setW(BigInteger.valueOf(11906));
+        pageSize.setH(BigInteger.valueOf(16838));
 
         CTPageMar margins = sectPr.isSetPgMar() ? sectPr.getPgMar() : sectPr.addNewPgMar();
         margins.setTop(BigInteger.valueOf(720));
@@ -85,7 +82,7 @@ final class ObservationProtocolWordExporter {
         setCellText(headerTable.getRow(0).getCell(0),
                 "Испытательная лаборатория ООО «ЦИТ»", ParagraphAlignment.CENTER, false, FONT_SIZE);
         setCellText(headerTable.getRow(0).getCell(1),
-                "Протокол по результатам наблюдения\nФ3 РИ ИЛ 2-2023", ParagraphAlignment.CENTER, false, FONT_SIZE);
+                "Лист выдачи приборов Ф39 ДП ИЛ 2-2023", ParagraphAlignment.CENTER, false, FONT_SIZE);
         setCellText(headerTable.getRow(0).getCell(2),
                 "Дата утверждения бланка формуляра: 01.01.2023г.", ParagraphAlignment.LEFT, false, FONT_SIZE);
         setCellText(headerTable.getRow(1).getCell(2), "Редакция № 1", ParagraphAlignment.LEFT, false, FONT_SIZE);
@@ -96,112 +93,37 @@ final class ObservationProtocolWordExporter {
         styleAllCellParagraphs(headerTable, FONT_SIZE);
     }
 
-    private static void addTitle(XWPFDocument document, String year, String responsible) {
-        XWPFParagraph paragraph = document.createParagraph();
-        paragraph.setAlignment(ParagraphAlignment.CENTER);
-        XWPFRun run = paragraph.createRun();
-        run.setFontFamily("Arial");
-        run.setFontSize(20);
-        run.setBold(true);
-        run.setText("Протокол по результатам наблюдений");
-        run.addBreak();
-        run.setText("за период: " + year + " г.");
-        run.addBreak();
-        run.setText("Ответственные лица: " + responsible);
-        run.addBreak();
-        run.setText("Отчет проверил и утвердил: " + oppositeResponsible(responsible));
-
-        addEmptyLine(document);
+    private static void addCenterBlock(XWPFDocument document, VlkWordExporter.PlanRow row) {
+        addCenteredParagraph(document,
+                "Место использования прибора:\nКонтроль точности результатов измерений " + methodCipher(row.event()),
+                true);
+        addCenteredParagraph(document,
+                "Фамилия, инициалы лица, получившего приборы:\n" + (row.responsible() == null ? "" : row.responsible()),
+                true);
+        addCenteredParagraph(document, "Лист выдачи приборов", true);
     }
 
-    private static void addMainTable(XWPFDocument document, VlkWordExporter.PlanRow row, String controlDate) {
-        XWPFTable table = document.createTable(2, 7);
+    private static void addMainTable(XWPFDocument document) {
+        XWPFTable table = document.createTable(2, 5);
         table.setWidth("100%");
         setFixedLayout(table);
-        setGrid(table, 650, 1300, 2800, 1300, 1300, 1300, 2200);
+        setGrid(table, 1700, 1200, 2600, 2600, 1500);
 
-        XWPFTableRow headerRow = table.getRow(0);
-        setCellText(headerRow.getCell(0), "№\nп/п", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(headerRow.getCell(1), "Дата проведения контроля", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(headerRow.getCell(2), "Шифр контролируемого метода (методики) измерений", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(headerRow.getCell(3), "Контролируемый показатель", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(headerRow.getCell(4), "Сотрудники ИЛ, демонстрирующие метод (методику) измерений", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(headerRow.getCell(5), "Сотрудник ИЛ, осуществляющий контроль за работой сотрудников ИЛ", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(headerRow.getCell(6), "Результат контроля на каждом этапе реализации метода (методики) измерений", ParagraphAlignment.CENTER, true, FONT_SIZE);
-
-        XWPFTableRow row1 = table.getRow(1);
-        setCellText(row1.getCell(0), "1", ParagraphAlignment.CENTER, false, FONT_SIZE);
-        setCellText(row1.getCell(1), controlDate == null ? "" : controlDate, ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(2), methodCipher(row.event()), ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(3), "", ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(4), row.responsible(), ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(5), oppositeResponsible(row.responsible()), ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(6), "", ParagraphAlignment.LEFT, false, FONT_SIZE);
+        setCellText(table.getRow(0).getCell(0), "Наименование\nоборудования", ParagraphAlignment.CENTER, true, FONT_SIZE);
+        setCellText(table.getRow(0).getCell(1), "Зав. №", ParagraphAlignment.CENTER, true, FONT_SIZE);
+        setCellText(table.getRow(0).getCell(2),
+                "Получение прибора, отметка о проведении технического обслуживания и (или) проверки перед выдачей",
+                ParagraphAlignment.CENTER,
+                true,
+                FONT_SIZE);
+        setCellText(table.getRow(0).getCell(3),
+                "Возврат оборудования, Отметка о проведении технического обслуживания и (или) проверки перед возвратом оборудования и после его транспортировки",
+                ParagraphAlignment.CENTER,
+                true,
+                FONT_SIZE);
+        setCellText(table.getRow(0).getCell(4), "Примечание", ParagraphAlignment.CENTER, true, FONT_SIZE);
 
         styleAllCellParagraphs(table, FONT_SIZE);
-    }
-
-    private static void addSecondPage(XWPFDocument document, String controlDate) {
-        XWPFParagraph pageBreak = document.createParagraph();
-        pageBreak.createRun().addBreak(BreakType.PAGE);
-
-        XWPFParagraph familiarTitle = document.createParagraph();
-        familiarTitle.setAlignment(ParagraphAlignment.CENTER);
-        XWPFRun familiarRun = familiarTitle.createRun();
-        familiarRun.setFontFamily("Arial");
-        familiarRun.setFontSize(14);
-        familiarRun.setBold(true);
-        familiarRun.setText("ЛИСТ ОЗНАКОМЛЕНИЯ");
-
-        XWPFTable familiarTable = document.createTable(5, 5);
-        familiarTable.setWidth("100%");
-        setFixedLayout(familiarTable);
-        setGrid(familiarTable, 1400, 2200, 2200, 1400, 2400);
-
-        setCellText(familiarTable.getRow(0).getCell(0), "Дата\nознакомления", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(familiarTable.getRow(0).getCell(1), "Должность", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(familiarTable.getRow(0).getCell(2), "Ф.И.О.", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(familiarTable.getRow(0).getCell(3), "Подпись", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(familiarTable.getRow(0).getCell(4), "Примечание", ParagraphAlignment.CENTER, true, FONT_SIZE);
-
-        setCellText(familiarTable.getRow(1).getCell(0), "1", ParagraphAlignment.CENTER, false, FONT_SIZE);
-        setCellText(familiarTable.getRow(1).getCell(1), "2", ParagraphAlignment.CENTER, false, FONT_SIZE);
-        setCellText(familiarTable.getRow(1).getCell(2), "3", ParagraphAlignment.CENTER, false, FONT_SIZE);
-        setCellText(familiarTable.getRow(1).getCell(3), "4", ParagraphAlignment.CENTER, false, FONT_SIZE);
-        setCellText(familiarTable.getRow(1).getCell(4), "5", ParagraphAlignment.CENTER, false, FONT_SIZE);
-
-        setCellText(familiarTable.getRow(2).getCell(1), "Заведующий лабораторией", ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(familiarTable.getRow(2).getCell(2), "Тарновский Максим Олегович", ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(familiarTable.getRow(2).getCell(0), controlDate == null ? "" : controlDate, ParagraphAlignment.LEFT, false, FONT_SIZE);
-
-        setCellText(familiarTable.getRow(3).getCell(1), "Инженер", ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(familiarTable.getRow(3).getCell(2), "Белов Дмитрий Андреевич", ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(familiarTable.getRow(3).getCell(0), controlDate == null ? "" : controlDate, ParagraphAlignment.LEFT, false, FONT_SIZE);
-
-        styleAllCellParagraphs(familiarTable, FONT_SIZE);
-
-        addEmptyLine(document);
-        addEmptyLine(document);
-
-        XWPFParagraph distributionTitle = document.createParagraph();
-        distributionTitle.setAlignment(ParagraphAlignment.CENTER);
-        XWPFRun distributionRun = distributionTitle.createRun();
-        distributionRun.setFontFamily("Arial");
-        distributionRun.setFontSize(14);
-        distributionRun.setBold(true);
-        distributionRun.setText("ЛИСТ РАССЫЛКИ ДОКУМЕНТОВ");
-
-        XWPFTable distributionTable = document.createTable(4, 4);
-        distributionTable.setWidth("100%");
-        setFixedLayout(distributionTable);
-        setGrid(distributionTable, 1700, 2200, 2300, 3000);
-
-        setCellText(distributionTable.getRow(0).getCell(0), "Номер учтенной копии", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(distributionTable.getRow(0).getCell(1), "Ф.И.О., должность", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(distributionTable.getRow(0).getCell(2), "Подпись о получении учтенной копии, дата", ParagraphAlignment.CENTER, true, FONT_SIZE);
-        setCellText(distributionTable.getRow(0).getCell(3), "Отметка об изъятии у получателя учтенной копии, уничтожении учтенной копии: подпись уполномоченного работника ИЛ, дата", ParagraphAlignment.CENTER, true, FONT_SIZE);
-
-        styleAllCellParagraphs(distributionTable, FONT_SIZE);
     }
 
     private static String methodCipher(String event) {
@@ -213,19 +135,6 @@ final class ObservationProtocolWordExporter {
             return event.substring(prefix.length()).trim();
         }
         return event;
-    }
-
-    private static String oppositeResponsible(String responsible) {
-        if (responsible == null) {
-            return "";
-        }
-        if (responsible.contains("Белов")) {
-            return "Тарновский М.О.";
-        }
-        if (responsible.contains("Тарновский")) {
-            return "Белов Д.А.";
-        }
-        return "";
     }
 
     private static void mergeCellsVertically(XWPFTable table, int col, int fromRow, int toRow) {
@@ -341,14 +250,24 @@ final class ObservationProtocolWordExporter {
         }
     }
 
-    private static void addEmptyLine(XWPFDocument document) {
+    private static void addCenteredParagraph(XWPFDocument document, String text, boolean bold) {
         XWPFParagraph paragraph = document.createParagraph();
+        paragraph.setAlignment(ParagraphAlignment.CENTER);
         paragraph.setSpacingBefore(0);
         paragraph.setSpacingAfter(0);
+
         XWPFRun run = paragraph.createRun();
         run.setFontFamily("Arial");
         run.setFontSize(FONT_SIZE);
-        run.setText(" ");
+        run.setBold(bold);
+
+        String[] lines = text == null ? new String[]{""} : text.split("\\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) {
+                run.addBreak();
+            }
+            run.setText(lines[i]);
+        }
     }
 
     private static void styleAllCellParagraphs(XWPFTable table, int size) {
