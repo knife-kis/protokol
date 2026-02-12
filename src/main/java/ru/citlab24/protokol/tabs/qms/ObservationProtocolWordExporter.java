@@ -36,12 +36,12 @@ final class ObservationProtocolWordExporter {
     private ObservationProtocolWordExporter() {
     }
 
-    static void export(File target, String year, VlkWordExporter.PlanRow row) throws IOException {
+    static void export(File target, String year, VlkWordExporter.PlanRow row, String controlDate) throws IOException {
         try (XWPFDocument document = new XWPFDocument()) {
             configureLandscapePage(document);
             createHeader(document);
             addTitle(document, year, row.responsible());
-            addMainTable(document, row);
+            addMainTable(document, row, controlDate);
             addSecondPage(document);
 
             try (FileOutputStream out = new FileOutputStream(target)) {
@@ -114,7 +114,7 @@ final class ObservationProtocolWordExporter {
         addEmptyLine(document);
     }
 
-    private static void addMainTable(XWPFDocument document, VlkWordExporter.PlanRow row) {
+    private static void addMainTable(XWPFDocument document, VlkWordExporter.PlanRow row, String controlDate) {
         XWPFTable table = document.createTable(2, 7);
         table.setWidth("100%");
         setFixedLayout(table);
@@ -131,11 +131,11 @@ final class ObservationProtocolWordExporter {
 
         XWPFTableRow row1 = table.getRow(1);
         setCellText(row1.getCell(0), "1", ParagraphAlignment.CENTER, false, FONT_SIZE);
-        setCellText(row1.getCell(1), "", ParagraphAlignment.LEFT, false, FONT_SIZE);
+        setCellText(row1.getCell(1), controlDate == null ? "" : controlDate, ParagraphAlignment.LEFT, false, FONT_SIZE);
         setCellText(row1.getCell(2), methodCipher(row.event()), ParagraphAlignment.LEFT, false, FONT_SIZE);
         setCellText(row1.getCell(3), "", ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(4), oppositeResponsible(row.responsible()), ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(5), row.responsible(), ParagraphAlignment.LEFT, false, FONT_SIZE);
+        setCellText(row1.getCell(4), row.responsible(), ParagraphAlignment.LEFT, false, FONT_SIZE);
+        setCellText(row1.getCell(5), oppositeResponsible(row.responsible()), ParagraphAlignment.LEFT, false, FONT_SIZE);
         setCellText(row1.getCell(6), "", ParagraphAlignment.LEFT, false, FONT_SIZE);
 
         styleAllCellParagraphs(table, FONT_SIZE);
