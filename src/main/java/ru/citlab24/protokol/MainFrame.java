@@ -15,6 +15,7 @@ import ru.citlab24.protokol.protocolmap.house.ProtocolMapPanel;
 import ru.citlab24.protokol.tabs.resourceTab.EquipmentTab;
 import ru.citlab24.protokol.tabs.resourceTab.CalendarTab;
 import ru.citlab24.protokol.tabs.resourceTab.PersonnelTab;
+import ru.citlab24.protokol.tabs.qms.VlkTab;
 
 
 import com.formdev.flatlaf.FlatClientProperties;
@@ -38,6 +39,7 @@ public class MainFrame extends JFrame {
     private static final String CARD_RESOURCE_CALENDAR = "resource-calendar";
     private static final String CARD_QMS_AUDIT = "qms-audit";
     private static final String CARD_QMS_NONCONFORMITIES = "qms-nonconformities";
+    private static final String CARD_QMS_VLK = "qms-vlk";
 
 
     public MainFrame() {
@@ -107,6 +109,7 @@ public class MainFrame extends JFrame {
         cardPanel.add(createScenePanel(new CalendarTab()), CARD_RESOURCE_CALENDAR);
         cardPanel.add(createPlaceholderScene(), CARD_QMS_AUDIT);
         cardPanel.add(createPlaceholderScene(), CARD_QMS_NONCONFORMITIES);
+        cardPanel.add(createScenePanel(new VlkTab()), CARD_QMS_VLK);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
@@ -277,8 +280,12 @@ public class MainFrame extends JFrame {
         JMenuItem nonconformitiesItem = new JMenuItem("Несоответствия");
         nonconformitiesItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_NONCONFORMITIES));
 
+        JMenuItem vlkItem = new JMenuItem("ВЛК");
+        vlkItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_VLK));
+
         qmsMenu.add(auditItem);
         qmsMenu.add(nonconformitiesItem);
+        qmsMenu.add(vlkItem);
         return qmsMenu;
     }
 }
