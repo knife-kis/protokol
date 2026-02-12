@@ -17,6 +17,7 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,6 +34,15 @@ public class CalendarTab extends JPanel {
     private static final String ASPECT_MSI = "МСИ";
     private static final String ASPECT_VERIFICATION = "Поверка оборудования";
     private static final String ASPECT_VLK = "ВЛК";
+
+    private static final Map<String, Color> ASPECT_COLORS = Map.of(
+            ASPECT_VACATION, new Color(66, 133, 244),
+            ASPECT_AUDIT, new Color(251, 188, 5),
+            ASPECT_TESTS, new Color(52, 168, 83),
+            ASPECT_MSI, new Color(156, 39, 176),
+            ASPECT_VERIFICATION, new Color(0, 172, 193),
+            ASPECT_VLK, new Color(255, 112, 67)
+    );
 
     private final JCheckBox showAllCheck = new JCheckBox("Показать все");
     private final Map<String, JCheckBox> aspectFilters = new HashMap<>();
@@ -123,6 +133,7 @@ public class CalendarTab extends JPanel {
 
     private void addAspectCheckbox(JPanel panel, String aspect) {
         JCheckBox box = new JCheckBox(aspect, true);
+        box.setForeground(colorForAspect(aspect));
         box.addActionListener(e -> {
             renderCalendar();
             showSelectedDayDetails();
@@ -185,6 +196,12 @@ public class CalendarTab extends JPanel {
                     "Ошибка БД",
                     JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    public void refreshEvents() {
+        reloadEvents();
+        renderCalendar();
+        showSelectedDayDetails();
     }
 
     private void renderCalendar() {
@@ -303,6 +320,7 @@ public class CalendarTab extends JPanel {
             for (int i = 0; i < Math.min(limit, events.size()); i++) {
                 JLabel eLabel = new JLabel("• " + events.get(i).title());
                 eLabel.setFont(eLabel.getFont().deriveFont(10f));
+                eLabel.setForeground(colorForAspect(events.get(i).aspect()));
                 eventsPanel.add(eLabel);
             }
             if (events.size() > limit) {
@@ -312,9 +330,7 @@ public class CalendarTab extends JPanel {
             }
             cell.add(eventsPanel, BorderLayout.CENTER);
         } else if (!events.isEmpty()) {
-            JPanel marker = new JPanel();
-            marker.setBackground(new Color(93, 173, 226));
-            marker.setPreferredSize(new Dimension(8, 8));
+            JPanel marker = createEventMarkerPanel(events, compact);
             cell.add(marker, BorderLayout.SOUTH);
         }
 
@@ -372,6 +388,33 @@ public class CalendarTab extends JPanel {
                 .filter(entry -> entry.getValue().isSelected())
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toSet());
+    }
+
+    private JPanel createEventMarkerPanel(List<CalendarEvent> events, boolean compact) {
+        JPanel marker = new JPanel(new GridLayout(1, 0, 1, 0));
+        marker.setOpaque(false);
+
+        int limit = compact ? 3 : 4;
+        Set<String> uniqueAspects = events.stream()
+                .map(CalendarEvent::aspect)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        int count = 0;
+        for (String aspect : uniqueAspects) {
+            if (count++ >= limit) {
+                break;
+            }
+            JPanel strip = new JPanel();
+            strip.setOpaque(true);
+            strip.setBackground(colorForAspect(aspect));
+            strip.setPreferredSize(new Dimension(8, compact ? 4 : 6));
+            marker.add(strip);
+        }
+        return marker;
+    }
+
+    private Color colorForAspect(String aspect) {
+        return ASPECT_COLORS.getOrDefault(aspect, new Color(120, 144, 156));
     }
 
     private static LocalDate parseDate(String value) {

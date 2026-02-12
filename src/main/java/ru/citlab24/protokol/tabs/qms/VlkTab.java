@@ -25,6 +25,17 @@ import java.util.Set;
 
 public class VlkTab extends JPanel {
 
+    private static final Set<String> DEFAULT_PROTOCOL_EVENTS = Set.of(
+            "Контроль точности результатов измерений по МИ Ш.13-2022",
+            "Контроль точности результатов измерений по МР 2.6.1.0361-24",
+            "Контроль точности результатов измерений по МУ 2.6.1.0333-23",
+            "Контроль точности результатов измерений по «Методика измерения плотности потока радона с поверхности земли и строительных конструкций (свидетельство об аттестации МВИ № 40090.6К816)»",
+            "Контроль точности результатов измерений по Руководство по эксплуатации Экофизика-110А ПКДУ.411000.001.02 РЭ п.7.1, п.7.2 с приложением МИ ПКФ 12-006 п.2, п.5",
+            "Контроль точности результатов измерений по ГОСТ 27296-2012, ГОСТ Р ИСО 3382-2-2013, ГОСТ Р 56769-2015, ГОСТ Р 56770-2015",
+            "Контроль точности результатов измерений по МИ СС.09-2021",
+            "Контроль точности результатов измерений по ГОСТ 30494-2011"
+    );
+
     private static final String[] EXTRA_TABLE_COLUMNS = {
             "Наименование мероприятий",
             "Периодичность",
@@ -67,9 +78,15 @@ public class VlkTab extends JPanel {
 
     private final JTable vlkDatesTable = new JTable(vlkDatesModel);
     private final List<VlkDateRecord> vlkDateRecords = new ArrayList<>();
+    private final Runnable onVlkDatesChanged;
 
     public VlkTab() {
+        this(() -> {});
+    }
+
+    public VlkTab(Runnable onVlkDatesChanged) {
         super(new BorderLayout(10, 10));
+        this.onVlkDatesChanged = onVlkDatesChanged == null ? () -> {} : onVlkDatesChanged;
 
         cardPanel.add(createMainView(), "main");
         cardPanel.add(createVlkDatesView(), "dates");
@@ -192,7 +209,7 @@ public class VlkTab extends JPanel {
                 "Протокол по результатам наблюдения"
         });
         extraRowsModel.addRow(new String[]{
-                "Контроль точности результатов измерений по МУ МР 2.6.1.0361-24",
+                "Контроль точности результатов измерений по МР 2.6.1.0361-24",
                 "Один раз в год",
                 "Тарновский М.О.",
                 "Протокол по результатам наблюдения"
@@ -302,6 +319,7 @@ public class VlkTab extends JPanel {
                                            List<VlkWordExporter.PlanRow> rows) throws IOException, SQLException {
         List<VlkWordExporter.PlanRow> protocolRows = rows.stream()
                 .filter(row -> "Протокол по результатам наблюдения".equalsIgnoreCase(row.accountingForm().trim()))
+                .filter(row -> DEFAULT_PROTOCOL_EVENTS.contains(row.event().trim()))
                 .toList();
 
         List<LocalDate> protocolDates = generateProtocolDates(protocolRows.size(), Integer.parseInt(year));
@@ -324,6 +342,7 @@ public class VlkTab extends JPanel {
 
         DatabaseManager.replaceVlkDates(generatedRecords);
         reloadVlkDates();
+        onVlkDatesChanged.run();
         return protocolRows.size();
     }
 
@@ -437,6 +456,7 @@ public class VlkTab extends JPanel {
         try {
             DatabaseManager.deleteVlkDate(record.getId());
             reloadVlkDates();
+            onVlkDatesChanged.run();
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this,
                     "Не удалось удалить запись: " + ex.getMessage(),
