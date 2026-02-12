@@ -19,6 +19,10 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGridCol;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTVMerge;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STFldCharType;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -76,7 +80,7 @@ final class VlkWordExporter {
         XWPFHeaderFooterPolicy policy = new XWPFHeaderFooterPolicy(document, sectPr);
         XWPFHeader header = policy.createHeader(XWPFHeaderFooterPolicy.DEFAULT);
 
-        XWPFTable headerTable = header.createTable(1, 3);
+        XWPFTable headerTable = header.createTable(3, 3);
         headerTable.setTableAlignment(TableRowAlign.CENTER);
         headerTable.setWidth("100%");
         setFixedLayout(headerTable);
@@ -93,11 +97,77 @@ final class VlkWordExporter {
                 true);
 
         setCellText(headerTable.getRow(0).getCell(2),
-                "Дата утверждения бланка формуляра: 01.01.2023г.\n------------------------------\nРедакция № 1\n------------------------------\nКоличество страниц: 1 / 7",
+                "Дата утверждения бланка формуляра: 01.01.2023г",
                 ParagraphAlignment.LEFT,
                 false);
+        setCellText(headerTable.getRow(1).getCell(2), "Редакция № 1", ParagraphAlignment.LEFT, false);
+        setPageCounterCellText(headerTable.getRow(2).getCell(2));
+
+        mergeCellsVertically(headerTable, 0, 0, 2);
+        mergeCellsVertically(headerTable, 1, 0, 2);
 
         styleAllCellParagraphs(headerTable);
+    }
+
+    private static void setPageCounterCellText(XWPFTableCell cell) {
+        cell.removeParagraph(0);
+        XWPFParagraph paragraph = cell.addParagraph();
+        paragraph.setAlignment(ParagraphAlignment.LEFT);
+        paragraph.setSpacingBefore(0);
+        paragraph.setSpacingAfter(0);
+
+        XWPFRun textRun = paragraph.createRun();
+        textRun.setFontFamily("Arial");
+        textRun.setFontSize(FONT_SIZE);
+        textRun.setText("Количество страниц: ");
+
+        addField(paragraph, "PAGE");
+
+        XWPFRun separatorRun = paragraph.createRun();
+        separatorRun.setFontFamily("Arial");
+        separatorRun.setFontSize(FONT_SIZE);
+        separatorRun.setText(" / ");
+
+        addField(paragraph, "NUMPAGES");
+    }
+
+    private static void addField(XWPFParagraph paragraph, String fieldName) {
+        XWPFRun beginRun = paragraph.createRun();
+        beginRun.setFontFamily("Arial");
+        beginRun.setFontSize(FONT_SIZE);
+        beginRun.getCTR().addNewFldChar().setFldCharType(STFldCharType.BEGIN);
+
+        XWPFRun instrRun = paragraph.createRun();
+        instrRun.setFontFamily("Arial");
+        instrRun.setFontSize(FONT_SIZE);
+        instrRun.getCTR().addNewInstrText().setStringValue(fieldName);
+
+        XWPFRun separateRun = paragraph.createRun();
+        separateRun.setFontFamily("Arial");
+        separateRun.setFontSize(FONT_SIZE);
+        separateRun.getCTR().addNewFldChar().setFldCharType(STFldCharType.SEPARATE);
+
+        XWPFRun valueRun = paragraph.createRun();
+        valueRun.setFontFamily("Arial");
+        valueRun.setFontSize(FONT_SIZE);
+        valueRun.setText("1");
+
+        XWPFRun endRun = paragraph.createRun();
+        endRun.setFontFamily("Arial");
+        endRun.setFontSize(FONT_SIZE);
+        endRun.getCTR().addNewFldChar().setFldCharType(STFldCharType.END);
+    }
+
+    private static void mergeCellsVertically(XWPFTable table, int col, int fromRow, int toRow) {
+        for (int rowIndex = fromRow; rowIndex <= toRow; rowIndex++) {
+            XWPFTableCell cell = table.getRow(rowIndex).getCell(col);
+            CTTcPr tcPr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
+            CTVMerge merge = tcPr.isSetVMerge() ? tcPr.getVMerge() : tcPr.addNewVMerge();
+            merge.setVal(rowIndex == fromRow ? STMerge.RESTART : STMerge.CONTINUE);
+            if (rowIndex > fromRow) {
+                setCellText(cell, "", ParagraphAlignment.LEFT, false);
+            }
+        }
     }
 
     private static void addApprovalTable(XWPFDocument document, String year) {
