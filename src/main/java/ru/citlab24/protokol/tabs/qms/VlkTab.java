@@ -19,7 +19,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -324,14 +326,23 @@ public class VlkTab extends JPanel {
 
         List<LocalDate> protocolDates = generateProtocolDates(protocolRows.size(), Integer.parseInt(year));
         List<VlkDateRecord> generatedRecords = new ArrayList<>();
+        Map<String, Integer> fileNameCounters = new HashMap<>();
 
         for (int i = 0; i < protocolRows.size(); i++) {
             VlkWordExporter.PlanRow row = protocolRows.get(i);
             LocalDate assignedDate = protocolDates.get(i);
             String displayDate = assignedDate.format(UI_DATE_FORMAT);
 
-            String fileName = String.format("Протокол_по_результатам_наблюдения_%02d.docx", i + 1);
-            ObservationProtocolWordExporter.export(vlkDir.resolve(fileName).toFile(), year, row, displayDate);
+            String methodCipher = resolveMethodCipher(row.event());
+            String safeMethodCipher = sanitizeFileNamePart(methodCipher);
+            int fileIndex = fileNameCounters.merge(safeMethodCipher, 1, Integer::sum);
+            String fileSuffix = fileIndex > 1 ? "_" + fileIndex : "";
+
+            String protocolFileName = "Протокол_по_результатам_наблюдения_" + safeMethodCipher + fileSuffix + ".docx";
+            ObservationProtocolWordExporter.export(vlkDir.resolve(protocolFileName).toFile(), year, row, displayDate);
+
+            String issuanceFileName = "Лист_выдачи_приборов_" + safeMethodCipher + fileSuffix + ".docx";
+            VlkEquipmentIssuanceWordExporter.export(vlkDir.resolve(issuanceFileName).toFile(), row);
 
             VlkDateRecord record = new VlkDateRecord();
             record.setVlkDate(assignedDate.format(DB_DATE_FORMAT));
@@ -344,6 +355,25 @@ public class VlkTab extends JPanel {
         reloadVlkDates();
         onVlkDatesChanged.run();
         return protocolRows.size();
+    }
+
+    private String resolveMethodCipher(String event) {
+        String prefix = "Контроль точности результатов измерений по";
+        if (event == null || event.isBlank()) {
+            return "без_шифра";
+        }
+        if (event.startsWith(prefix)) {
+            String cipher = event.substring(prefix.length()).trim();
+            return cipher.isEmpty() ? "без_шифра" : cipher;
+        }
+        return event;
+    }
+
+    private String sanitizeFileNamePart(String value) {
+        if (value == null || value.isBlank()) {
+            return "без_шифра";
+        }
+        return value.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
     }
 
     private List<LocalDate> generateProtocolDates(int count, int year) throws SQLException {
