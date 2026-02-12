@@ -160,7 +160,10 @@ final class VlkWordExporter {
 
     private static void setFixedLayout(XWPFTable table) {
         CTTbl cttbl = table.getCTTbl();
-        CTTblPr tblPr = cttbl.isSetTblPr() ? cttbl.getTblPr() : cttbl.addNewTblPr();
+        CTTblPr tblPr = cttbl.getTblPr();
+        if (tblPr == null) {
+            tblPr = cttbl.addNewTblPr();
+        }
         CTTblLayoutType layout = tblPr.isSetTblLayout() ? tblPr.getTblLayout() : tblPr.addNewTblLayout();
         layout.setType(org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType.FIXED);
     }
@@ -177,11 +180,16 @@ final class VlkWordExporter {
     }
 
     private static void setGrid(XWPFTable table, int... widths) {
-        CTTblGrid grid = table.getCTTbl().getTblGrid();
-        if (grid != null) {
-            table.getCTTbl().unsetTblGrid();
+        CTTbl cttbl = table.getCTTbl();
+        CTTblGrid tblGrid = cttbl.getTblGrid();
+        if (tblGrid == null) {
+            tblGrid = cttbl.addNewTblGrid();
+        } else {
+            while (tblGrid.sizeOfGridColArray() > 0) {
+                tblGrid.removeGridCol(0);
+            }
         }
-        CTTblGrid tblGrid = table.getCTTbl().addNewTblGrid();
+
         for (int width : widths) {
             CTTblGridCol col = tblGrid.addNewGridCol();
             col.setW(BigInteger.valueOf(width));
