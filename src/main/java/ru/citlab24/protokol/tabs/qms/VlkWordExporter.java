@@ -93,7 +93,7 @@ final class VlkWordExporter {
                 true);
 
         setCellText(headerTable.getRow(0).getCell(2),
-                "Дата утверждения бланка формуляра: 01.01.2023г.\nРедакция № 1\nКоличество страниц: 1 / 7",
+                "Дата утверждения бланка формуляра: 01.01.2023г.\n------------------------------\nРедакция № 1\n------------------------------\nКоличество страниц: 1 / 7",
                 ParagraphAlignment.LEFT,
                 false);
 
@@ -120,7 +120,7 @@ final class VlkWordExporter {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setAlignment(ParagraphAlignment.CENTER);
         XWPFRun run = paragraph.createRun();
-        run.setFontFamily("Times New Roman");
+        run.setFontFamily("Arial");
         run.setFontSize(FONT_SIZE);
         run.setBold(true);
         run.setText("План мониторинга достоверности результатов лабораторной деятельности");
@@ -144,6 +144,8 @@ final class VlkWordExporter {
         setCellText(headerRow.getCell(4), "Формы учета", ParagraphAlignment.CENTER, true);
         setCellText(headerRow.getCell(5), "Отметка о выполнении дата/подпись ответственного лица", ParagraphAlignment.CENTER, true);
 
+        markRowAsRepeatableHeader(headerRow);
+
         for (int i = 0; i < rows.size(); i++) {
             PlanRow row = rows.get(i);
             XWPFTableRow tableRow = table.getRow(i + 1);
@@ -156,6 +158,16 @@ final class VlkWordExporter {
         }
 
         styleAllCellParagraphs(table);
+    }
+
+
+    private static void markRowAsRepeatableHeader(XWPFTableRow row) {
+        if (row.getCtRow().getTrPr() == null) {
+            row.getCtRow().addNewTrPr();
+        }
+        if (row.getCtRow().getTrPr().sizeOfTblHeaderArray() == 0) {
+            row.getCtRow().getTrPr().addNewTblHeader();
+        }
     }
 
     private static void setFixedLayout(XWPFTable table) {
@@ -204,7 +216,7 @@ final class VlkWordExporter {
         paragraph.setSpacingAfter(0);
 
         XWPFRun run = paragraph.createRun();
-        run.setFontFamily("Times New Roman");
+        run.setFontFamily("Arial");
         run.setFontSize(FONT_SIZE);
         run.setBold(bold);
 
@@ -222,7 +234,7 @@ final class VlkWordExporter {
         paragraph.setSpacingBefore(0);
         paragraph.setSpacingAfter(0);
         XWPFRun run = paragraph.createRun();
-        run.setFontFamily("Times New Roman");
+        run.setFontFamily("Arial");
         run.setFontSize(FONT_SIZE);
         run.setText(" ");
     }
@@ -235,7 +247,7 @@ final class VlkWordExporter {
                         continue;
                     }
                     for (XWPFRun run : paragraph.getRuns()) {
-                        run.setFontFamily("Times New Roman");
+                        run.setFontFamily("Arial");
                         run.setFontSize(FONT_SIZE);
                     }
                 }
@@ -341,6 +353,13 @@ final class VlkWordExporter {
                 "Не менее 25 раз в год",
                 "Белов Д.А.",
                 "Программа по построению контрольных карт Шухарта",
+                ""
+        ));
+        rows.add(new PlanRow(
+                "Контроль точности результатов измерений по ГОС 30494-2011",
+                "Один раз в год",
+                "Тарновский М.О.",
+                "Протокол по результатам наблюдения",
                 ""
         ));
         return rows;
