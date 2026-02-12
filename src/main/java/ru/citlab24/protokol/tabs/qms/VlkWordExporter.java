@@ -325,7 +325,7 @@ final class VlkWordExporter {
         }
     }
 
-    private static List<PlanRow> mandatoryRows() {
+    static List<PlanRow> mandatoryRows() {
         List<PlanRow> rows = new ArrayList<>();
         rows.add(new PlanRow(
                 "Контроль за соблюдением требований нормативной документации при проведении измерений",
@@ -423,13 +423,6 @@ final class VlkWordExporter {
                 "Не менее 25 раз в год",
                 "Белов Д.А.",
                 "Программа по построению контрольных карт Шухарта",
-                ""
-        ));
-        rows.add(new PlanRow(
-                "Контроль точности результатов измерений по ГОС 30494-2011",
-                "Один раз в год",
-                "Тарновский М.О.",
-                "Протокол по результатам наблюдения",
                 ""
         ));
         return rows;

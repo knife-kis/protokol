@@ -4,6 +4,9 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Year;
 import java.util.ArrayList;
 import java.util.List;
@@ -165,6 +168,12 @@ public class VlkTab extends JPanel {
                 "Тарновский М.О.",
                 "Протокол по результатам наблюдения"
         });
+        extraRowsModel.addRow(new String[]{
+                "Контроль точности результатов измерений по ГОСТ 30494-2011",
+                "Один раз в год",
+                "Тарновский М.О.",
+                "Протокол по результатам наблюдения"
+        });
     }
 
     private void swapResponsiblesInExtraRows() {
@@ -191,22 +200,34 @@ public class VlkTab extends JPanel {
         }
 
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Сохранить план мониторинга ВЛК");
-        chooser.setSelectedFile(new File("План_мониторинга_ВЛК_" + year + ".docx"));
+        chooser.setDialogTitle("Выберите папку для документов ВЛК");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setSelectedFile(new File("ВЛК " + year));
 
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
             return;
         }
 
-        File file = chooser.getSelectedFile();
-        if (!file.getName().toLowerCase().endsWith(".docx")) {
-            file = new File(file.getParentFile(), file.getName() + ".docx");
-        }
+        File baseDir = chooser.getSelectedFile();
 
         try {
-            VlkWordExporter.export(file, year, collectExtraRows());
-            selectedYearLabel.setText("Сформирован файл: " + file.getAbsolutePath());
-            JOptionPane.showMessageDialog(this, "Файл успешно создан:\n" + file.getAbsolutePath());
+            List<VlkWordExporter.PlanRow> extraRows = collectExtraRows();
+            List<VlkWordExporter.PlanRow> allRows = new ArrayList<>(VlkWordExporter.mandatoryRows());
+            allRows.addAll(extraRows);
+
+            Path vlkDir = baseDir.toPath().resolve("ВЛК " + year);
+            Files.createDirectories(vlkDir);
+
+            File planFile = vlkDir.resolve("План_мониторинга_ВЛК_" + year + ".docx").toFile();
+            VlkWordExporter.export(planFile, year, extraRows);
+
+            int protocolCount = exportObservationProtocols(vlkDir, year, allRows);
+
+            selectedYearLabel.setText("Сформирована папка: " + vlkDir);
+            JOptionPane.showMessageDialog(this,
+                    "Документы успешно созданы:\n" + vlkDir +
+                            "\nПлан: " + planFile.getName() +
+                            "\nПротоколов по результатам наблюдения: " + protocolCount);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(
                     this,
@@ -215,6 +236,22 @@ public class VlkTab extends JPanel {
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    private int exportObservationProtocols(Path vlkDir,
+                                           String year,
+                                           List<VlkWordExporter.PlanRow> rows) throws IOException {
+        int protocolIndex = 0;
+        for (VlkWordExporter.PlanRow row : rows) {
+            if (!"Протокол по результатам наблюдения".equalsIgnoreCase(row.accountingForm().trim())) {
+                continue;
+            }
+
+            protocolIndex++;
+            String fileName = String.format("Протокол_по_результатам_наблюдения_%02d.docx", protocolIndex);
+            ObservationProtocolWordExporter.export(vlkDir.resolve(fileName).toFile(), year, row);
+        }
+        return protocolIndex;
     }
 
     private List<VlkWordExporter.PlanRow> collectExtraRows() {
