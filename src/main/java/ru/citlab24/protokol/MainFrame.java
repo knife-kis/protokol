@@ -104,12 +104,15 @@ public class MainFrame extends JFrame {
         cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_AREA);
         cardPanel.add(createScenePanel(new ProtocolMapPanel()), CARD_PROTOCOL_MAP);
         cardPanel.add(createScenePanel(new AreaPrimaryPanel()), CARD_PROTOCOL_REQUEST);
+        CalendarTab calendarTab = new CalendarTab();
+        VlkTab vlkTab = new VlkTab(calendarTab::refreshEvents);
+
         cardPanel.add(createScenePanel(new PersonnelTab()), CARD_RESOURCE_PERSONNEL);
         cardPanel.add(createScenePanel(new EquipmentTab()), CARD_RESOURCE_EQUIPMENT);
-        cardPanel.add(createScenePanel(new CalendarTab()), CARD_RESOURCE_CALENDAR);
+        cardPanel.add(createScenePanel(calendarTab), CARD_RESOURCE_CALENDAR);
         cardPanel.add(createPlaceholderScene(), CARD_QMS_AUDIT);
         cardPanel.add(createPlaceholderScene(), CARD_QMS_NONCONFORMITIES);
-        cardPanel.add(createScenePanel(new VlkTab()), CARD_QMS_VLK);
+        cardPanel.add(createScenePanel(vlkTab), CARD_QMS_VLK);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
