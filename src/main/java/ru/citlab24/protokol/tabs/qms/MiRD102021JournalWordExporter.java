@@ -184,6 +184,9 @@ final class MiRD102021JournalWordExporter {
 
         setRowHeight(table.getRow(0), 350);
         setRowHeight(table.getRow(1), 350);
+        for (int rowIndex = 2; rowIndex <= 6; rowIndex++) {
+            setRowHeight(table.getRow(rowIndex), 1400);
+        }
 
         setCellText(table.getRow(0).getCell(0), "№ п/п", ParagraphAlignment.CENTER, 7, true);
         setCellText(table.getRow(0).getCell(1), "Дата\nпроведения\nконтроля", ParagraphAlignment.CENTER, 7, true);
@@ -223,9 +226,9 @@ final class MiRD102021JournalWordExporter {
         setCellText(table.getRow(2).getCell(3), "МИ РД.10-2021", ParagraphAlignment.CENTER, 7, false);
         setCellText(table.getRow(2).getCell(4), "Дальномер лазерный ADA Cosmo 70 Зав.№ 000873\nДальномер лазерный ADA Cosmo 70 Зав.№001953", ParagraphAlignment.CENTER, 7, false);
         setCellText(table.getRow(2).getCell(5), "Тарновский М.О.\nБелов Д.А.", ParagraphAlignment.CENTER, 7, false);
-        mergeCellsVertically(table, 3, 2, 5);
-        mergeCellsVertically(table, 4, 2, 5);
-        mergeCellsVertically(table, 5, 2, 5);
+        mergeCellsVertically(table, 3, 2, 6);
+        mergeCellsVertically(table, 4, 2, 6);
+        mergeCellsVertically(table, 5, 2, 6);
         setVerticalText(table.getRow(2).getCell(3));
         setVerticalText(table.getRow(2).getCell(4));
         setVerticalText(table.getRow(2).getCell(5));
