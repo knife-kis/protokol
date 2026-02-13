@@ -303,7 +303,7 @@ public class VlkTab extends JPanel {
             List<LocalDate> quarterlyJournalDates = generateQuarterlyFreeDates(Integer.parseInt(year));
             int mimJournalCount = exportMiM082021Journals(vlkDir, Integer.parseInt(year), quarterlyJournalDates);
             int miRdJournalCount = exportMiRD102021Journals(vlkDir, Integer.parseInt(year), quarterlyJournalDates);
-            int maintenanceJournalCount = exportTechnicalMaintenanceJournals(vlkDir, Integer.parseInt(year));
+            int maintenanceJournalCount = exportTechnicalMaintenanceJournal(vlkDir, Integer.parseInt(year));
 
             selectedYearLabel.setText("Сформирована папка: " + vlkDir);
             JOptionPane.showMessageDialog(this,
@@ -384,13 +384,11 @@ public class VlkTab extends JPanel {
     }
 
 
-    private int exportTechnicalMaintenanceJournals(Path vlkDir, int year) throws IOException {
-        for (int i = 0; i < 4; i++) {
-            int number = i + 1;
-            String fileName = number + "-Журнал_технического_обслуживания.docx";
-            TechnicalMaintenanceJournalWordExporter.export(vlkDir.resolve(fileName).toFile(), year, number);
-        }
-        return 4;
+    private int exportTechnicalMaintenanceJournal(Path vlkDir, int year) throws IOException {
+        int number = 1;
+        String fileName = "Журнал_технического_обслуживания.docx";
+        TechnicalMaintenanceJournalWordExporter.export(vlkDir.resolve(fileName).toFile(), year, number);
+        return 1;
     }
 
     private List<LocalDate> generateQuarterlyFreeDates(int year) throws SQLException {
