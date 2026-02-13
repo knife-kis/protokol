@@ -300,12 +300,14 @@ public class VlkTab extends JPanel {
             VlkWordExporter.export(planFile, year, extraRows);
 
             int protocolCount = exportObservationProtocols(vlkDir, year, allRows);
+            int mimJournalCount = exportMiM082021Journals(vlkDir, Integer.parseInt(year));
 
             selectedYearLabel.setText("Сформирована папка: " + vlkDir);
             JOptionPane.showMessageDialog(this,
                     "Документы успешно созданы:\n" + vlkDir +
                             "\nПлан: " + planFile.getName() +
-                            "\nПротоколов по результатам наблюдения: " + protocolCount);
+                            "\nПротоколов по результатам наблюдения: " + protocolCount +
+                            "\nЖурналов МИ М.08-2021: " + mimJournalCount);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(
                     this,
@@ -355,6 +357,51 @@ public class VlkTab extends JPanel {
         reloadVlkDates();
         onVlkDatesChanged.run();
         return protocolRows.size();
+    }
+
+    private int exportMiM082021Journals(Path vlkDir, int year) throws IOException, SQLException {
+        List<LocalDate> dates = generateQuarterlyFreeDates(year);
+        for (int i = 0; i < dates.size(); i++) {
+            int number = i + 1;
+            String fileName = number + "-Журнал_регистрации_результатов_методом_повторных_исследований_МИ_М.08-2021.docx";
+            MiM082021JournalWordExporter.export(vlkDir.resolve(fileName).toFile(), String.valueOf(year), number, dates.get(i));
+        }
+        return dates.size();
+    }
+
+    private List<LocalDate> generateQuarterlyFreeDates(int year) throws SQLException {
+        Set<LocalDate> unavailableDates = loadAllUnavailableDates();
+        List<LocalDate> dates = new ArrayList<>();
+
+        int[][] quarters = {
+                {1, 3},
+                {4, 6},
+                {7, 9},
+                {10, 12}
+        };
+
+        for (int[] quarter : quarters) {
+            LocalDate start = LocalDate.of(year, quarter[0], 1);
+            LocalDate end = LocalDate.of(year, quarter[1], LocalDate.of(year, quarter[1], 1).lengthOfMonth());
+            LocalDate found = null;
+
+            for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+                if (date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY) {
+                    continue;
+                }
+                if (unavailableDates.contains(date)) {
+                    continue;
+                }
+                found = date;
+                break;
+            }
+
+            if (found == null) {
+                throw new SQLException("Не найдена свободная рабочая дата в квартале " + quarter[0] + "-" + quarter[1] + " для журнала МИ М.08-2021.");
+            }
+            dates.add(found);
+        }
+        return dates;
     }
 
     private String resolveMethodCipher(String event) {
