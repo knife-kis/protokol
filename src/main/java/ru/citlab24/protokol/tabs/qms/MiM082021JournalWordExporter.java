@@ -118,7 +118,6 @@ final class MiM082021JournalWordExporter {
         run.addBreak();
         run.addBreak();
         run.addBreak();
-        run.addBreak();
 
         XWPFParagraph footerText = document.createParagraph();
         footerText.setAlignment(ParagraphAlignment.LEFT);
@@ -140,17 +139,17 @@ final class MiM082021JournalWordExporter {
         setFixedLayout(table);
         setGrid(table, 6500, 6500);
 
-        setCellText(table.getRow(0).getCell(0), "Ответственный за ведение журнала,\nДолжность, Фамилия, Инициалы.", ParagraphAlignment.LEFT, 12, false);
-        setCellText(table.getRow(0).getCell(1), "Образец подписи", ParagraphAlignment.LEFT, 12, false);
+        setCellText(table.getRow(0).getCell(0), "Ответственный за ведение журнала,\nДолжность, Фамилия, Инициалы.", ParagraphAlignment.LEFT, 12, true);
+        setCellText(table.getRow(0).getCell(1), "Образец подписи", ParagraphAlignment.LEFT, 12, true);
         setCellText(table.getRow(1).getCell(0), "Заведующий лабораторией, Тарновский М.О.", ParagraphAlignment.LEFT, 12, false);
-        setCellText(table.getRow(2).getCell(0), "Допущены к ведению журнала\nДолжность, Фамилия, Инициалы.", ParagraphAlignment.LEFT, 12, false);
-        setCellText(table.getRow(2).getCell(1), "Образец подписи", ParagraphAlignment.LEFT, 12, false);
+        setCellText(table.getRow(2).getCell(0), "Допущены к ведению журнала\nДолжность, Фамилия, Инициалы.", ParagraphAlignment.LEFT, 12, true);
+        setCellText(table.getRow(2).getCell(1), "Образец подписи", ParagraphAlignment.LEFT, 12, true);
         setCellText(table.getRow(3).getCell(0), "Заведующий лабораторией, Тарновский М.О.", ParagraphAlignment.LEFT, 12, false);
         setCellText(table.getRow(4).getCell(0), "Инженер Белов Д.А.", ParagraphAlignment.LEFT, 12, false);
-        setCellText(table.getRow(6).getCell(0), "Список сокращений (при необходимости)", ParagraphAlignment.CENTER, 12, false);
+        setCellText(table.getRow(6).getCell(0), "Список сокращений (при необходимости)", ParagraphAlignment.CENTER, 12, true);
         mergeCellsHorizontally(table, 6, 0, 1);
-        setCellText(table.getRow(7).getCell(0), "Условное обозначение", ParagraphAlignment.CENTER, 12, false);
-        setCellText(table.getRow(7).getCell(1), "Расшифровка условного обозначения", ParagraphAlignment.CENTER, 12, false);
+        setCellText(table.getRow(7).getCell(0), "Условное обозначение", ParagraphAlignment.CENTER, 12, true);
+        setCellText(table.getRow(7).getCell(1), "Расшифровка условного обозначения", ParagraphAlignment.CENTER, 12, true);
         setCellText(table.getRow(8).getCell(0), "Удовлетворительно", ParagraphAlignment.LEFT, 12, false);
         setCellText(table.getRow(8).getCell(1), "удов", ParagraphAlignment.LEFT, 12, false);
 
@@ -159,6 +158,7 @@ final class MiM082021JournalWordExporter {
         XWPFRun cr = caption.createRun();
         cr.setFontFamily("Arial");
         cr.setFontSize(16);
+        cr.setBold(true);
         cr.setText("Регистрация результатов проверок ведения журнала");
 
         XWPFTable checks = document.createTable(4, 6);
@@ -186,10 +186,15 @@ final class MiM082021JournalWordExporter {
         double x1AirSpeed = randomBetween(random, 0.10, 0.13, 2);
         double x2AirSpeed = Math.max(0.10, vary(random, x1AirSpeed, 0.01, 0.10));
 
-        XWPFTable table = document.createTable(6, 12);
+        XWPFTable table = document.createTable(5, 12);
         table.setWidth("100%");
         setFixedLayout(table);
         setGrid(table, 500, 950, 1700, 900, 1200, 1200, 850, 850, 1200, 1300, 1000, 1800);
+        setRowHeight(table.getRow(0), 2000);
+        setRowHeight(table.getRow(1), 1900);
+        setRowHeight(table.getRow(2), 1900);
+        setRowHeight(table.getRow(3), 1900);
+        setRowHeight(table.getRow(4), 1900);
 
         setCellText(table.getRow(0).getCell(0), "№ п/п", ParagraphAlignment.CENTER, 7, false);
         setCellText(table.getRow(0).getCell(1), "Дата\nпроведения\nконтроля", ParagraphAlignment.CENTER, 7, false);
@@ -258,6 +263,10 @@ final class MiM082021JournalWordExporter {
         CTTcPr tcPr = cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
         CTTextDirection td = tcPr.isSetTextDirection() ? tcPr.getTextDirection() : tcPr.addNewTextDirection();
         td.setVal(STTextDirection.BT_LR);
+    }
+
+    private static void setRowHeight(XWPFTableRow row, int height) {
+        row.setHeight(height);
     }
 
     private static double randomBetween(Random random, double min, double max, int digits) {
