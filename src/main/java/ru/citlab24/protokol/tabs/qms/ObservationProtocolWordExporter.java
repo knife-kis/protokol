@@ -133,10 +133,10 @@ final class ObservationProtocolWordExporter {
         setCellText(row1.getCell(0), "1", ParagraphAlignment.CENTER, false, FONT_SIZE);
         setCellText(row1.getCell(1), controlDate == null ? "" : controlDate, ParagraphAlignment.LEFT, false, FONT_SIZE);
         setCellText(row1.getCell(2), methodCipher(row.event()), ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(3), "", ParagraphAlignment.LEFT, false, FONT_SIZE);
+        setCellText(row1.getCell(3), controlledIndicator(row.event()), ParagraphAlignment.LEFT, false, FONT_SIZE);
         setCellText(row1.getCell(4), row.responsible(), ParagraphAlignment.LEFT, false, FONT_SIZE);
         setCellText(row1.getCell(5), oppositeResponsible(row.responsible()), ParagraphAlignment.LEFT, false, FONT_SIZE);
-        setCellText(row1.getCell(6), "", ParagraphAlignment.LEFT, false, FONT_SIZE);
+        setControlResultCell(row1.getCell(6), controlStages(row.event()), oppositeResponsible(row.responsible()), controlDate);
 
         styleAllCellParagraphs(table, FONT_SIZE);
     }
@@ -226,6 +226,88 @@ final class ObservationProtocolWordExporter {
             return "Белов Д.А.";
         }
         return "";
+    }
+
+    private static String controlledIndicator(String event) {
+        if (event == null) {
+            return "";
+        }
+        return switch (event) {
+            case "Контроль точности результатов измерений по ГОСТ 30494-2011" ->
+                    "Относительная влажность воздуха, температура поверхности отопительного прибора, температура воздуха, температура внутренней поверхности ограждения, результирующая температура, скорость движения воздуха.";
+            case "Контроль точности результатов измерений по МИ Ш.13-2022" ->
+                    "Эквивалентный уровень звука, дБА\nМаксимальный уровень звука, дБА";
+            case "Контроль точности результатов измерений по МР 2.6.1.0361-24" ->
+                    "Средневзвешенное значение мощности дозы гамма-\nизлучения\nПлотность потока радона с поверхности грунта\nМощность дозы гамма-излучения";
+            case "Контроль точности результатов измерений по МУ 2.6.1.0333-23" ->
+                    "Мощность дозы гамма-излучения\nЭРОА радона,\nЭРОА торона,\nсреднегодовое значение ЭРОА изотопов радона";
+            case "Контроль точности результатов измерений по «Методика измерения плотности потока радона с поверхности земли и строительных конструкций (свидетельство об аттестации МВИ № 40090.6К816)»" ->
+                    "Плотность потока радона с поверхности";
+            case "Контроль точности результатов измерений по Руководство по эксплуатации Экофизика-110А ПКДУ.411000.001.02 РЭ п.7.1, п.7.2 с приложением МИ ПКФ 12-006 п.2, п.5" ->
+                    "Уровень звукового давления в октавных (третьоктавных)\nполосах частот в диапазоне 31,5–16 000 Гц (25–20 000 Гц),\nдБ\nЭквивалентный уровень звука, дБА";
+            default -> "";
+        };
+    }
+
+    private static String[] controlStages(String event) {
+        if (event == null) {
+            return new String[0];
+        }
+        return switch (event) {
+            case "Контроль точности результатов измерений по ГОСТ 30494-2011" -> new String[]{
+                    "Применение оборудования в соответствии с Руководствами по эксплуатации",
+                    "Определение периода года",
+                    "Измерение температуры, влажности и скорости движения воздуха",
+                    "Измерение температуры внутренней поверхности стен, световых проемов, отопительных приборов.",
+                    "Измерение результирующей температуры"
+            };
+            case "Контроль точности результатов измерений по МИ Ш.13-2022" -> new String[]{
+                    "Проверка работоспособности (калибровки) шумомера: выполнена на месте применения до и после серии измерений; отклонение показаний от уровня калибровочного сигнала не превышает 0,5 дБ",
+                    "Проверено отсутствие факторов, искажающих результаты; обеспечены требуемые условия по методике (в т.ч. контроль климатических параметров)",
+                    "Контроль выполнения ключевых операций метода: выбор контрольных точек и установка микрофона выполнены строго по методике",
+                    "Измерения эквивалентного и максимального уровней выполнены в полном объёме по методике"
+            };
+            case "Контроль точности результатов измерений по МР 2.6.1.0361-24" -> new String[]{
+                    "Проверены СИ и условия измерений",
+                    "Выполнена поисковая гамма-съёмка участка по прямолинейным профилям с зигзагообразным движением детектора",
+                    "Проведены измерения МАЭД в контрольных точках на высоте 1 м от поверхности",
+                    "Проведен контроль ППР с поверхности грунта"
+            };
+            case "Контроль точности результатов измерений по МУ 2.6.1.0333-23" -> new String[]{
+                    "Проверена пригодность СИ",
+                    "Выполнена поисковая гамма-съёмка всех помещений вдоль стен и пола с зигзагообразным движением детектора",
+                    "Проведены измерения МАЭД в помещениях",
+                    "Проведены измерения ЭРОА изотопов радона/торона"
+            };
+            case "Контроль точности результатов измерений по «Методика измерения плотности потока радона с поверхности земли и строительных конструкций (свидетельство об аттестации МВИ № 40090.6К816)»" -> new String[]{
+                    "Подготовка к отбору проб",
+                    "Отбор проб.",
+                    "Измерение плотности потока радона"
+            };
+            case "Контроль точности результатов измерений по Руководство по эксплуатации Экофизика-110А ПКДУ.411000.001.02 РЭ п.7.1, п.7.2 с приложением МИ ПКФ 12-006 п.2, п.5" -> new String[]{
+                    "Подготовка прибора к работе",
+                    "Проверка климатических и иных условий перед началом проведения измерений и их контроль во время проведения измерений",
+                    "Проверка работоспособности шумомера",
+                    "Измерение эквивалентного уровня звука и уровней звукового давления в октавных (третьоктавных)\nполосах частот"
+            };
+            default -> new String[0];
+        };
+    }
+
+    private static void setControlResultCell(XWPFTableCell cell,
+                                             String[] stages,
+                                             String controller,
+                                             String controlDate) {
+        cell.removeParagraph(0);
+        if (stages == null || stages.length == 0) {
+            addCellParagraph(cell, "", ParagraphAlignment.LEFT, false, FONT_SIZE);
+            return;
+        }
+        for (String stage : stages) {
+            addCellParagraph(cell, stage, ParagraphAlignment.LEFT, false, FONT_SIZE);
+            addCellParagraph(cell, "__________/" + (controller == null ? "" : controller), ParagraphAlignment.RIGHT, false, FONT_SIZE);
+            addCellParagraph(cell, controlDate == null ? "" : controlDate, ParagraphAlignment.RIGHT, false, FONT_SIZE);
+        }
     }
 
     private static void mergeCellsVertically(XWPFTable table, int col, int fromRow, int toRow) {
@@ -322,6 +404,14 @@ final class ObservationProtocolWordExporter {
                                     boolean bold,
                                     int size) {
         cell.removeParagraph(0);
+        addCellParagraph(cell, text, alignment, bold, size);
+    }
+
+    private static void addCellParagraph(XWPFTableCell cell,
+                                         String text,
+                                         ParagraphAlignment alignment,
+                                         boolean bold,
+                                         int size) {
         XWPFParagraph paragraph = cell.addParagraph();
         paragraph.setAlignment(alignment);
         paragraph.setSpacingBefore(0);
