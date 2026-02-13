@@ -300,14 +300,17 @@ public class VlkTab extends JPanel {
             VlkWordExporter.export(planFile, year, extraRows);
 
             int protocolCount = exportObservationProtocols(vlkDir, year, allRows);
-            int mimJournalCount = exportMiM082021Journals(vlkDir, Integer.parseInt(year));
+            List<LocalDate> quarterlyJournalDates = generateQuarterlyFreeDates(Integer.parseInt(year));
+            int mimJournalCount = exportMiM082021Journals(vlkDir, Integer.parseInt(year), quarterlyJournalDates);
+            int miRdJournalCount = exportMiRD102021Journals(vlkDir, Integer.parseInt(year), quarterlyJournalDates);
 
             selectedYearLabel.setText("Сформирована папка: " + vlkDir);
             JOptionPane.showMessageDialog(this,
                     "Документы успешно созданы:\n" + vlkDir +
                             "\nПлан: " + planFile.getName() +
                             "\nПротоколов по результатам наблюдения: " + protocolCount +
-                            "\nЖурналов МИ М.08-2021: " + mimJournalCount);
+                            "\nЖурналов МИ М.08-2021: " + mimJournalCount +
+                            "\nЖурналов МИ РД.10-2021: " + miRdJournalCount);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(
                     this,
@@ -359,12 +362,21 @@ public class VlkTab extends JPanel {
         return protocolRows.size();
     }
 
-    private int exportMiM082021Journals(Path vlkDir, int year) throws IOException, SQLException {
-        List<LocalDate> dates = generateQuarterlyFreeDates(year);
+    private int exportMiM082021Journals(Path vlkDir, int year, List<LocalDate> dates) throws IOException {
         for (int i = 0; i < dates.size(); i++) {
             int number = i + 1;
             String fileName = number + "-Журнал_регистрации_результатов_методом_повторных_исследований_МИ_М.08-2021.docx";
             MiM082021JournalWordExporter.export(vlkDir.resolve(fileName).toFile(), String.valueOf(year), number, dates.get(i));
+        }
+        return dates.size();
+    }
+
+
+    private int exportMiRD102021Journals(Path vlkDir, int year, List<LocalDate> dates) throws IOException {
+        for (int i = 0; i < dates.size(); i++) {
+            int number = i + 5;
+            String fileName = number + "-Журнал_регистрации_результатов_методом_повторных_исследований_МИ_РД.10-2021.docx";
+            MiRD102021JournalWordExporter.export(vlkDir.resolve(fileName).toFile(), String.valueOf(year), number, dates.get(i));
         }
         return dates.size();
     }
@@ -380,10 +392,11 @@ public class VlkTab extends JPanel {
                 {10, 12}
         };
 
+        Random random = new Random(year * 37L + 11);
         for (int[] quarter : quarters) {
             LocalDate start = LocalDate.of(year, quarter[0], 1);
             LocalDate end = LocalDate.of(year, quarter[1], LocalDate.of(year, quarter[1], 1).lengthOfMonth());
-            LocalDate found = null;
+            List<LocalDate> availableInQuarter = new ArrayList<>();
 
             for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
                 if (date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY) {
@@ -392,14 +405,13 @@ public class VlkTab extends JPanel {
                 if (unavailableDates.contains(date)) {
                     continue;
                 }
-                found = date;
-                break;
+                availableInQuarter.add(date);
             }
 
-            if (found == null) {
+            if (availableInQuarter.isEmpty()) {
                 throw new SQLException("Не найдена свободная рабочая дата в квартале " + quarter[0] + "-" + quarter[1] + " для журнала МИ М.08-2021.");
             }
-            dates.add(found);
+            dates.add(availableInQuarter.get(random.nextInt(availableInQuarter.size())));
         }
         return dates;
     }

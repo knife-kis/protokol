@@ -11,21 +11,7 @@ import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageMar;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTbl;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGridCol;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTextDirection;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTVMerge;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.STFldCharType;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTextDirection;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -36,11 +22,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Random;
 
-final class MiM082021JournalWordExporter {
+final class MiRD102021JournalWordExporter {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
-    private MiM082021JournalWordExporter() {
+    private MiRD102021JournalWordExporter() {
     }
 
     static void export(File target, String year, int number, LocalDate controlDate) throws IOException {
@@ -101,23 +87,20 @@ final class MiM082021JournalWordExporter {
     }
 
     private static void addTitlePage(XWPFDocument document, String year, int number) {
+        XWPFParagraph spacer = document.createParagraph();
+        XWPFRun sr = spacer.createRun();
+        sr.addBreak();
+        sr.addBreak();
+        sr.addBreak();
+        sr.addBreak();
+
         XWPFTable box = document.createTable(1, 1);
         box.setWidth("100%");
-        XWPFTableCell cell = box.getRow(0).getCell(0);
-        setCellText(cell,
+        setCellText(box.getRow(0).getCell(0),
                 "ЖУРНАЛ\nрезультатов методом повторных исследований (испытаний) и измерений\n№" + number + "/" + year,
                 ParagraphAlignment.CENTER,
                 28,
                 true);
-
-        XWPFParagraph spacer = document.createParagraph();
-        spacer.setSpacingBefore(0);
-        spacer.setSpacingAfter(0);
-        XWPFRun run = spacer.createRun();
-        run.addBreak();
-        run.addBreak();
-        run.addBreak();
-        run.addBreak();
 
         XWPFParagraph footerText = document.createParagraph();
         footerText.setAlignment(ParagraphAlignment.LEFT);
@@ -176,56 +159,93 @@ final class MiM082021JournalWordExporter {
     }
 
     private static void addMeasurementPage(XWPFDocument document, LocalDate controlDate) {
-        Random random = new Random(controlDate.toEpochDay());
-        double x1TempAir = randomBetween(random, 22.0, 24.0, 1);
-        double x2TempAir = vary(random, x1TempAir, 0.1, 22.0);
-        double x1TempSurface = randomBetween(random, 17.0, 19.0, 1);
-        double x2TempSurface = vary(random, x1TempSurface, 0.1, 17.0);
-        double x1Humidity = randomBetween(random, 35.0, 45.0, 1);
-        double x2Humidity = vary(random, x1Humidity, randomFrom(random, 0.0, 0.1, 0.2, 0.3), 35.0);
-        double x1AirSpeed = randomBetween(random, 0.10, 0.13, 2);
-        double x2AirSpeed = Math.max(0.10, vary(random, x1AirSpeed, 0.01, 0.10));
+        Random random = new Random(controlDate.toEpochDay() * 31 + 17);
 
-        XWPFTable table = document.createTable(5, 12);
+        double x1Width = randomBetween(random, 3.019, 3.023, 3);
+        double x2Width = varyByStep(random, x1Width, 0.001, 3);
+        double x1Length = randomBetween(random, 2.510, 2.513, 3);
+        double x2Length = varyByStep(random, x1Length, 0.001, 3);
+        double x1Height = randomBetween(random, 2.711, 2.714, 3);
+        double x2Height = varyByStep(random, x1Height, 0.001, 3);
+
+        double x1Area = round(x1Width * x1Length, 3);
+        double x2Area = round(x2Width * x2Length, 3);
+        double x1Volume = round(x1Height * x1Area, 3);
+        double x2Volume = round(x2Height * x2Area, 3);
+
+        double k = 0.00173;
+        double nArea = Math.sqrt(Math.pow(x1Width, 2) * Math.pow(k, 2) + Math.pow(x1Length, 2) * Math.pow(k, 2));
+        double nVolume = Math.sqrt(Math.pow(x1Height, 2) * Math.pow(k, 2) + Math.pow(x1Area, 2) * Math.pow(k, 2));
+
+        XWPFTable table = document.createTable(7, 12);
         table.setWidth("100%");
         setFixedLayout(table);
-        setGrid(table, 500, 950, 1700, 900, 1200, 1200, 850, 850, 1200, 1300, 1000, 1800);
-        setRowHeight(table.getRow(0), 650);
-        setRowHeight(table.getRow(1), 620);
-        setRowHeight(table.getRow(2), 1900);
-        setRowHeight(table.getRow(3), 1900);
-        setRowHeight(table.getRow(4), 1900);
+        setGrid(table, 520, 900, 1250, 800, 1200, 950, 850, 850, 1150, 1300, 900, 1800);
 
-        setCellText(table.getRow(0).getCell(0), "№ п/п", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(1), "Дата\nпроведения\nконтроля", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(2), "Контролируемый\nпоказатель,\nединицы измерения", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(3), "НД на методику", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(4), "Средство(а)\nизмерения", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(5), "Оператор(ы)\n(Фамилия И.О.)", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(6), "Результаты измерений\nТарновский", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(7), "Результаты измерений\nБелов", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(8), "Среднее значение Хср\n(Х1+Х2)/2", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(9), "Результат процедуры\n|Х1-Х2|", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(10), "Норматив\nконтроля", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(0).getCell(11), "Вывод, подпись ответственного", ParagraphAlignment.CENTER, 7, false);
+        setRowHeight(table.getRow(0), 350);
+        setRowHeight(table.getRow(1), 350);
 
-        fillRow(table.getRow(1), "1", controlDate.format(DATE_FORMAT), "Температура воздуха, °C", format(x1TempAir), format(x2TempAir), avg(x1TempAir, x2TempAir), abs(x1TempAir - x2TempAir), "0,2");
-        fillRow(table.getRow(2), "2", "", "Температура поверхности, °C", format(x1TempSurface), format(x2TempSurface), avg(x1TempSurface, x2TempSurface), abs(x1TempSurface - x2TempSurface), "0,179");
-        fillRow(table.getRow(3), "3", "", "Относительная влажность воздуха, %", format(x1Humidity), format(x2Humidity), avg(x1Humidity, x2Humidity), abs(x1Humidity - x2Humidity), "3,5");
-        fillRow(table.getRow(4), "4", "", "Скорость движения воздуха, м/с", format(x1AirSpeed), format(x2AirSpeed), avg(x1AirSpeed, x2AirSpeed), abs(x1AirSpeed - x2AirSpeed), "0,105");
+        setCellText(table.getRow(0).getCell(0), "№ п/п", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(1), "Дата\nпроведения\nконтроля", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(2), "Контролируемый\nпоказатель,\nединицы измерения", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(3), "НД на методику", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(4), "Средство (а)\nизмерения", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(5), "Оператор (ы)\n(Фамилия И.О.)", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(6), "Результаты измерений", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(8), "Среднее значение Хср\n(Х1+Х2)/2", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(9), "Результат процедуры, |Х1-Х2|", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(10), "Норматив контроля", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(0).getCell(11), "Вывод, подпись ответственного за ведение журнала", ParagraphAlignment.CENTER, 7, true);
 
-        mergeCellsVertically(table, 1, 1, 4);
-        mergeCellsVertically(table, 3, 1, 4);
-        mergeCellsVertically(table, 4, 1, 4);
-        mergeCellsVertically(table, 5, 1, 4);
+        setCellText(table.getRow(1).getCell(6), "Тарновский", ParagraphAlignment.CENTER, 7, true);
+        setCellText(table.getRow(1).getCell(7), "Белов", ParagraphAlignment.CENTER, 7, true);
 
-        setCellText(table.getRow(1).getCell(3), "МИ М.08−2021", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(1).getCell(4), "Метеоскоп-М №569521\nМетеоскоп-М 708623", ParagraphAlignment.CENTER, 7, false);
-        setCellText(table.getRow(1).getCell(5), "Тарновский М.О.\nБелов Д.А.", ParagraphAlignment.CENTER, 7, false);
-        setVerticalText(table.getRow(1).getCell(3));
-        setVerticalText(table.getRow(1).getCell(4));
+        for (int col : new int[]{0, 1, 2, 3, 4, 5, 8, 9, 10, 11}) {
+            mergeCellsVertically(table, col, 0, 1);
+        }
+        mergeCellsHorizontally(table, 0, 6, 7);
+
+        setCellText(table.getRow(2).getCell(0), "1", ParagraphAlignment.CENTER, 7, false);
+        setCellText(table.getRow(3).getCell(0), "2", ParagraphAlignment.CENTER, 7, false);
+        setCellText(table.getRow(4).getCell(0), "3", ParagraphAlignment.CENTER, 7, false);
+        setCellText(table.getRow(5).getCell(0), "4", ParagraphAlignment.CENTER, 7, false);
+        setCellText(table.getRow(6).getCell(0), "5", ParagraphAlignment.CENTER, 7, false);
+
+        setCellText(table.getRow(2).getCell(1), controlDate.format(DATE_FORMAT), ParagraphAlignment.CENTER, 7, false);
+        mergeCellsVertically(table, 1, 2, 6);
+
+        setCellText(table.getRow(2).getCell(2), "Ширина, м", ParagraphAlignment.LEFT, 7, false);
+        setCellText(table.getRow(3).getCell(2), "Длина, м", ParagraphAlignment.LEFT, 7, false);
+        setCellText(table.getRow(4).getCell(2), "Высота, м", ParagraphAlignment.LEFT, 7, false);
+        setCellText(table.getRow(5).getCell(2), "Площадь, м^2", ParagraphAlignment.LEFT, 7, false);
+        setCellText(table.getRow(6).getCell(2), "Объем, м^3", ParagraphAlignment.LEFT, 7, false);
+
+        setCellText(table.getRow(2).getCell(3), "МИ РД.10-2021", ParagraphAlignment.CENTER, 7, false);
+        setCellText(table.getRow(2).getCell(4), "Дальномер лазерный ADA Cosmo 70 Зав.№ 000873\nДальномер лазерный ADA Cosmo 70 Зав.№001953", ParagraphAlignment.CENTER, 7, false);
+        setCellText(table.getRow(2).getCell(5), "Тарновский М.О.\nБелов Д.А.", ParagraphAlignment.CENTER, 7, false);
+        mergeCellsVertically(table, 3, 2, 5);
+        mergeCellsVertically(table, 4, 2, 5);
+        mergeCellsVertically(table, 5, 2, 5);
+        setVerticalText(table.getRow(2).getCell(3));
+        setVerticalText(table.getRow(2).getCell(4));
+        setVerticalText(table.getRow(2).getCell(5));
+
+        fillResultRow(table.getRow(2), x1Width, x2Width, "0,00173");
+        fillResultRow(table.getRow(3), x1Length, x2Length, "0,00173");
+        fillResultRow(table.getRow(4), x1Height, x2Height, "0,00173");
+        fillResultRow(table.getRow(5), x1Area, x2Area, format(nArea));
+        fillResultRow(table.getRow(6), x1Volume, x2Volume, format(nVolume));
 
         document.createParagraph().createRun().addBreak(BreakType.PAGE);
+    }
+
+    private static void fillResultRow(XWPFTableRow row, double x1, double x2, String norm) {
+        setCellText(row.getCell(6), format(x1), ParagraphAlignment.CENTER, 7, false);
+        setCellText(row.getCell(7), format(x2), ParagraphAlignment.CENTER, 7, false);
+        setCellText(row.getCell(8), format((x1 + x2) / 2.0), ParagraphAlignment.CENTER, 7, false);
+        setCellText(row.getCell(9), format(Math.abs(x1 - x2)), ParagraphAlignment.CENTER, 7, false);
+        setCellText(row.getCell(10), norm, ParagraphAlignment.CENTER, 7, false);
+        setCellText(row.getCell(11), "удов", ParagraphAlignment.CENTER, 7, false);
     }
 
     private static void addDistributionPage(XWPFDocument document) {
@@ -246,17 +266,25 @@ final class MiM082021JournalWordExporter {
         setCellText(table.getRow(0).getCell(3), "Отметка об изъятии у получателя учтенной копии, уничтожении учтенной копии: подпись уполномоченного работника ИЛ, дата", ParagraphAlignment.CENTER, 12, false);
     }
 
-    private static void fillRow(XWPFTableRow row, String idx, String date, String indicator,
-                                String x1, String x2, double avg, double diff, String norm) {
-        setCellText(row.getCell(0), idx, ParagraphAlignment.CENTER, 7, false);
-        setCellText(row.getCell(1), date, ParagraphAlignment.CENTER, 7, false);
-        setCellText(row.getCell(2), indicator, ParagraphAlignment.LEFT, 7, false);
-        setCellText(row.getCell(6), x1, ParagraphAlignment.CENTER, 7, false);
-        setCellText(row.getCell(7), x2, ParagraphAlignment.CENTER, 7, false);
-        setCellText(row.getCell(8), format(avg), ParagraphAlignment.CENTER, 7, false);
-        setCellText(row.getCell(9), format(diff), ParagraphAlignment.CENTER, 7, false);
-        setCellText(row.getCell(10), norm, ParagraphAlignment.CENTER, 7, false);
-        setCellText(row.getCell(11), "удов", ParagraphAlignment.CENTER, 7, false);
+    private static double randomBetween(Random random, double min, double max, int digits) {
+        double span = max - min;
+        return round(min + random.nextDouble() * span, digits);
+    }
+
+    private static double varyByStep(Random random, double base, double step, int digits) {
+        int op = random.nextInt(3) - 1;
+        return round(base + op * step, digits);
+    }
+
+    private static double round(double value, int digits) {
+        double m = Math.pow(10, digits);
+        return Math.round(value * m) / m;
+    }
+
+    private static String format(double value) {
+        String raw = String.format(Locale.US, "%.3f", value);
+        raw = raw.replaceAll("0+$", "").replaceAll("\\.$", "");
+        return raw.replace('.', ',');
     }
 
     private static void setVerticalText(XWPFTableCell cell) {
@@ -267,36 +295,6 @@ final class MiM082021JournalWordExporter {
 
     private static void setRowHeight(XWPFTableRow row, int height) {
         row.setHeight(height);
-    }
-
-    private static double randomBetween(Random random, double min, double max, int digits) {
-        double span = max - min;
-        double value = min + random.nextDouble() * span;
-        double m = Math.pow(10, digits);
-        return Math.round(value * m) / m;
-    }
-
-    private static double vary(Random random, double base, double delta, double min) {
-        int op = random.nextInt(3) - 1;
-        return Math.max(min, base + op * delta);
-    }
-
-    private static double randomFrom(Random random, double... values) {
-        return values[random.nextInt(values.length)];
-    }
-
-    private static String format(double value) {
-        String raw = String.format(Locale.US, "%.3f", value);
-        raw = raw.replaceAll("0+$", "").replaceAll("\\.$", "");
-        return raw.replace('.', ',');
-    }
-
-    private static double avg(double a, double b) {
-        return (a + b) / 2.0;
-    }
-
-    private static double abs(double value) {
-        return Math.abs(value);
     }
 
     private static void setPageCounterCellText(XWPFTableCell cell) {
@@ -337,7 +335,7 @@ final class MiM082021JournalWordExporter {
             tblPr = cttbl.addNewTblPr();
         }
         CTTblLayoutType layout = tblPr.isSetTblLayout() ? tblPr.getTblLayout() : tblPr.addNewTblLayout();
-        layout.setType(org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType.FIXED);
+        layout.setType(STTblLayoutType.FIXED);
     }
 
     private static void setGrid(XWPFTable table, int... widths) {
@@ -384,7 +382,7 @@ final class MiM082021JournalWordExporter {
             CTVMerge merge = tcPr.isSetVMerge() ? tcPr.getVMerge() : tcPr.addNewVMerge();
             merge.setVal(rowIndex == fromRow ? STMerge.RESTART : STMerge.CONTINUE);
             if (rowIndex > fromRow) {
-                setCellText(cell, "", ParagraphAlignment.LEFT, 12, false);
+                setCellText(cell, "", ParagraphAlignment.LEFT, 7, false);
             }
         }
     }
