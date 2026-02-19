@@ -1,15 +1,30 @@
 package ru.citlab24.protokol.tabs.qms;
 
+import ru.citlab24.protokol.db.DatabaseManager;
+import ru.citlab24.protokol.db.VlkDateRecord;
+
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.io.File;
 import java.io.IOException;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashSet;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ShewhartMapTab extends JPanel {
+
+    private static final DateTimeFormatter DB_DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final Pattern FILE_DATE_PATTERN = Pattern.compile("(?<!\\d)(\\d{2})\\.(\\d{2})\\.(\\d{2}|\\d{4})(?!\\d)");
+    private static final String SHEWHART_VLK_EVENT = "влк карта Шухарата по ЗИ";
+    private static final String SHEWHART_VLK_MARK = "✓";
 
     private final DefaultListModel<File> inputFilesModel = new DefaultListModel<>();
 
@@ -185,19 +200,70 @@ public class ShewhartMapTab extends JPanel {
 
         try {
             ShewhartMapExcelExporter.exportStaticTitle(targetFile, inputFiles);
+
+            int importedDates = saveShewhartDatesToVlk(inputFiles);
+            String importedInfo = importedDates > 0
+                    ? "\n\nДобавлено дат ВЛК: " + importedDates
+                    : "\n\nДаты в названиях файлов не найдены или уже добавлены в БД.";
+
             JOptionPane.showMessageDialog(
                     this,
-                    "Файл успешно создан:\n" + targetFile.getAbsolutePath(),
+                    "Файл успешно создан:\n" + targetFile.getAbsolutePath() + importedInfo,
                     "Готово",
                     JOptionPane.INFORMATION_MESSAGE
             );
-        } catch (IOException ex) {
+        } catch (IOException | SQLException ex) {
             JOptionPane.showMessageDialog(
                     this,
                     "Не удалось создать файл:\n" + ex.getMessage(),
                     "Ошибка",
                     JOptionPane.ERROR_MESSAGE
             );
+        }
+    }
+
+    private int saveShewhartDatesToVlk(List<File> inputFiles) throws SQLException {
+        Set<LocalDate> dates = new LinkedHashSet<>();
+        for (File inputFile : inputFiles) {
+            LocalDate parsed = extractDateFromFileName(inputFile.getName());
+            if (parsed != null) {
+                dates.add(parsed);
+            }
+        }
+
+        if (dates.isEmpty()) {
+            return 0;
+        }
+
+        List<VlkDateRecord> records = new ArrayList<>();
+        for (LocalDate date : dates) {
+            VlkDateRecord record = new VlkDateRecord();
+            record.setVlkDate(date.format(DB_DATE_FORMAT));
+            record.setResponsible(SHEWHART_VLK_MARK);
+            record.setEventName(SHEWHART_VLK_EVENT);
+            records.add(record);
+        }
+
+        return DatabaseManager.addVlkDatesIfMissing(records);
+    }
+
+    private LocalDate extractDateFromFileName(String fileName) {
+        Matcher matcher = FILE_DATE_PATTERN.matcher(fileName);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        int day = Integer.parseInt(matcher.group(1));
+        int month = Integer.parseInt(matcher.group(2));
+        String yearToken = matcher.group(3);
+        int year = yearToken.length() == 2
+                ? 2000 + Integer.parseInt(yearToken)
+                : Integer.parseInt(yearToken);
+
+        try {
+            return LocalDate.of(year, month, day);
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 }
