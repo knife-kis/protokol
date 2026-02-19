@@ -15,6 +15,7 @@ import ru.citlab24.protokol.protocolmap.house.ProtocolMapPanel;
 import ru.citlab24.protokol.tabs.resourceTab.EquipmentTab;
 import ru.citlab24.protokol.tabs.resourceTab.CalendarTab;
 import ru.citlab24.protokol.tabs.resourceTab.PersonnelTab;
+import ru.citlab24.protokol.tabs.qms.ShewhartMapTab;
 import ru.citlab24.protokol.tabs.qms.VlkTab;
 
 
@@ -40,6 +41,7 @@ public class MainFrame extends JFrame {
     private static final String CARD_QMS_AUDIT = "qms-audit";
     private static final String CARD_QMS_NONCONFORMITIES = "qms-nonconformities";
     private static final String CARD_QMS_VLK = "qms-vlk";
+    private static final String CARD_QMS_SHEWHART_MAP = "qms-shewhart-map";
 
 
     public MainFrame() {
@@ -113,6 +115,7 @@ public class MainFrame extends JFrame {
         cardPanel.add(createPlaceholderScene(), CARD_QMS_AUDIT);
         cardPanel.add(createPlaceholderScene(), CARD_QMS_NONCONFORMITIES);
         cardPanel.add(createScenePanel(vlkTab), CARD_QMS_VLK);
+        cardPanel.add(createScenePanel(new ShewhartMapTab()), CARD_QMS_SHEWHART_MAP);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
@@ -286,9 +289,13 @@ public class MainFrame extends JFrame {
         JMenuItem vlkItem = new JMenuItem("ВЛК");
         vlkItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_VLK));
 
+        JMenuItem shewhartMapItem = new JMenuItem("Карта Шухарта");
+        shewhartMapItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_SHEWHART_MAP));
+
         qmsMenu.add(auditItem);
         qmsMenu.add(nonconformitiesItem);
         qmsMenu.add(vlkItem);
+        qmsMenu.add(shewhartMapItem);
         return qmsMenu;
     }
 }
