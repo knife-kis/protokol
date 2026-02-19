@@ -60,6 +60,7 @@ final class ShewhartMapExcelExporter {
 
             CellStyle headerStyle = createHeaderStyle(workbook);
             CellStyle bodyStyle = createBodyStyle(workbook);
+            CellStyle numericBodyStyle = createNumericBodyStyle(workbook, bodyStyle);
             DataFormatter formatter = new DataFormatter(Locale.ROOT);
 
             createHeader(sheet, headerStyle);
@@ -68,7 +69,7 @@ final class ShewhartMapExcelExporter {
             int targetRowIndex = FIRST_DATA_ROW;
             for (File inputFile : inputFiles) {
                 String monthFromFileName = extractMonthFromFileName(inputFile.getName());
-                targetRowIndex = appendFileData(sheet, bodyStyle, formatter, inputFile, monthFromFileName, targetRowIndex);
+                targetRowIndex = appendFileData(sheet, bodyStyle, numericBodyStyle, formatter, inputFile, monthFromFileName, targetRowIndex);
             }
 
             for (int col = COL_B; col <= COL_AG; col++) {
@@ -115,6 +116,7 @@ final class ShewhartMapExcelExporter {
     private static int appendFileData(
             Sheet targetSheet,
             CellStyle bodyStyle,
+            CellStyle numericBodyStyle,
             DataFormatter formatter,
             File inputFile,
             String monthFromFileName,
@@ -139,8 +141,8 @@ final class ShewhartMapExcelExporter {
                 fillRowStyle(targetRow, bodyStyle);
                 targetRow.getCell(COL_A).setCellValue(monthFromFileName);
 
-                copyRwValues(firstSheet, formatter, targetRow, true);
-                copyRwValues(secondSheet, formatter, targetRow, false);
+                copyRwValues(firstSheet, formatter, targetRow, true, numericBodyStyle);
+                copyRwValues(secondSheet, formatter, targetRow, false, numericBodyStyle);
 
                 targetRowIndex++;
             }
@@ -159,7 +161,13 @@ final class ShewhartMapExcelExporter {
         }
     }
 
-    private static void copyRwValues(Sheet sourceSheet, DataFormatter formatter, Row targetRow, boolean oddColumns) {
+    private static void copyRwValues(
+            Sheet sourceSheet,
+            DataFormatter formatter,
+            Row targetRow,
+            boolean oddColumns,
+            CellStyle numericBodyStyle
+    ) {
         if (sourceSheet == null) {
             return;
         }
@@ -173,7 +181,7 @@ final class ShewhartMapExcelExporter {
             Cell sourceCell = sourceRow.getCell(sourceCol);
             int frequencyIndex = sourceCol - SOURCE_FIRST_DATA_COL;
             int targetCol = COL_B + frequencyIndex * 2 + (oddColumns ? 0 : 1);
-            setCellValue(targetRow.getCell(targetCol), sourceCell, formatter);
+            setCellValue(targetRow.getCell(targetCol), sourceCell, formatter, numericBodyStyle);
         }
     }
 
@@ -191,7 +199,7 @@ final class ShewhartMapExcelExporter {
         return null;
     }
 
-    private static void setCellValue(Cell targetCell, Cell sourceCell, DataFormatter formatter) {
+    private static void setCellValue(Cell targetCell, Cell sourceCell, DataFormatter formatter, CellStyle numericBodyStyle) {
         if (sourceCell == null) {
             targetCell.setBlank();
             return;
@@ -199,6 +207,7 @@ final class ShewhartMapExcelExporter {
 
         if (sourceCell.getCellType() == CellType.NUMERIC) {
             targetCell.setCellValue(sourceCell.getNumericCellValue());
+            targetCell.setCellStyle(numericBodyStyle);
             return;
         }
 
@@ -210,6 +219,7 @@ final class ShewhartMapExcelExporter {
 
         try {
             targetCell.setCellValue(Double.parseDouble(value.replace(',', '.')));
+            targetCell.setCellStyle(numericBodyStyle);
         } catch (NumberFormatException ex) {
             targetCell.setCellValue(value);
         }
@@ -264,5 +274,12 @@ final class ShewhartMapExcelExporter {
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
         return style;
+    }
+
+    private static CellStyle createNumericBodyStyle(XSSFWorkbook workbook, CellStyle baseStyle) {
+        CellStyle numericStyle = workbook.createCellStyle();
+        numericStyle.cloneStyleFrom(baseStyle);
+        numericStyle.setDataFormat(workbook.createDataFormat().getFormat("0.0"));
+        return numericStyle;
     }
 }
