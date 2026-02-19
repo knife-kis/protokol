@@ -169,9 +169,9 @@ public class ShewhartMapTab extends JPanel {
         }
 
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Сохранить результат в формате XLSM");
-        chooser.setSelectedFile(new File("Карта_Шухарта.xlsm"));
-        chooser.setFileFilter(new FileNameExtensionFilter("Excel Macro-Enabled Workbook", "xlsm"));
+        chooser.setDialogTitle("Сохранить результат в формате XLSX");
+        chooser.setSelectedFile(new File("Карта_Шухарта.xlsx"));
+        chooser.setFileFilter(new FileNameExtensionFilter("Excel Workbook", "xlsx"));
 
         int result = chooser.showSaveDialog(this);
         if (result != JFileChooser.APPROVE_OPTION) {
@@ -179,8 +179,8 @@ public class ShewhartMapTab extends JPanel {
         }
 
         File targetFile = chooser.getSelectedFile();
-        if (!targetFile.getName().toLowerCase().endsWith(".xlsm")) {
-            targetFile = new File(targetFile.getParentFile(), targetFile.getName() + ".xlsm");
+        if (!targetFile.getName().toLowerCase().endsWith(".xlsx")) {
+            targetFile = new File(targetFile.getParentFile(), targetFile.getName() + ".xlsx");
         }
 
         try {
