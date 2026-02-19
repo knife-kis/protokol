@@ -1173,7 +1173,7 @@ public class DatabaseManager {
         }
 
         if (records == null || records.isEmpty()) {
-            return;
+            return 0;
         }
 
         String sql = "INSERT INTO vlk_dates (vlk_date, responsible, event_name) VALUES (?, ?, ?)";
@@ -1193,6 +1193,43 @@ public class DatabaseManager {
             stmt.setInt(1, id);
             stmt.executeUpdate();
         }
+    }
+
+    public static int addVlkDatesIfMissing(List<VlkDateRecord> records) throws SQLException {
+        if (records == null || records.isEmpty()) {
+            return 0;
+        }
+
+        String existsSql = "SELECT 1 FROM vlk_dates WHERE vlk_date = ? AND event_name = ? LIMIT 1";
+        String insertSql = "INSERT INTO vlk_dates (vlk_date, responsible, event_name) VALUES (?, ?, ?)";
+
+        int inserted = 0;
+        try (PreparedStatement existsStmt = connection.prepareStatement(existsSql);
+             PreparedStatement insertStmt = connection.prepareStatement(insertSql)) {
+            for (VlkDateRecord record : records) {
+                if (record == null || record.getVlkDate() == null || record.getVlkDate().isBlank()) {
+                    continue;
+                }
+
+                existsStmt.setString(1, record.getVlkDate());
+                existsStmt.setString(2, record.getEventName());
+                try (ResultSet rs = existsStmt.executeQuery()) {
+                    if (rs.next()) {
+                        continue;
+                    }
+                }
+
+                insertStmt.setString(1, record.getVlkDate());
+                insertStmt.setString(2, record.getResponsible());
+                insertStmt.setString(3, record.getEventName());
+                insertStmt.addBatch();
+                inserted++;
+            }
+            if (inserted > 0) {
+                insertStmt.executeBatch();
+            }
+        }
+        return inserted;
     }
 
     private static List<PersonnelRecord.UnavailabilityRecord> getUnavailabilityForPerson(int personnelId) throws SQLException {
