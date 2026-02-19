@@ -1173,7 +1173,7 @@ public class DatabaseManager {
         }
 
         if (records == null || records.isEmpty()) {
-            return 0;
+            return;
         }
 
         String sql = "INSERT INTO vlk_dates (vlk_date, responsible, event_name) VALUES (?, ?, ?)";
