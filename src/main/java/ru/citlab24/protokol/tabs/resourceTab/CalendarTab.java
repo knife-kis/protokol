@@ -27,6 +27,8 @@ import java.util.stream.Collectors;
 public class CalendarTab extends JPanel {
     private static final DateTimeFormatter MONTH_LABEL = DateTimeFormatter.ofPattern("LLLL yyyy", new Locale("ru"));
     private static final DateTimeFormatter DAY_LABEL = DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy", new Locale("ru"));
+    private static final DateTimeFormatter DOTTED_DATE_FORMAT = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+    private static final DateTimeFormatter DASHED_DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     private static final String ASPECT_VACATION = "Отпуск";
     private static final String ASPECT_AUDIT = "Аудит";
@@ -421,13 +423,27 @@ public class CalendarTab extends JPanel {
         if (value == null || value.isBlank()) {
             return null;
         }
+        String trimmed = value.trim();
+
+        if (trimmed.length() >= 10) {
+            try {
+                return LocalDate.parse(trimmed.substring(0, 10));
+            } catch (DateTimeParseException ignored) {
+                // Пробуем альтернативные форматы ниже.
+            }
+        }
+
         try {
-            return LocalDate.parse(value.trim());
+            return LocalDate.parse(trimmed);
         } catch (DateTimeParseException ignored) {
             try {
-                return LocalDate.parse(value.trim(), DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+                return LocalDate.parse(trimmed, DOTTED_DATE_FORMAT);
             } catch (DateTimeParseException ignoredAgain) {
-                return null;
+                try {
+                    return LocalDate.parse(trimmed, DASHED_DATE_FORMAT);
+                } catch (DateTimeParseException ignoredThird) {
+                    return null;
+                }
             }
         }
     }
