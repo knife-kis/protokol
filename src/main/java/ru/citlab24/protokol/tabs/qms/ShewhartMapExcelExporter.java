@@ -33,9 +33,14 @@ final class ShewhartMapExcelExporter {
     private static final int COL_A = 0;
     private static final int COL_B = 1;
     private static final int COL_AG = 32;
+    private static final int DATA_COLUMN_WIDTH_PX = 45;
     private static final int SOURCE_FIRST_DATA_COL = 1; // B
     private static final int SOURCE_LAST_DATA_COL = 16; // Q
     private static final Pattern FILENAME_DATE_PATTERN = Pattern.compile("\\b\\d{2}\\.(\\d{2})\\.(?:\\d{2}|\\d{4})\\b");
+    private static final String[] MONTHS_RU = {
+            "январь", "февраль", "март", "апрель", "май", "июнь",
+            "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"
+    };
 
     private static final int[] FREQUENCIES = {
             100, 125, 160, 200, 250, 315, 400, 500,
@@ -58,6 +63,7 @@ final class ShewhartMapExcelExporter {
             DataFormatter formatter = new DataFormatter(Locale.ROOT);
 
             createHeader(sheet, headerStyle);
+            sheet.getPrintSetup().setLandscape(true);
 
             int targetRowIndex = FIRST_DATA_ROW;
             for (File inputFile : inputFiles) {
@@ -65,8 +71,8 @@ final class ShewhartMapExcelExporter {
                 targetRowIndex = appendFileData(sheet, bodyStyle, formatter, inputFile, monthFromFileName, targetRowIndex);
             }
 
-            for (int col = COL_A; col <= COL_AG; col++) {
-                sheet.setColumnWidth(col, 12 * 256);
+            for (int col = COL_B; col <= COL_AG; col++) {
+                sheet.setColumnWidth(col, pixelsToWidthUnits(DATA_COLUMN_WIDTH_PX));
             }
             sheet.setColumnWidth(COL_A, 14 * 256);
 
@@ -212,9 +218,16 @@ final class ShewhartMapExcelExporter {
     private static String extractMonthFromFileName(String fileName) {
         Matcher matcher = FILENAME_DATE_PATTERN.matcher(fileName);
         if (matcher.find()) {
-            return matcher.group(1);
+            int monthNumber = Integer.parseInt(matcher.group(1));
+            if (monthNumber >= 1 && monthNumber <= MONTHS_RU.length) {
+                return MONTHS_RU[monthNumber - 1];
+            }
         }
         return "";
+    }
+
+    private static int pixelsToWidthUnits(int pixels) {
+        return Math.max(0, (int) Math.round(((pixels - 5d) / 7d) * 256d));
     }
 
     private static String normalize(String value) {
