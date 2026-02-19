@@ -12,6 +12,7 @@ import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTOnOff;
+import org.openxmlformats.schemas.officeDocument.x2006.sharedTypes.STOnOff;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageMar;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
@@ -276,9 +277,9 @@ final class TechnicalMaintenanceJournalWordExporter {
     }
 
     private static void setRepeatTableHeader(XWPFTableRow row) {
-        CTTrPr trPr = row.getCtRow().isSetTrPr() ? row.getCtRow().getTrPr() : row.getCtRow().addNewTrPr();
-        CTOnOff onOff = trPr.sizeOfTblHeaderArray() > 0 ? trPr.getTblHeaderArray(0) : trPr.addNewTblHeader();
-        onOff.setVal(org.openxmlformats.schemas.wordprocessingml.x2006.main.STOnOff.TRUE);
+        if (row != null) {
+            row.setRepeatHeader(true);
+        }
     }
 
     private static void setPageCounterCellText(XWPFTableCell cell) {
