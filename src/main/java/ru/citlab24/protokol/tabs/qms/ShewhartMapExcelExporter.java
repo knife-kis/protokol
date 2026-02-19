@@ -33,8 +33,8 @@ final class ShewhartMapExcelExporter {
     }
 
     static void exportStaticTitle(File targetFile, List<File> inputFiles) throws IOException {
-        if (inputFiles == null || inputFiles.size() != 12) {
-            throw new IllegalArgumentException("Для преобразования необходимо 12 входных файлов.");
+        if (inputFiles == null || inputFiles.isEmpty()) {
+            throw new IllegalArgumentException("Для преобразования необходим хотя бы один входной файл.");
         }
 
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
