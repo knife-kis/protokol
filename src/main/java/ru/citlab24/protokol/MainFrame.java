@@ -73,7 +73,7 @@ public class MainFrame extends JFrame {
         menuBar.add(Box.createHorizontalStrut(8));
         menuBar.add(createQmsMenu());
         menuBar.add(Box.createHorizontalStrut(12));
-        JLabel versionLabel = new JLabel("v 1.2.2");
+        JLabel versionLabel = new JLabel("v 1.2.3");
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
         menuBar.add(versionLabel);
         return menuBar;
