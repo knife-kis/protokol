@@ -30,7 +30,8 @@ public final class NoiseMapExporter {
     private static final double TOP_MARGIN_CM = 3.3;
     private static final double BOTTOM_MARGIN_CM = 1.9;
     private static final int TITLE_MEASUREMENT_DATES_ROW = 7;
-    private static final int NOISE_PROTOCOL_DEFAULT_START_ROW_INDEX = 6; // Excel строка 7
+    private static final int NOISE_PROTOCOL_FIRST_SHEET_START_ROW_INDEX = 6; // Excel строка 7
+    private static final int NOISE_PROTOCOL_NEXT_SHEETS_START_ROW_INDEX = 1; // Excel строка 2
     private static final String PRIMARY_FOLDER_NAME = "Первичка Шумы";
     private static final String NOISE_MEASUREMENT_DATE_PLACEHOLDER =
             "Дата, время проведения измерений_____________________";
@@ -442,20 +443,30 @@ public final class NoiseMapExporter {
             }
 
             boolean noiseHeaderApplied = false;
+            int noiseSheetCounter = 0;
             for (String sheetName : sheetNames) {
                 Sheet sourceSheet = sourceWorkbook.getSheet(sheetName);
                 Sheet targetSheet = workbook.createSheet(sheetName);
                 applyNoiseResultsSheetDefaults(workbook, targetSheet);
                 applyHeaders(targetSheet, registrationNumber);
+                boolean isNoiseSheet = isNoiseProtocolSheet(sheetName);
                 boolean hasFullHeader = false;
-                if (!noiseHeaderApplied && isNoiseProtocolSheet(sheetName)) {
+                if (!noiseHeaderApplied && isNoiseSheet) {
                     buildNoiseResultsHeader(workbook, targetSheet);
                     noiseHeaderApplied = true;
                     hasFullHeader = true;
                 } else {
                     addSimpleNumberingRow(workbook, targetSheet);
                 }
-                fillNoiseResultsFromProtocol(sourceSheet, workbook, targetSheet, hasFullHeader);
+
+                int startRowIndex = NOISE_PROTOCOL_FIRST_SHEET_START_ROW_INDEX;
+                if (isNoiseSheet) {
+                    startRowIndex = noiseSheetCounter == 0
+                            ? NOISE_PROTOCOL_FIRST_SHEET_START_ROW_INDEX
+                            : NOISE_PROTOCOL_NEXT_SHEETS_START_ROW_INDEX;
+                    noiseSheetCounter++;
+                }
+                fillNoiseResultsFromProtocol(sourceSheet, workbook, targetSheet, hasFullHeader, startRowIndex);
             }
         } catch (Exception ex) {
             // Игнорируем ошибки чтения, чтобы карта всё равно сформировалась.
@@ -617,7 +628,8 @@ public final class NoiseMapExporter {
     private static void fillNoiseResultsFromProtocol(Sheet sourceSheet,
                                                      Workbook targetWorkbook,
                                                      Sheet targetSheet,
-                                                     boolean hasFullHeader) {
+                                                     boolean hasFullHeader,
+                                                     int startRowIndex) {
         if (sourceSheet == null || targetSheet == null) {
             return;
         }
@@ -630,7 +642,7 @@ public final class NoiseMapExporter {
         CellStyle leftStyle = createNoiseDataStyle(targetWorkbook,
                 org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
 
-        int sourceRowIndex = detectNoiseProtocolStartRow(sourceSheet, formatter, evaluator);
+        int sourceRowIndex = detectNoiseProtocolStartRow(sourceSheet, formatter, evaluator, startRowIndex);
         int targetRowIndex = hasFullHeader ? 6 : 1;
         int lastRow = sourceSheet.getLastRowNum();
 
@@ -686,10 +698,12 @@ public final class NoiseMapExporter {
 
     private static int detectNoiseProtocolStartRow(Sheet sourceSheet,
                                                    DataFormatter formatter,
-                                                   FormulaEvaluator evaluator) {
+                                                   FormulaEvaluator evaluator,
+                                                   int startRowIndex) {
         int lastRow = sourceSheet.getLastRowNum();
-        int searchLimit = Math.min(lastRow, NOISE_PROTOCOL_DEFAULT_START_ROW_INDEX + 20);
-        for (int rowIndex = 0; rowIndex <= searchLimit; rowIndex++) {
+        int normalizedStartRow = Math.max(0, Math.min(startRowIndex, Math.max(lastRow, 0)));
+        int searchLimit = Math.min(lastRow, normalizedStartRow + 20);
+        for (int rowIndex = normalizedStartRow; rowIndex <= searchLimit; rowIndex++) {
             CellRangeAddress mergedRegion = findMergedRegion(sourceSheet, rowIndex, 0);
             if (mergedRegion != null && mergedRegion.getFirstRow() == rowIndex
                     && (isMergedDateRow(mergedRegion) || isMergedBlockHeader(mergedRegion))) {
@@ -702,7 +716,7 @@ public final class NoiseMapExporter {
                 return rowIndex;
             }
         }
-        return Math.min(NOISE_PROTOCOL_DEFAULT_START_ROW_INDEX, Math.max(lastRow, 0));
+        return normalizedStartRow;
     }
 
     private static boolean isMergedDateRow(CellRangeAddress mergedRegion) {
