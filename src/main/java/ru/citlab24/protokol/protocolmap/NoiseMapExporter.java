@@ -646,14 +646,6 @@ public final class NoiseMapExporter {
         int targetRowIndex = hasFullHeader ? 6 : 1;
         int lastRow = sourceSheet.getLastRowNum();
 
-        if (hasSecondRowMergedDate(sourceSheet)) {
-            setMergedRegionWithStyle(targetSheet, targetRowIndex, targetRowIndex,
-                    0, 22, leftStyle, NOISE_MEASUREMENT_DATE_PLACEHOLDER);
-            adjustRowHeightForMergedText(targetSheet, targetRowIndex, 0, 22,
-                    NOISE_MEASUREMENT_DATE_PLACEHOLDER);
-            targetRowIndex++;
-        }
-
         while (sourceRowIndex <= lastRow) {
             CellRangeAddress mergedRegion = findMergedRegion(sourceSheet, sourceRowIndex, 0);
             if (mergedRegion != null && mergedRegion.getFirstRow() == sourceRowIndex) {
@@ -723,15 +715,6 @@ public final class NoiseMapExporter {
         return mergedRegion.getFirstColumn() == 0
                 && mergedRegion.getLastColumn() == 24
                 && mergedRegion.getFirstRow() == mergedRegion.getLastRow();
-    }
-
-    private static boolean hasSecondRowMergedDate(Sheet sourceSheet) {
-        CellRangeAddress mergedRegion = findMergedRegion(sourceSheet, 1, 0);
-        return mergedRegion != null
-                && mergedRegion.getFirstRow() == 1
-                && mergedRegion.getLastRow() == 1
-                && mergedRegion.getFirstColumn() == 0
-                && mergedRegion.getLastColumn() == 24;
     }
 
     private static boolean isMergedBlockHeader(CellRangeAddress mergedRegion) {
