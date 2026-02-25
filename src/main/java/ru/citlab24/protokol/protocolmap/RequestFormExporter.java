@@ -1685,6 +1685,10 @@ public final class RequestFormExporter {
         return mergedRegion.getFirstColumn() <= 0 && mergedRegion.getLastColumn() >= 21;
     }
 
+    private static boolean isInsideMergedRegionWithoutStart(CellRangeAddress mergedRegion, int rowIndex) {
+        return mergedRegion != null && mergedRegion.getFirstRow() < rowIndex;
+    }
+
     private static List<VentilationRow> resolveVentilationRows(File sourceFile) {
         if (sourceFile == null || !sourceFile.exists()) {
             return new ArrayList<>();
