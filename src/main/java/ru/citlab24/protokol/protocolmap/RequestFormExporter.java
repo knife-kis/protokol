@@ -99,6 +99,7 @@ public final class RequestFormExporter {
         String objectAddress = resolveObjectAddress(mapFile);
         List<NormativeRow> normativeRows = resolveNormativeRows(sourceFile);
         List<MicroclimateRow> microclimateRows = resolveMicroclimateRows(sourceFile);
+        List<MicroclimateRow> protocolMicroclimateRows = resolveProtocolMicroclimateRows(sourceFile);
         List<VentilationRow> ventilationRows = resolveVentilationRows(sourceFile);
         String ventilationMethod = resolveVentilationNormativeMethod(sourceFile);
         List<String> medRows = resolveMedRows(sourceFile);
@@ -410,7 +411,7 @@ public final class RequestFormExporter {
 
             if (!microclimateRows.isEmpty() || !ventilationRows.isEmpty() || hasMedSheet || hasEroaRadonSheet
                     || hasArtificialLightingSheet || hasArtificialGroundLightingSheet || hasKeoSheet
-                    || hasNoiseRows) {
+                    || hasNoiseRows || !protocolMicroclimateRows.isEmpty()) {
                 XWPFParagraph appendixBreak = document.createParagraph();
                 setParagraphSpacing(appendixBreak);
                 appendixBreak.createRun().addBreak(BreakType.PAGE);
@@ -896,6 +897,71 @@ public final class RequestFormExporter {
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
                         setTableCellText(keoTable.getRow(rowIndex).getCell(1), row.allowedValue,
                                 MED_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                    }
+                    sectionIndex++;
+                }
+
+                if (!protocolMicroclimateRows.isEmpty()) {
+                    XWPFParagraph spacerBeforeProtocolMicroclimate = document.createParagraph();
+                    setParagraphSpacing(spacerBeforeProtocolMicroclimate);
+
+                    XWPFParagraph protocolMicroclimateTitle = document.createParagraph();
+                    setParagraphSpacing(protocolMicroclimateTitle);
+                    XWPFRun protocolMicroclimateTitleRun = protocolMicroclimateTitle.createRun();
+                    protocolMicroclimateTitleRun.setFontFamily(FONT_NAME);
+                    protocolMicroclimateTitleRun.setFontSize(FONT_SIZE);
+                    protocolMicroclimateTitleRun.setText(sectionIndex + ".\tНормируемые значения параметров " +
+                            "микроклимата в соответствии с СанПиН 1.2.3685-21 \"Гигиенические нормативы и " +
+                            "требования к обеспечению безопасности и (или) безвредности для человека факторов " +
+                            "среды обитания\" с указанием места проведения измерений:");
+
+                    int protocolMicroclimateRowsCount = protocolMicroclimateRows.size();
+                    XWPFTable protocolMicroclimateTable = document.createTable(1 + protocolMicroclimateRowsCount, 6);
+                    configureTableLayout(protocolMicroclimateTable, new int[]{800, 5480, 1570, 1570, 1570, 1570});
+                    setTableCellText(protocolMicroclimateTable.getRow(0).getCell(0),
+                            "№",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(protocolMicroclimateTable.getRow(0).getCell(1),
+                            "Рабочее место, место проведения измерений, цех, участок, наименование профессии " +
+                                    "или должности",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(protocolMicroclimateTable.getRow(0).getCell(2),
+                            "Допустимый уровень температуры воздуха, ºС",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(protocolMicroclimateTable.getRow(0).getCell(3),
+                            "Допустимый уровень результирующей температуры, ºС",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(protocolMicroclimateTable.getRow(0).getCell(4),
+                            "Допустимый уровень относительной влажности воздуха, %",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+                    setTableCellText(protocolMicroclimateTable.getRow(0).getCell(5),
+                            "Допустимый уровень скорости движения воздуха, м/с",
+                            MICROCLIMATE_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
+
+                    int ordinal = 1;
+                    for (int index = 0; index < protocolMicroclimateRowsCount; index++) {
+                        int rowIndex = index + 1;
+                        MicroclimateRow row = protocolMicroclimateRows.get(index);
+                        if (row.isSection) {
+                            setTableCellText(protocolMicroclimateTable.getRow(rowIndex).getCell(1), row.workplace,
+                                    MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                            mergeCellsHorizontally(protocolMicroclimateTable, rowIndex, 1, 5);
+                            continue;
+                        }
+
+                        setTableCellText(protocolMicroclimateTable.getRow(rowIndex).getCell(0), String.valueOf(ordinal),
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.CENTER);
+                        setTableCellText(protocolMicroclimateTable.getRow(rowIndex).getCell(1), row.workplace,
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(protocolMicroclimateTable.getRow(rowIndex).getCell(2), row.airTemperature,
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(protocolMicroclimateTable.getRow(rowIndex).getCell(3), row.resultTemperature,
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(protocolMicroclimateTable.getRow(rowIndex).getCell(4), row.humidity,
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        setTableCellText(protocolMicroclimateTable.getRow(rowIndex).getCell(5), row.airSpeed,
+                                MICROCLIMATE_TABLE_FONT_SIZE, false, ParagraphAlignment.LEFT);
+                        ordinal++;
                     }
                     sectionIndex++;
                 }
@@ -1560,6 +1626,63 @@ public final class RequestFormExporter {
         } catch (Exception ignored) {
             return new ArrayList<>();
         }
+    }
+
+    private static List<MicroclimateRow> resolveProtocolMicroclimateRows(File sourceFile) {
+        if (sourceFile == null || !sourceFile.exists()) {
+            return new ArrayList<>();
+        }
+        try (InputStream in = new FileInputStream(sourceFile);
+             Workbook workbook = WorkbookFactory.create(in)) {
+            Sheet sheet = findSheetByName(workbook, "Микроклимат");
+            if (sheet == null) {
+                sheet = findSheetByName(workbook, "Микроклимат (2)");
+            }
+            if (sheet == null) {
+                return new ArrayList<>();
+            }
+
+            List<MicroclimateRow> rows = new ArrayList<>();
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            int lastRow = sheet.getLastRowNum();
+
+            for (int rowIndex = 5; rowIndex <= lastRow; rowIndex++) {
+                CellRangeAddress mergedInA = findMergedRegion(sheet, rowIndex, 0);
+                if (isMicroclimateMergedSection(mergedInA, rowIndex)) {
+                    String mergedText = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (!mergedText.isEmpty()) {
+                        rows.add(MicroclimateRow.section(mergedText));
+                    }
+                    continue;
+                }
+
+                if (isInsideMergedRegionWithoutStart(mergedInA, rowIndex)) {
+                    continue;
+                }
+
+                String workplace = readMergedCellValue(sheet, rowIndex, 1, formatter, evaluator).trim();
+                if (workplace.isEmpty()) {
+                    continue;
+                }
+
+                String airTemperature = readMergedCellValue(sheet, rowIndex, 8, formatter, evaluator).trim();
+                String resultTemperature = readMergedCellValue(sheet, rowIndex, 13, formatter, evaluator).trim();
+                String humidity = readMergedCellValue(sheet, rowIndex, 17, formatter, evaluator).trim();
+                String airSpeed = readMergedCellValue(sheet, rowIndex, 21, formatter, evaluator).trim();
+                rows.add(new MicroclimateRow(workplace, airTemperature, resultTemperature, humidity, airSpeed));
+            }
+            return rows;
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private static boolean isMicroclimateMergedSection(CellRangeAddress mergedRegion, int rowIndex) {
+        if (mergedRegion == null || mergedRegion.getFirstRow() != rowIndex) {
+            return false;
+        }
+        return mergedRegion.getFirstColumn() <= 0 && mergedRegion.getLastColumn() >= 21;
     }
 
     private static List<VentilationRow> resolveVentilationRows(File sourceFile) {
