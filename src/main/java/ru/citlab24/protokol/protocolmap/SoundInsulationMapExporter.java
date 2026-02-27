@@ -952,7 +952,9 @@ public final class SoundInsulationMapExporter {
                     if (i == 0) {
                         workbook.setPrintArea(i, "$A:$AF");
                     } else if (i >= 2) {
-                        workbook.setPrintArea(i, "$A:$Q");
+                        int lastRow = Math.max(sheet.getLastRowNum(), 0);
+                        workbook.setPrintArea(i, 0, 16, 0, lastRow);
+                        removeColumnBreaks(sheet, 0, 16);
                     }
 
                     Header header = sheet.getHeader();
@@ -2385,6 +2387,19 @@ public final class SoundInsulationMapExporter {
         for (int rowIndex = from; rowIndex <= to; rowIndex++) {
             if (sheet.isRowBroken(rowIndex)) {
                 sheet.removeRowBreak(rowIndex);
+            }
+        }
+    }
+
+    private static void removeColumnBreaks(Sheet sheet, int startColumn, int endColumn) {
+        if (sheet == null) {
+            return;
+        }
+        int from = Math.max(0, startColumn);
+        int to = Math.max(from, endColumn);
+        for (int colIndex = from; colIndex <= to; colIndex++) {
+            if (sheet.isColumnBroken(colIndex)) {
+                sheet.removeColumnBreak(colIndex);
             }
         }
     }
