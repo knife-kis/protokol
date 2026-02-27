@@ -949,7 +949,11 @@ public final class SoundInsulationMapExporter {
                     printSetup.setFitHeight((short) 0);
                     sheet.setFitToPage(true);
                     sheet.setAutobreaks(true);
-                    workbook.setPrintArea(i, "$A:$Q");
+                    if (i == 0) {
+                        workbook.setPrintArea(i, "$A:$AF");
+                    } else if (i >= 2) {
+                        workbook.setPrintArea(i, "$A:$Q");
+                    }
 
                     Header header = sheet.getHeader();
                     header.setLeft(headerLeft);
