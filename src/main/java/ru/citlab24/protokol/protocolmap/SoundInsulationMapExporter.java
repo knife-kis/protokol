@@ -77,8 +77,8 @@ public final class SoundInsulationMapExporter {
                                    File protocolFile,
                                    String workDeadline,
                                    String customerInn) throws IOException {
-        File impactFile = (impactFiles != null && !impactFiles.isEmpty()) ? impactFiles.get(0) : null;
-        File targetFile = PhysicalFactorsMapExporter.generateMap(impactFile, workDeadline, customerInn,
+        File sourceFile = resolveSourceFile(impactFiles, wallFiles, slabFiles);
+        File targetFile = PhysicalFactorsMapExporter.generateMap(sourceFile, workDeadline, customerInn,
                 PRIMARY_FOLDER_NAME);
         removeMicroclimateSheet(targetFile);
         removeVentilationSheet(targetFile);
@@ -110,6 +110,32 @@ public final class SoundInsulationMapExporter {
             SoundInsulationRequestAnalysisSheetExporter.generate(protocolFile, renamed);
         }
         return renamed;
+    }
+
+    private static File resolveSourceFile(List<File> impactFiles,
+                                          List<File> wallFiles,
+                                          List<File> slabFiles) {
+        File file = firstExistingFile(impactFiles);
+        if (file != null) {
+            return file;
+        }
+        file = firstExistingFile(wallFiles);
+        if (file != null) {
+            return file;
+        }
+        return firstExistingFile(slabFiles);
+    }
+
+    private static File firstExistingFile(List<File> files) {
+        if (files == null || files.isEmpty()) {
+            return null;
+        }
+        for (File file : files) {
+            if (file != null && file.exists()) {
+                return file;
+            }
+        }
+        return null;
     }
 
     private static void removeMicroclimateSheet(File targetFile) throws IOException {
