@@ -1,6 +1,7 @@
 package ru.citlab24.protokol;
 
 import com.formdev.flatlaf.FlatLightLaf;
+import ru.citlab24.protokol.ui.TitleBarCloseIcon;
 import javax.swing.*;
 import java.util.Locale;
 
@@ -37,6 +38,7 @@ public class Main {
 
 // Дальше — ЛАФ
                     UIManager.setLookAndFeel(new com.formdev.flatlaf.FlatIntelliJLaf());
+                    UIManager.put("TitlePane.closeIcon", new TitleBarCloseIcon());
                     com.formdev.flatlaf.FlatLaf.updateUI();
 
 // JavaFX: не гасить платформу при закрытии FX-сцен (на всякий случай)
