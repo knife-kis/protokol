@@ -52,8 +52,8 @@ public class MainFrame extends JFrame {
         setLocationByPlatform(true);
 
         // Современные оконные декорации (если FlatLaf активен)
-        getRootPane().putClientProperty("JRootPane.titleBarBackground", UIManager.getColor("Panel.background"));
-        getRootPane().putClientProperty("JRootPane.titleBarForeground", UIManager.getColor("Label.foreground"));
+        getRootPane().putClientProperty("JRootPane.titleBarBackground", AppTheme.MENU);
+        getRootPane().putClientProperty("JRootPane.titleBarForeground", Color.WHITE);
 
         configureTabbedPane();
         initUI();
@@ -64,25 +64,38 @@ public class MainFrame extends JFrame {
 
     private JMenuBar createMenuBar(Runnable onLoadProject, Runnable onSaveProject) {
         JMenuBar menuBar = new JMenuBar();
+        menuBar.setOpaque(true);
+        menuBar.setBackground(AppTheme.MENU);
+        menuBar.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
 
-        menuBar.add(createFileMenu());
+        menuBar.add(styleTopMenu(createFileMenu()));
         menuBar.add(Box.createHorizontalStrut(8));
-        menuBar.add(createProjectMenu(onLoadProject, onSaveProject));
+        menuBar.add(styleTopMenu(createProjectMenu(onLoadProject, onSaveProject)));
         menuBar.add(Box.createHorizontalStrut(8));
-        menuBar.add(createResourceMenu());
+        menuBar.add(styleTopMenu(createResourceMenu()));
         menuBar.add(Box.createHorizontalStrut(8));
-        menuBar.add(createQmsMenu());
+        menuBar.add(styleTopMenu(createQmsMenu()));
         menuBar.add(Box.createHorizontalStrut(12));
         JLabel versionLabel = new JLabel("v 1.3.1");
+        versionLabel.setForeground(new Color(0xC6D2DC));
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
         menuBar.add(versionLabel);
         return menuBar;
+    }
+
+    private JMenu styleTopMenu(JMenu menu) {
+        menu.setOpaque(false);
+        menu.setForeground(Color.WHITE);
+        menu.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
+        return menu;
     }
 
     private void configureTabbedPane() {
         // «Воздушные» вкладки — только свойства, гарантированно присутствующие во FlatLaf
         tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_HEIGHT, 28);
         tabbedPane.putClientProperty(FlatClientProperties.TABBED_PANE_HAS_FULL_BORDER, Boolean.FALSE);
+        tabbedPane.putClientProperty(FlatClientProperties.STYLE,
+                "tabType: card; showTabSeparators: false; tabArc: 8; contentSeparatorHeight: 0");
 
         // Скролл, если вкладок много
         tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
@@ -101,21 +114,34 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Освещение",             new ArtificialLightingTab(building));
         tabbedPane.addTab("Осв улица",             new StreetLightingTab(building));
         tabbedPane.addTab("Шумы",                  new NoiseTab(building));
+        AppTheme.decorateWorkspace(tabbedPane);
 
         cardPanel.add(createScenePanel(tabbedPane), CARD_PROTOCOL_HOME);
         cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_AREA);
-        cardPanel.add(createScenePanel(new ProtocolMapPanel()), CARD_PROTOCOL_MAP);
-        cardPanel.add(createScenePanel(new AreaPrimaryPanel()), CARD_PROTOCOL_REQUEST);
+        ProtocolMapPanel protocolMapPanel = new ProtocolMapPanel();
+        AppTheme.decorateWorkspace(protocolMapPanel);
+        cardPanel.add(createScenePanel(protocolMapPanel), CARD_PROTOCOL_MAP);
+        AreaPrimaryPanel areaPrimaryPanel = new AreaPrimaryPanel();
+        AppTheme.decorateWorkspace(areaPrimaryPanel);
+        cardPanel.add(createScenePanel(areaPrimaryPanel), CARD_PROTOCOL_REQUEST);
         CalendarTab calendarTab = new CalendarTab();
         VlkTab vlkTab = new VlkTab(calendarTab::refreshEvents);
 
-        cardPanel.add(createScenePanel(new PersonnelTab()), CARD_RESOURCE_PERSONNEL);
-        cardPanel.add(createScenePanel(new EquipmentTab()), CARD_RESOURCE_EQUIPMENT);
+        PersonnelTab personnelTab = new PersonnelTab();
+        EquipmentTab equipmentTab = new EquipmentTab();
+        AppTheme.decorateWorkspace(personnelTab);
+        AppTheme.decorateWorkspace(equipmentTab);
+        AppTheme.decorateWorkspace(calendarTab);
+        AppTheme.decorateWorkspace(vlkTab);
+        cardPanel.add(createScenePanel(personnelTab), CARD_RESOURCE_PERSONNEL);
+        cardPanel.add(createScenePanel(equipmentTab), CARD_RESOURCE_EQUIPMENT);
         cardPanel.add(createScenePanel(calendarTab), CARD_RESOURCE_CALENDAR);
         cardPanel.add(createPlaceholderScene(), CARD_QMS_AUDIT);
         cardPanel.add(createPlaceholderScene(), CARD_QMS_NONCONFORMITIES);
         cardPanel.add(createScenePanel(vlkTab), CARD_QMS_VLK);
-        cardPanel.add(createScenePanel(new ShewhartMapTab()), CARD_QMS_SHEWHART_MAP);
+        ShewhartMapTab shewhartMapTab = new ShewhartMapTab();
+        AppTheme.decorateWorkspace(shewhartMapTab);
+        cardPanel.add(createScenePanel(shewhartMapTab), CARD_QMS_SHEWHART_MAP);
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
@@ -124,6 +150,12 @@ public class MainFrame extends JFrame {
 
     private JPanel createScenePanel(JComponent content) {
         JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(AppTheme.PANEL);
+        panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        content.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(AppTheme.BORDER),
+                BorderFactory.createEmptyBorder(6, 6, 6, 6)
+        ));
         panel.add(content, BorderLayout.CENTER);
         return panel;
     }
