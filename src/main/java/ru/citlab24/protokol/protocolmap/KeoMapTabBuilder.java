@@ -57,15 +57,15 @@ final class KeoMapTabBuilder {
 
         applyMergedHeader(sheet, 2, 2, 6, 14, "При боковом освещении", headerStyle);
         applyMergedHeader(sheet, 3, 3, 6, 8,
-                "Освещенность внутри помещения ± расширенная неопределенность, лк",
+                "Освещенность внутри помещения, лк Результат измерений\n(y) ± U",
                 headerVerticalStyle);
         applyMergedHeader(sheet, 3, 3, 9, 11,
-                "Наружная освещенность ± расширенная неопределенность, лк",
+                "Наружная освещенность, лк Результат измерений\n(y) ± U",
                 headerVerticalStyle);
-        applyMergedHeader(sheet, 3, 3, 12, 14, "КЕО ± расширенная неопределенность, %", headerVerticalStyle);
+        applyMergedHeader(sheet, 3, 3, 12, 14, "КЕО , % Результат измерений\n(y) ± U", headerVerticalStyle);
 
         applyMergedHeader(sheet, 2, 3, 15, 17,
-                "Неравномерность естественного освещения ± расширенная неопределенность",
+                "Неравномерность естественного освещения Результат измерений\n(y) ± U",
                 headerVerticalStyle);
 
         Row numbersRow = sheet.createRow(4);

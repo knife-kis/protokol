@@ -42,6 +42,11 @@ public class NoiseTab extends JPanel {
     private JList<Space>   spaceList;
     private JToggleButton[] filterBtns;
     private JTable         roomsTable;
+    private JDialog noiseSummaryDialog;
+    private JTable noiseSummaryTable;
+    private NoiseSummaryTableModel noiseSummaryModel;
+    private JTextField noiseSummaryFilterField;
+    private javax.swing.table.TableRowSorter<NoiseSummaryTableModel> noiseSummarySorter;
 
     // Табличная модель комнат
     private NoiseRoomsTableModel tableModel;
@@ -94,6 +99,7 @@ public class NoiseTab extends JPanel {
             v.measure = v.lift || v.vent || v.heatCurtain || v.itp || v.pns || v.electrical || v.autoSrc || v.zum;
             byKey.put(e.getKey(), v);
         }
+        refreshNoiseSummaryWindow();
     }
 
     /** Применить сохранённые пороги (key -> {EqMin, EqMax, MaxMin, MaxMax}). */
@@ -272,6 +278,14 @@ public class NoiseTab extends JPanel {
         });
         p.add(clear);
 
+        JButton summaryBtn = new JButton("Сводка точек");
+        summaryBtn.setFocusable(false);
+        summaryBtn.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "buttonType: toolBarButton; arc: 8; focusWidth: 1");
+        summaryBtn.setToolTipText("Показать выбранные шумовые точки и источники звука");
+        summaryBtn.addActionListener(e -> showNoiseSummaryWindow());
+        p.add(summaryBtn);
+
         // Разделитель
         JSeparator sep = new JSeparator(SwingConstants.VERTICAL);
         sep.setPreferredSize(new Dimension(10, 24));
@@ -316,34 +330,229 @@ public class NoiseTab extends JPanel {
         p.add(sep2);
         p.add(Box.createHorizontalStrut(4));
 
-        // ==== Пороговые значения (урезанные) ====
-        p.add(new JLabel("Пороговые:"));
-
-        String[] srcForThresholds = {"Лифт","ИТО","Зум","Авто","Улица"};
-        for (String src : srcForThresholds) {
-            JButton b = createThresholdButton(src);
-            p.add(b);
-        }
-
-        JButton exportThresholds = new JButton("Экспорт пороговых значений");
-        exportThresholds.setFocusable(false);
-        exportThresholds.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_EXPORT, 16));
-        exportThresholds.setIconTextGap(6);
-        exportThresholds.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
-                "buttonType: toolBarButton; arc: 8; focusWidth: 1");
-        exportThresholds.setToolTipText("Сформировать Excel-шаблон для пороговых значений шума");
-        exportThresholds.addActionListener(e -> onExportThresholdsTemplate());
-        p.add(exportThresholds);
-
-        JButton importThresholds = new JButton("Импорт порогов");
-        importThresholds.setFocusable(false);
-        importThresholds.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
-                "buttonType: toolBarButton; arc: 8; focusWidth: 1");
-        importThresholds.setToolTipText("Загрузить заполненный Excel-шаблон порогов");
-        importThresholds.addActionListener(e -> onImportThresholdsTemplate());
-        p.add(importThresholds);
+        JButton thresholdsMenu = new JButton("Пороговые значения");
+        thresholdsMenu.setFocusable(false);
+        thresholdsMenu.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.SLIDERS_H, 16));
+        thresholdsMenu.setIconTextGap(6);
+        thresholdsMenu.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE,
+                "buttonType: roundRect; arc: 999; focusWidth: 1; minimumWidth: 165");
+        thresholdsMenu.setToolTipText("Настроить, экспортировать или импортировать пороговые значения шума");
+        thresholdsMenu.addActionListener(e -> showThresholdsDialog(thresholdsMenu));
+        p.add(thresholdsMenu);
 
         return p;
+    }
+
+    private void showThresholdsDialog(JButton owner) {
+        String[] srcForThresholds = {"Лифт", "ИТО", "Зум", "Авто", "Улица"};
+
+        JPanel table = new JPanel(new GridBagLayout());
+        table.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+        java.util.List<JLabel> editorLabels = new ArrayList<>();
+
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.insets = new Insets(4, 6, 4, 6);
+        gc.anchor = GridBagConstraints.WEST;
+
+        int row = 0;
+        Font headerFont = table.getFont().deriveFont(Font.BOLD);
+
+        gc.gridy = row++;
+        gc.gridx = 0; gc.weightx = 1.0; gc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel hVar = new JLabel("Источник / вариант");
+        hVar.setFont(headerFont);
+        table.add(hVar, gc);
+
+        gc.weightx = 0; gc.fill = GridBagConstraints.NONE;
+        JLabel hEkMin = new JLabel("Eq мин");
+        hEkMin.setFont(headerFont);
+        gc.gridx = 1; table.add(hEkMin, gc);
+
+        JLabel hEkMax = new JLabel("Eq макс");
+        hEkMax.setFont(headerFont);
+        gc.gridx = 2; table.add(hEkMax, gc);
+
+        JLabel hMMin = new JLabel("MAX мин");
+        hMMin.setFont(headerFont);
+        gc.gridx = 3; table.add(hMMin, gc);
+
+        JLabel hMMax = new JLabel("MAX макс");
+        hMMax.setFont(headerFont);
+        gc.gridx = 4; table.add(hMMax, gc);
+
+        for (String src : srcForThresholds) {
+            gc.gridy = row++;
+            gc.gridx = 0;
+            gc.gridwidth = 5;
+            gc.weightx = 1.0;
+            gc.fill = GridBagConstraints.HORIZONTAL;
+            gc.insets = new Insets(row == 2 ? 8 : 14, 6, 2, 6);
+            JLabel section = new JLabel(src);
+            section.setFont(section.getFont().deriveFont(Font.BOLD));
+            table.add(section, gc);
+
+            gc.gridwidth = 1;
+            gc.insets = new Insets(4, 6, 4, 6);
+
+            for (String variant : variantsForSource(src)) {
+                row = addThresholdEditorRow(table, gc, row, editorLabels, src, variant);
+            }
+        }
+
+        gc.gridy = row;
+        gc.gridx = 0;
+        gc.gridwidth = 5;
+        gc.weightx = 1.0;
+        gc.weighty = 1.0;
+        gc.fill = GridBagConstraints.BOTH;
+        table.add(Box.createGlue(), gc);
+
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        JPanel content = new JPanel(new BorderLayout(0, 8));
+        content.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        content.add(scroll, BorderLayout.CENTER);
+
+        JButton exportBtn = new JButton("Экспорт");
+        exportBtn.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_EXPORT, 14));
+        JButton importBtn = new JButton("Импорт");
+        importBtn.setIcon(org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_IMPORT, 14));
+        JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        leftActions.add(importBtn);
+        leftActions.add(exportBtn);
+
+        JButton save = new JButton("Сохранить");
+        JButton cancel = new JButton("Отмена");
+        JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        rightActions.add(save);
+        rightActions.add(cancel);
+
+        JPanel actions = new JPanel(new BorderLayout());
+        actions.add(leftActions, BorderLayout.WEST);
+        actions.add(rightActions, BorderLayout.EAST);
+        content.add(actions, BorderLayout.SOUTH);
+
+        Window window = SwingUtilities.getWindowAncestor(owner);
+        JDialog dialog = new JDialog(window, "Пороговые значения", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.setContentPane(content);
+        dialog.getRootPane().setDefaultButton(save);
+
+        save.addActionListener(e -> {
+            if (saveThresholdEditors(editorLabels, dialog)) {
+                dialog.dispose();
+            }
+        });
+        cancel.addActionListener(e -> dialog.dispose());
+        exportBtn.addActionListener(e -> {
+            if (saveThresholdEditors(editorLabels, dialog)) {
+                onExportThresholdsTemplate();
+            }
+        });
+        importBtn.addActionListener(e -> {
+            if (onImportThresholdsTemplate()) {
+                dialog.dispose();
+                SwingUtilities.invokeLater(() -> showThresholdsDialog(owner));
+            }
+        });
+
+        dialog.setPreferredSize(new Dimension(720, 780));
+        dialog.pack();
+        dialog.setLocationRelativeTo(owner);
+        dialog.setVisible(true);
+    }
+
+    private int addThresholdEditorRow(JPanel content, GridBagConstraints gc, int row,
+                                      java.util.List<JLabel> editorLabels, String srcLabel, String variant) {
+        String key = thKey(srcLabel, variant);
+        Threshold t = thresholds.getOrDefault(key, new Threshold());
+
+        gc.gridy = row;
+        gc.gridwidth = 1;
+        gc.weighty = 0;
+        gc.fill = GridBagConstraints.NONE;
+
+        JLabel lbl = new JLabel("диапазон".equals(variant) ? "Улица" : (srcLabel + " " + variant));
+        gc.gridx = 0;
+        gc.weightx = 1.0;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        content.add(lbl, gc);
+
+        javax.swing.JFormattedTextField fEkMin = createThresholdField(t.ekMin);
+        gc.gridx = 1;
+        gc.weightx = 0;
+        gc.fill = GridBagConstraints.NONE;
+        content.add(fEkMin, gc);
+
+        javax.swing.JFormattedTextField fEkMax = createThresholdField(t.ekMax);
+        gc.gridx = 2;
+        content.add(fEkMax, gc);
+
+        javax.swing.JFormattedTextField fMMin = createThresholdField(t.mMin);
+        gc.gridx = 3;
+        content.add(fMMin, gc);
+
+        javax.swing.JFormattedTextField fMMax = createThresholdField(t.mMax);
+        gc.gridx = 4;
+        content.add(fMMax, gc);
+
+        lbl.putClientProperty("key", key);
+        lbl.putClientProperty("fEkMin", fEkMin);
+        lbl.putClientProperty("fEkMax", fEkMax);
+        lbl.putClientProperty("fMMin",  fMMin);
+        lbl.putClientProperty("fMMax",  fMMax);
+        editorLabels.add(lbl);
+
+        return row + 1;
+    }
+
+    private static javax.swing.JFormattedTextField createThresholdField(Double value) {
+        javax.swing.JFormattedTextField field = new javax.swing.JFormattedTextField(buildNumberFormatter());
+        field.setColumns(6);
+        field.setFocusLostBehavior(javax.swing.JFormattedTextField.PERSIST);
+        if (value != null) {
+            field.setValue(value);
+        }
+        return field;
+    }
+
+    private boolean saveThresholdEditors(java.util.List<JLabel> editorLabels, Component parent) {
+        Map<String, Threshold> updates = new LinkedHashMap<>();
+        Set<String> removals = new LinkedHashSet<>();
+
+        for (JLabel lbl : editorLabels) {
+            String key = String.valueOf(lbl.getClientProperty("key"));
+            javax.swing.JFormattedTextField fEkMin = (javax.swing.JFormattedTextField) lbl.getClientProperty("fEkMin");
+            javax.swing.JFormattedTextField fEkMax = (javax.swing.JFormattedTextField) lbl.getClientProperty("fEkMax");
+            javax.swing.JFormattedTextField fMMin  = (javax.swing.JFormattedTextField) lbl.getClientProperty("fMMin");
+            javax.swing.JFormattedTextField fMMax  = (javax.swing.JFormattedTextField) lbl.getClientProperty("fMMax");
+
+            Double ekMin = fieldValueOrNull(fEkMin);
+            Double ekMax = fieldValueOrNull(fEkMax);
+            Double mMin  = fieldValueOrNull(fMMin);
+            Double mMax  = fieldValueOrNull(fMMax);
+
+            if (!validateRange(lbl.getText(), "Eq", ekMin, ekMax, parent)) {
+                return false;
+            }
+            if (!validateRange(lbl.getText(), "MAX", mMin, mMax, parent)) {
+                return false;
+            }
+
+            if (ekMin == null && ekMax == null && mMin == null && mMax == null) {
+                removals.add(key);
+            } else {
+                updates.put(key, new Threshold(ekMin, ekMax, mMin, mMax));
+            }
+        }
+
+        for (String key : removals) {
+            thresholds.remove(key);
+        }
+        thresholds.putAll(updates);
+        return true;
     }
 
     /** Экспорт «Шумы / Лифт»: создаёт все нужные листы. */
@@ -395,18 +604,20 @@ public class NoiseTab extends JPanel {
         }
     }
 
-    private void onImportThresholdsTemplate() {
+    private boolean onImportThresholdsTemplate() {
         try {
             Map<String, double[]> imported = NoiseThresholdsExcelIO.importTemplate(this);
-            if (imported == null) return;
+            if (imported == null) return false;
             thresholds.clear();
             imported.forEach((key, arr) -> thresholds.put(key, thresholdFromArray(arr)));
             DatabaseManager.updateNoiseThresholds(building, imported);
             JOptionPane.showMessageDialog(this, "Пороговые значения загружены.",
                     "Пороговые значения", JOptionPane.INFORMATION_MESSAGE);
+            return true;
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Ошибка импорта порогов: " + ex.getMessage(),
                     "Пороговые значения", JOptionPane.ERROR_MESSAGE);
+            return false;
         }
     }
     /** Упаковка порогов в простой вид для экспортёра: key -> {EqMin, EqMax, MaxMin, MaxMax}. */
@@ -449,6 +660,7 @@ public class NoiseTab extends JPanel {
     public void onBuildingChanged(ru.citlab24.protokol.tabs.models.Building building) {
         this.building = (building != null) ? building : new Building();
         applyGlobalFilter();
+        refreshNoiseSummaryWindow();
     }
 
 
@@ -458,6 +670,7 @@ public class NoiseTab extends JPanel {
         // 1) Сохраняем в оперативную карту вкладки
         DatabaseManager.NoiseValue nv = byKey.computeIfAbsent(key, k -> new DatabaseManager.NoiseValue());
         change.accept(nv);
+        refreshNoiseSummaryWindow();
 
         // 2) Точечный апсерт одной записи (устойчиво к быстрым переключениям)
         try {
@@ -491,6 +704,7 @@ public class NoiseTab extends JPanel {
                 .collect(Collectors.toList());
 
         tableModel.setRooms(rooms);
+        refreshNoiseSummaryWindow();
     }
 
     private void refreshFloors() {
@@ -558,6 +772,249 @@ public class NoiseTab extends JPanel {
         if (roomsTable == null) return;
         if (roomsTable.isEditing()) {
             try { roomsTable.getCellEditor().stopCellEditing(); } catch (Exception ignore) {}
+        }
+    }
+
+    private void showNoiseSummaryWindow() {
+        commitEditors();
+        if (noiseSummaryDialog == null || !noiseSummaryDialog.isDisplayable()) {
+            Window owner = SwingUtilities.getWindowAncestor(this);
+            noiseSummaryDialog = new JDialog(owner, "Сводка шумовых точек", Dialog.ModalityType.MODELESS);
+            noiseSummaryDialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+
+            noiseSummaryModel = new NoiseSummaryTableModel();
+            noiseSummaryTable = new JTable(noiseSummaryModel);
+            noiseSummaryTable.setRowHeight(26);
+            noiseSummarySorter = new javax.swing.table.TableRowSorter<>(noiseSummaryModel);
+            noiseSummaryTable.setRowSorter(noiseSummarySorter);
+            noiseSummaryTable.setDefaultRenderer(Object.class, new NoiseSummaryCellRenderer());
+            noiseSummaryTable.getColumnModel().getColumn(0).setPreferredWidth(90);
+            noiseSummaryTable.getColumnModel().getColumn(1).setPreferredWidth(320);
+            noiseSummaryTable.getColumnModel().getColumn(2).setPreferredWidth(260);
+
+            noiseSummaryFilterField = new JTextField();
+            noiseSummaryFilterField.putClientProperty(com.formdev.flatlaf.FlatClientProperties.PLACEHOLDER_TEXT,
+                    "Фильтр по этажу, комнате или источнику");
+            noiseSummaryFilterField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+                @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { applyNoiseSummaryFilter(); }
+                @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { applyNoiseSummaryFilter(); }
+                @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { applyNoiseSummaryFilter(); }
+            });
+
+            JPanel filterPanel = new JPanel(new BorderLayout(8, 0));
+            filterPanel.add(new JLabel("Фильтр:"), BorderLayout.WEST);
+            filterPanel.add(noiseSummaryFilterField, BorderLayout.CENTER);
+
+            JPanel content = new JPanel(new BorderLayout(0, 6));
+            content.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            content.add(filterPanel, BorderLayout.NORTH);
+            JScrollPane tableScroll = new JScrollPane(noiseSummaryTable);
+            tableScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+            tableScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+            tableScroll.getVerticalScrollBar().setUnitIncrement(16);
+            content.add(tableScroll, BorderLayout.CENTER);
+
+            noiseSummaryDialog.setContentPane(content);
+            noiseSummaryDialog.setSize(780, 460);
+            noiseSummaryDialog.setLocationRelativeTo(this);
+        }
+
+        refreshNoiseSummaryWindow();
+        noiseSummaryDialog.setVisible(true);
+        noiseSummaryDialog.toFront();
+    }
+
+    private void refreshNoiseSummaryWindow() {
+        if (noiseSummaryModel != null) {
+            noiseSummaryModel.setRows(buildNoiseSummaryRows());
+            applyNoiseSummaryFilter();
+        }
+    }
+
+    private void applyNoiseSummaryFilter() {
+        if (noiseSummarySorter == null || noiseSummaryFilterField == null) return;
+
+        String query = safeTrim(noiseSummaryFilterField.getText()).toLowerCase(Locale.ROOT);
+        if (query.isBlank()) {
+            noiseSummarySorter.setRowFilter(null);
+            return;
+        }
+
+        noiseSummarySorter.setRowFilter(new RowFilter<NoiseSummaryTableModel, Integer>() {
+            @Override
+            public boolean include(Entry<? extends NoiseSummaryTableModel, ? extends Integer> entry) {
+                for (int col = 0; col < entry.getValueCount(); col++) {
+                    String value = safeTrim(entry.getStringValue(col)).toLowerCase(Locale.ROOT);
+                    if (value.contains(query)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        });
+    }
+
+    private List<NoiseSummaryRow> buildNoiseSummaryRows() {
+        List<NoiseSummaryRow> result = new ArrayList<>();
+        if (building == null) return result;
+
+        List<Floor> floors = new ArrayList<>(building.getFloors());
+        floors.sort(Comparator.comparingInt(Floor::getPosition));
+
+        Map<String, Integer> colorBySpace = new LinkedHashMap<>();
+        int colorIndex = 0;
+
+        for (Floor floor : floors) {
+            if (floor == null || floor.getType() == Floor.FloorType.PUBLIC) continue;
+
+            String floorNum = safeTrim(floor.getNumber());
+            String floorText = floorNum.isBlank() ? safeTrim(floor.getName()) : floorNum;
+            int sectionIndex = Math.max(0, floor.getSectionIndex());
+
+            List<Space> spaces = new ArrayList<>(floor.getSpaces());
+            spaces.sort(Comparator.comparingInt(Space::getPosition));
+            for (Space space : spaces) {
+                if (space == null) continue;
+
+                String spaceId = safeTrim(space.getIdentifier());
+                String spaceLabel = spaceId.isBlank() ? spaceDisplayName(space) : spaceId;
+                String spaceKey = sectionIndex + "|" + floorNum + "|" + spaceId;
+                Integer existingColor = colorBySpace.get(spaceKey);
+                if (existingColor == null) {
+                    existingColor = colorIndex++;
+                    colorBySpace.put(spaceKey, existingColor);
+                }
+
+                List<Room> rooms = new ArrayList<>(space.getRooms());
+                rooms.sort(Comparator.comparingInt(Room::getPosition));
+                for (Room room : rooms) {
+                    if (room == null || isIgnoredNoiseRoomName(room.getName())) continue;
+
+                    String roomName = safeTrim(room.getName());
+                    String key = sectionIndex + "|" + floorNum + "|" + spaceId + "|" + roomName;
+                    DatabaseManager.NoiseValue nv = byKey.get(key);
+                    Set<String> sources = (nv == null) ? Collections.emptySet() : getNvSources(nv);
+                    if (sources.isEmpty()) continue;
+
+                    result.add(new NoiseSummaryRow(
+                            floorText,
+                            joinComma(spaceLabel, roomName),
+                            formatSourcesForSummary(floor, space, sources),
+                            existingColor
+                    ));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static String formatSourcesForSummary(Floor floor, Space space, Set<String> sources) {
+        List<String> labels = new ArrayList<>();
+        boolean isStreet = floor != null && floor.getType() == Floor.FloorType.STREET
+                && space != null && space.getType() == Space.SpaceType.OUTDOOR;
+        for (String source : sources) {
+            if (isStreet && "Зум".equals(source)) {
+                labels.add("Поезд");
+            } else {
+                labels.add(source);
+            }
+        }
+        return String.join(", ", labels);
+    }
+
+    private static String joinComma(String... values) {
+        List<String> parts = new ArrayList<>();
+        if (values != null) {
+            for (String value : values) {
+                String trimmed = safeTrim(value);
+                if (!trimmed.isBlank()) parts.add(trimmed);
+            }
+        }
+        return String.join(", ", parts);
+    }
+
+    private static String safeTrim(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String spaceDisplayName(Space space) {
+        if (space == null) return "";
+        String identifier = safeTrim(space.getIdentifier());
+        if (!identifier.isBlank()) return identifier;
+        try {
+            java.lang.reflect.Method m = space.getClass().getMethod("getName");
+            Object value = m.invoke(space);
+            if (value != null && !value.toString().trim().isBlank()) {
+                return value.toString().trim();
+            }
+        } catch (Exception ignored) {
+        }
+        return "Помещение";
+    }
+
+    private static final class NoiseSummaryRow {
+        final String floor;
+        final String room;
+        final String sources;
+        final int colorIndex;
+
+        NoiseSummaryRow(String floor, String room, String sources, int colorIndex) {
+            this.floor = floor;
+            this.room = room;
+            this.sources = sources;
+            this.colorIndex = colorIndex;
+        }
+    }
+
+    private static final class NoiseSummaryTableModel extends AbstractTableModel {
+        private final String[] columns = {"Этаж", "Комната в помещении", "Источник звука"};
+        private List<NoiseSummaryRow> rows = new ArrayList<>();
+
+        void setRows(List<NoiseSummaryRow> rows) {
+            this.rows = rows == null ? new ArrayList<>() : new ArrayList<>(rows);
+            fireTableDataChanged();
+        }
+
+        NoiseSummaryRow rowAt(int rowIndex) {
+            return rows.get(rowIndex);
+        }
+
+        @Override public int getRowCount() { return rows.size(); }
+        @Override public int getColumnCount() { return columns.length; }
+        @Override public String getColumnName(int column) { return columns[column]; }
+
+        @Override public Object getValueAt(int rowIndex, int columnIndex) {
+            NoiseSummaryRow row = rows.get(rowIndex);
+            return switch (columnIndex) {
+                case 0 -> row.floor;
+                case 1 -> row.room;
+                case 2 -> row.sources;
+                default -> "";
+            };
+        }
+    }
+
+    private static final class NoiseSummaryCellRenderer extends javax.swing.table.DefaultTableCellRenderer {
+        private static final Color[] COLORS = {
+                new Color(232, 244, 255),
+                new Color(236, 248, 239),
+                new Color(255, 245, 225),
+                new Color(244, 238, 255),
+                new Color(255, 236, 239),
+                new Color(232, 248, 247)
+        };
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                       boolean hasFocus, int row, int column) {
+            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            if (!isSelected && table.getModel() instanceof NoiseSummaryTableModel model) {
+                int modelRow = table.convertRowIndexToModel(row);
+                NoiseSummaryRow summaryRow = model.rowAt(modelRow);
+                c.setBackground(COLORS[Math.floorMod(summaryRow.colorIndex, COLORS.length)]);
+            }
+            return c;
         }
     }
 
@@ -796,6 +1253,7 @@ public class NoiseTab extends JPanel {
         refreshFloors();
         refreshSpaces();
         refreshRooms();
+        refreshNoiseSummaryWindow();
     }
     private int getSelectedSectionIndex() {
         Section sel = sectionList.getSelectedValue();

@@ -79,6 +79,38 @@ final class TitlePageMeasurementTableWriter {
         );
     }
 
+    static void rebuildNoiseTable(Workbook wb, String additionalInfoText) {
+        if (wb == null) return;
+
+        Sheet sheet = wb.getSheet("Титульная страница");
+        if (sheet == null) return;
+
+        Font baseFont = wb.createFont();
+        baseFont.setFontName("Arial");
+        baseFont.setFontHeightInPoints((short) 10);
+
+        Font smallFont = wb.createFont();
+        smallFont.setFontName("Arial");
+        smallFont.setFontHeightInPoints((short) 8);
+
+        CellStyle headerStyle = wb.createCellStyle();
+        headerStyle.setFont(baseFont);
+        headerStyle.setWrapText(true);
+        headerStyle.setAlignment(HorizontalAlignment.CENTER);
+        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        setThinBorders(headerStyle);
+
+        CellStyle measurementStyle = wb.createCellStyle();
+        measurementStyle.cloneStyleFrom(headerStyle);
+        measurementStyle.setFont(smallFont);
+        setThinBorders(measurementStyle);
+
+        int headerRow = 35;
+        String[] headers = noiseHeaderTexts();
+        writeNoiseTable(sheet, headerRow, headerStyle, measurementStyle, additionalInfoText, headers);
+        adjustHeaderRowHeightForMergedSections(sheet, headerRow, headerRanges(), headers);
+    }
+
     private static void setThinBorders(CellStyle style) {
         if (style == null) return;
         style.setBorderTop(BorderStyle.THIN);
@@ -149,16 +181,17 @@ final class TitlePageMeasurementTableWriter {
         writeMeasurementRow(sheet, measurementStyle, rowIndex,
                 "Длительность интервала времени",
                 "Секундомеры электронные, Интеграл С-01",
-                "\u00b1(9,6\u00b710-6 \u00b7\u0422x+0,01) \u0441\n" +
+                "Основная абсолютная погрешность, при температуре 25\u00a0\u00b1\u00a05 (\u02da\u0421):\n" +
+                        "\u00b1(9,6\u00b710\u207b\u2076 \u00b7\u0422x+0,01) \u0441\n" +
                         "\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u0430\u044f \u0430\u0431\u0441\u043e\u043b\u044e\u0442\u043d\u0430\u044f \u043f\u043e\u0433\u0440\u0435\u0448\u043d\u043e\u0441\u0442\u044c \u043f\u0440\u0438 \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0438 \u0442\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u044b \u043e\u0442 \u043d\u043e\u0440\u043c\u0430\u043b\u044c\u043d\u044b\u0445 \u0443\u0441\u043b\u043e\u0432\u0438\u0439 25 \u00b1 5 (\u02da\u0421) \u043d\u0430 1 \u02da\u0421 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0442\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u044b:\n" +
-                        "-(2,2\u00b710-6\u00b7\u0422x) \u0441",
-                "\u0421-\u0410\u0428/21-05-2025/433383424 \u0434\u043e 20.05.2026",
-                "462667");
+                        "-(2,2\u00b710\u207b\u2076\u00b7\u0422x) \u0441",
+                "\u0421-\u0410\u0428/14-10-2025/473393582 \u0434\u043e 12.10.2026",
+                "433276");
         rowIndex++;
 
         int microStartRow = rowIndex;
         String instrumentValue = "Комплект измерительный параметров микроклимата «Метеоскоп-М»";
-        String verificationValue = "С-А/22-01-2024/310286448 до 21.01.2026";
+        String verificationValue = "С-ГЛР/02-02-2026/501012535 до 01.02.2028";
         setMergedText(sheet, measurementStyle, microStartRow,
                 microStartRow + (hasResultantTemperature ? 4 : 3), 4, 9, instrumentValue);
         setMergedText(sheet, measurementStyle, microStartRow,
@@ -203,7 +236,7 @@ final class TitlePageMeasurementTableWriter {
                 "Измерение расстояний",
                 "Дальномер лазерный ADA Cosmo 70",
                 "\u00b11,5 мм",
-                "С-АШ/22-01-2025/403727315  до 21.01.2026",
+                "С-АШ/19-01-2026/495362001  до 18.01.2027",
                 "000873");
 
         int medRow = distanceRow + 1;
@@ -213,7 +246,7 @@ final class TitlePageMeasurementTableWriter {
                     "Мощность дозы гамма-излучения",
                     "Дозиметр радиометр ДРБП-03",
                     "\u00b1 (15+4/Н)%\nГде Н – измеренные числовые значения МЭД",
-                    "С-АШ/16-01-2025/402566181 до 15.01.2026",
+                    "С-АШ/19-01-2026/495368144 до 18.01.2027",
                     "21115");
         } else {
             writeMeasurementRow(sheet, measurementStyle, medRow, "", "", "", "", "");
@@ -227,7 +260,7 @@ final class TitlePageMeasurementTableWriter {
                             "Эквивалентная равновесная объемная активность (ЭРОА) торона",
                     "Аэрозольный альфа-радиометр РАА-20П2 «Поиск»",
                     "\u00b1 30%",
-                    "С-ТТ/27-01-2025/405177537 до 26.01.2026",
+                    "С-ТТ/29-01-2026/499889885 до 28.01.2027",
                     "412");
         } else {
             writeMeasurementRow(sheet, measurementStyle, eroaRow, "", "", "", "", "");
@@ -286,7 +319,7 @@ final class TitlePageMeasurementTableWriter {
                             "\u00b1(0,015×X + 5×к) в полосе частот 50…60 Гц\n" +
                             "\u00b1(0,0001*X + 1*к) \n" +
                             "X – значение измеренной величины по встроенному индикатору, к – цена единицы младшего разряда индикатора",
-                    "С-АШ/17-01-2025/402863148 до 16.01.2026",
+                    "С-АШ/21-01-2026/496235486 до 20.01.2027",
                     "05151010");
         } else {
             writeMeasurementRow(sheet, measurementStyle, multimeterRow, "", "", "", "", "");
@@ -516,6 +549,226 @@ final class TitlePageMeasurementTableWriter {
         setMergedText(sheet, legendBoxStyle, legendRow, legendRow, 18, 20, "поле №1");
         setMergedText(sheet, legendTextStyle, legendRow, legendRow, 21, 25,
                 "- Поля для измерения средней горизонтальной освещенности на уровне земли");
+    }
+
+    private static String[] noiseHeaderTexts() {
+        return new String[]{
+                "Измеряемый показатель",
+                "Наименование, тип средства измерения",
+                "Заводской номер",
+                "Погрешность средства измерения",
+                "Сведения о поверке (№ свидетельства, срок действия)"
+        };
+    }
+
+    private static void writeNoiseTable(Sheet sheet, int headerRow, CellStyle headerStyle,
+                                        CellStyle measurementStyle, String additionalInfoText,
+                                        String[] headers) {
+        writeHeaderRow(sheet, headerRow, headerStyle, headers);
+
+        int rowIndex = headerRow + 1;
+        setRowHeightPx(sheet, rowIndex, 126f);
+        writeMeasurementRow(sheet, measurementStyle, rowIndex,
+                "Длительность интервала времени",
+                "Секундомеры электронные, Интеграл С-01",
+                "Основная абсолютная погрешность, при температуре 25\u00a0\u00b1\u00a05 (\u02da\u0421):\n" +
+                        "\u00b1(9,6\u00b710\u207b\u2076 \u00b7\u0422x+0,01) \u0441\n" +
+                        "\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u0430\u044f \u0430\u0431\u0441\u043e\u043b\u044e\u0442\u043d\u0430\u044f \u043f\u043e\u0433\u0440\u0435\u0448\u043d\u043e\u0441\u0442\u044c \u043f\u0440\u0438 \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0438\u0438 \u0442\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u044b \u043e\u0442 \u043d\u043e\u0440\u043c\u0430\u043b\u044c\u043d\u044b\u0445 \u0443\u0441\u043b\u043e\u0432\u0438\u0439 25 \u00b1 5 (\u02da\u0421) \u043d\u0430 1 \u02da\u0421 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f \u0442\u0435\u043c\u043f\u0435\u0440\u0430\u0442\u0443\u0440\u044b:\n" +
+                        "-(2,2\u00b710\u207b\u2076\u00b7\u0422x) \u0441",
+                "С-АШ/14-10-2025/473393582 до 12.10.2026",
+                "433276");
+        rowIndex++;
+
+        int microStartRow = rowIndex;
+        setMergedText(sheet, measurementStyle, microStartRow, microStartRow + 3, 4, 9,
+                "Комплект измерительный параметров микроклимата «Метеоскоп-М»");
+        setMergedText(sheet, measurementStyle, microStartRow, microStartRow + 3, 10, 12, "569521");
+        setMergedText(sheet, measurementStyle, microStartRow, microStartRow + 3, 20, 25,
+                "С-ГЛР/02-02-2026/501012535 до 01.02.2028");
+
+        setRowHeightPx(sheet, rowIndex, 33f);
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 0, 3, "Температура окружающего воздуха");
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "\u00b10,2 \u00b0C");
+        rowIndex++;
+
+        setRowHeightPx(sheet, rowIndex, 30f);
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 0, 3, "Относительная влажность");
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "\u00b1 3%");
+        rowIndex++;
+
+        setRowHeightPx(sheet, rowIndex, 72f);
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 0, 3,
+                "Скорость воздушного потока, скорость движения воздуха");
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19,
+                "\u00b1(0,05+0,05V) м/с в диапазоне от 0,1 до 1 м/с включ.\n" +
+                        "\u00b1(0,1+0,05V) м/с в диапазоне св. 1 до 20 м/с.\n" +
+                        "где V – значение измеряемой скорости, м/с");
+        rowIndex++;
+
+        setRowHeightPx(sheet, rowIndex, 37f);
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 0, 3, "Атмосферное давление");
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "\u00b1 0,13 кПа\n(\u00b11 мм рт.ст)");
+        rowIndex++;
+
+        setRowHeightPx(sheet, rowIndex, 35f);
+        writeMeasurementRow(sheet, measurementStyle, rowIndex,
+                "Измерение расстояний",
+                "Дальномер лазерный ADA Cosmo 70",
+                "\u00b11,5 мм",
+                "С-АШ/19-01-2026/495362001  до 18.01.2027",
+                "000873");
+        rowIndex++;
+
+        writeNoiseMeasurementTallRow(sheet, measurementStyle, rowIndex,
+                "Эквивалентный уровень звука, максимальный уровень звука",
+                "Шумомер-виброметр, анализатор спектра ЭКОФИЗИКА-110А ",
+                "БФЛ251842",
+                "1 класс\n\u00b10,7 дБ",
+                "С-ГУЦ/24-02-2026/507383956 до 23.02.2027",
+                4);
+        rowIndex += 4;
+
+        writeNoiseMeasurementTallRow(sheet, measurementStyle, rowIndex,
+                "Проверка калибровки шумомера",
+                "Калибратор акустический АК-1000",
+                "2145",
+                "1 класс\n\u00b10,25 дБ",
+                "С-ВХН/25-02-2026/506318673 до 24.02.2027",
+                4);
+        rowIndex += 4;
+
+        Workbook workbook = sheet.getWorkbook();
+        Font sectionFont = workbook.createFont();
+        sectionFont.setFontName("Arial");
+        sectionFont.setFontHeightInPoints((short) 10);
+
+        CellStyle sectionTextStyle = workbook.createCellStyle();
+        sectionTextStyle.setFont(sectionFont);
+        sectionTextStyle.setWrapText(true);
+        sectionTextStyle.setAlignment(HorizontalAlignment.LEFT);
+        sectionTextStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        CellStyle sectionHeaderStyle = workbook.createCellStyle();
+        sectionHeaderStyle.cloneStyleFrom(sectionTextStyle);
+        sectionHeaderStyle.setAlignment(HorizontalAlignment.CENTER);
+        setThinBorders(sectionHeaderStyle);
+
+        CellStyle sectionCellStyle = workbook.createCellStyle();
+        sectionCellStyle.cloneStyleFrom(sectionTextStyle);
+        setThinBorders(sectionCellStyle);
+
+        Font sectionSmallFont = workbook.createFont();
+        sectionSmallFont.setFontName("Arial");
+        sectionSmallFont.setFontHeightInPoints((short) 9);
+
+        CellStyle sectionSmallCenterStyle = workbook.createCellStyle();
+        sectionSmallCenterStyle.cloneStyleFrom(sectionCellStyle);
+        sectionSmallCenterStyle.setFont(sectionSmallFont);
+        sectionSmallCenterStyle.setAlignment(HorizontalAlignment.CENTER);
+
+        int infoRow = rowIndex;
+        setRowHeightPx(sheet, infoRow, 10f);
+
+        int sectionTitleRow = infoRow + 1;
+        setRowHeightPx(sheet, sectionTitleRow, 20f);
+        setMergedText(sheet, sectionTextStyle, sectionTitleRow, sectionTitleRow, 0, 25,
+                "11. Сведения о нормативных документах (НД), регламентирующих значения показателей " +
+                        "и НД на методы (методики) измерений:");
+
+        int spacerRow = sectionTitleRow + 1;
+        setRowHeightPx(sheet, spacerRow, 10f);
+
+        int sectionHeaderRow = spacerRow + 1;
+        setRowHeightPx(sheet, sectionHeaderRow, 40f);
+        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 0, 4,
+                "Измеряемый показатель");
+        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 5, 14,
+                "Документы, наименование НД, регламентирующих значения характеристик, показателей (к сведению)");
+        setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 15, 25,
+                "Идентификация применяемого метода испытаний / метод (методика) измерений ");
+
+        int noiseSectionRow = sectionHeaderRow + 1;
+        for (int r = noiseSectionRow; r < noiseSectionRow + 6; r++) {
+            setRowHeightPx(sheet, r, 28f);
+        }
+        setMergedText(sheet, sectionSmallCenterStyle, noiseSectionRow, noiseSectionRow + 5, 0, 4,
+                "Эквивалентный уровень звука, максимальный уровень звука");
+        setMergedText(sheet, sectionSmallCenterStyle, noiseSectionRow, noiseSectionRow + 5, 5, 14,
+                "СанПиН 1.2.3685-21 \"Гигиенические нормативы и требования к обеспечению безопасности " +
+                        "и (или) безвредности для человека факторов среды обитания\"");
+        setMergedText(sheet, sectionSmallCenterStyle, noiseSectionRow, noiseSectionRow + 5, 15, 25,
+                "МИ Ш.13-2021 \"Методика измерений шума, инфразвука, воздушного\n" +
+                        "ультразвука на рабочих местах, в том числе рабочих местах\n" +
+                        "транспорта и объектов транспортной инфраструктуры, в\n" +
+                        "помещениях жилых, общественных и производственных\n" +
+                        "зданий, на селитебной и открытой территории.\" п. 12.3.2, п. 12.3.3 / измерение шума");
+
+        int spacerAfterSections = noiseSectionRow + 6;
+        setRowHeightPx(sheet, spacerAfterSections, 10f);
+
+        writeCommonTail(sheet, workbook, sectionTextStyle, spacerAfterSections + 1, additionalInfoText);
+    }
+
+    private static void writeNoiseMeasurementTallRow(Sheet sheet, CellStyle style, int firstRow,
+                                                     String indicatorValue, String instrumentValue,
+                                                     String serialValue, String errorValue,
+                                                     String verificationValue, int rows) {
+        int lastRow = firstRow + Math.max(1, rows) - 1;
+        for (int r = firstRow; r <= lastRow; r++) {
+            setRowHeightPx(sheet, r, 24f);
+        }
+        setMergedText(sheet, style, firstRow, lastRow, 0, 3, indicatorValue);
+        setMergedText(sheet, style, firstRow, lastRow, 4, 9, instrumentValue);
+        setMergedText(sheet, style, firstRow, lastRow, 10, 12, serialValue);
+        setMergedText(sheet, style, firstRow, lastRow, 13, 19, errorValue);
+        setMergedText(sheet, style, firstRow, lastRow, 20, 25, verificationValue);
+    }
+
+    private static void writeCommonTail(Sheet sheet, Workbook workbook, CellStyle sectionTextStyle,
+                                        int additionalInfoRow, String additionalInfoText) {
+        setRowHeightPx(sheet, additionalInfoRow, 20f);
+        String infoText = (additionalInfoText == null || additionalInfoText.isBlank())
+                ? "12. Дополнительные сведения (характеристика объекта):" : additionalInfoText;
+
+        Font infoFont = workbook.createFont();
+        infoFont.setFontName("Arial");
+        infoFont.setFontHeightInPoints((short) 10);
+
+        Font redFont = workbook.createFont();
+        redFont.setFontName("Arial");
+        redFont.setFontHeightInPoints((short) 10);
+        redFont.setColor(IndexedColors.RED.getIndex());
+
+        CellStyle additionalInfoStyle = workbook.createCellStyle();
+        additionalInfoStyle.setFont(infoFont);
+        additionalInfoStyle.setWrapText(true);
+        additionalInfoStyle.setAlignment(HorizontalAlignment.LEFT);
+        additionalInfoStyle.setVerticalAlignment(VerticalAlignment.TOP);
+
+        XSSFRichTextString richInfo = new XSSFRichTextString(infoText);
+        richInfo.applyFont(infoFont);
+        String highlight = "летний период";
+        int highlightIndex = infoText.indexOf(highlight);
+        if (highlightIndex >= 0) {
+            richInfo.applyFont(highlightIndex, highlightIndex + highlight.length(), redFont);
+        }
+        setMergedRichText(sheet, additionalInfoStyle, additionalInfoRow, additionalInfoRow, 0, 25, richInfo);
+
+        int spacerAfterAdditionalInfo = additionalInfoRow + 1;
+        setRowHeightPx(sheet, spacerAfterAdditionalInfo, 7f);
+
+        int section13Row = spacerAfterAdditionalInfo + 1;
+        setRowHeightPx(sheet, section13Row, 20f);
+        setMergedText(sheet, sectionTextStyle, section13Row, section13Row, 0, 25,
+                "13. Сведения о дополнении, отклонении или исключении из методов: - ");
+
+        int spacerAfterSection13 = section13Row + 1;
+        setRowHeightPx(sheet, spacerAfterSection13, 7f);
+
+        int section14Row = spacerAfterSection13 + 1;
+        setRowHeightPx(sheet, section14Row, 20f);
+        setMergedText(sheet, sectionTextStyle, section14Row, section14Row, 0, 25,
+                "14. Эскиз (ситуационный план) места проведения измерений с указанием точек измерений: - ");
     }
 
     private static void writeHeaderRow(Sheet sheet, int rowIndex, CellStyle headerStyle, String[] headers) {

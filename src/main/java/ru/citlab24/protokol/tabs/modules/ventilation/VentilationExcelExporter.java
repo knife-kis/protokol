@@ -70,6 +70,7 @@ public class VentilationExcelExporter {
 
         fillData(filtered, sheet, dataStyle, wrappedDataStyle, threeDigitStyle, integerStyle, oneDigitStyle,
                 floorHeaderStyle, plusMinusStyle, leftInGroupStyle, rightInGroupStyle);
+        addUncertaintyLegend(sheet, wrappedDataStyle);
 
         // 6) Автовысота строк для текста в C
         adjustRowsWithText((org.apache.poi.xssf.usermodel.XSSFSheet) sheet);
@@ -123,6 +124,7 @@ public class VentilationExcelExporter {
 
         fillData(filteredRecords, sheet, dataStyle, wrappedDataStyle, threeDigitStyle, integerStyle, oneDigitStyle,
                 floorHeaderStyle, plusMinusStyle, leftInGroupStyle, rightInGroupStyle);
+        addUncertaintyLegend(sheet, wrappedDataStyle);
 
         // Автоматическая высота строк для текста в столбце C
         adjustRowsWithText((XSSFSheet) sheet);
@@ -390,7 +392,7 @@ public class VentilationExcelExporter {
         String[] headers = {
                 "№ п/п", "№точки измерения",
                 "Рабочее место, место проведения измерений (Приток/вытяжка)",
-                "Измеренные значения скорости воздушного потока (± расширенная неопределенность) м/с",
+                "Измеренные значения скорости воздушного потока. Результат измерений (y) ± U, м/с",
                 "", "", "Площадь сечения проема, м²",
                 "Производительность вент системы (канал или общая), м³/ч",
                 "Объем помещения, м³", "Кратность воздухообмена по притоку или вытяжке, ч⁻¹",
@@ -423,6 +425,45 @@ public class VentilationExcelExporter {
         numberRow.getCell(10).setCellValue("9");
         numberRow.getCell(11).setCellValue("10");
         sheet.addMergedRegion(new CellRangeAddress(3, 3, 3, 5));
+    }
+
+    private static void addUncertaintyLegend(Sheet sheet, CellStyle baseStyle) {
+        if (sheet == null) return;
+
+        int firstRow = sheet.getLastRowNum() + 1;
+        int lastRow = firstRow + 3;
+
+        Workbook workbook = sheet.getWorkbook();
+        CellStyle legendStyle = workbook.createCellStyle();
+        if (baseStyle != null) {
+            legendStyle.cloneStyleFrom(baseStyle);
+        }
+        legendStyle.setWrapText(true);
+        legendStyle.setAlignment(HorizontalAlignment.LEFT);
+        legendStyle.setVerticalAlignment(VerticalAlignment.TOP);
+        legendStyle.setBorderBottom(BorderStyle.NONE);
+        legendStyle.setBorderLeft(BorderStyle.NONE);
+        legendStyle.setBorderRight(BorderStyle.NONE);
+
+        String text = "Условные обозначения:\n" +
+                "U - значение расширенной неопределенности результата измерения, выраженное в абсолютных значениях. " +
+                "Указанная расширенная неопределенность измерений установлена как стандартная неопределенность измерений, " +
+                "умноженная на коэффициент охвата k (k=2), который соответствует вероятности охвата около 95 %";
+
+        for (int rowIndex = firstRow; rowIndex <= lastRow; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) row = sheet.createRow(rowIndex);
+            row.setHeightInPoints(15f);
+            for (int col = 0; col <= 11; col++) {
+                Cell cell = row.getCell(col);
+                if (cell == null) cell = row.createCell(col);
+                cell.setCellStyle(legendStyle);
+            }
+        }
+
+        Cell firstCell = sheet.getRow(firstRow).getCell(0);
+        firstCell.setCellValue(text);
+        sheet.addMergedRegion(new CellRangeAddress(firstRow, lastRow, 0, 11));
     }
 
     private static void fillData(List<VentilationRecord> records, Sheet sheet,

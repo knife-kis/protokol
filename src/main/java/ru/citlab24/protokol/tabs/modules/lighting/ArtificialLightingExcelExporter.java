@@ -18,6 +18,12 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class ArtificialLightingExcelExporter {
 
     private ArtificialLightingExcelExporter() {}
+    private static final String DELTA_H_LEGEND_TEXT = "Условные обозначения:\n" +
+            "∆Н - абсолютная расширенная неопределенность результата измерения мощности дозы гамма-излучения " +
+            "на местности, определяемая в соответствии с руководством по эксплуатации дозиметра или методикой " +
+            "выполнения измерений. Указанная расширенная неопределенность измерений установлена как стандартная " +
+            "неопределенность измерений, умноженная на коэффициент охвата k (k=2), который соответствует " +
+            "вероятности охвата около 95 %.";
 
     /* =================== Публичные API =================== */
     public static void export(Building building,
@@ -135,9 +141,9 @@ public final class ArtificialLightingExcelExporter {
         mergeWithBorder(sh, "H4:L4");
         mergeWithBorder(sh, "M4:P4");
 
-        mergeWithBorder(sh, "H5:K5");   // «Измеренная ± расширенная неопределенность»
+        mergeWithBorder(sh, "H5:K5");   // «Результат измерений (y) ± U»
         mergeWithBorder(sh, "L5:L6");   // «Нормируемая»
-        mergeWithBorder(sh, "M5:O6");   // «Измеренный ± расширенная неопределенность»
+        mergeWithBorder(sh, "M5:O6");   // «Результат измерений (y) ± U»
         mergeWithBorder(sh, "P5:P6");   // «Нормируемая»
 
         mergeWithBorder(sh, "H6:J6");   // «Общая»
@@ -159,13 +165,13 @@ public final class ArtificialLightingExcelExporter {
         put(sh, 3, 6, "Число не горящих ламп, шт.", S.headVertical);
 
         put(sh, 3, 7,  "Освещенность, лк", S.headCenterBorderWrap);
-        put(sh, 4, 7,  "Измеренная ± расширенная неопределенность", S.headCenterBorderWrap);
+        put(sh, 4, 7,  "Результат измерений\n(y) ± U", S.headCenterBorderWrap);
         put(sh, 5, 7,  "Общая", S.headCenterBorderWrap);
         put(sh, 5, 10, "Комбинированная", S.headVertical);
         put(sh, 4, 11, "Нормируемая", S.headVertical);
 
         put(sh, 3, 12, "Коэффициент пульсации, %", S.headCenterBorderWrap);
-        put(sh, 4, 12, "Измеренный ± расширенная неопределенность", S.headCenterBorderWrap);
+        put(sh, 4, 12, "Результат измерений\n(y) ± U", S.headCenterBorderWrap);
         put(sh, 4, 15, "Нормируемая", S.headVertical);
 
         // строка 7 — 1..12
@@ -280,6 +286,7 @@ public final class ArtificialLightingExcelExporter {
         int lastRow = rows.isEmpty() ? 6 : (start + rows.size() - 1); // <-- фикс
         paintGridIfEmpty(sh, 3, 6, 0, 15, S.centerBorder);           // 4..7
         if (lastRow >= 7) paintGridIfEmpty(sh, 7, lastRow, 0, 15, S.centerBorder); // 8..last
+        addBottomLegend(sh, lastRow + 1, DELTA_H_LEGEND_TEXT, S.textLeftBorderWrap);
     }
 
     /* =================== Сбор данных =================== */
@@ -500,6 +507,31 @@ public final class ArtificialLightingExcelExporter {
                 if (noBorders) cell.setCellStyle(style);
             }
         }
+    }
+
+    private static void addBottomLegend(Sheet sh, int firstRow, String text, CellStyle baseStyle) {
+        Workbook wb = sh.getWorkbook();
+        CellStyle legendStyle = wb.createCellStyle();
+        if (baseStyle != null) {
+            legendStyle.cloneStyleFrom(baseStyle);
+        }
+        legendStyle.setWrapText(true);
+        legendStyle.setAlignment(HorizontalAlignment.LEFT);
+        legendStyle.setVerticalAlignment(VerticalAlignment.TOP);
+        legendStyle.setBorderBottom(BorderStyle.NONE);
+        legendStyle.setBorderLeft(BorderStyle.NONE);
+        legendStyle.setBorderRight(BorderStyle.NONE);
+
+        int lastRow = firstRow + 4;
+        for (int rowIndex = firstRow; rowIndex <= lastRow; rowIndex++) {
+            Row row = ensureRow(sh, rowIndex);
+            row.setHeightInPoints(15f);
+            for (int col = 0; col <= 15; col++) {
+                cell(row, col).setCellStyle(legendStyle);
+            }
+        }
+        cell(ensureRow(sh, firstRow), 0).setCellValue(text);
+        sh.addMergedRegion(new CellRangeAddress(firstRow, lastRow, 0, 15));
     }
 
     /* =================== Стили =================== */

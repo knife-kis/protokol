@@ -19,6 +19,10 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class LightingExcelExporter {
 
     private LightingExcelExporter() {}
+    private static final String UNCERTAINTY_LEGEND_TEXT = "Условные обозначения:\n" +
+            "U - значение расширенной неопределенности результата измерения, выраженное в абсолютных значениях. " +
+            "Указанная расширенная неопределенность измерений установлена как стандартная неопределенность " +
+            "измерений, умноженная на коэффициент охвата k (k=2), который соответствует вероятности охвата около 95 %";
 
     // === ТОНКАЯ ОБЁРТКА: создаёт книгу, вызывает appendToWorkbook(...), предлагает «Сохранить» ===
     public static void export(Building building, int sectionIndex, Component parent) {
@@ -89,13 +93,13 @@ public final class LightingExcelExporter {
         put(sh, 3, 5, "КЕО, %", S.headVertical);
 
         mergeWithBorder(sh, "G3:P3"); put(sh, 2, 6, "При боковом освещении", S.headCenterBorderWrap);
-        mergeWithBorder(sh, "G4:I4"); put(sh, 3, 6, "Освещенность внутри помещения ± расширенная неопределенность, лк", S.headVertical);
-        mergeWithBorder(sh, "J4:L4"); put(sh, 3, 9, "Наружная освещенность ± расширенная неопределенность, лк", S.headVertical);
-        mergeWithBorder(sh, "M4:O4"); put(sh, 3, 12, "КЕО ± расширенная неопределенность, %", S.headVertical);
+        mergeWithBorder(sh, "G4:I4"); put(sh, 3, 6, "Освещенность внутри помещения, лк Результат измерений\n(y) ± U", S.headVertical);
+        mergeWithBorder(sh, "J4:L4"); put(sh, 3, 9, "Наружная освещенность, лк Результат измерений\n(y) ± U", S.headVertical);
+        mergeWithBorder(sh, "M4:O4"); put(sh, 3, 12, "КЕО , % Результат измерений\n(y) ± U", S.headVertical);
         put(sh, 3, 15, "Допустимое значение КЕО, %", S.headVertical);
 
         mergeWithBorder(sh, "Q3:S4");
-        put(sh, 2, 16, "Неравномерность естественного освещения ± расширенная неопределенность", S.headVertical);
+        put(sh, 2, 16, "Неравномерность естественного освещения Результат измерений\n(y) ± U", S.headVertical);
 
         // Нумерация (ряд 5)
         put(sh, 4, 0, 1, S.headCenterBorder);
@@ -313,12 +317,11 @@ public final class LightingExcelExporter {
             }
         }
 
-        int noteRow = row;
+        int noteRow = addUncertaintyLegendBeforeCustomerData(sh, row, S);
         Row note = ensureRow(sh, noteRow);
         note.setHeightInPoints(pixelsToPoints(67));
         String noteRange = "A" + (noteRow + 1) + ":S" + (noteRow + 1);
         mergeWithoutBorder(sh, noteRange);
-        addRegionTopBorder(sh, noteRange);
         String noteText = buildCustomerDataNote(wb);
         put(sh, noteRow, 0, noteText, S.textLeftItalicTopBorderWrap);
 
@@ -367,6 +370,27 @@ public final class LightingExcelExporter {
         Row endRow = ensureRow(sh, footerRow);
         mergeWithoutBorder(sh, "A" + (endRow.getRowNum() + 1) + ":S" + (endRow.getRowNum() + 1));
         put(sh, endRow.getRowNum(), 0, "Конец протокола испытаний", S.centerBold);
+    }
+
+    private static int addUncertaintyLegendBeforeCustomerData(Sheet sh, int rowIndex, Styles S) {
+        Row row = ensureRow(sh, rowIndex);
+        row.setHeightInPoints(pixelsToPoints(67));
+
+        String range = "A" + (rowIndex + 1) + ":S" + (rowIndex + 1);
+        mergeWithoutBorder(sh, range);
+        addRegionTopBorder(sh, range);
+
+        Workbook wb = sh.getWorkbook();
+        CellStyle legendStyle = wb.createCellStyle();
+        legendStyle.cloneStyleFrom(S.textLeft);
+        legendStyle.setWrapText(true);
+        legendStyle.setVerticalAlignment(VerticalAlignment.TOP);
+        legendStyle.setBorderBottom(BorderStyle.NONE);
+        legendStyle.setBorderLeft(BorderStyle.NONE);
+        legendStyle.setBorderRight(BorderStyle.NONE);
+        put(sh, rowIndex, 0, UNCERTAINTY_LEGEND_TEXT, legendStyle);
+
+        return rowIndex + 1;
     }
 
     // ===== ЛОГИКА ДАННЫХ =====

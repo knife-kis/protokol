@@ -62,14 +62,14 @@ final class ArtificialLightingMapTabBuilder {
 
         applyMergedHeader(sheet, rowIndex + 1, rowIndex + 1, 6, 9, "Освещенность, лк", headerStyle);
         applyMergedHeader(sheet, rowIndex + 2, rowIndex + 2, 6, 9,
-                "Измеренная ± расширенная неопределенность", headerStyle);
+                "Результат измерений\n(y) ± U", headerStyle);
         applyMergedHeader(sheet, rowIndex + 3, rowIndex + 3, 6, 8, "Общая", headerStyle);
         setCellValue(headerBottom, 9, "Комбинированная", headerVerticalStyle);
         applyBorderToCell(headerBottom, 9, headerVerticalStyle);
 
         applyMergedHeader(sheet, rowIndex + 1, rowIndex + 1, 10, 12, "Коэффициент\nпульсации, %", headerStyle);
         applyMergedHeader(sheet, rowIndex + 2, rowIndex + 3, 10, 12,
-                "Измеренный\n ± расширенная неопределенность", headerStyle);
+                "Результат измерений\n(y) ± U", headerStyle);
 
         Row numbersRow = sheet.createRow(rowIndex + 4);
         applyMergedHeader(sheet, rowIndex + 4, rowIndex + 4, 0, 0, "1", headerNumberStyle);

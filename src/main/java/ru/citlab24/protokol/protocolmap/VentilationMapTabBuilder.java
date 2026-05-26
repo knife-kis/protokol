@@ -95,7 +95,7 @@ final class VentilationMapTabBuilder {
         createCell(headerRow, 0, "№ п/п", headerStyle);
         createCell(headerRow, 1, "№ точки измерения", headerStyle);
         createCell(headerRow, 2, "Рабочее место, место проведения измерений (Приток/вытяжка)", headerStyle);
-        createCell(headerRow, 3, "Измеренные значения скорости воздушного потока (± расширенная неопределенность) м/с",
+        createCell(headerRow, 3, "Измеренные значения скорости воздушного потока. Результат измерений (y) ± U, м/с",
                 headerStyle);
         createCell(headerRow, 4, "", headerStyle);
         createCell(headerRow, 5, "", headerStyle);

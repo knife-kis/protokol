@@ -139,6 +139,44 @@ public final class AllExcelExporter {
                     "Ошибка", JOptionPane.ERROR_MESSAGE);
         }
     }
+
+    public static void appendNoiseTitleSheet(MainFrame frame, Building building, Workbook wb) {
+        if (wb == null) return;
+
+        appendTitleSheet(frame, building, wb);
+
+        Sheet sheet = wb.getSheet("Титульная страница");
+        if (sheet != null) {
+            PrintSetup ps = sheet.getPrintSetup();
+            ps.setPaperSize(PrintSetup.A4_PAPERSIZE);
+            ps.setLandscape(true);
+            ps.setFitWidth((short) 1);
+            ps.setFitHeight((short) 0);
+            sheet.setFitToPage(true);
+            sheet.setAutobreaks(true);
+
+            TitlePageValues titleValues = readTitlePageValues(frame);
+            setExistingCellText(sheet, 12, 0, buildProtocolTitle(titleValues.applicationNumber, 2));
+            setExistingCellText(sheet, 31, 1,
+                    "Регистрационный номер карты замеров: " + buildMeasurementCardNumber(titleValues.applicationNumber, 2));
+
+            String indicatorsText = "Показатели, по которым проводились измерения: " +
+                    "эквивалентный уровень звука, максимальный уровень звука.";
+            setExistingCellText(sheet, 29, 1, indicatorsText);
+            adjustRowHeightForMergedText(sheet, 29, 1, 25, indicatorsText);
+        }
+
+        TitlePageMeasurementTableWriter.rebuildNoiseTable(wb,
+                "12. Дополнительные сведения (характеристика объекта): Помещения не меблированы");
+        sheet = wb.getSheet("Титульная страница");
+        if (sheet != null) {
+            int sheetIndex = wb.getSheetIndex(sheet);
+            if (sheetIndex >= 0) {
+                wb.setPrintArea(sheetIndex, 0, 25, 0, Math.max(0, sheet.getLastRowNum()));
+            }
+        }
+    }
+
     /** Первый лист: титульная страница. */
     private static void appendTitleSheet(MainFrame frame, Building building, Workbook wb) {
         Sheet sheet = wb.createSheet("Титульная страница");
@@ -628,16 +666,24 @@ public final class AllExcelExporter {
     }
 
     private static String buildProtocolTitle(String applicationNumber) {
-        return "Протокол испытаний № " + buildProtocolNumber(applicationNumber);
+        return buildProtocolTitle(applicationNumber, 1);
+    }
+
+    private static String buildProtocolTitle(String applicationNumber, int protocolPart) {
+        return "Протокол испытаний № " + buildProtocolNumber(applicationNumber, protocolPart);
     }
 
     private static String buildProtocolNumber(String applicationNumber) {
+        return buildProtocolNumber(applicationNumber, 1);
+    }
+
+    private static String buildProtocolNumber(String applicationNumber, int protocolPart) {
         String appNumber = safe(applicationNumber);
         if (appNumber.isEmpty()) {
             appNumber = "_____";
         }
         String suffix = lastDigitsOrPlaceholder(applicationNumber, 2, "__");
-        return appNumber + "-1-Ф/" + suffix;
+        return appNumber + "-" + protocolPart + "-Ф/" + suffix;
     }
 
     private static String buildBasisLine(TitlePageValues values) {
@@ -652,8 +698,12 @@ public final class AllExcelExporter {
     }
 
     private static String buildMeasurementCardNumber(String applicationNumber) {
+        return buildMeasurementCardNumber(applicationNumber, 1);
+    }
+
+    private static String buildMeasurementCardNumber(String applicationNumber, int cardPart) {
         String base = valueOrPlaceholder(applicationNumber);
-        return base + "-1К";
+        return base + "-" + cardPart + "К";
     }
 
     private static void setCellValue(Sheet sheet, CellStyle style, int rowIdx, int colIdx, String text) {
@@ -666,6 +716,19 @@ public final class AllExcelExporter {
             cell = row.createCell(colIdx);
         }
         cell.setCellStyle(style);
+        cell.setCellValue(text);
+    }
+
+    private static void setExistingCellText(Sheet sheet, int rowIdx, int colIdx, String text) {
+        if (sheet == null) return;
+        Row row = sheet.getRow(rowIdx);
+        if (row == null) {
+            row = sheet.createRow(rowIdx);
+        }
+        Cell cell = row.getCell(colIdx);
+        if (cell == null) {
+            cell = row.createCell(colIdx);
+        }
         cell.setCellValue(text);
     }
 

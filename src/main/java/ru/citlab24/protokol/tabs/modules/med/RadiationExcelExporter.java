@@ -17,6 +17,12 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class RadiationExcelExporter {
     private static final String LIMIT_TEXT =
             "Превышение мощности дозы, измеренной на открытой местности, не более чем на 0,3 мкЗв/ч";
+    private static final String MED2_LEGEND_TEXT = "Условные обозначения:\n" +
+            "∆Н - абсолютная расширенная неопределенность результата измерения мощности дозы гамма-излучения " +
+            "на местности, определяемая в соответствии с руководством по эксплуатации дозиметра или методикой " +
+            "выполнения измерений. Указанная расширенная неопределенность измерений установлена как стандартная " +
+            "неопределенность измерений, умноженная на коэффициент охвата k (k=2), который соответствует " +
+            "вероятности охвата около 95 %.";
 
     private RadiationExcelExporter() {}
 
@@ -318,6 +324,7 @@ public final class RadiationExcelExporter {
                 }
             }
         }
+        addMergedLegend(sh, row + 1, 0, 5, 5, MED2_LEGEND_TEXT, S.textLeft);
     }
 
     /* ============================ Лист 3: «ЭРОА радона» ============================ */
@@ -636,6 +643,29 @@ public final class RadiationExcelExporter {
                 if (style != null) cell.setCellStyle(style);
             }
         }
+    }
+
+    private static void addMergedLegend(Sheet sheet, int firstRow, int firstCol, int lastCol,
+                                        int rowCount, String text, CellStyle baseStyle) {
+        Workbook workbook = sheet.getWorkbook();
+        CellStyle legendStyle = workbook.createCellStyle();
+        if (baseStyle != null) {
+            legendStyle.cloneStyleFrom(baseStyle);
+        }
+        legendStyle.setWrapText(true);
+        legendStyle.setAlignment(HorizontalAlignment.LEFT);
+        legendStyle.setVerticalAlignment(VerticalAlignment.TOP);
+
+        int lastRow = firstRow + rowCount - 1;
+        for (int r = firstRow; r <= lastRow; r++) {
+            Row row = ensureRow(sheet, r);
+            row.setHeightInPoints(15f);
+            for (int c = firstCol; c <= lastCol; c++) {
+                cell(row, c).setCellStyle(legendStyle);
+            }
+        }
+        cell(ensureRow(sheet, firstRow), firstCol).setCellValue(text);
+        sheet.addMergedRegion(new CellRangeAddress(firstRow, lastRow, firstCol, lastCol));
     }
 
     private static CellStyle cloneWithBorders(Workbook wb, CellStyle src) {
