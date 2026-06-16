@@ -53,7 +53,7 @@ final class ArtificialLightingMapTabBuilder {
         applyMergedHeader(sheet, rowIndex + 1, rowIndex + 3, 1, 1,
                 "Наименование места\nпроведения измерений", headerStyle);
         applyMergedHeader(sheet, rowIndex + 1, rowIndex + 3, 2, 2,
-                "Разряд, под разряд зрительной работы", headerVerticalStyle);
+                "Разряд, подразряд зрительной работы", headerVerticalStyle);
         applyMergedHeader(sheet, rowIndex + 1, rowIndex + 3, 3, 3,
                 "Рабочая поверхность, плоскость измерения (горизонтальная - Г, вертикальная - В) - высота от пола (земли), м",
                 headerVerticalStyle);

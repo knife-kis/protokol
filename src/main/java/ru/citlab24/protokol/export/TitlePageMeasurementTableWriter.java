@@ -107,6 +107,10 @@ final class TitlePageMeasurementTableWriter {
 
         int headerRow = 35;
         String[] headers = noiseHeaderTexts();
+        int measurementInfoRow = headerRow - 2;
+        if (measurementInfoRow > 0) {
+            sheet.setRowBreak(measurementInfoRow - 1);
+        }
         writeNoiseTable(sheet, headerRow, headerStyle, measurementStyle, additionalInfoText, headers);
         adjustHeaderRowHeightForMergedSections(sheet, headerRow, headerRanges(), headers);
     }
@@ -227,7 +231,7 @@ final class TitlePageMeasurementTableWriter {
 
         setRowHeightPx(sheet, rowIndex, 37f);
         setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 0, 3, "Атмосферное давление");
-        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "\u00b1 0,13 кПа\n(\u00b11 мм рт.ст)");
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "\u00b1 0,13 кПа\n(\u00b11 мм рт. ст.)");
         rowIndex++;
 
         int distanceRow = rowIndex;
@@ -313,7 +317,7 @@ final class TitlePageMeasurementTableWriter {
         setRowHeightPx(sheet, multimeterRow, 120f);
         if (hasLightingPowerSheet) {
             writeMeasurementRow(sheet, measurementStyle, multimeterRow,
-                    "Измерение напряжения и частоты переменного ток",
+                    "Измерение напряжения и частоты переменного тока",
                     "Мультиметр\nЦифровой, АРPА-103N",
                     "\u00b1(0,013×X + 5×к) для 40 Гц…1 кГц\n" +
                             "\u00b1(0,015×X + 5×к) в полосе частот 50…60 Гц\n" +
@@ -373,7 +377,7 @@ final class TitlePageMeasurementTableWriter {
         setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 5, 14,
                 "Документы, наименование НД, регламентирующих значения характеристик, показателей (к сведению)");
         setMergedText(sheet, sectionHeaderStyle, sectionHeaderRow, sectionHeaderRow, 15, 25,
-                "Документы, устанавливающие правила и методы исследований (испытаний) и измерений");
+                "Идентификация применяемого метода испытаний / метод (методика) измерений ");
 
         int sectionRowIndex = sectionHeaderRow + 1;
         int lastSectionRow = sectionHeaderRow;
@@ -388,7 +392,7 @@ final class TitlePageMeasurementTableWriter {
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
-                            "п. IV, V");
+                            "п. IV, V / прочие методы радиационных исследований (испытаний)");
             lastSectionRow = sectionRowIndex;
             sectionRowIndex++;
         }
@@ -405,7 +409,7 @@ final class TitlePageMeasurementTableWriter {
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
-                            "п. IV, V");
+                            "п. IV, V / прочие методы радиационных исследований (испытаний)");
             lastSectionRow = sectionRowIndex;
             sectionRowIndex++;
         }
@@ -427,7 +431,7 @@ final class TitlePageMeasurementTableWriter {
                             "зданий (сооружений), помещениях специального подвижного\n" +
                             "состава железнодорожного транспорта и метрополитена, в\n" +
                             "системах вентиляции промышленных, общественных и жилых\n" +
-                            "зданий (сооружений), на открытом воздухе\" п.11.2");
+                            "зданий (сооружений), на открытом воздухе\" п.11.2 / прочие методы измерения физических факторов");
             lastSectionRow = sectionRowIndex;
             sectionRowIndex++;
         }
@@ -448,7 +452,7 @@ final class TitlePageMeasurementTableWriter {
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
                     "МИ СС.09\u22122021 \"Метод измерений показателей световой среды Методика измерений показателей " +
                             "световой среды\nна рабочих местах, в помещениях и оконных конструкциях жилых и общественных " +
-                            "зданий (сооружений), селитебной территории\" п. 10.2");
+                            "зданий (сооружений), селитебной территории\" п. 10.2 / Измерение параметров физических факторов; измерение освещенности");
             lastSectionRow = sectionRowIndex;
             sectionRowIndex++;
         }
@@ -471,7 +475,7 @@ final class TitlePageMeasurementTableWriter {
                             "зданий (сооружений), помещениях специального подвижного\n" +
                             "состава железнодорожного транспорта и метрополитена, в\n" +
                             "системах вентиляции промышленных, общественных и жилых\n" +
-                            "зданий (сооружений), на открытом воздухе\" п.11.2");
+                            "зданий (сооружений), на открытом воздухе\" п.11.2 / прочие методы измерения физических факторов");
             lastSectionRow = sectionRowIndex;
         }
 
@@ -607,7 +611,7 @@ final class TitlePageMeasurementTableWriter {
 
         setRowHeightPx(sheet, rowIndex, 37f);
         setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 0, 3, "Атмосферное давление");
-        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "\u00b1 0,13 кПа\n(\u00b11 мм рт.ст)");
+        setMergedText(sheet, measurementStyle, rowIndex, rowIndex, 13, 19, "\u00b1 0,13 кПа\n(\u00b11 мм рт. ст.)");
         rowIndex++;
 
         setRowHeightPx(sheet, rowIndex, 35f);
@@ -666,10 +670,15 @@ final class TitlePageMeasurementTableWriter {
         sectionSmallCenterStyle.setFont(sectionSmallFont);
         sectionSmallCenterStyle.setAlignment(HorizontalAlignment.CENTER);
 
+        CellStyle noiseMethodHighlightStyle = createHighlightedStyle(workbook, sectionSmallCenterStyle);
+
         int infoRow = rowIndex;
         setRowHeightPx(sheet, infoRow, 10f);
 
         int sectionTitleRow = infoRow + 1;
+        if (infoRow > 0) {
+            sheet.setRowBreak(infoRow);
+        }
         setRowHeightPx(sheet, sectionTitleRow, 20f);
         setMergedText(sheet, sectionTextStyle, sectionTitleRow, sectionTitleRow, 0, 25,
                 "11. Сведения о нормативных документах (НД), регламентирующих значения показателей " +
@@ -696,7 +705,7 @@ final class TitlePageMeasurementTableWriter {
         setMergedText(sheet, sectionSmallCenterStyle, noiseSectionRow, noiseSectionRow + 5, 5, 14,
                 "СанПиН 1.2.3685-21 \"Гигиенические нормативы и требования к обеспечению безопасности " +
                         "и (или) безвредности для человека факторов среды обитания\"");
-        setMergedText(sheet, sectionSmallCenterStyle, noiseSectionRow, noiseSectionRow + 5, 15, 25,
+        setMergedText(sheet, noiseMethodHighlightStyle, noiseSectionRow, noiseSectionRow + 5, 15, 25,
                 "МИ Ш.13-2021 \"Методика измерений шума, инфразвука, воздушного\n" +
                         "ультразвука на рабочих местах, в том числе рабочих местах\n" +
                         "транспорта и объектов транспортной инфраструктуры, в\n" +
@@ -744,6 +753,9 @@ final class TitlePageMeasurementTableWriter {
         additionalInfoStyle.setWrapText(true);
         additionalInfoStyle.setAlignment(HorizontalAlignment.LEFT);
         additionalInfoStyle.setVerticalAlignment(VerticalAlignment.TOP);
+        if (infoText.contains("Помещения не меблированы")) {
+            additionalInfoStyle = createHighlightedStyle(workbook, additionalInfoStyle);
+        }
 
         XSSFRichTextString richInfo = new XSSFRichTextString(infoText);
         richInfo.applyFont(infoFont);

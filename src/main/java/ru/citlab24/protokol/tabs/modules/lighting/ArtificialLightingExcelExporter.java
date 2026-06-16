@@ -159,7 +159,7 @@ public final class ArtificialLightingExcelExporter {
         put(sh, 3, 0, "№ п/п", S.headCenterBorderWrap);
         put(sh, 3, 1, "№ точки измерения", S.headVertical);
         put(sh, 3, 2, "Наименование места\nпроведения измерений", S.headCenterBorderWrap);
-        put(sh, 3, 3, "Разряд, под разряд зрительной работы", S.headVertical);
+        put(sh, 3, 3, "Разряд, подразряд зрительной работы", S.headVertical);
         put(sh, 3, 4, "Рабочая поверхность, плоскость измерения (горизонтальная - Г, вертикальная - В) - высота от пола (земли), м", S.headVertical);
         put(sh, 3, 5, "Вид, тип светильников", S.headVertical);
         put(sh, 3, 6, "Число не горящих ламп, шт.", S.headVertical);

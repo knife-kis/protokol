@@ -95,7 +95,7 @@ public final class LightingExcelExporter {
         mergeWithBorder(sh, "G3:P3"); put(sh, 2, 6, "При боковом освещении", S.headCenterBorderWrap);
         mergeWithBorder(sh, "G4:I4"); put(sh, 3, 6, "Освещенность внутри помещения, лк Результат измерений\n(y) ± U", S.headVertical);
         mergeWithBorder(sh, "J4:L4"); put(sh, 3, 9, "Наружная освещенность, лк Результат измерений\n(y) ± U", S.headVertical);
-        mergeWithBorder(sh, "M4:O4"); put(sh, 3, 12, "КЕО , % Результат измерений\n(y) ± U", S.headVertical);
+        mergeWithBorder(sh, "M4:O4"); put(sh, 3, 12, "КЕО, % Результат измерений\n(y) ± U", S.headVertical);
         put(sh, 3, 15, "Допустимое значение КЕО, %", S.headVertical);
 
         mergeWithBorder(sh, "Q3:S4");

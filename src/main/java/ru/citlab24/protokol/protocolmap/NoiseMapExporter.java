@@ -596,7 +596,7 @@ public final class NoiseMapExporter {
         setMergedRegionWithStyle(sheet, 2, 4, 19, 21, headerVerticalStyle,
                 "Эквивалентные уровни звука,  (дБА) ±U (дБ)");
         setMergedRegionWithStyle(sheet, 2, 4, 22, 22, headerVerticalStyle,
-                "Максимальные уровни звука  (дБА)");
+                "Максимальные уровни звука  (дБА) ±U (дБ)");
 
         Row numberingRow = sheet.createRow(5);
         for (int col = 0; col <= 18; col++) {

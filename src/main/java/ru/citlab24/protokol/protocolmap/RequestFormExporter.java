@@ -625,7 +625,7 @@ public final class RequestFormExporter {
                             "Объем помещения, м^3",
                             VENTILATION_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
                     setTableCellText(ventilationTable.getRow(0).getCell(2),
-                            "Допустимый уровень производительности венсистем, м^3/ч",
+                            "Допустимый уровень производительности вентсистем, м^3/ч",
                             VENTILATION_TABLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
                     setTableCellText(ventilationTable.getRow(0).getCell(3),
                             "Допустимый уровень кратности воздухообмена, ч^-1",

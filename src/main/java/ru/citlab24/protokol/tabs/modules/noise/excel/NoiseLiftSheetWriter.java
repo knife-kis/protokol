@@ -147,7 +147,7 @@ public class NoiseLiftSheetWriter {
         setCenter(sh, 2, 19, "Эквивалентные уровни звука,  (дБА) ±U (дБ)", verticalWrapBorderF10);
 
         merges.add(merge(sh, 2, 4, 22, 24));
-        setCenter(sh, 2, 22, "Максимальные уровни звука  (дБА)", verticalWrapBorderF10);
+        setCenter(sh, 2, 22, "Максимальные уровни звука  (дБА) ±U (дБ)", verticalWrapBorderF10);
 
         Row r6 = getOrCreateRow(sh, 5);
         for (int c = 0; c <= 18; c++) setText(r6, c, String.valueOf(c + 1), centerBorder);

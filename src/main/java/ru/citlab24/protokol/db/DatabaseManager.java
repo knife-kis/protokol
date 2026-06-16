@@ -123,6 +123,12 @@ public class DatabaseManager {
                     "temp_outside_start VARCHAR(32)," +
                     "temp_outside_end VARCHAR(32))");
 
+            stmt.execute("CREATE TABLE IF NOT EXISTS area_project (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "name VARCHAR(255)," +
+                    "snapshot BLOB," +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+
 
             stmt.execute("CREATE TABLE IF NOT EXISTS personnel (" +
                     "id INT AUTO_INCREMENT PRIMARY KEY," +
@@ -173,6 +179,9 @@ public class DatabaseManager {
             addColumnIfMissing(stmt, "building", "application_number", "VARCHAR(128)");
             addColumnIfMissing(stmt, "building", "application_date", "VARCHAR(32)");
             addColumnIfMissing(stmt, "building", "representative", "VARCHAR(512)");
+            addColumnIfMissing(stmt, "area_project", "name", "VARCHAR(255)");
+            addColumnIfMissing(stmt, "area_project", "snapshot", "BLOB");
+            addColumnIfMissing(stmt, "area_project", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
             addColumnIfMissing(stmt, "personnel", "first_name", "VARCHAR(255)");
             addColumnIfMissing(stmt, "personnel", "last_name", "VARCHAR(255)");
             addColumnIfMissing(stmt, "personnel", "middle_name", "VARCHAR(255)");
@@ -303,6 +312,82 @@ public class DatabaseManager {
             }
         }
         return buildings;
+    }
+
+    public static int saveAreaProject(String name, byte[] snapshot) throws SQLException {
+        String sql = "INSERT INTO area_project (name, snapshot, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)";
+        try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, name);
+            stmt.setBytes(2, snapshot);
+            stmt.executeUpdate();
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    public static List<AreaProjectInfo> getAllAreaProjects() throws SQLException {
+        List<AreaProjectInfo> projects = new ArrayList<>();
+        String sql = "SELECT id, name, created_at FROM area_project ORDER BY id DESC";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                Timestamp createdAt = rs.getTimestamp("created_at");
+                projects.add(new AreaProjectInfo(
+                        rs.getInt("id"),
+                        rs.getString("name"),
+                        createdAt == null ? "" : createdAt.toString()
+                ));
+            }
+        }
+        return projects;
+    }
+
+    public static byte[] loadAreaProjectSnapshot(int projectId) throws SQLException {
+        String sql = "SELECT snapshot FROM area_project WHERE id = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, projectId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getBytes("snapshot") : null;
+            }
+        }
+    }
+
+    public static void deleteAreaProject(int projectId) throws SQLException {
+        try (PreparedStatement stmt = connection.prepareStatement(
+                "DELETE FROM area_project WHERE id = ?")) {
+            stmt.setInt(1, projectId);
+            stmt.executeUpdate();
+        }
+    }
+
+    public static final class AreaProjectInfo {
+        private final int id;
+        private final String name;
+        private final String createdAt;
+
+        public AreaProjectInfo(int id, String name, String createdAt) {
+            this.id = id;
+            this.name = name;
+            this.createdAt = createdAt;
+        }
+
+        public int getId() {
+            return id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getCreatedAt() {
+            return createdAt;
+        }
+
+        @Override
+        public String toString() {
+            return name == null || name.isBlank() ? "Проект участка " + id : name;
+        }
     }
 
     private static void saveFloor(int buildingId, Floor floor) throws SQLException {

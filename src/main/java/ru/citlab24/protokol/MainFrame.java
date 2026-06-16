@@ -11,6 +11,7 @@ import ru.citlab24.protokol.tabs.modules.ventilation.VentilationTab;
 import ru.citlab24.protokol.tabs.modules.med.RadiationTab;
 import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 import ru.citlab24.protokol.protocolmap.area.AreaPrimaryPanel;
+import ru.citlab24.protokol.protocolmap.area.AreaProtocolPanel;
 import ru.citlab24.protokol.protocolmap.house.ProtocolMapPanel;
 import ru.citlab24.protokol.tabs.resourceTab.EquipmentTab;
 import ru.citlab24.protokol.tabs.resourceTab.CalendarTab;
@@ -30,6 +31,9 @@ public class MainFrame extends JFrame {
     private final JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cardPanel = new JPanel(cardLayout);
+    private BuildingTab buildingTab;
+    private AreaProtocolPanel areaProtocolPanel;
+    private String currentCard;
 
     private static final String CARD_PROTOCOL_HOME = "protocol-home";
     private static final String CARD_PROTOCOL_AREA = "protocol-area";
@@ -60,6 +64,7 @@ public class MainFrame extends JFrame {
 
         pack();
         setLocationRelativeTo(null);
+        setExtendedState(getExtendedState() | JFrame.MAXIMIZED_BOTH);
     }
 
     private JMenuBar createMenuBar(Runnable onLoadProject, Runnable onSaveProject) {
@@ -76,7 +81,7 @@ public class MainFrame extends JFrame {
         menuBar.add(Box.createHorizontalStrut(8));
         menuBar.add(styleTopMenu(createQmsMenu()));
         menuBar.add(Box.createHorizontalStrut(12));
-        JLabel versionLabel = new JLabel("v 1.3.1");
+        JLabel versionLabel = new JLabel("v 1.4.1");
         versionLabel.setForeground(new Color(0xC6D2DC));
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
         menuBar.add(versionLabel);
@@ -102,8 +107,9 @@ public class MainFrame extends JFrame {
     }
 
     private void initUI() {
-        BuildingTab buildingTab = new BuildingTab(building);
-        setJMenuBar(createMenuBar(buildingTab::requestLoadProject, buildingTab::requestSaveProject));
+        buildingTab = new BuildingTab(building);
+        areaProtocolPanel = new AreaProtocolPanel();
+        setJMenuBar(createMenuBar(this::requestLoadProject, this::requestSaveProject));
 
         tabbedPane.addTab("Титульная страница",    new TitlePageTab(building));
         tabbedPane.addTab("Характеристики здания", buildingTab);
@@ -117,7 +123,8 @@ public class MainFrame extends JFrame {
         AppTheme.decorateWorkspace(tabbedPane);
 
         cardPanel.add(createScenePanel(tabbedPane), CARD_PROTOCOL_HOME);
-        cardPanel.add(createPlaceholderScene(), CARD_PROTOCOL_AREA);
+        AppTheme.decorateWorkspace(areaProtocolPanel);
+        cardPanel.add(createScenePanel(areaProtocolPanel), CARD_PROTOCOL_AREA);
         ProtocolMapPanel protocolMapPanel = new ProtocolMapPanel();
         AppTheme.decorateWorkspace(protocolMapPanel);
         cardPanel.add(createScenePanel(protocolMapPanel), CARD_PROTOCOL_MAP);
@@ -145,7 +152,40 @@ public class MainFrame extends JFrame {
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
-        cardLayout.show(cardPanel, CARD_PROTOCOL_HOME);
+        showCard(CARD_PROTOCOL_HOME);
+    }
+
+    private void showCard(String cardName) {
+        currentCard = cardName;
+        cardLayout.show(cardPanel, cardName);
+    }
+
+    private void requestLoadProject() {
+        if (CARD_PROTOCOL_AREA.equals(currentCard) && areaProtocolPanel != null) {
+            areaProtocolPanel.requestLoadProject();
+            String projectName = areaProtocolPanel.getProjectName();
+            if (!projectName.isBlank()) {
+                setProjectTitle(projectName);
+            }
+            return;
+        }
+        if (buildingTab != null) {
+            buildingTab.requestLoadProject();
+        }
+    }
+
+    private void requestSaveProject() {
+        if (CARD_PROTOCOL_AREA.equals(currentCard) && areaProtocolPanel != null) {
+            areaProtocolPanel.requestSaveProject();
+            String projectName = areaProtocolPanel.getProjectName();
+            if (!projectName.isBlank()) {
+                setProjectTitle(projectName);
+            }
+            return;
+        }
+        if (buildingTab != null) {
+            buildingTab.requestSaveProject();
+        }
     }
 
     private JPanel createScenePanel(JComponent content) {
@@ -172,16 +212,16 @@ public class MainFrame extends JFrame {
         JMenu fileMenu = new JMenu("Файл");
 
         JMenuItem protocolHome = new JMenuItem("Заполнение протокола дом");
-        protocolHome.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_HOME));
+        protocolHome.addActionListener(e -> showCard(CARD_PROTOCOL_HOME));
 
         JMenuItem protocolArea = new JMenuItem("Заполнение протокола участок");
-        protocolArea.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_AREA));
+        protocolArea.addActionListener(e -> showCard(CARD_PROTOCOL_AREA));
 
         JMenuItem protocolMap = new JMenuItem("Сформировать первичку по домам");
-        protocolMap.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_MAP));
+        protocolMap.addActionListener(e -> showCard(CARD_PROTOCOL_MAP));
 
         JMenuItem protocolRequest = new JMenuItem("Сформировать первичку по участкам");
-        protocolRequest.addActionListener(e -> cardLayout.show(cardPanel, CARD_PROTOCOL_REQUEST));
+        protocolRequest.addActionListener(e -> showCard(CARD_PROTOCOL_REQUEST));
 
         fileMenu.add(protocolHome);
         fileMenu.add(protocolArea);
@@ -264,13 +304,13 @@ public class MainFrame extends JFrame {
         JMenu resourceMenu = new JMenu("Ресурс");
 
         JMenuItem personnelItem = new JMenuItem("Персонал");
-        personnelItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_RESOURCE_PERSONNEL));
+        personnelItem.addActionListener(e -> showCard(CARD_RESOURCE_PERSONNEL));
 
         JMenuItem equipmentItem = new JMenuItem("Оборудование");
-        equipmentItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_RESOURCE_EQUIPMENT));
+        equipmentItem.addActionListener(e -> showCard(CARD_RESOURCE_EQUIPMENT));
 
         JMenuItem calendarItem = new JMenuItem("Календарь");
-        calendarItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_RESOURCE_CALENDAR));
+        calendarItem.addActionListener(e -> showCard(CARD_RESOURCE_CALENDAR));
 
         resourceMenu.add(personnelItem);
         resourceMenu.add(equipmentItem);
@@ -313,16 +353,16 @@ public class MainFrame extends JFrame {
         JMenu qmsMenu = new JMenu("СМК");
 
         JMenuItem auditItem = new JMenuItem("Аудит");
-        auditItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_AUDIT));
+        auditItem.addActionListener(e -> showCard(CARD_QMS_AUDIT));
 
         JMenuItem nonconformitiesItem = new JMenuItem("Несоответствия");
-        nonconformitiesItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_NONCONFORMITIES));
+        nonconformitiesItem.addActionListener(e -> showCard(CARD_QMS_NONCONFORMITIES));
 
         JMenuItem vlkItem = new JMenuItem("ВЛК");
-        vlkItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_VLK));
+        vlkItem.addActionListener(e -> showCard(CARD_QMS_VLK));
 
         JMenuItem shewhartMapItem = new JMenuItem("Карта Шухарта");
-        shewhartMapItem.addActionListener(e -> cardLayout.show(cardPanel, CARD_QMS_SHEWHART_MAP));
+        shewhartMapItem.addActionListener(e -> showCard(CARD_QMS_SHEWHART_MAP));
 
         qmsMenu.add(auditItem);
         qmsMenu.add(nonconformitiesItem);

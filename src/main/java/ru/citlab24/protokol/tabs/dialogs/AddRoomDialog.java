@@ -175,6 +175,7 @@ public class AddRoomDialog extends JDialog {
         south.setBorder(BorderFactory.createEmptyBorder(2, 8, 4, 8));
 
         input.setColumns(40);
+        styleReadableInput(input);
         south.add(input, BorderLayout.CENTER);
 
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
@@ -437,6 +438,15 @@ public class AddRoomDialog extends JDialog {
         Object value = pane.getValue();
         boolean ok = (value != null) && Integer.valueOf(JOptionPane.OK_OPTION).equals(value);
         return ok ? tf.getText() : null;
+    }
+
+    private static void styleReadableInput(JTextField field) {
+        field.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE, "minimumHeight: 32");
+        Dimension preferred = field.getPreferredSize();
+        field.setPreferredSize(new Dimension(preferred.width, 32));
+        field.setMinimumSize(new Dimension(Math.max(preferred.width, 120), 32));
+        field.setFont(field.getFont().deriveFont(14f));
+        field.setMargin(new Insets(4, 6, 4, 6));
     }
 
     // ==== Публичные API ====

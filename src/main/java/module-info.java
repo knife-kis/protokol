@@ -11,6 +11,7 @@ module ru.citlab24.protokol {
     requires com.formdev.flatlaf;
     requires org.kordamp.ikonli.swing;
     requires java.sql;
+    requires java.prefs;
 //    requires org.apache.poi.poi;
     requires org.apache.poi.ooxml;
     requires org.slf4j;

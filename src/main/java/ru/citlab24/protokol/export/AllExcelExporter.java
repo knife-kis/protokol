@@ -154,6 +154,7 @@ public final class AllExcelExporter {
             ps.setFitHeight((short) 0);
             sheet.setFitToPage(true);
             sheet.setAutobreaks(true);
+            sheet.setColumnWidth(25, sheet.getColumnWidth(25) * 2);
 
             TitlePageValues titleValues = readTitlePageValues(frame);
             setExistingCellText(sheet, 12, 0, buildProtocolTitle(titleValues.applicationNumber, 2));
@@ -217,6 +218,10 @@ public final class AllExcelExporter {
         centerMiddleStyle.cloneStyleFrom(baseStyle);
         centerMiddleStyle.setAlignment(HorizontalAlignment.CENTER);
         centerMiddleStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        CellStyle centerTopStyle = wb.createCellStyle();
+        centerTopStyle.cloneStyleFrom(centerMiddleStyle);
+        centerTopStyle.setVerticalAlignment(VerticalAlignment.TOP);
 
         CellStyle boldCenterStyle = wb.createCellStyle();
         boldCenterStyle.cloneStyleFrom(centerMiddleStyle);
@@ -289,7 +294,7 @@ public final class AllExcelExporter {
         setMergedText(sheet, boldCenterStyle, 0, 2, 0, 8, txtA1);
 
         // 2) S1-Z3
-        String txtS1 = "УТВЕРЖДАЮ\nЗаместитель заведующего лабораторией";
+        String txtS1 = "УТВЕРЖДАЮ\nЗаведующий лабораторией";
         setMergedText(sheet, boldCenterStyle, 0, 2, 18, 25, txtS1);
 
         // 3) A4-I5
@@ -315,10 +320,10 @@ public final class AllExcelExporter {
         String txtA9 = "660041, Красноярский край, г. Красноярск,\n" +
                 "пр. Свободный дом 75, пом. 9 кабинет 12\n" +
                 "+7 (391) 244-03-10, cit-krsk@yandex.ru";
-        setMergedText(sheet, centerMiddleStyle, 8, 10, 0, 8, txtA9);
+        setMergedText(sheet, centerTopStyle, 8, 10, 0, 8, txtA9);
 
-        // S5-Z5: _______________/М.Е. Гаврилова/
-        String txtS5 = "_______________/М.Е. Гаврилова/";
+        // S5-Z5: _______________/М.О. Тарновский/
+        String txtS5 = "_______________/М.О. Тарновский/";
         setMergedText(sheet, boldCenterStyle, 4, 4, 18, 25, txtS5);
 
         // S7-Z7: дата из программы в формате "12 декабря 2025 г."
@@ -370,7 +375,7 @@ public final class AllExcelExporter {
                 "Измерения проводились в присутствии представителя заказчика: " +
                         safe(titleValues.representative));
 
-        setCellValue(sheet, centerMiddleStyle, 29, 0, "8.");
+        setCellValue(sheet, centerTopStyle, 29, 0, "8.");
         String indicatorsText = "Показатели, по которым проводились измерения:";
         setMergedText(sheet, baseStyle, 29, 29, 1, 25, indicatorsText);
         adjustRowHeightForMergedText(sheet, 29, 1, 25, indicatorsText);
@@ -608,7 +613,6 @@ public final class AllExcelExporter {
                 "Измерения микроклимата проведены в зимний период. " +
                 "Измерения ионизирующих излучений проведены в летний период. " +
                 "Температура наружного воздуха: " + outsideTempsText + ". " +
-                "Абсолютная неопределенность далее \"ΔН\" приведена в результатах измерений. " +
                 "Поверхностных радиационных аномалий в конструкциях здания не обнаружено. " +
                 "Перед измерением ЭРОА радона здание выдержанно в течении более 12 часов при закрытых дверях и окнах. " +
                 "Измерения наружной освещенности проведены в светлое время суток при сплошной равномерной облачности, " +

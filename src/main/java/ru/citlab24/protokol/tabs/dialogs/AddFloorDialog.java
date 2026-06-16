@@ -14,7 +14,7 @@ public class AddFloorDialog extends JDialog {
 
     public AddFloorDialog(JFrame parent) {
         super(parent, "Добавить этаж", true);
-        setSize(350, 200);
+        setSize(350, 220);
         setLocationRelativeTo(parent);
         initUI();
     }
@@ -26,10 +26,12 @@ public class AddFloorDialog extends JDialog {
         // Поля ввода
         mainPanel.add(new JLabel("Название этажа:"));
         floorNumberField = new JTextField(); // Текстовое поле вместо спиннера
+        styleReadableInput(floorNumberField, 42);
         mainPanel.add(floorNumberField);
 
         mainPanel.add(new JLabel("Тип этажа:"));
         floorTypeCombo = new JComboBox<>(Floor.FloorType.values());
+        styleReadableInput(floorTypeCombo, 32);
         mainPanel.add(floorTypeCombo);
 
         // Кнопки
@@ -72,6 +74,17 @@ public class AddFloorDialog extends JDialog {
     public boolean showDialog() {
         setVisible(true);
         return confirmed;
+    }
+
+    private static void styleReadableInput(JComponent component, int height) {
+        component.putClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE, "minimumHeight: " + height);
+        Dimension preferred = component.getPreferredSize();
+        component.setPreferredSize(new Dimension(preferred.width, height));
+        component.setMinimumSize(new Dimension(Math.max(preferred.width, 120), height));
+        component.setFont(component.getFont().deriveFont(14f));
+        if (component instanceof JTextField field) {
+            field.setMargin(new Insets(2, 6, 2, 6));
+        }
     }
 
     public String getFloorNumber() { // Возвращаем строку вместо числа

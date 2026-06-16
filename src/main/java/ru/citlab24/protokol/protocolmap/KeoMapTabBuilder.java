@@ -62,7 +62,7 @@ final class KeoMapTabBuilder {
         applyMergedHeader(sheet, 3, 3, 9, 11,
                 "Наружная освещенность, лк Результат измерений\n(y) ± U",
                 headerVerticalStyle);
-        applyMergedHeader(sheet, 3, 3, 12, 14, "КЕО , % Результат измерений\n(y) ± U", headerVerticalStyle);
+        applyMergedHeader(sheet, 3, 3, 12, 14, "КЕО, % Результат измерений\n(y) ± U", headerVerticalStyle);
 
         applyMergedHeader(sheet, 2, 3, 15, 17,
                 "Неравномерность естественного освещения Результат измерений\n(y) ± U",

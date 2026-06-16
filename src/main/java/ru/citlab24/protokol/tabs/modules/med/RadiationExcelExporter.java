@@ -301,8 +301,10 @@ public final class RadiationExcelExporter {
 
                     Cell d = cell(rr, 3); d.setCellValue("±"); d.setCellStyle(S.plusMinusTB);
 
-                    double delta = ((15.0 + (4.0 / cVal * 0.01)) * cVal / 100.0);
-                    Cell e = cell(rr, 4); e.setCellValue(parse2(df2, delta)); e.setCellStyle(S.num2NoLeft);
+                    Cell e = cell(rr, 4);
+                    double delta = (15.0 + 4.0 / cVal) / 100.0 * cVal / Math.sqrt(3.0) * 2.0;
+                    e.setCellValue(parse2(df2, delta));
+                    e.setCellStyle(S.num2NoLeft);
 
                     Cell fcell = cell(rr, 5); fcell.setCellStyle(S.headerCenterBorder);
 
