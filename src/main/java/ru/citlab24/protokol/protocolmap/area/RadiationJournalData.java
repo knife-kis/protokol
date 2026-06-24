@@ -38,6 +38,7 @@ final class RadiationJournalData {
         String observationLocation = "";
         int pointCount = DEFAULT_POINT_COUNT;
         String controlDate = "";
+        String journalNumber = "";
 
         try (InputStream in = new FileInputStream(sourceFile);
              Workbook workbook = WorkbookFactory.create(in)) {
@@ -55,6 +56,7 @@ final class RadiationJournalData {
                     "Наименование предприятия, организации, объекта, где производились измерения:");
             pointCount = Math.max(DEFAULT_POINT_COUNT, countSamplingPoints(workbook));
             controlDate = resolveControlDate(workbook);
+            journalNumber = resolveJournalNumber(workbook);
         } catch (Exception ignored) {
             return ProtocolData.empty();
         }
@@ -69,8 +71,23 @@ final class RadiationJournalData {
                 customerPresence,
                 observationLocation,
                 pointCount,
-                controlDate
+                controlDate,
+                journalNumber
         );
+    }
+
+    private static String resolveJournalNumber(Workbook workbook) {
+        String value = resolveValueByPrefix(workbook,
+                "Регистрационный номер карты замеров и(или) журнал регистрации результатов определения плотности потока радона:");
+        if (value.isBlank()) {
+            return "";
+        }
+        String marker = " и ";
+        int markerIndex = value.lastIndexOf(marker);
+        if (markerIndex >= 0 && markerIndex + marker.length() < value.length()) {
+            return value.substring(markerIndex + marker.length()).trim();
+        }
+        return value.trim();
     }
 
     private static String resolveControlDate(Workbook workbook) {
@@ -379,7 +396,8 @@ final class RadiationJournalData {
                         String customerPresence,
                         String observationLocation,
                         int pointCount,
-                        String controlDate) {
+                        String controlDate,
+                        String journalNumber) {
         static ProtocolData empty() {
             return new ProtocolData(
                     "Заведующий лабораторией Тарновский М.О.",
@@ -391,6 +409,7 @@ final class RadiationJournalData {
                     "",
                     "",
                     DEFAULT_POINT_COUNT,
+                    "",
                     ""
             );
         }

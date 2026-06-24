@@ -229,7 +229,7 @@ final class KeoMapTabBuilder {
     }
 
     private static int[] buildColumnWidthsPx() {
-        return new int[]{46, 193, 60, 30, 30, 30, 48, 19, 48, 48, 19, 48, 48, 19, 48, 48, 19, 48};
+        return new int[]{46, 193, 60, 39, 39, 39, 48, 19, 48, 48, 19, 48, 48, 19, 48, 48, 19, 48};
     }
 
     private static int pixel2WidthUnits(int px) {

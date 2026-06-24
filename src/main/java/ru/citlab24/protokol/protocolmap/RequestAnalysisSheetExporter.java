@@ -45,7 +45,7 @@ import java.util.List;
 import java.util.Locale;
 
 public final class RequestAnalysisSheetExporter {
-    private static final String ANALYSIS_SHEET_NAME = "лист анализа заявки шумы.docx";
+    private static final String ANALYSIS_SHEET_NAME = "лист анализа заявки.docx";
     private static final String FONT_NAME = "Arial";
     private static final int TITLE_FONT_SIZE = 12;
     private static final int TABLE_FONT_SIZE = 10;
@@ -58,7 +58,23 @@ public final class RequestAnalysisSheetExporter {
     private RequestAnalysisSheetExporter() {
     }
 
-    static void generate(File mapFile) {
+    public static void generate(File mapFile) {
+        generate(mapFile, List.of(), false);
+    }
+
+    public static void generate(File mapFile, List<String> additionalMeasurementDates) {
+        generate(mapFile, additionalMeasurementDates, false);
+    }
+
+    public static void generateForNoise(File mapFile) {
+        generate(mapFile, List.of(), true);
+    }
+
+    public static void generateForNoise(File mapFile, List<String> additionalMeasurementDates) {
+        generate(mapFile, additionalMeasurementDates, true);
+    }
+
+    private static void generate(File mapFile, List<String> additionalMeasurementDates, boolean forceTarnovsky) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
@@ -69,14 +85,22 @@ public final class RequestAnalysisSheetExporter {
         String planCreatorRole = isTarnovsky
                 ? "Заместитель заведующий лабораторией"
                 : "Заведующий лабораторией";
-        String responsibleRole = planCreatorRole.equals("Заместитель заведующий лабораторией")
+        String responsibleRole = forceTarnovsky || planCreatorRole.equals("Заместитель заведующий лабораторией")
                 ? "Заведующий лабораторией"
                 : "Инженер";
         String responsibleName = responsibleRole.equals("Заведующий лабораторией")
                 ? "Тарновский М.О."
                 : "Белов Д.А.";
         String responsibleDate = lastCharacters(applicationNumber, 10);
-        List<String> measurementDates = resolveMeasurementDates(mapFile);
+        List<String> measurementDates = new ArrayList<>(resolveMeasurementDates(mapFile));
+        if (additionalMeasurementDates != null) {
+            for (String measurementDate : additionalMeasurementDates) {
+                String trimmed = measurementDate == null ? "" : measurementDate.trim();
+                if (!trimmed.isBlank() && !measurementDates.contains(trimmed)) {
+                    measurementDates.add(trimmed);
+                }
+            }
+        }
         String measurementDatesText = String.join(", ", measurementDates);
 
         try (XWPFDocument document = new XWPFDocument()) {
@@ -625,11 +649,15 @@ public final class RequestAnalysisSheetExporter {
         if (value == null) {
             return "";
         }
-        String trimmed = value.trim();
+        String trimmed = value.trim().replaceFirst("(?<=\\d{2}\\.\\d{2}\\.\\d{4})[\\s.]+$", "");
         if (trimmed.length() <= count) {
             return trimmed;
         }
         return trimmed.substring(trimmed.length() - count);
+    }
+
+    public static List<String> resolveMeasurementDatesForMap(File mapFile) {
+        return resolveMeasurementDates(mapFile);
     }
 
     private static List<String> resolveMeasurementDates(File mapFile) {

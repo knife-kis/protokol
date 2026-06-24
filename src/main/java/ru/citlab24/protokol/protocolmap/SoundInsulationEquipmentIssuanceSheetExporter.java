@@ -53,7 +53,7 @@ public final class SoundInsulationEquipmentIssuanceSheetExporter {
         String objectName = data.objectName();
         List<SoundInsulationProtocolDataParser.InstrumentEntry> instruments = data.instruments();
 
-        File targetFile = resolveIssuanceSheetFile(mapFile);
+        File targetFile = resolveIssuanceSheetFile(mapFile, measurementDate);
         writeIssuanceSheet(targetFile, objectName, PERFORMER_NAME, instruments, measurementDate);
     }
 
@@ -61,7 +61,9 @@ public final class SoundInsulationEquipmentIssuanceSheetExporter {
         if (mapFile == null || !mapFile.exists()) {
             return Collections.emptyList();
         }
-        return List.of(resolveIssuanceSheetFile(mapFile));
+        SoundInsulationProtocolDataParser.ProtocolData data = SoundInsulationProtocolDataParser.parse(protocolFile);
+        String measurementDate = resolvePrimaryMeasurementDate(data.measurementDates());
+        return List.of(resolveIssuanceSheetFile(mapFile, measurementDate));
     }
 
     private static void writeIssuanceSheet(File targetFile,
@@ -397,8 +399,13 @@ public final class SoundInsulationEquipmentIssuanceSheetExporter {
         }
     }
 
-    private static File resolveIssuanceSheetFile(File mapFile) {
-        return new File(mapFile.getParentFile(), ISSUANCE_SHEET_BASE_NAME + ".docx");
+    private static File resolveIssuanceSheetFile(File mapFile, String measurementDate) {
+        String name = ISSUANCE_SHEET_BASE_NAME;
+        String safeDate = EquipmentIssuanceSheetExporter.sanitizeFileComponent(measurementDate);
+        if (!safeDate.isBlank()) {
+            name += " " + safeDate;
+        }
+        return new File(mapFile.getParentFile(), name + ".docx");
     }
 
     private static String resolvePrimaryMeasurementDate(List<String> measurementDates) {

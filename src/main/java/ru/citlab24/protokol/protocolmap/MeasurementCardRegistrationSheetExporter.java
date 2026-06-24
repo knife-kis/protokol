@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.util.Locale;
+import java.util.List;
 
 public final class MeasurementCardRegistrationSheetExporter {
     private static final String REGISTRATION_SHEET_NAME = "лист регистрации карт замеров.docx";
@@ -53,6 +54,20 @@ public final class MeasurementCardRegistrationSheetExporter {
     private static final String PERFORMER_PREFIX = "3. Измерения провел, подпись:";
 
     private MeasurementCardRegistrationSheetExporter() {
+    }
+
+    static final class RowData {
+        final String applicationNumber;
+        final String cardNumber;
+        final String protocolNumber;
+        final String performer;
+
+        RowData(String applicationNumber, String cardNumber, String protocolNumber, String performer) {
+            this.applicationNumber = applicationNumber;
+            this.cardNumber = cardNumber;
+            this.protocolNumber = protocolNumber;
+            this.performer = performer;
+        }
     }
 
     static void generate(File sourceFile, File mapFile) {
@@ -98,6 +113,71 @@ public final class MeasurementCardRegistrationSheetExporter {
             }
         } catch (IOException ignored) {
             // пропускаем создание листа, если не удалось сформировать документ
+        }
+    }
+
+    public static void generateCombined(File targetFile, List<File> sourceFiles, List<File> mapFiles) {
+        if (targetFile == null || mapFiles == null || mapFiles.isEmpty()) {
+            return;
+        }
+        List<RowData> rows = new java.util.ArrayList<>();
+        for (int index = 0; index < mapFiles.size(); index++) {
+            File mapFile = mapFiles.get(index);
+            File sourceFile = sourceFiles != null && index < sourceFiles.size() ? sourceFiles.get(index) : null;
+            rows.add(rowDataFromMap(sourceFile, mapFile));
+        }
+        generateCombinedRows(targetFile, rows);
+    }
+
+    static RowData rowDataFromMap(File sourceFile, File mapFile) {
+        String cardNumber = resolveCardNumberFromMap(mapFile);
+        if (cardNumber.isEmpty()) {
+            cardNumber = resolveRegistrationNumberFromSource(sourceFile);
+        }
+        return new RowData(
+                resolveApplicationNumberFromMap(mapFile),
+                cardNumber,
+                resolveProtocolNumberFromMap(mapFile),
+                resolveMeasurementPerformerFromMap(mapFile)
+        );
+    }
+
+    static void generateCombinedRows(File targetFile, List<RowData> rows) {
+        if (targetFile == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        try (XWPFDocument document = new XWPFDocument()) {
+            setLandscapeOrientation(document);
+            applyStandardHeader(document);
+
+            XWPFParagraph title = document.createParagraph();
+            title.setAlignment(ParagraphAlignment.CENTER);
+            XWPFRun titleRun = title.createRun();
+            titleRun.setText("Лист регистрации карт замеров");
+            titleRun.setFontFamily(FONT_NAME);
+            titleRun.setFontSize(FONT_SIZE);
+
+            XWPFTable table = document.createTable(rows.size() + 1, 5);
+            setTableCellText(table.getRow(0).getCell(0), "Номер заявки");
+            setTableCellText(table.getRow(0).getCell(1), "Номер карты");
+            setTableCellText(table.getRow(0).getCell(2), "Номер протокола");
+            setTableCellText(table.getRow(0).getCell(3), "Фамилия работника - измерителя");
+            setTableCellText(table.getRow(0).getCell(4),
+                    "Подпись Заведующего ИЛ (заместителя Заведующего ИЛ)");
+
+            for (int index = 0; index < rows.size(); index++) {
+                RowData rowData = rows.get(index);
+                setTableCellText(table.getRow(index + 1).getCell(0), rowData.applicationNumber);
+                setTableCellText(table.getRow(index + 1).getCell(1), rowData.cardNumber);
+                setTableCellText(table.getRow(index + 1).getCell(2), rowData.protocolNumber);
+                setTableCellText(table.getRow(index + 1).getCell(3), rowData.performer);
+                setTableCellText(table.getRow(index + 1).getCell(4), "");
+            }
+
+            try (FileOutputStream out = new FileOutputStream(targetFile)) {
+                document.write(out);
+            }
+        } catch (IOException ignored) {
         }
     }
 

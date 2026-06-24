@@ -47,7 +47,6 @@ public final class SoundInsulationMapExporter {
             "4. Наименование предприятия, организации, объекта, где производились измерения:";
     private static final String OBJECT_ADDRESS_LABEL = "5. Адрес предприятия (объекта):";
     private static final String OBJECT_ADDRESS_SECTION_LABEL = "5. Адрес предприятия";
-    private static final String MEASUREMENT_DATES_NOTE = "смотреть п. 7.6.2";
     private static final String RATING_CURVE_SHIFT_LABEL = "Смещение оценочной кривой";
     private static final String APPROVAL_LABEL = "УТВЕРЖДАЮ";
     private static final Pattern APPROVAL_DATE_PATTERN =
@@ -77,9 +76,58 @@ public final class SoundInsulationMapExporter {
                                    File protocolFile,
                                    String workDeadline,
                                    String customerInn) throws IOException {
+        return generateMap(impactFiles, wallFiles, slabFiles, protocolFile, workDeadline, customerInn, true);
+    }
+
+    public static File generateMap(List<File> impactFiles,
+                                   List<File> wallFiles,
+                                   List<File> slabFiles,
+                                   File protocolFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   boolean generateCompanionDocuments) throws IOException {
+        return generateMap(impactFiles, wallFiles, slabFiles, protocolFile, workDeadline, customerInn,
+                PRIMARY_FOLDER_NAME, generateCompanionDocuments);
+    }
+
+    public static File generateMap(List<File> impactFiles,
+                                   List<File> wallFiles,
+                                   List<File> slabFiles,
+                                   File protocolFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   String primaryFolderName,
+                                   boolean generateCompanionDocuments) throws IOException {
         File sourceFile = resolveSourceFile(impactFiles, wallFiles, slabFiles);
         File targetFile = PhysicalFactorsMapExporter.generateMap(sourceFile, workDeadline, customerInn,
-                PRIMARY_FOLDER_NAME);
+                primaryFolderName, generateCompanionDocuments);
+        return finishMap(impactFiles, wallFiles, slabFiles, protocolFile, workDeadline, customerInn,
+                generateCompanionDocuments, targetFile);
+    }
+
+    public static File generateMap(List<File> impactFiles,
+                                   List<File> wallFiles,
+                                   List<File> slabFiles,
+                                   File protocolFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   File primaryFolder,
+                                   boolean generateCompanionDocuments) throws IOException {
+        File sourceFile = resolveSourceFile(impactFiles, wallFiles, slabFiles);
+        File targetFile = PhysicalFactorsMapExporter.generateMap(sourceFile, workDeadline, customerInn,
+                primaryFolder, generateCompanionDocuments);
+        return finishMap(impactFiles, wallFiles, slabFiles, protocolFile, workDeadline, customerInn,
+                generateCompanionDocuments, targetFile);
+    }
+
+    private static File finishMap(List<File> impactFiles,
+                                  List<File> wallFiles,
+                                  List<File> slabFiles,
+                                  File protocolFile,
+                                  String workDeadline,
+                                  String customerInn,
+                                  boolean generateCompanionDocuments,
+                                  File targetFile) throws IOException {
         removeMicroclimateSheet(targetFile);
         removeVentilationSheet(targetFile);
         SoundInsulationProtocolData data = new SoundInsulationProtocolData();
@@ -100,8 +148,8 @@ public final class SoundInsulationMapExporter {
         addRtSheets(targetFile, slabFiles, wallFiles);
         addBackgroundSheet(targetFile, wallFiles, slabFiles);
         applyUniformMapSheetLayout(targetFile);
-        File renamed = renameSoundInsulationMap(targetFile);
-        if (renamed != null) {
+        File renamed = renameSoundInsulationMap(targetFile, data);
+        if (renamed != null && generateCompanionDocuments) {
             SoundInsulationProtocolIssuanceSheetExporter.generate(protocolFile, renamed);
             SoundInsulationMeasurementCardRegistrationSheetExporter.generate(protocolFile, renamed);
             SoundInsulationEquipmentIssuanceSheetExporter.generate(protocolFile, renamed);
@@ -110,6 +158,10 @@ public final class SoundInsulationMapExporter {
             SoundInsulationRequestAnalysisSheetExporter.generate(protocolFile, renamed);
         }
         return renamed;
+    }
+
+    public static File resolveMeasurementPlanFile(File mapFile) {
+        return SoundInsulationMeasurementPlanExporter.resolveMeasurementPlanFile(mapFile);
     }
 
     private static File resolveSourceFile(List<File> impactFiles,
@@ -432,7 +484,7 @@ public final class SoundInsulationMapExporter {
             setMergedCellValueWithPrefix(sheet, 5, "1. Заказчик: ", data.customerNameAndContacts, prefixFont, valueFont);
             adjustRowHeightForMergedTextDoubling(sheet, 5, 0, 31,
                     "1. Заказчик: " + safe(data.customerNameAndContacts));
-            String measurementDatesText = appendMeasurementDatesNote(data.measurementDates);
+            String measurementDatesText = resolvePrimaryMeasurementDate(data.measurementDates);
             setMergedCellValueWithPrefix(sheet, 7, "2. Дата замеров: ", measurementDatesText, prefixFont, valueFont);
             adjustRowHeightForMergedTextDoubling(sheet, 7, 0, 31,
                     "2. Дата замеров: " + safe(measurementDatesText));
@@ -472,8 +524,15 @@ public final class SoundInsulationMapExporter {
         }
     }
 
-    private static String appendMeasurementDatesNote(String measurementDates) {
-        return MEASUREMENT_DATES_NOTE;
+    private static String resolvePrimaryMeasurementDate(String measurementDates) {
+        if (measurementDates == null || measurementDates.isBlank()) {
+            return "";
+        }
+        int commaIndex = measurementDates.indexOf(',');
+        if (commaIndex >= 0) {
+            return measurementDates.substring(0, commaIndex).trim();
+        }
+        return measurementDates.trim();
     }
 
     private static void setCellText(Sheet sheet, int rowIndex, String text) {
@@ -830,16 +889,34 @@ public final class SoundInsulationMapExporter {
         return new ArrayList<>(rows);
     }
 
-    private static File renameSoundInsulationMap(File targetFile) throws IOException {
+    private static File renameSoundInsulationMap(File targetFile, SoundInsulationProtocolData data) throws IOException {
         if (targetFile == null || !targetFile.exists()) {
             return targetFile;
         }
-        File renamedFile = new File(targetFile.getParentFile(), SOUND_INSULATION_MAP_NAME + ".xlsx");
+        String protocolNumber = data == null ? "" : data.protocolNumber;
+        String registrationNumber = data == null ? "" : data.registrationNumber;
+        String baseName = firstNotBlank(protocolNumber, registrationNumber, SOUND_INSULATION_MAP_NAME);
+        File renamedFile = new File(targetFile.getParentFile(), sanitizeFileName(baseName) + "_карта.xlsx");
         if (targetFile.equals(renamedFile)) {
             return targetFile;
         }
         Files.move(targetFile.toPath(), renamedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
         return renamedFile;
+    }
+
+    private static String firstNotBlank(String first, String second, String fallback) {
+        if (first != null && !first.isBlank()) {
+            return first.trim();
+        }
+        if (second != null && !second.isBlank()) {
+            return second.trim();
+        }
+        return fallback;
+    }
+
+    private static String sanitizeFileName(String value) {
+        String safeValue = value == null ? "" : value.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        return safeValue.isBlank() ? SOUND_INSULATION_MAP_NAME : safeValue;
     }
 
     private static void removeExistingLnwSheets(Workbook targetWorkbook) {
@@ -971,16 +1048,26 @@ public final class SoundInsulationMapExporter {
 
                     PrintSetup printSetup = sheet.getPrintSetup();
                     printSetup.setLandscape(true);
+                    printSetup.setPaperSize(PrintSetup.A4_PAPERSIZE);
                     printSetup.setFitWidth((short) 1);
                     printSetup.setFitHeight((short) 0);
                     sheet.setFitToPage(true);
                     sheet.setAutobreaks(true);
                     if (i == 0) {
-                        workbook.setPrintArea(i, "$A:$AF");
+                        int lastRow = Math.max(sheet.getLastRowNum(), 0);
+                        workbook.setPrintArea(i, 0, 31, 0, lastRow);
+                        removeColumnBreaks(sheet, 0, 31);
+                    } else if (isSoundInsulationMeasurementSheet(sheet.getSheetName())) {
+                        if (isRtSheet(sheet.getSheetName())) {
+                            trimTrailingBlankRows(sheet, 1, 16);
+                        }
+                        int lastRow = Math.max(sheet.getLastRowNum(), 0);
+                        workbook.setPrintArea(i, 0, 16, 0, lastRow);
+                        removeColumnBreaks(sheet, 0, 31);
                     } else if (i >= 2) {
                         int lastRow = Math.max(sheet.getLastRowNum(), 0);
                         workbook.setPrintArea(i, 0, 16, 0, lastRow);
-                        removeColumnBreaks(sheet, 0, 16);
+                        removeColumnBreaks(sheet, 0, 31);
                     }
 
                     Header header = sheet.getHeader();
@@ -1000,6 +1087,104 @@ public final class SoundInsulationMapExporter {
             }
         } finally {
             ZipSecureFile.setMinInflateRatio(oldRatio);
+        }
+    }
+
+    private static boolean isSoundInsulationMeasurementSheet(String sheetName) {
+        String normalized = safe(sheetName).trim().toLowerCase(Locale.ROOT);
+        return normalized.equals("lnw")
+                || normalized.startsWith("lnw ")
+                || normalized.equals("rw")
+                || normalized.startsWith("rw ")
+                || normalized.equals("rt")
+                || normalized.startsWith("rt ")
+                || normalized.equals("фон");
+    }
+
+    private static boolean isRtSheet(String sheetName) {
+        String normalized = safe(sheetName).trim().toLowerCase(Locale.ROOT);
+        return normalized.equals("rt") || normalized.startsWith("rt ");
+    }
+
+    private static void trimTrailingBlankRows(Sheet sheet, int firstRowToKeep, int lastCol) {
+        if (sheet == null) {
+            return;
+        }
+        DataFormatter formatter = new DataFormatter();
+        for (int rowIndex = sheet.getLastRowNum(); rowIndex >= firstRowToKeep; rowIndex--) {
+            Row row = sheet.getRow(rowIndex);
+            if (rowHasVisibleContent(sheet, row, rowIndex, formatter, lastCol)) {
+                break;
+            }
+            removeBlankMergedRegionsIntersectingRow(sheet, rowIndex, formatter, lastCol);
+            if (row != null) {
+                sheet.removeRow(row);
+            }
+        }
+    }
+
+    private static boolean rowHasVisibleContent(Sheet sheet,
+                                                Row row,
+                                                int rowIndex,
+                                                DataFormatter formatter,
+                                                int lastCol) {
+        if (row != null) {
+            int maxCol = Math.max(lastCol, row.getLastCellNum() - 1);
+            for (int col = 0; col <= maxCol; col++) {
+                if (cellHasVisibleContent(row.getCell(col), formatter)) {
+                    return true;
+                }
+            }
+        }
+        for (int index = 0; index < sheet.getNumMergedRegions(); index++) {
+            CellRangeAddress region = sheet.getMergedRegion(index);
+            if (region.getFirstRow() <= rowIndex && region.getLastRow() >= rowIndex
+                    && mergedRegionHasVisibleContent(sheet, region, formatter, lastCol)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean mergedRegionHasVisibleContent(Sheet sheet,
+                                                         CellRangeAddress region,
+                                                         DataFormatter formatter,
+                                                         int lastCol) {
+        int lastRegionCol = Math.min(Math.max(lastCol, region.getLastColumn()), region.getLastColumn());
+        for (int rowIndex = region.getFirstRow(); rowIndex <= region.getLastRow(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                continue;
+            }
+            for (int col = region.getFirstColumn(); col <= lastRegionCol; col++) {
+                if (cellHasVisibleContent(row.getCell(col), formatter)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean cellHasVisibleContent(Cell cell, DataFormatter formatter) {
+        if (cell == null) {
+            return false;
+        }
+        if (cell.getCellType() == CellType.FORMULA) {
+            return true;
+        }
+        return !normalizeSpace(formatter.formatCellValue(cell)).isEmpty();
+    }
+
+    private static void removeBlankMergedRegionsIntersectingRow(Sheet sheet,
+                                                                int rowIndex,
+                                                                DataFormatter formatter,
+                                                                int lastCol) {
+        for (int index = sheet.getNumMergedRegions() - 1; index >= 0; index--) {
+            CellRangeAddress region = sheet.getMergedRegion(index);
+            if (region.getFirstRow() <= rowIndex && region.getLastRow() >= rowIndex
+                    && !mergedRegionHasVisibleContent(sheet, region, formatter, lastCol)) {
+                sheet.removeMergedRegion(index);
+            }
         }
     }
 

@@ -28,7 +28,7 @@ public final class AreaNoisePrimaryFiles {
         if (analysisSheet != null) {
             files.add(analysisSheet);
         }
-        File measurementPlan = MeasurementPlanExporter.resolveMeasurementPlanFile(mapFile);
+        File measurementPlan = MeasurementPlanExporter.resolveNoiseMeasurementPlanFile(mapFile);
         if (measurementPlan != null) {
             files.add(measurementPlan);
         }
@@ -57,7 +57,7 @@ public final class AreaNoisePrimaryFiles {
     }
 
     public static File resolveMeasurementPlanFile(File mapFile) {
-        return MeasurementPlanExporter.resolveMeasurementPlanFile(mapFile);
+        return MeasurementPlanExporter.resolveNoiseMeasurementPlanFile(mapFile);
     }
 
     public static File resolveRegistrationSheetFile(File mapFile) {

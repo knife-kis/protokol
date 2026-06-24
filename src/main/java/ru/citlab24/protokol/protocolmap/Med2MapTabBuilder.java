@@ -33,12 +33,12 @@ final class Med2MapTabBuilder {
                 titleStyle);
 
         Row headerRow = sheet.createRow(rowIndex);
-        headerRow.setHeightInPoints(sheet.getDefaultRowHeightInPoints() * 2f);
+        headerRow.setHeightInPoints(sheet.getDefaultRowHeightInPoints() * 3f);
         setMed2CellValue(headerRow, 0, "№ п/п", borderCenterStyle);
         setMed2CellValue(headerRow, 1, "Наименование места\nпроведения измерений", borderCenterStyle);
         for (int col = 2; col <= 4; col++) {
             setMed2CellValue(headerRow, col, col == 2
-                    ? "Мощность дозы гамма-\nизлучения ± ΔН, мкЗв/ч"
+                    ? "Мощность дозы гамма-\nизлучения ± ΔН, мкЗв/ч\nИзмеренная (± расширенная неопределенность)"
                     : "", borderCenterStyle);
         }
         CellRangeAddress headerRegion = new CellRangeAddress(rowIndex, rowIndex, 2, 4);
@@ -177,7 +177,7 @@ final class Med2MapTabBuilder {
     }
 
     private static int[] buildMed2ColumnWidthsPx() {
-        return new int[]{33, 550, 74, 20, 74};
+        return new int[]{33, 550, 111, 78, 111};
     }
 
     private static int pixel2WidthUnits(int px) {

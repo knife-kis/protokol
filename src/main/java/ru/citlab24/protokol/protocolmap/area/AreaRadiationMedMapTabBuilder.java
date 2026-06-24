@@ -70,9 +70,10 @@ final class AreaRadiationMedMapTabBuilder {
                 : locationLabels;
         for (String label : labels) {
             Row dataRow = sheet.createRow(rowIndex++);
-            dataRow.setHeightInPoints(defaultHeight * 3f);
+            String locationLabel = label == null ? "" : label;
+            dataRow.setHeightInPoints(isControlPoint(locationLabel) ? defaultHeight : defaultHeight * 3f);
             setCellValue(dataRow, 0, String.valueOf(sequence++), dataCenterStyle);
-            mergeCellRange(sheet, dataRow.getRowNum(), 1, 7, label == null ? "" : label, dataLeftStyle);
+            mergeCellRange(sheet, dataRow.getRowNum(), 1, 7, locationLabel, dataLeftStyle);
             mergeCellRange(sheet, dataRow.getRowNum(), 8, LAST_COL, "", dataCenterStyle);
             applyBorders(sheet, dataRow.getRowNum(), 0, 0);
             applyBorders(sheet, dataRow.getRowNum(), 1, 7);
@@ -85,6 +86,10 @@ final class AreaRadiationMedMapTabBuilder {
                 "Дополнительные сведения: ____________", titleStyle);
 
         return sheet;
+    }
+
+    private static boolean isControlPoint(String value) {
+        return value != null && value.toLowerCase(java.util.Locale.ROOT).contains("контрольная точка");
     }
 
     private static void applySheetDefaults(Workbook workbook, Sheet sheet) {

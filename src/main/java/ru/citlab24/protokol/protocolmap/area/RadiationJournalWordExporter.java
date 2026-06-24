@@ -61,7 +61,7 @@ final class RadiationJournalWordExporter {
             setLandscapeOrientation(document);
             applyStandardHeader(document);
 
-            buildTitlePage(document);
+            buildTitlePage(document, data);
             buildResponsibleSection(document, data);
             buildCheckSection(document);
             buildProtocolInfoSection(document, data);
@@ -87,12 +87,14 @@ final class RadiationJournalWordExporter {
         return new File(mapFile.getParentFile(), JOURNAL_FILE_NAME);
     }
 
-    private static void buildTitlePage(XWPFDocument document) {
+    private static void buildTitlePage(XWPFDocument document, RadiationJournalData.ProtocolData data) {
+        String journalNumber = data.journalNumber().isBlank() ? "5/2023" : data.journalNumber();
+        addSpacer(document, 5);
         XWPFTable titleTable = document.createTable(1, 1);
         stretchTableToFullWidth(titleTable);
         XWPFTableCell cell = titleTable.getRow(0).getCell(0);
         setTableCellText(cell,
-                "ЖУРНАЛ\nРегистрации результатов определения плотности потока радона\n№5/2023",
+                "ЖУРНАЛ\nРегистрации результатов определения плотности потока радона\n№" + journalNumber,
                 TITLE_FONT_SIZE, true, ParagraphAlignment.CENTER);
 
         addSpacer(document, 3);

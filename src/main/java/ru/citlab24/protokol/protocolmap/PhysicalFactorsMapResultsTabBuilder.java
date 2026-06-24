@@ -18,7 +18,7 @@ final class PhysicalFactorsMapResultsTabBuilder {
     private static final double BOTTOM_MARGIN_CM = 1.9;
     private static final float EXTRA_ROW_HEIGHT_POINTS = 15f;
     private static final float HEADER_ROW_TOP_HEIGHT_POINTS = pixelsToPoints(48);
-    private static final float HEADER_ROW_BOTTOM_HEIGHT_POINTS = pixelsToPoints(120);
+    private static final float HEADER_ROW_BOTTOM_HEIGHT_POINTS = pixelsToPoints(137);
 
     private PhysicalFactorsMapResultsTabBuilder() {
     }

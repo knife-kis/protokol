@@ -46,7 +46,8 @@ import java.util.List;
 import java.util.Locale;
 
 public final class MeasurementPlanExporter {
-    private static final String PLAN_SHEET_NAME = "план измерений.docx";
+    private static final String PLAN_SHEET_NAME = "план измерений физфакторы.docx";
+    private static final String NOISE_PLAN_SHEET_NAME = "план измерений шумы.docx";
     private static final String FONT_NAME = "Arial";
     private static final int TITLE_FONT_SIZE = 12;
     private static final int TABLE_FONT_SIZE = 10;
@@ -61,11 +62,18 @@ public final class MeasurementPlanExporter {
     private MeasurementPlanExporter() {
     }
 
-    static void generate(File sourceFile, File mapFile, String workDeadline) {
+    public static void generate(File sourceFile, File mapFile, String workDeadline) {
+        generate(sourceFile, mapFile, workDeadline, resolveMeasurementPlanFile(mapFile));
+    }
+
+    public static void generateForNoise(File sourceFile, File mapFile, String workDeadline) {
+        generate(sourceFile, mapFile, workDeadline, resolveNoiseMeasurementPlanFile(mapFile));
+    }
+
+    private static void generate(File sourceFile, File mapFile, String workDeadline, File targetFile) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
-        File targetFile = resolveMeasurementPlanFile(mapFile);
         String applicationNumber = resolveApplicationNumberFromMap(mapFile);
         String objectName = resolveObjectName(mapFile);
         String objectAddress = resolveObjectAddress(mapFile);
@@ -200,6 +208,13 @@ public final class MeasurementPlanExporter {
             return null;
         }
         return new File(mapFile.getParentFile(), PLAN_SHEET_NAME);
+    }
+
+    public static File resolveNoiseMeasurementPlanFile(File mapFile) {
+        if (mapFile == null) {
+            return null;
+        }
+        return new File(mapFile.getParentFile(), NOISE_PLAN_SHEET_NAME);
     }
 
     private static String buildResponsibleText(String role, String performer) {
@@ -654,7 +669,7 @@ public final class MeasurementPlanExporter {
         if (value == null) {
             return "";
         }
-        String trimmed = value.trim();
+        String trimmed = value.trim().replaceFirst("(?<=\\d{2}\\.\\d{2}\\.\\d{4})[\\s.]+$", "");
         if (trimmed.length() <= count) {
             return trimmed;
         }
@@ -682,9 +697,12 @@ public final class MeasurementPlanExporter {
                 if (row == null) {
                     break;
                 }
-                String indicator = findFirstValueInRange(row, formatter, 0, 4);
-                String method = findFirstValueInRange(row, formatter, 15, 25);
+                String indicator = removeMeasurementLegendNote(findFirstValueInRange(row, formatter, 0, 4));
+                String method = removeMeasurementLegendNote(findFirstValueInRange(row, formatter, 15, 25));
                 if (indicator.contains(NORMATIVE_HEADER_TITLE)) {
+                    continue;
+                }
+                if (isMeasurementLegendNote(indicator) || isMeasurementLegendNote(method)) {
                     continue;
                 }
                 if (indicator.isEmpty() && method.isEmpty()) {
@@ -726,6 +744,30 @@ public final class MeasurementPlanExporter {
             }
         }
         return "";
+    }
+
+    private static String removeMeasurementLegendNote(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        String lower = trimmed.toLowerCase(Locale.ROOT).replace('\u00A0', ' ');
+        int index = lower.indexOf("условные обозначения:");
+        if (index < 0) {
+            index = lower.indexOf("u - значение расширенной неопределенности");
+        }
+        if (index < 0) {
+            index = lower.indexOf("указанная расширенная неопределенность измерений");
+        }
+        return index < 0 ? trimmed : trimmed.substring(0, index).trim();
+    }
+
+    private static boolean isMeasurementLegendNote(String value) {
+        String normalized = (value == null ? "" : value)
+                .replace('\u00A0', ' ')
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+        return normalized.startsWith("условные обозначения:")
+                || normalized.startsWith("u - значение расширенной неопределенности")
+                || normalized.contains("указанная расширенная неопределенность измерений");
     }
 
     private static final class NormativeRow {

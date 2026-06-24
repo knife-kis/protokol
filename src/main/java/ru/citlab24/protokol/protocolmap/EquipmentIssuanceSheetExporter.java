@@ -59,7 +59,7 @@ public final class EquipmentIssuanceSheetExporter {
     private EquipmentIssuanceSheetExporter() {
     }
 
-    static void generate(File mapFile) {
+    public static void generate(File mapFile) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }

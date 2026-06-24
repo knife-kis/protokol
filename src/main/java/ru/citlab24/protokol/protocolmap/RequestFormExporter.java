@@ -45,9 +45,14 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class RequestFormExporter {
     private static final String REQUEST_FORM_NAME = "заявка.docx";
+    private static final String RADIATION_SANPIN =
+            "СанПиН 2.6.4115-25\n" +
+                    "\"Санитарно-эпидемиологические требования в области радиационной безопасности населения при обращении источников ионизирующего излучения\"";
     private static final String FONT_NAME = "Arial";
     private static final int FONT_SIZE = 12;
     private static final int PLAN_TABLE_FONT_SIZE = 10;
@@ -72,23 +77,40 @@ public final class RequestFormExporter {
     private static final String ADDRESS_PREFIX = "Адрес объекта";
     private static final String NORMATIVE_SECTION_TITLE = "Сведения о нормативных документах";
     private static final String NORMATIVE_HEADER_TITLE = "Измеряемый показатель";
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
+    private static final Pattern PHONE_PREFIX_PATTERN =
+            Pattern.compile("(?iu)^(?:контактный\\s+телефон|телефон|тел|т)\\.?\\s*[:.]?\\s*");
 
     private RequestFormExporter() {
     }
 
-    static void generate(File sourceFile, File mapFile, String workDeadline, String customerInn) {
-        generate(sourceFile, mapFile, workDeadline, customerInn, true);
+    public static void generate(File sourceFile, File mapFile, String workDeadline, String customerInn) {
+        generate(sourceFile, mapFile, workDeadline, customerInn, true, false);
     }
 
-    static void generateForNoise(File sourceFile, File mapFile, String workDeadline, String customerInn) {
-        generate(sourceFile, mapFile, workDeadline, customerInn, false);
+    public static void generateAreaRadiation(File sourceFile,
+                                             File mapFile,
+                                             String workDeadline,
+                                             String customerInn,
+                                             boolean includeNoiseInstructions) {
+        generate(sourceFile, mapFile, workDeadline, customerInn, true, includeNoiseInstructions);
+    }
+
+    public static void generateForNoise(File sourceFile, File mapFile, String workDeadline, String customerInn) {
+        generate(sourceFile, mapFile, workDeadline, customerInn, true, false);
+    }
+
+    public static void generateForNoiseAppendix(File sourceFile, File mapFile, String workDeadline, String customerInn) {
+        generate(sourceFile, mapFile, workDeadline, customerInn, false, false);
     }
 
     private static void generate(File sourceFile,
                                  File mapFile,
                                  String workDeadline,
                                  String customerInn,
-                                 boolean includeRequestSection) {
+                                 boolean includeRequestSection,
+                                 boolean includeRadiationNoiseInstructions) {
         if (mapFile == null || !mapFile.exists()) {
             return;
         }
@@ -99,7 +121,7 @@ public final class RequestFormExporter {
         String objectAddress = resolveObjectAddress(mapFile);
         List<NormativeRow> normativeRows = resolveNormativeRows(sourceFile);
         List<MicroclimateRow> microclimateRows = resolveMicroclimateRows(sourceFile);
-        List<MicroclimateRow> protocolMicroclimateRows = resolveProtocolMicroclimateRows(sourceFile);
+        List<MicroclimateRow> protocolMicroclimateRows = List.of();
         List<VentilationRow> ventilationRows = resolveVentilationRows(sourceFile);
         String ventilationMethod = resolveVentilationNormativeMethod(sourceFile);
         List<String> medRows = resolveMedRows(sourceFile);
@@ -249,8 +271,8 @@ public final class RequestFormExporter {
                     "Данные, предоставленные Заказчиком, за которые он несет ответственность",
                     false, ParagraphAlignment.LEFT);
             String appendixText = isRadiationArea
-                    ? buildRadiationAppendixText(areaSize)
-                    : "Приложение к заявке";
+                    ? buildRadiationAppendixText(areaSize, includeRadiationNoiseInstructions)
+                    : (hasNoiseRows ? buildNoiseAppendixText() : "Приложение к заявке");
             setTableCellText(optionsTable.getRow(14).getCell(1), appendixText, false, ParagraphAlignment.LEFT);
 
             setTableCellText(optionsTable.getRow(15).getCell(0), "Сроки выполнения работ", false,
@@ -1299,6 +1321,10 @@ public final class RequestFormExporter {
         if (value.isBlank()) {
             value = extractValueAfterPrefix(line, "Заказчик");
         }
+        CustomerInfo parsedByEmail = parseCustomerInfoByEmail(value);
+        if (parsedByEmail != null) {
+            return parsedByEmail;
+        }
         List<String> parts = splitCommaParts(value);
         String name = parts.isEmpty() ? "" : parts.get(0);
         String email = parts.size() > 1 ? parts.get(1) : "";
@@ -1309,6 +1335,38 @@ public final class RequestFormExporter {
             phone = parts.get(2);
         }
         return new CustomerInfo(name, email, phone);
+    }
+
+    private static CustomerInfo parseCustomerInfoByEmail(String value) {
+        String normalized = normalizeInlineText(value);
+        Matcher emailMatcher = EMAIL_PATTERN.matcher(normalized);
+        if (!emailMatcher.find()) {
+            return null;
+        }
+        String name = stripCustomerSeparators(normalized.substring(0, emailMatcher.start()));
+        String email = emailMatcher.group();
+        String phone = cleanCustomerPhone(normalized.substring(emailMatcher.end()));
+        return new CustomerInfo(name, email, phone);
+    }
+
+    private static String cleanCustomerPhone(String value) {
+        String result = stripCustomerSeparators(value);
+        result = PHONE_PREFIX_PATTERN.matcher(result).replaceFirst("");
+        return stripCustomerSeparators(result);
+    }
+
+    private static String stripCustomerSeparators(String value) {
+        return normalizeInlineText(value)
+                .replaceFirst("^[\\s,.;:]+", "")
+                .replaceFirst("[\\s,.;:]+$", "")
+                .trim();
+    }
+
+    private static String normalizeInlineText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
     }
 
     private static List<String> splitCommaParts(String value) {
@@ -1464,12 +1522,19 @@ public final class RequestFormExporter {
         return value.toLowerCase(Locale.ROOT).indexOf(needle.toLowerCase(Locale.ROOT));
     }
 
-    private static String buildRadiationAppendixText(String areaSize) {
+    private static String buildRadiationAppendixText(String areaSize, boolean includeNoiseInstructions) {
         String areaPart = areaSize == null || areaSize.isBlank() ? "" : (" " + areaSize.trim());
-        return "Площадь участка" + areaPart + " Прошу указать в протоколе:\n" +
-                "Допустимый уровень мощность дозы гамма-излучения по СанПиН 2.6.1.2800-10 - 0,30 мкЗв/ч;\n" +
-                "Допустимый уровень плотности потока радона по СанПиН 2.6.1.2800-10 - 80 мБк/(м2∙с);\n" +
-                "Измерение эквивалентных и максимальных уровней звука производить в дневное время на " +
+        String text = "Площадь участка" + areaPart + " Прошу указать в протоколе:\n" +
+                "Допустимый уровень мощность дозы гамма-излучения по " + RADIATION_SANPIN + " - 0,30 мкЗв/ч;\n" +
+                "Допустимый уровень плотности потока радона по " + RADIATION_SANPIN + " - 80 мБк/(м2∙с);";
+        if (!includeNoiseInstructions) {
+            return text;
+        }
+        return text + "\n" + buildNoiseAppendixText();
+    }
+
+    private static String buildNoiseAppendixText() {
+        return "Измерение эквивалентных и максимальных уровней звука производить в дневное время на " +
                 "любом временном интервале в период с 07. 00 ч. до 23.00 ч. \n" +
                 "Нормативные требования СанПиН 1.2.3685-21 (с 07. 00 ч. до 23.00 ч.) " +
                 "Эквивалентные уровни звука - 55 дБА; максимальные уровни звука - 70 дБА.";
@@ -1710,6 +1775,9 @@ public final class RequestFormExporter {
                 CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
                 if (isVentilationMergedRow(mergedRow, rowIndex)) {
                     String sectionText = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (isRequestLegendNote(sectionText)) {
+                        break;
+                    }
                     if (!sectionText.isEmpty()) {
                         rows.add(VentilationRow.section(sectionText));
                         started = true;
@@ -1800,6 +1868,9 @@ public final class RequestFormExporter {
                 CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
                 if (isMedMergedRow(mergedRow, rowIndex)) {
                     String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (isRequestLegendNote(text)) {
+                        break;
+                    }
                     if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator, 0, 5)) {
                         if (started) {
                             break;
@@ -1852,6 +1923,9 @@ public final class RequestFormExporter {
                 CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
                 if (isMedMergedRow(mergedRow, rowIndex)) {
                     String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (isRequestLegendNote(text)) {
+                        break;
+                    }
                     if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator, 0, 5)) {
                         if (started) {
                             break;
@@ -1939,6 +2013,9 @@ public final class RequestFormExporter {
                 CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
                 if (isEroaRadonMergedRow(mergedRow, rowIndex)) {
                     String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (isRequestLegendNote(text)) {
+                        break;
+                    }
                     if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator, 0, 6)) {
                         if (started) {
                             break;
@@ -2022,6 +2099,9 @@ public final class RequestFormExporter {
                 CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
                 if (isArtificialLightingMergedRow(mergedRow, rowIndex)) {
                     String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (isRequestLegendNote(text)) {
+                        break;
+                    }
                     if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator,
                             0, ARTIFICIAL_LIGHTING_LAST_COL)) {
                         if (started) {
@@ -2075,9 +2155,16 @@ public final class RequestFormExporter {
             boolean started = false;
 
             for (int rowIndex = ARTIFICIAL_GROUND_LIGHTING_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                if (rowContainsRequestLegendNote(sheet, rowIndex, formatter, evaluator,
+                        0, ARTIFICIAL_GROUND_LIGHTING_MERGE_LAST_COL)) {
+                    break;
+                }
                 CellRangeAddress mergedRow = findMergedRegion(sheet, rowIndex, 0);
                 if (isArtificialGroundLightingMergedRow(mergedRow, rowIndex)) {
                     String text = readMergedCellValue(sheet, rowIndex, 0, formatter, evaluator).trim();
+                    if (isRequestLegendNote(text)) {
+                        break;
+                    }
                     if (text.isEmpty() && !hasRowContentInRange(sheet, rowIndex, formatter, evaluator,
                             0, ARTIFICIAL_GROUND_LIGHTING_MERGE_LAST_COL)) {
                         if (started) {
@@ -2131,7 +2218,14 @@ public final class RequestFormExporter {
             boolean started = false;
 
             for (int rowIndex = KEO_SOURCE_START_ROW; rowIndex <= lastRow; rowIndex++) {
+                String firstValue = readMergedCellValue(keoSheet, rowIndex, 0, formatter, evaluator).trim();
+                if (isRequestLegendNote(firstValue)) {
+                    break;
+                }
                 String place = readMergedCellValue(keoSheet, rowIndex, KEO_PLACE_COL, formatter, evaluator).trim();
+                if (isRequestLegendNote(place)) {
+                    break;
+                }
                 if (place.contains("Данные, предоставленные зак")) {
                     break;
                 }
@@ -2300,6 +2394,9 @@ public final class RequestFormExporter {
         for (String value : values) {
             if (value == null || value.isBlank()) {
                 continue;
+            }
+            if (isRequestLegendNote(value)) {
+                return true;
             }
             String normalized = value.toLowerCase(Locale.ROOT);
             if (normalized.contains("данные, предоставленные")) {
@@ -2660,6 +2757,39 @@ public final class RequestFormExporter {
             }
         }
         return false;
+    }
+
+    private static boolean rowContainsRequestLegendNote(Sheet sheet,
+                                                        int rowIndex,
+                                                        DataFormatter formatter,
+                                                        FormulaEvaluator evaluator,
+                                                        int startCol,
+                                                        int endCol) {
+        if (sheet == null) {
+            return false;
+        }
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            return false;
+        }
+        for (int col = startCol; col <= endCol; col++) {
+            Cell cell = row.getCell(col);
+            if (cell == null) {
+                continue;
+            }
+            String text = formatter.formatCellValue(cell, evaluator);
+            if (text != null && isRequestLegendNote(text.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isRequestLegendNote(String value) {
+        String normalized = normalizeInlineText(value).toLowerCase(Locale.ROOT);
+        return normalized.startsWith("условные обозначения:")
+                || normalized.startsWith("u - значение расширенной неопределенности")
+                || normalized.contains("указанная расширенная неопределенность измерений");
     }
 
     private record CustomerInfo(String name, String email, String phone) {

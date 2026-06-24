@@ -13,6 +13,9 @@ final class TitlePageMeasurementTableWriter {
             "Скорость воздушного потока, производительность вентсистем, " +
                     "кратность воздухообмена по вытяжке, площадь сечения";
     private static final String HIGHLIGHT_LIGHTING_ERROR = "\u00b1 8% (Освещенность)";
+    private static final String RADIATION_SANPIN =
+            "СанПиН 2.6.4115-25\n" +
+                    "\"Санитарно-эпидемиологические требования в области радиационной безопасности населения при обращении источников ионизирующего излучения\"";
 
     private TitlePageMeasurementTableWriter() {
     }
@@ -382,13 +385,11 @@ final class TitlePageMeasurementTableWriter {
         int sectionRowIndex = sectionHeaderRow + 1;
         int lastSectionRow = sectionHeaderRow;
         if (hasMedSheet) {
-            setRowHeightPx(sheet, sectionRowIndex, 96f);
+            setRowHeightPx(sheet, sectionRowIndex, 150f);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 0, 4,
                     "Мощность дозы гамма-излучения; минимальное значение МЭД гамма-излучения; " +
                             "максимальное значение МЭД гамма-излучения");
-            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
-                    "СанПиН 2.6.1.2800-10 \"Гигиенические требования по ограничению облучения населения " +
-                            "за счет природных источников ионизирующего излучения\"");
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14, RADIATION_SANPIN);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +
@@ -403,9 +404,7 @@ final class TitlePageMeasurementTableWriter {
                     "Эквивалентная равновесная объемная активность (ЭРОА) радона; " +
                             "Эквивалентная равновесная объемная активность (ЭРОА) торона; " +
                             "Среднегодовое значение эквивалентной равновесной объемной активности изотопов радона");
-            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14,
-                    "СанПиН 2.6.1.2800-10 \"Гигиенические требования по ограничению облучения населения " +
-                            "за счет природных источников ионизирующего излучения\"");
+            setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 5, 14, RADIATION_SANPIN);
             setMergedText(sheet, sectionSmallCenterStyle, sectionRowIndex, sectionRowIndex, 15, 25,
                     "МР 2.6.1.0333-23 \"Радиационный контроль и санитарно-эпидемиологическая оценка жилых, " +
                             "общественных и производственных зданий и сооружений по показателям радиационной безопасности\" " +

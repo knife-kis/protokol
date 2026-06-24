@@ -35,7 +35,7 @@ import java.math.BigInteger;
 import java.util.List;
 
 final class SoundInsulationMeasurementPlanExporter {
-    private static final String PLAN_SHEET_NAME = "план измерений.docx";
+    private static final String PLAN_SHEET_NAME = "план измерений звукоизоляция.docx";
     private static final String FONT_NAME = "Arial";
     private static final int TITLE_FONT_SIZE = 12;
     private static final int TABLE_FONT_SIZE = 10;
@@ -138,7 +138,7 @@ final class SoundInsulationMeasurementPlanExporter {
 
             XWPFParagraph creatorCaption = document.createParagraph();
             setParagraphSpacing(creatorCaption);
-            creatorCaption.createRun().setText("План измерений сформировал:");
+            setParagraphText(creatorCaption, "План измерений сформировал:");
 
             XWPFTable approvalTable = document.createTable(2, 4);
             configureApprovalTableLayout(approvalTable);
@@ -165,7 +165,7 @@ final class SoundInsulationMeasurementPlanExporter {
 
             XWPFParagraph copyCaption = document.createParagraph();
             setParagraphSpacing(copyCaption);
-            copyCaption.createRun().setText("Копию плана получил:");
+            setParagraphText(copyCaption, "Копию плана получил:");
 
             XWPFTable copyTable = document.createTable(2, 4);
             configureApprovalTableLayout(copyTable);
@@ -175,7 +175,7 @@ final class SoundInsulationMeasurementPlanExporter {
                     TABLE_FONT_SIZE, false);
             setTableCellText(copyTable.getRow(0).getCell(2), copyRecipientName,
                     TABLE_FONT_SIZE, false);
-            setTableCellText(copyTable.getRow(0).getCell(3), "",
+            setTableCellText(copyTable.getRow(0).getCell(3), planCreatorDate,
                     TABLE_FONT_SIZE, false);
 
             setTableCellText(copyTable.getRow(1).getCell(0), "должность",
@@ -306,6 +306,13 @@ final class SoundInsulationMeasurementPlanExporter {
                 run.addBreak();
             }
         }
+    }
+
+    private static void setParagraphText(XWPFParagraph paragraph, String text) {
+        XWPFRun run = paragraph.createRun();
+        run.setText(text != null ? text : "");
+        run.setFontFamily(FONT_NAME);
+        run.setFontSize(TABLE_FONT_SIZE);
     }
 
     private static void setParagraphSpacing(XWPFParagraph paragraph) {
@@ -515,7 +522,7 @@ final class SoundInsulationMeasurementPlanExporter {
         if (value == null) {
             return "";
         }
-        String trimmed = value.trim();
+        String trimmed = value.trim().replaceFirst("(?<=\\d{2}\\.\\d{2}\\.\\d{4})[\\s.]+$", "");
         if (trimmed.length() <= count) {
             return trimmed;
         }

@@ -44,6 +44,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
+import java.util.List;
 
 public final class ProtocolIssuanceSheetExporter {
     private static final int MAP_PROTOCOL_NUMBER_ROW_INDEX = 21;
@@ -54,6 +55,20 @@ public final class ProtocolIssuanceSheetExporter {
     private static final int FONT_SIZE = 12;
 
     private ProtocolIssuanceSheetExporter() {
+    }
+
+    static final class RowData {
+        final String protocolNumber;
+        final String protocolDate;
+        final String customerName;
+        final String applicationNumber;
+
+        RowData(String protocolNumber, String protocolDate, String customerName, String applicationNumber) {
+            this.protocolNumber = protocolNumber;
+            this.protocolDate = protocolDate;
+            this.customerName = customerName;
+            this.applicationNumber = applicationNumber;
+        }
     }
 
     static void generate(File sourceFile, File mapFile) {
@@ -101,6 +116,70 @@ public final class ProtocolIssuanceSheetExporter {
             }
         } catch (IOException ignored) {
             // пропускаем создание листа, если не удалось сформировать документ
+        }
+    }
+
+    public static void generateCombined(File targetFile, List<File> sourceFiles, List<File> mapFiles) {
+        if (targetFile == null || mapFiles == null || mapFiles.isEmpty()) {
+            return;
+        }
+        List<RowData> rows = new java.util.ArrayList<>();
+        for (int index = 0; index < mapFiles.size(); index++) {
+            File mapFile = mapFiles.get(index);
+            File sourceFile = sourceFiles != null && index < sourceFiles.size() ? sourceFiles.get(index) : null;
+            rows.add(rowDataFromMap(sourceFile, mapFile));
+        }
+        generateCombinedRows(targetFile, rows);
+    }
+
+    static RowData rowDataFromMap(File sourceFile, File mapFile) {
+        return new RowData(
+                resolveProtocolNumberFromMap(mapFile),
+                resolveProtocolDateFromSource(sourceFile),
+                resolveCustomerNameFromMap(mapFile),
+                resolveApplicationNumberFromMap(mapFile)
+        );
+    }
+
+    static void generateCombinedRows(File targetFile, List<RowData> rows) {
+        if (targetFile == null || rows == null || rows.isEmpty()) {
+            return;
+        }
+        try (XWPFDocument document = new XWPFDocument()) {
+            setLandscapeOrientation(document);
+            applyStandardHeader(document);
+
+            XWPFParagraph title = document.createParagraph();
+            title.setAlignment(ParagraphAlignment.CENTER);
+            XWPFRun titleRun = title.createRun();
+            titleRun.setText("Лист выдачи протоколов");
+            titleRun.setFontFamily(FONT_NAME);
+            titleRun.setFontSize(FONT_SIZE);
+
+            XWPFTable table = document.createTable(rows.size() + 1, 5);
+            setTableCellText(table.getRow(0).getCell(0), "№ п/п");
+            setTableCellText(table.getRow(0).getCell(1), "Номер протокола");
+            setTableCellText(table.getRow(0).getCell(2), "Дата протокола");
+            setTableCellText(table.getRow(0).getCell(3),
+                    "Наименование заказчика (полное или сокращенное для юридического лица, " +
+                            "ФИО (допустимо указание только фамилии) для физического лица)");
+            setTableCellText(table.getRow(0).getCell(4), "Номер заявки");
+
+            for (int index = 0; index < rows.size(); index++) {
+                RowData rowData = rows.get(index);
+                setTableCellText(table.getRow(index + 1).getCell(0), String.valueOf(index + 1));
+                setTableCellText(table.getRow(index + 1).getCell(1), rowData.protocolNumber);
+                setTableCellText(table.getRow(index + 1).getCell(2), rowData.protocolDate);
+                setTableCellText(table.getRow(index + 1).getCell(3), rowData.customerName);
+                setTableCellText(table.getRow(index + 1).getCell(4), rowData.applicationNumber);
+            }
+
+            addIssuanceNotes(document);
+
+            try (FileOutputStream out = new FileOutputStream(targetFile)) {
+                document.write(out);
+            }
+        } catch (IOException ignored) {
         }
     }
 

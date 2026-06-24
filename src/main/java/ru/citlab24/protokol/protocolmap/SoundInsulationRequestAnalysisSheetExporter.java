@@ -40,8 +40,6 @@ final class SoundInsulationRequestAnalysisSheetExporter {
     private static final int TABLE_FONT_SIZE = 10;
     private static final int SMALL_FONT_SIZE = 8;
     private static final int PORTRAIT_TABLE_WIDTH_DXA = 9639;
-    private static final String PERFORMER_NAME = "Белов Д.А.";
-
     private SoundInsulationRequestAnalysisSheetExporter() {
     }
 
@@ -55,17 +53,8 @@ final class SoundInsulationRequestAnalysisSheetExporter {
         if (applicationNumber.isBlank()) {
             applicationNumber = data.registrationNumber();
         }
-        String performer = PERFORMER_NAME;
-        boolean isTarnovsky = performer.contains("Тарновский");
-        String planCreatorRole = isTarnovsky
-                ? "Заместитель заведующий лабораторией"
-                : "Заведующий лабораторией";
-        String responsibleRole = planCreatorRole.equals("Заместитель заведующий лабораторией")
-                ? "Заведующий лабораторией"
-                : "Инженер";
-        String responsibleName = responsibleRole.equals("Заведующий лабораторией")
-                ? "Тарновский М.О."
-                : "Белов Д.А.";
+        String responsibleRole = "Заведующий лабораторией";
+        String responsibleName = "Тарновский М.О.";
         String responsibleDate = lastCharacters(applicationNumber, 10);
         List<String> measurementDates = data.measurementDates();
         String measurementDatesText = String.join(", ", measurementDates);
@@ -502,7 +491,7 @@ final class SoundInsulationRequestAnalysisSheetExporter {
         if (value == null) {
             return "";
         }
-        String trimmed = value.trim();
+        String trimmed = value.trim().replaceFirst("(?<=\\d{2}\\.\\d{2}\\.\\d{4})[\\s.]+$", "");
         if (trimmed.length() <= count) {
             return trimmed;
         }

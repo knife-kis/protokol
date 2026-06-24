@@ -40,6 +40,30 @@ public final class NoiseMapExporter {
     }
 
     public static File generateMap(File sourceFile, String workDeadline, String customerInn) throws IOException {
+        return generateMap(sourceFile, workDeadline, customerInn, true);
+    }
+
+    public static File generateMap(File sourceFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   boolean generateCompanionDocuments) throws IOException {
+        return generateMap(sourceFile, workDeadline, customerInn, PRIMARY_FOLDER_NAME, generateCompanionDocuments);
+    }
+
+    public static File generateMap(File sourceFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   String primaryFolderName,
+                                   boolean generateCompanionDocuments) throws IOException {
+        return generateMap(sourceFile, workDeadline, customerInn,
+                ensurePrimaryFolder(sourceFile, primaryFolderName), generateCompanionDocuments);
+    }
+
+    public static File generateMap(File sourceFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   File primaryFolder,
+                                   boolean generateCompanionDocuments) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
         String protocolNumber = resolveProtocolNumber(sourceFile);
@@ -54,16 +78,18 @@ public final class NoiseMapExporter {
         String specialConditions = resolveSpecialConditions(sourceFile);
         String measurementMethods = resolveMeasurementMethods(sourceFile);
         java.util.List<InstrumentData> instruments = resolveMeasurementInstruments(sourceFile);
-        File targetFile = buildTargetFile(sourceFile);
+        File targetFile = buildTargetFile(sourceFile, primaryFolder);
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("карта замеров");
             applySheetDefaults(workbook, sheet);
             applyHeaders(sheet, registrationNumber);
             createTitleRows(workbook, sheet, registrationNumber, headerData, measurementPerformer, measurementDates, controlDate);
-            createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
-                    additionalInfo, specialConditions, measurementMethods, instruments);
             java.util.List<String> measurementDatesList = extractMeasurementDatesList(measurementDates);
+            createSecondPageRows(workbook, sheet, protocolNumber, contractText, headerData,
+                    additionalInfo, specialConditions, measurementMethods, instruments,
+                    Math.max(1, measurementDatesList.size()));
+            applyTitleSheetPrintArea(workbook, sheet);
             createProtocolTabs(sourceFile, workbook, registrationNumber, measurementDatesList);
 
             try (FileOutputStream out = new FileOutputStream(targetFile)) {
@@ -71,12 +97,14 @@ public final class NoiseMapExporter {
             }
         }
 
-        ProtocolIssuanceSheetExporter.generate(sourceFile, targetFile);
-        MeasurementCardRegistrationSheetExporter.generate(sourceFile, targetFile);
+        if (generateCompanionDocuments) {
+            ProtocolIssuanceSheetExporter.generate(sourceFile, targetFile);
+            MeasurementCardRegistrationSheetExporter.generate(sourceFile, targetFile);
 
-        MeasurementPlanExporter.generate(sourceFile, targetFile, workDeadline);
-        RequestFormExporter.generateForNoise(sourceFile, targetFile, workDeadline, customerInn);
-        RequestAnalysisSheetExporter.generate(targetFile);
+            MeasurementPlanExporter.generateForNoise(sourceFile, targetFile, workDeadline);
+            RequestFormExporter.generateForNoise(sourceFile, targetFile, workDeadline, customerInn);
+            RequestAnalysisSheetExporter.generateForNoise(targetFile);
+        }
 
         return targetFile;
 
@@ -121,20 +149,26 @@ public final class NoiseMapExporter {
         return "";
     }
 
-    private static File buildTargetFile(File sourceFile) {
+    private static File buildTargetFile(File sourceFile, String primaryFolderName) {
+        return buildTargetFile(sourceFile, ensurePrimaryFolder(sourceFile, primaryFolderName));
+    }
+
+    private static File buildTargetFile(File sourceFile, File primaryFolder) {
         String name = sourceFile.getName();
         int dotIndex = name.lastIndexOf('.');
         String baseName = dotIndex > 0 ? name.substring(0, dotIndex) : name;
-        File primaryFolder = ensurePrimaryFolder(sourceFile);
         return new File(primaryFolder, baseName + "_карта.xlsx");
     }
 
-    private static File ensurePrimaryFolder(File sourceFile) {
+    private static File ensurePrimaryFolder(File sourceFile, String primaryFolderName) {
+        String resolvedFolderName = primaryFolderName == null || primaryFolderName.isBlank()
+                ? PRIMARY_FOLDER_NAME
+                : primaryFolderName;
         File parent = sourceFile != null ? sourceFile.getParentFile() : null;
         if (parent == null) {
             parent = new File(".");
         }
-        File primaryFolder = new File(parent, PRIMARY_FOLDER_NAME);
+        File primaryFolder = new File(parent, resolvedFolderName);
         if (!primaryFolder.exists()) {
             primaryFolder.mkdirs();
         }
@@ -165,6 +199,13 @@ public final class NoiseMapExporter {
         sheet.setMargin(Sheet.RightMargin, cmToInches(RIGHT_MARGIN_CM));
         sheet.setMargin(Sheet.TopMargin, cmToInches(TOP_MARGIN_CM));
         sheet.setMargin(Sheet.BottomMargin, cmToInches(BOTTOM_MARGIN_CM));
+    }
+
+    private static void applyTitleSheetPrintArea(Workbook workbook, Sheet sheet) {
+        if (workbook == null || sheet == null) {
+            return;
+        }
+        workbook.setPrintArea(workbook.getSheetIndex(sheet), 0, 31, 0, Math.max(sheet.getLastRowNum(), 0));
     }
 
     private static void applyHeaders(Sheet sheet, String registrationNumber) {
@@ -295,7 +336,8 @@ public final class NoiseMapExporter {
                                              String additionalInfo,
                                              String specialConditions,
                                              String measurementMethods,
-                                             java.util.List<InstrumentData> instruments) {
+                                             java.util.List<InstrumentData> instruments,
+                                             int measurementDaysCount) {
         int startRow = 21;
         sheet.setRowBreak(startRow - 1);
 
@@ -395,16 +437,7 @@ public final class NoiseMapExporter {
 
         sheet.setRowBreak(rowIndex - 1);
 
-        setMergedCellValue(sheet, rowIndex,
-                "5.4 калибровочный уровень: 94 дБ\n" +
-                        "показания шумомера перед измерениями на частоте 1 кГц:\n" +
-                        "показания шумомера после измерений на частоте 1 кГц:",
-                plainStyle);
-        Row calibrationRow = sheet.getRow(rowIndex);
-        if (calibrationRow != null) {
-            calibrationRow.setHeightInPoints(sheet.getDefaultRowHeightInPoints() * 3);
-        }
-        rowIndex++;
+        rowIndex = addNoiseCalibrationBlock(workbook, sheet, rowIndex, measurementDaysCount);
     }
 
     private static void createProtocolTabs(File sourceFile,
@@ -650,6 +683,11 @@ public final class NoiseMapExporter {
             CellRangeAddress mergedRegion = findMergedRegion(sourceSheet, sourceRowIndex, 0);
             if (mergedRegion != null && mergedRegion.getFirstRow() == sourceRowIndex) {
                 if (isMergedDateRow(mergedRegion)) {
+                    if (!hasNoiseRowsAfterDate(sourceSheet, mergedRegion.getLastRow() + 1,
+                            lastRow, formatter, evaluator)) {
+                        sourceRowIndex = mergedRegion.getLastRow() + 1;
+                        continue;
+                    }
                     String text = NOISE_MEASUREMENT_DATE_PLACEHOLDER;
                     setMergedRegionWithStyle(targetSheet, targetRowIndex, targetRowIndex,
                             0, 22, leftStyle, text);
@@ -709,6 +747,33 @@ public final class NoiseMapExporter {
             }
         }
         return normalizedStartRow;
+    }
+
+    private static boolean hasNoiseRowsAfterDate(Sheet sourceSheet,
+                                                 int startRow,
+                                                 int lastRow,
+                                                 DataFormatter formatter,
+                                                 FormulaEvaluator evaluator) {
+        for (int rowIndex = startRow; rowIndex <= lastRow; rowIndex++) {
+            CellRangeAddress mergedRegion = findMergedRegion(sourceSheet, rowIndex, 0);
+            if (mergedRegion != null && mergedRegion.getFirstRow() == rowIndex) {
+                if (isMergedDateRow(mergedRegion)) {
+                    return false;
+                }
+                if (isMergedBlockHeader(mergedRegion)) {
+                    return true;
+                }
+                rowIndex = mergedRegion.getLastRow();
+                continue;
+            }
+
+            Row row = sourceSheet.getRow(rowIndex);
+            Cell cellA = row == null ? null : row.getCell(0);
+            if (isNumericCell(cellA, formatter, evaluator)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isMergedDateRow(CellRangeAddress mergedRegion) {
@@ -934,6 +999,82 @@ public final class NoiseMapExporter {
         return rowIndex;
     }
 
+    private static int addNoiseCalibrationBlock(Workbook workbook, Sheet sheet, int rowIndex, int measurementDaysCount) {
+        CellStyle greenTitleStyle = createNoiseCalibrationStyle(workbook, (short) 12, true,
+                org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT, false);
+        CellStyle greenHeaderStyle = createNoiseCalibrationStyle(workbook, (short) 11, false,
+                org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER, true);
+        CellStyle borderedBlankStyle = createNoiseCalibrationStyle(workbook, (short) 11, false,
+                org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER, true);
+        borderedBlankStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.NO_FILL);
+
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 0, 11, greenTitleStyle,
+                "5.4 ПРИ ИЗМЕРЕНИЯХ ШУМА И ВИБРАЦИИ");
+        setRowHeightPixels(sheet, rowIndex, 18);
+        rowIndex++;
+
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 0, 15, greenTitleStyle,
+                "Проверка калибровочных поправок: ПЕРЕД НАЧАЛОМ ИЗМЕРЕНИЙ");
+        setRowHeightPixels(sheet, rowIndex, 18);
+        rowIndex++;
+
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 0, 11, greenHeaderStyle,
+                "Калибровочные параметры прибора\nсоответствуют паспортным данным");
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 12, 15, greenHeaderStyle, "ДА/НЕТ");
+        setRowHeightPixels(sheet, rowIndex, 48);
+        rowIndex++;
+
+        setRowHeightPixels(sheet, rowIndex, 24);
+        rowIndex++;
+
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 0, 15, greenTitleStyle,
+                "Проверка работоспособности (проверка калибровки)");
+        setRowHeightPixels(sheet, rowIndex, 20);
+        rowIndex++;
+
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 0, 7, greenHeaderStyle,
+                "Проверка работоспособности до\nпроведения серии измерений, дБ");
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 8, 15, greenHeaderStyle,
+                "Проверка работоспособности после\nпроведения серии измерений, дБ");
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 16, 22, greenHeaderStyle,
+                "Норматив контроля проверки\nработоспособности, дБ");
+        setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 23, 30, greenHeaderStyle,
+                "Вывод: выходит за пределы ДА/НЕТ");
+        setRowHeightPixels(sheet, rowIndex, 38);
+        rowIndex++;
+
+        for (int i = 0; i < Math.max(1, measurementDaysCount); i++) {
+            setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 0, 7, borderedBlankStyle, "");
+            setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 8, 15, borderedBlankStyle, "");
+            setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 16, 22, borderedBlankStyle, "");
+            setMergedRegionWithStyle(sheet, rowIndex, rowIndex, 23, 30, borderedBlankStyle, "");
+            setRowHeightPixels(sheet, rowIndex, 22);
+            rowIndex++;
+        }
+        return rowIndex;
+    }
+
+    private static CellStyle createNoiseCalibrationStyle(Workbook workbook,
+                                                         short fontSize,
+                                                         boolean bold,
+                                                         org.apache.poi.ss.usermodel.HorizontalAlignment alignment,
+                                                         boolean bordered) {
+        Font font = workbook.createFont();
+        font.setFontName("Arial");
+        font.setFontHeightInPoints(fontSize);
+        font.setBold(bold);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setAlignment(alignment);
+        style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+        style.setWrapText(true);
+        if (bordered) {
+            setThinBorders(style);
+        }
+        return style;
+    }
+
     private static void mergeCellRangeWithStyle(Sheet sheet,
                                                 int rowIndex,
                                                 int firstCol,
@@ -1058,6 +1199,14 @@ public final class NoiseMapExporter {
 
     private static float pixelsToPoints(int pixels) {
         return pixels * 0.75f;
+    }
+
+    private static void setRowHeightPixels(Sheet sheet, int rowIndex, int pixels) {
+        Row row = sheet.getRow(rowIndex);
+        if (row == null) {
+            row = sheet.createRow(rowIndex);
+        }
+        row.setHeightInPoints(pixelsToPoints(pixels));
     }
 
     private static float pointsToPixels(float points) {

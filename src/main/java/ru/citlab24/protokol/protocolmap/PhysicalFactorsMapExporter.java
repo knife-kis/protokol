@@ -52,7 +52,31 @@ public final class PhysicalFactorsMapExporter {
     public static File generateMap(File sourceFile,
                                    String workDeadline,
                                    String customerInn,
+                                   boolean generateCompanionDocuments) throws IOException {
+        return generateMap(sourceFile, workDeadline, customerInn, PRIMARY_FOLDER_NAME, generateCompanionDocuments);
+    }
+
+    public static File generateMap(File sourceFile,
+                                   String workDeadline,
+                                   String customerInn,
                                    String primaryFolderName) throws IOException {
+        return generateMap(sourceFile, workDeadline, customerInn, primaryFolderName, true);
+    }
+
+    public static File generateMap(File sourceFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   String primaryFolderName,
+                                   boolean generateCompanionDocuments) throws IOException {
+        return generateMap(sourceFile, workDeadline, customerInn,
+                ensurePrimaryFolder(sourceFile, primaryFolderName), generateCompanionDocuments);
+    }
+
+    public static File generateMap(File sourceFile,
+                                   String workDeadline,
+                                   String customerInn,
+                                   File primaryFolder,
+                                   boolean generateCompanionDocuments) throws IOException {
         String registrationNumber = resolveRegistrationNumber(sourceFile);
         MapHeaderData headerData = resolveHeaderData(sourceFile);
         String titleMeasurementDates = resolveTitleMeasurementDates(sourceFile);
@@ -75,7 +99,7 @@ public final class PhysicalFactorsMapExporter {
         boolean hasArtificialLightingSheet = hasSheetWithName(sourceFile, "Иск освещение");
         boolean hasStreetLightingSheet = hasSheetWithName(sourceFile, "Иск освещение (2)");
         boolean hasKeoSheet = hasSheetWithName(sourceFile, "КЕО");
-        File targetFile = buildTargetFile(sourceFile, primaryFolderName);
+        File targetFile = buildTargetFile(sourceFile, primaryFolder);
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("карта замеров");
@@ -191,13 +215,15 @@ public final class PhysicalFactorsMapExporter {
             }
         }
 
-        ProtocolIssuanceSheetExporter.generate(sourceFile, targetFile);
-        MeasurementCardRegistrationSheetExporter.generate(sourceFile, targetFile);
-        EquipmentIssuanceSheetExporter.generate(targetFile);
-        MeasurementPlanExporter.generate(sourceFile, targetFile, workDeadline);
-        RequestFormExporter.generate(sourceFile, targetFile, workDeadline, customerInn);
-        RequestAnalysisSheetExporter.generate(targetFile);
-        PhysicalFactorsValuesGuideExporter.generate(sourceFile, targetFile);
+        if (generateCompanionDocuments) {
+            ProtocolIssuanceSheetExporter.generate(sourceFile, targetFile);
+            MeasurementCardRegistrationSheetExporter.generate(sourceFile, targetFile);
+            EquipmentIssuanceSheetExporter.generate(targetFile);
+            MeasurementPlanExporter.generate(sourceFile, targetFile, workDeadline);
+            RequestFormExporter.generate(sourceFile, targetFile, workDeadline, customerInn);
+            RequestAnalysisSheetExporter.generate(targetFile);
+            PhysicalFactorsValuesGuideExporter.generate(sourceFile, targetFile);
+        }
 
         return targetFile;
     }
@@ -309,10 +335,13 @@ public final class PhysicalFactorsMapExporter {
     }
 
     private static File buildTargetFile(File sourceFile, String primaryFolderName) {
+        return buildTargetFile(sourceFile, ensurePrimaryFolder(sourceFile, primaryFolderName));
+    }
+
+    private static File buildTargetFile(File sourceFile, File primaryFolder) {
         String name = sourceFile.getName();
         int dotIndex = name.lastIndexOf('.');
         String baseName = dotIndex > 0 ? name.substring(0, dotIndex) : name;
-        File primaryFolder = ensurePrimaryFolder(sourceFile, primaryFolderName);
         return new File(primaryFolder, baseName + "_карта.xlsx");
     }
 
@@ -475,6 +504,9 @@ public final class PhysicalFactorsMapExporter {
                 CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
                 if (isVentilationMergedRow(mergedRow, sourceRowIndex)) {
                     String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                    if (isMapLegendNote(text)) {
+                        break;
+                    }
                     if (!text.isBlank()) {
                         mergeCellRangeWithValue(targetSheet, targetRowIndex, targetRowIndex,
                                 0, VENTILATION_LAST_COL, text, mergedRowStyle);
@@ -637,6 +669,9 @@ public final class PhysicalFactorsMapExporter {
                 CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
                 if (isMed2MergedRow(mergedRow, sourceRowIndex)) {
                     String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                    if (isMapLegendNote(text)) {
+                        break;
+                    }
                     if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
                         if (started) {
                             break;
@@ -889,6 +924,9 @@ public final class PhysicalFactorsMapExporter {
                 CellRangeAddress mergedRow = findMergedRegion(sourceSheet, sourceRowIndex, 0);
                 if (isArtificialLightingMergedRow(mergedRow, sourceRowIndex)) {
                     String text = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                    if (isMapLegendNote(text)) {
+                        break;
+                    }
                     if (text.isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
                         if (started) {
                             break;
@@ -1006,6 +1044,9 @@ public final class PhysicalFactorsMapExporter {
 
             while (sourceRowIndex <= lastRow) {
                 String aValue = readMergedCellValue(sourceSheet, sourceRowIndex, 0, formatter, evaluator);
+                if (isMapLegendNote(aValue)) {
+                    break;
+                }
                 if (normalizeText(aValue).isBlank() && !hasRowContent(sourceSheet, sourceRowIndex, formatter)) {
                     emptyAStreak++;
                     if (started && emptyAStreak >= 10) {
@@ -1024,6 +1065,7 @@ public final class PhysicalFactorsMapExporter {
                 String bValue = readMergedCellValue(sourceSheet, sourceRowIndex, 2, formatter, evaluator);
                 String cValue = readMergedCellValue(sourceSheet, sourceRowIndex, 3, formatter, evaluator);
 
+                ensureRow(targetSheet, targetRowIndex).setHeightInPoints(pixelsToPoints(51));
                 setCellValue(targetSheet, targetRowIndex, 0, aValue, centerStyle);
                 setCellValue(targetSheet, targetRowIndex, 1, bValue, leftStyle);
                 setCellValue(targetSheet, targetRowIndex, 2, cValue, centerStyle);
@@ -2634,7 +2676,7 @@ public final class PhysicalFactorsMapExporter {
             for (Cell cell : row) {
                 String rawText = formatter.formatCellValue(cell);
                 String normalized = normalizeText(rawText);
-                if (!normalized.equals(METHODS_HEADER)) {
+                if (!isMethodsHeader(normalized)) {
                     continue;
                 }
                 return collectMethodsBelow(sheet, row.getRowNum(), cell.getColumnIndex(), formatter);
@@ -2644,24 +2686,40 @@ public final class PhysicalFactorsMapExporter {
     }
 
     private static String collectMethodsBelow(Sheet sheet, int headerRow, int columnIndex, DataFormatter formatter) {
-        java.util.List<String> methods = new java.util.ArrayList<>();
+        java.util.Set<String> methods = new java.util.LinkedHashSet<>();
+        int emptyRows = 0;
         for (int rowIndex = headerRow + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             if (row == null) {
-                break;
-            }
-            Cell cell = row.getCell(columnIndex);
-            String raw = cell == null ? "" : formatter.formatCellValue(cell);
-            String normalized = normalizeText(raw);
-            if (normalized.isEmpty()) {
-                break;
-            }
-            if (normalized.equals(METHODS_HEADER)) {
+                if (!methods.isEmpty() || ++emptyRows > 3) {
+                    break;
+                }
                 continue;
+            }
+            String normalized = readMergedCellValue(sheet, rowIndex, columnIndex, formatter);
+            if (normalized.isEmpty()) {
+                if (!methods.isEmpty() || ++emptyRows > 3) {
+                    break;
+                }
+                continue;
+            }
+            emptyRows = 0;
+            if (isMethodsHeader(normalized)) {
+                continue;
+            }
+            if (normalized.startsWith("12.") || normalized.toLowerCase(Locale.ROOT).contains("дополнительные сведения")) {
+                break;
             }
             methods.add(normalized);
         }
         return String.join("; ", methods);
+    }
+
+    private static boolean isMethodsHeader(String normalized) {
+        String lower = normalizeText(normalized).toLowerCase(Locale.ROOT);
+        return normalizeText(normalized).equals(METHODS_HEADER)
+                || lower.equals(METHODS_IDENTIFICATION_HEADER)
+                || lower.contains("идентификация применяемого метода испытаний");
     }
 
     private static boolean isGeneratorSheet(String sheetName) {
@@ -2778,6 +2836,10 @@ public final class PhysicalFactorsMapExporter {
             return "";
         }
         return text.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
+    }
+
+    private static boolean isMapLegendNote(String text) {
+        return normalizeText(text).toLowerCase(Locale.ROOT).startsWith("условные обозначения:");
     }
 
     private static String resolveControlSuffix(String measurementPerformer) {
@@ -2935,6 +2997,8 @@ public final class PhysicalFactorsMapExporter {
     private static final String OBJECT_ADDRESS_PREFIX = "Адрес предприятия (объекта):";
     private static final String METHODS_HEADER =
             "Документы, устанавливающие правила и методы исследований (испытаний) и измерений";
+    private static final String METHODS_IDENTIFICATION_HEADER =
+            "идентификация применяемого метода испытаний / метод (методика) измерений";
     private static final String INSTRUMENTS_SECTION_HEADER = "сведения о средствах измерения:";
     private static final String INSTRUMENTS_NAME_HEADER = "наименование, тип средства измерения";
     private static final String PROTOCOL_PREFIX = "Протокол испытаний";

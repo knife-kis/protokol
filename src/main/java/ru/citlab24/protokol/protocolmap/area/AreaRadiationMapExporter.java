@@ -35,6 +35,20 @@ final class AreaRadiationMapExporter {
         return mapFile;
     }
 
+    static File generateMap(File sourceFile,
+                            String workDeadline,
+                            String customerInn,
+                            File primaryFolder,
+                            boolean generateCompanionDocuments) throws java.io.IOException {
+        File mapFile = PhysicalFactorsMapExporter.generateMap(sourceFile, workDeadline, customerInn,
+                primaryFolder, generateCompanionDocuments);
+        if (mapFile == null || !mapFile.exists()) {
+            return mapFile;
+        }
+        updateRadiationMap(sourceFile, mapFile);
+        return mapFile;
+    }
+
     private static void updateRadiationMap(File sourceFile, File mapFile) {
         if (sourceFile == null || !sourceFile.exists() || mapFile == null || !mapFile.exists()) {
             return;
@@ -50,11 +64,54 @@ final class AreaRadiationMapExporter {
                 Sheet medSheet = AreaRadiationMedMapTabBuilder.createSheet(workbook, medLocationLabels);
                 applyHeadersFromMainSheet(workbook, medSheet);
             }
+            removeLegendNoteRows(workbook);
             try (FileOutputStream out = new FileOutputStream(mapFile)) {
                 workbook.write(out);
             }
         } catch (Exception ex) {
             // ignore
+        }
+    }
+
+    private static void removeLegendNoteRows(Workbook workbook) {
+        if (workbook == null) {
+            return;
+        }
+        for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
+            Sheet sheet = workbook.getSheetAt(sheetIndex);
+            for (int rowIndex = sheet.getLastRowNum(); rowIndex >= 0; rowIndex--) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null || !rowContainsLegendNote(row)) {
+                    continue;
+                }
+                removeMergedRegionsTouchingRow(sheet, rowIndex);
+                if (rowIndex < sheet.getLastRowNum()) {
+                    sheet.shiftRows(rowIndex + 1, sheet.getLastRowNum(), -1, true, false);
+                } else {
+                    sheet.removeRow(row);
+                }
+            }
+        }
+    }
+
+    private static boolean rowContainsLegendNote(Row row) {
+        DataFormatter formatter = new DataFormatter();
+        for (org.apache.poi.ss.usermodel.Cell cell : row) {
+            String normalized = normalizeText(formatter.formatCellValue(cell)).toLowerCase(java.util.Locale.ROOT);
+            if (normalized.contains("u - значение расширенной неопределенности")
+                    || normalized.contains("указанная расширенная неопределенность измерений")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void removeMergedRegionsTouchingRow(Sheet sheet, int rowIndex) {
+        for (int index = sheet.getNumMergedRegions() - 1; index >= 0; index--) {
+            CellRangeAddress region = sheet.getMergedRegion(index);
+            if (region.getFirstRow() <= rowIndex && region.getLastRow() >= rowIndex) {
+                sheet.removeMergedRegion(index);
+            }
         }
     }
 

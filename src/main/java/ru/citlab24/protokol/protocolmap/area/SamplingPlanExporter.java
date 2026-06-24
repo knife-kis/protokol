@@ -179,9 +179,6 @@ final class SamplingPlanExporter {
             XWPFParagraph pageBreak = document.createParagraph();
             pageBreak.createRun().addBreak(BreakType.PAGE);
 
-            XWPFParagraph secondPageBreak = document.createParagraph();
-            secondPageBreak.createRun().addBreak(BreakType.PAGE);
-
             XWPFParagraph acceptTitle = document.createParagraph();
             acceptTitle.setAlignment(ParagraphAlignment.LEFT);
             setParagraphSpacing(acceptTitle);
