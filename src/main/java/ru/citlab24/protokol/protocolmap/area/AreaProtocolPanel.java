@@ -3527,7 +3527,7 @@ public class AreaProtocolPanel extends JPanel {
     }
 
     private void importTechnicalAssignment() {
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new JFileChooser(resolveTechnicalAssignmentDirectory());
         chooser.setDialogTitle("Загрузить ТЗ (Word)");
         chooser.setFileFilter(new FileNameExtensionFilter("Word document (*.docx)", "docx"));
 
@@ -3554,6 +3554,15 @@ public class AreaProtocolPanel extends JPanel {
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    private File resolveTechnicalAssignmentDirectory() {
+        File desktop = new File(System.getProperty("user.home"), "Desktop");
+        File demo = new File(desktop, "демонстрация");
+        if (demo.isDirectory()) {
+            return demo;
+        }
+        return desktop.isDirectory() ? desktop : new File(System.getProperty("user.home"));
     }
 
     private void applyImportData(TitlePageImportData data) {

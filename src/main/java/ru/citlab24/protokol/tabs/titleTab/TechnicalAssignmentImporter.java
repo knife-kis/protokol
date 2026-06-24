@@ -473,7 +473,7 @@ public final class TechnicalAssignmentImporter {
     }
 
     private static String buildNameAndContacts(String name, String email, String phone) {
-        String normalizedName = normalizeSpace(name);
+        String normalizedName = preferParenthesizedShortName(normalizeSpace(name));
         String normalizedEmail = normalizeSpace(email);
         String normalizedPhone = normalizeSpace(phone);
         List<String> contacts = new ArrayList<>();
@@ -491,6 +491,17 @@ public final class TechnicalAssignmentImporter {
             return normalizedName;
         }
         return contactsValue;
+    }
+
+    private static String preferParenthesizedShortName(String name) {
+        Matcher matcher = Pattern.compile(".*\\(([^()]+)\\)\\s*$").matcher(name);
+        if (matcher.matches()) {
+            String shortName = normalizeSpace(matcher.group(1));
+            if (!shortName.isBlank()) {
+                return shortName;
+            }
+        }
+        return name;
     }
 
     private static String normalizeSpace(String value) {
