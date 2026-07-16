@@ -613,9 +613,10 @@ final class AreaNoiseProtocolExporter {
     }
 
     private static void saveWorkbook(Workbook workbook, Component parent) throws Exception {
-        JFileChooser chooser = new JFileChooser();
+        File initialDir = resolveProtocolExportDirectory();
+        JFileChooser chooser = new JFileChooser(initialDir);
         chooser.setDialogTitle("Сохранить протокол ШУМ участка");
-        chooser.setSelectedFile(new File("Протокол_участок_шум.xlsx"));
+        chooser.setSelectedFile(new File(initialDir, "Протокол_участок_шум.xlsx"));
         chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));
         if (chooser.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION) {
             return;
@@ -631,5 +632,19 @@ final class AreaNoiseProtocolExporter {
                 "Файл сохранён:\n" + file.getAbsolutePath(),
                 "Экспорт завершён",
                 JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static File resolveProtocolExportDirectory() {
+        File desktop = new File(System.getProperty("user.home"), "Desktop");
+        File demo = new File(desktop, "Демонстрация");
+        if (demo.isDirectory()) {
+            return demo;
+        }
+        File documents = javax.swing.filechooser.FileSystemView.getFileSystemView().getDefaultDirectory();
+        if (documents != null && documents.isDirectory()) {
+            return documents;
+        }
+        File fallbackDocuments = new File(System.getProperty("user.home"), "Documents");
+        return fallbackDocuments.isDirectory() ? fallbackDocuments : new File(System.getProperty("user.home"));
     }
 }

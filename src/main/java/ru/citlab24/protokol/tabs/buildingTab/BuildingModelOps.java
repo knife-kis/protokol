@@ -268,6 +268,8 @@ public final class BuildingModelOps {
         roomCopy.setVolume(originalRoom.getVolume());
         roomCopy.setVentilationChannels(originalRoom.getVentilationChannels());
         roomCopy.setVentilationSectionArea(originalRoom.getVentilationSectionArea());
+        roomCopy.setVentilationDuctShape(originalRoom.getVentilationDuctShape());
+        roomCopy.setVentilationWidth(originalRoom.getVentilationWidth());
         roomCopy.setSelected(false); // освещение сбрасываем
         try { roomCopy.setExternalWallsCount(originalRoom.getExternalWallsCount()); } catch (Throwable ignore) {}
         roomCopy.setOriginalRoomId(originalRoom.getId());
@@ -324,6 +326,8 @@ public final class BuildingModelOps {
             r.setVolume(or.getVolume());
             r.setVentilationChannels(or.getVentilationChannels());
             r.setVentilationSectionArea(or.getVentilationSectionArea());
+            r.setVentilationDuctShape(or.getVentilationDuctShape());
+            r.setVentilationWidth(or.getVentilationWidth());
             r.setSelected(or.isSelected());
             r.setMicroclimateSelected(or.isMicroclimateSelected());
             r.setRadiationSelected(or.isRadiationSelected());

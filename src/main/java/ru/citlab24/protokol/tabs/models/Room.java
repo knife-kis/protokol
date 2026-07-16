@@ -12,6 +12,8 @@ public class Room implements Serializable {
     private Double volume = null;
     private int ventilationChannels = 1;
     private double ventilationSectionArea = 0.008;
+    private String ventilationDuctShape = "SQUARE";
+    private Double ventilationWidth = 0.100;
     private Integer externalWallsCount = null; // Микроклимат: 0..4, null = не задано (проставим по умолчанию)
 
     private int position = 0;
@@ -47,6 +49,21 @@ public class Room implements Serializable {
     }
     public void setVentilationSectionArea(double ventilationSectionArea) {
         this.ventilationSectionArea = ventilationSectionArea;
+    }
+    public String getVentilationDuctShape() {
+        return (ventilationDuctShape == null || ventilationDuctShape.isBlank()) ? "SQUARE" : ventilationDuctShape;
+    }
+    public void setVentilationDuctShape(String ventilationDuctShape) {
+        this.ventilationDuctShape = (ventilationDuctShape == null || ventilationDuctShape.isBlank()) ? "SQUARE" : ventilationDuctShape;
+    }
+    public Double getVentilationWidth() {
+        return (ventilationWidth == null || ventilationWidth <= 0) ? 0.100 : ventilationWidth;
+    }
+    public void setVentilationWidth(Double ventilationWidth) {
+        this.ventilationWidth = (ventilationWidth == null || ventilationWidth <= 0) ? 0.100 : ventilationWidth;
+    }
+    public void setVentilationWidth(double ventilationWidth) {
+        setVentilationWidth(Double.valueOf(ventilationWidth));
     }
     public String getName() {
         return name;

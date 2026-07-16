@@ -294,7 +294,7 @@ public final class AllExcelExporter {
         setMergedText(sheet, boldCenterStyle, 0, 2, 0, 8, txtA1);
 
         // 2) S1-Z3
-        String txtS1 = "УТВЕРЖДАЮ\nЗаведующий лабораторией";
+        String txtS1 = "УТВЕРЖДАЮ\nЗаместитель заведующей лаборатории";
         setMergedText(sheet, boldCenterStyle, 0, 2, 18, 25, txtS1);
 
         // 3) A4-I5
@@ -322,8 +322,8 @@ public final class AllExcelExporter {
                 "+7 (391) 244-03-10, cit-krsk@yandex.ru";
         setMergedText(sheet, centerTopStyle, 8, 10, 0, 8, txtA9);
 
-        // S5-Z5: _______________/М.О. Тарновский/
-        String txtS5 = "_______________/М.О. Тарновский/";
+        // S5-Z5: _______________/М.Е.Гаврилова/
+        String txtS5 = "_______________/М.Е.Гаврилова/";
         setMergedText(sheet, boldCenterStyle, 4, 4, 18, 25, txtS5);
 
         // S7-Z7: дата из программы в формате "12 декабря 2025 г."

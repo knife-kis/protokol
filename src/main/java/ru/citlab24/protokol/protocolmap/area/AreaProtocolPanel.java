@@ -3509,12 +3509,18 @@ public class AreaProtocolPanel extends JPanel {
     }
 
     private File resolveLastSketchDirectory() {
-        String path = PREFS.get(PREF_SKETCH_DIR, "");
-        if (!path.isBlank()) {
-            File directory = new File(path);
-            if (directory.isDirectory()) {
-                return directory;
-            }
+        File desktop = new File(System.getProperty("user.home"), "Desktop");
+        File demo = new File(desktop, "Демонстрация");
+        if (demo.isDirectory()) {
+            return demo;
+        }
+        File downloads = new File(System.getProperty("user.home"), "Downloads");
+        if (downloads.isDirectory()) {
+            return downloads;
+        }
+        File localizedDownloads = new File(System.getProperty("user.home"), "Загрузки");
+        if (localizedDownloads.isDirectory()) {
+            return localizedDownloads;
         }
         return new File(System.getProperty("user.home"));
     }

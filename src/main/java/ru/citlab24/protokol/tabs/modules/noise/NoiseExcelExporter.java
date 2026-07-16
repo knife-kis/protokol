@@ -142,9 +142,10 @@ public final class NoiseExcelExporter {
             removeEmptyNoiseSheets(wb, sheetStates);
             applyNoiseWorkbookFooters(wb);
 
-            JFileChooser fc = new JFileChooser();
+            File initialDir = resolveNoiseExportDirectory();
+            JFileChooser fc = new JFileChooser(initialDir);
             fc.setDialogTitle("Сохранить Excel (шумы)");
-            fc.setSelectedFile(new File("шумы.xlsx"));
+            fc.setSelectedFile(new File(initialDir, "шумы.xlsx"));
             if (fc.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
                 File file = NoiseSheetCommon.ensureXlsx(fc.getSelectedFile());
                 try (FileOutputStream out = new FileOutputStream(file)) {
@@ -165,6 +166,20 @@ public final class NoiseExcelExporter {
                               Component parent,
                               Map<NoiseTestKind, String> dateLines) {
         export(building, byKey, parent, dateLines, java.util.Collections.emptyMap());
+    }
+
+    private static File resolveNoiseExportDirectory() {
+        File desktop = new File(System.getProperty("user.home"), "Desktop");
+        File demo = new File(desktop, "Демонстрация");
+        if (demo.isDirectory()) {
+            return demo;
+        }
+        File documents = javax.swing.filechooser.FileSystemView.getFileSystemView().getDefaultDirectory();
+        if (documents != null && documents.isDirectory()) {
+            return documents;
+        }
+        File fallbackDocuments = new File(System.getProperty("user.home"), "Documents");
+        return fallbackDocuments.isDirectory() ? fallbackDocuments : new File(System.getProperty("user.home"));
     }
 
     private static MainFrame findMainFrame(Component parent) {

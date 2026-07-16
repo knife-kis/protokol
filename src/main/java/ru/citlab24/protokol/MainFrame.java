@@ -34,6 +34,7 @@ public class MainFrame extends JFrame {
     private BuildingTab buildingTab;
     private AreaProtocolPanel areaProtocolPanel;
     private String currentCard;
+    private Component lastSelectedMainTab;
 
     private static final String CARD_PROTOCOL_HOME = "protocol-home";
     private static final String CARD_PROTOCOL_AREA = "protocol-area";
@@ -121,6 +122,7 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Осв улица",             new StreetLightingTab(building));
         tabbedPane.addTab("Шумы",                  new NoiseTab(building));
         AppTheme.decorateWorkspace(tabbedPane);
+        installMainTabSync();
 
         cardPanel.add(createScenePanel(tabbedPane), CARD_PROTOCOL_HOME);
         AppTheme.decorateWorkspace(areaProtocolPanel);
@@ -153,6 +155,20 @@ public class MainFrame extends JFrame {
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(cardPanel, BorderLayout.CENTER);
         showCard(CARD_PROTOCOL_HOME);
+    }
+
+    private void installMainTabSync() {
+        lastSelectedMainTab = tabbedPane.getSelectedComponent();
+        tabbedPane.addChangeListener(e -> {
+            if (lastSelectedMainTab instanceof VentilationTab) {
+                ((VentilationTab) lastSelectedMainTab).saveCalculationsToModel();
+            }
+            Component selected = tabbedPane.getSelectedComponent();
+            if (selected instanceof VentilationTab) {
+                ((VentilationTab) selected).refreshData();
+            }
+            lastSelectedMainTab = selected;
+        });
     }
 
     private void showCard(String cardName) {

@@ -300,15 +300,20 @@ public class VentilationTab extends JPanel {
 
                     if (!roomMatches) continue;
 
+                    VentilationRecord.DuctShape shape = readDuctShape(room);
+                    double width = readVentilationWidth(room);
+
                     tableModel.addRecord(new VentilationRecord(
                             floor.getNumber(),
                             space.getIdentifier(),
                             room.getName(),
                             room.getVentilationChannels(),
-                            room.getVentilationSectionArea(),
+                            VentilationRecord.area(shape, width),
                             (room.getVolume() != null && room.getVolume() == 0.0) ? null : room.getVolume(),
                             room,
-                            floor.getSectionIndex()
+                            floor.getSectionIndex(),
+                            shape,
+                            width
                     ));
                 }
             }
@@ -327,6 +332,23 @@ public class VentilationTab extends JPanel {
         for (String t : targets) if (lower.contains(t)) return true;
         return false;
     }
+    private VentilationRecord.DuctShape readDuctShape(Room room) {
+        String value = room == null ? null : room.getVentilationDuctShape();
+        if (value == null) return VentilationRecord.DuctShape.SQUARE;
+        try {
+            return VentilationRecord.DuctShape.valueOf(value);
+        } catch (IllegalArgumentException ex) {
+            return value.toLowerCase(Locale.ROOT).contains("круг")
+                    ? VentilationRecord.DuctShape.CIRCLE
+                    : VentilationRecord.DuctShape.SQUARE;
+        }
+    }
+
+    private double readVentilationWidth(Room room) {
+        Double width = room == null ? null : room.getVentilationWidth();
+        return (width == null || width <= 0) ? 0.100 : width;
+    }
+
     private boolean matchesRoomType(String roomName) {
         if (roomName == null) return false;
         String normalized = roomName.replaceAll("[\\s.-]+", " ").trim().toLowerCase(Locale.ROOT);
@@ -450,6 +472,8 @@ public class VentilationTab extends JPanel {
         return new java.util.ArrayList<>(tableModel.getRecords());
     }
     public void refreshData() {
+        saveCalculationsToModel();
+
         boolean showSection = building != null
                 && building.getSections() != null
                 && building.getSections().size() > 1;
