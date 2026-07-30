@@ -531,7 +531,7 @@ public class AreaPrimaryPanel extends JPanel {
                 return;
             }
 
-            JFileChooser chooser = new JFileChooser(downloadFile.getParentFile());
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(downloadFile.getParentFile());
             chooser.setSelectedFile(new File(downloadFile.getName()));
             int result = chooser.showSaveDialog(this);
             if (result != JFileChooser.APPROVE_OPTION) {

@@ -4,7 +4,11 @@ import com.github.lgooddatepicker.components.DatePicker;
 import com.github.lgooddatepicker.components.DatePickerSettings;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
+import ru.citlab24.protokol.MainFrame;
+import ru.citlab24.protokol.db.AppUserRecord;
 import ru.citlab24.protokol.db.DatabaseManager;
+import ru.citlab24.protokol.requests.ApprovedContractSelector;
+import ru.citlab24.protokol.requests.ContractTemplateType;
 import ru.citlab24.protokol.tabs.titleTab.TechnicalAssignmentImporter;
 import ru.citlab24.protokol.tabs.titleTab.TitlePageImportData;
 
@@ -98,6 +102,12 @@ public class AreaProtocolPanel extends JPanel {
     private final Color defaultTextColor = UIManager.getColor("TextField.foreground");
     private File imageFile;
     private boolean updatingMedValues;
+    private final AppUserRecord currentUser;
+    private final String editSessionId;
+    private int loadedProjectId;
+    private int loadedProjectRevision;
+    private boolean projectReadOnly;
+    private String projectLockOwner = "";
 
     private static class MeasurementRow {
         JPanel panel;
@@ -1938,7 +1948,13 @@ public class AreaProtocolPanel extends JPanel {
     }
 
     public AreaProtocolPanel() {
+        this(null, null);
+    }
+
+    public AreaProtocolPanel(AppUserRecord currentUser, String editSessionId) {
         super(new BorderLayout());
+        this.currentUser = currentUser;
+        this.editSessionId = editSessionId;
         setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
         JPanel formPanel = new JPanel(new GridBagLayout());
@@ -2934,6 +2950,27 @@ public class AreaProtocolPanel extends JPanel {
         });
         btnLoad.addActionListener(e -> importTechnicalAssignment());
 
+        JButton btnLoadFromDatabase = new JButton(
+                "Загрузить из БД",
+                FontIcon.of(FontAwesomeSolid.FILE_UPLOAD, 16, Color.WHITE)
+        );
+        btnLoadFromDatabase.setFocusPainted(false);
+        btnLoadFromDatabase.setBackground(new Color(46, 125, 50));
+        btnLoadFromDatabase.setForeground(Color.WHITE);
+        btnLoadFromDatabase.setFont(UIManager.getFont("Button.font"));
+        btnLoadFromDatabase.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                btnLoadFromDatabase.setBackground(new Color(56, 142, 60));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                btnLoadFromDatabase.setBackground(new Color(46, 125, 50));
+            }
+        });
+        btnLoadFromDatabase.addActionListener(e -> importTechnicalAssignmentFromDatabase());
+
         JButton btnExport = new JButton(
                 "Экспорт протокола РАД",
                 FontIcon.of(FontAwesomeSolid.FILE_EXCEL, 16, Color.WHITE)
@@ -2977,6 +3014,7 @@ public class AreaProtocolPanel extends JPanel {
         btnExportNoise.addActionListener(e -> AreaNoiseProtocolExporter.export(getProtocolData(), this));
 
         panel.add(btnLoad);
+        panel.add(btnLoadFromDatabase);
         panel.add(btnExport);
         panel.add(btnExportNoise);
         return panel;
@@ -2990,11 +3028,68 @@ public class AreaProtocolPanel extends JPanel {
         loadAreaProject();
     }
 
+    public void releaseProjectLock() {
+        releasePreviousProjectLock(0);
+        loadedProjectId = 0;
+        loadedProjectRevision = 0;
+        projectReadOnly = false;
+        projectLockOwner = "";
+    }
+
+    public boolean isProjectReadOnly() {
+        return projectReadOnly;
+    }
+
+    public String getEditingStatusText() {
+        if (projectReadOnly) {
+            return "Только просмотр · редактирует: " + projectLockOwner;
+        }
+        if (loadedProjectId > 0) {
+            return "Проект открыт для редактирования";
+        }
+        return "Новый проект";
+    }
+
+    private DatabaseManager.ProjectLockInfo acquireProjectLock(int projectId) throws SQLException {
+        if (currentUser == null || editSessionId == null || editSessionId.isBlank()) {
+            return null;
+        }
+        return DatabaseManager.acquireProjectLock(
+                DatabaseManager.PROJECT_TYPE_AREA, projectId, currentUser.getId(), editSessionId);
+    }
+
+    private void releasePreviousProjectLock(int nextProjectId) {
+        if (loadedProjectId <= 0 || loadedProjectId == nextProjectId || projectReadOnly
+                || editSessionId == null || editSessionId.isBlank()) {
+            return;
+        }
+        try {
+            DatabaseManager.releaseProjectLock(
+                    DatabaseManager.PROJECT_TYPE_AREA, loadedProjectId, editSessionId);
+        } catch (SQLException ignored) {
+        }
+    }
+
+    private void notifyProjectStatus() {
+        Window window = SwingUtilities.getWindowAncestor(this);
+        if (window instanceof MainFrame) {
+            ((MainFrame) window).setProjectEditingStatus(getEditingStatusText(), !projectReadOnly);
+        }
+    }
+
     public String getProjectName() {
         return projectNameField.getText().trim();
     }
 
     private void saveAreaProject() {
+        if (projectReadOnly) {
+            JOptionPane.showMessageDialog(this,
+                    "Проект редактирует " + projectLockOwner
+                            + ". В режиме просмотра сохранение недоступно.",
+                    "Проект занят",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         String projectName = projectNameField.getText().trim();
         if (projectName.isBlank()) {
             JOptionPane.showMessageDialog(this,
@@ -3007,8 +3102,20 @@ public class AreaProtocolPanel extends JPanel {
 
         String savedName = generateAreaProjectVersionName(projectName);
         try {
-            DatabaseManager.saveAreaProject(savedName, serializeAreaProjectSnapshot(createAreaProjectSnapshot(savedName)));
+            int savedProjectId = DatabaseManager.saveAreaProjectVersion(
+                    savedName,
+                    serializeAreaProjectSnapshot(createAreaProjectSnapshot(savedName)),
+                    loadedProjectId,
+                    loadedProjectRevision,
+                    editSessionId
+            );
+            releasePreviousProjectLock(savedProjectId);
+            loadedProjectId = savedProjectId;
+            loadedProjectRevision = loadedProjectRevision > 0 ? loadedProjectRevision + 1 : 1;
+            projectReadOnly = false;
+            projectLockOwner = "";
             projectNameField.setText(extractAreaProjectBaseName(savedName));
+            notifyProjectStatus();
             JOptionPane.showMessageDialog(this,
                     "Проект сохранен:\n" + savedName,
                     "Сохранить проект",
@@ -3035,13 +3142,45 @@ public class AreaProtocolPanel extends JPanel {
             if (selectedProject == null) {
                 return;
             }
-            byte[] snapshotBytes = DatabaseManager.loadAreaProjectSnapshot(selectedProject.getId());
-            if (snapshotBytes == null || snapshotBytes.length == 0) {
-                throw new IOException("Проект участка пустой или поврежден.");
+            boolean alreadyOwned = selectedProject.getId() == loadedProjectId && !projectReadOnly;
+            DatabaseManager.ProjectLockInfo lockInfo = acquireProjectLock(selectedProject.getId());
+            if (lockInfo != null && !lockInfo.isEditable()) {
+                int answer = JOptionPane.showConfirmDialog(
+                        this,
+                        "Проект сейчас редактирует " + lockInfo.getOwnerLabel()
+                                + ".\nОткрыть проект только для просмотра?",
+                        "Проект занят",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+                if (answer != JOptionPane.YES_OPTION) {
+                    return;
+                }
             }
-            applyAreaProjectSnapshot(deserializeAreaProjectSnapshot(snapshotBytes), selectedProject.getName());
+            try {
+                byte[] snapshotBytes = DatabaseManager.loadAreaProjectSnapshot(selectedProject.getId());
+                if (snapshotBytes == null || snapshotBytes.length == 0) {
+                    throw new IOException("Проект участка пустой или поврежден.");
+                }
+                applyAreaProjectSnapshot(deserializeAreaProjectSnapshot(snapshotBytes), selectedProject.getName());
+            } catch (IOException | ClassNotFoundException | SQLException ex) {
+                if (!alreadyOwned && lockInfo != null && lockInfo.isEditable()) {
+                    DatabaseManager.releaseProjectLock(
+                            DatabaseManager.PROJECT_TYPE_AREA, selectedProject.getId(), editSessionId);
+                }
+                throw ex;
+            }
+            releasePreviousProjectLock(selectedProject.getId());
+            loadedProjectId = selectedProject.getId();
+            loadedProjectRevision = selectedProject.getRevision();
+            projectReadOnly = lockInfo != null && !lockInfo.isEditable();
+            projectLockOwner = projectReadOnly ? lockInfo.getOwnerLabel() : "";
+            notifyProjectStatus();
+            String loadMessage = projectReadOnly
+                    ? "Проект открыт только для просмотра:\n" + selectedProject.getName()
+                    : "Проект загружен:\n" + selectedProject.getName();
             JOptionPane.showMessageDialog(this,
-                    "Проект загружен:\n" + selectedProject.getName(),
+                    loadMessage,
                     "Загрузить проект",
                     JOptionPane.INFORMATION_MESSAGE);
         } catch (IOException | ClassNotFoundException | SQLException ex) {
@@ -3194,14 +3333,24 @@ public class AreaProtocolPanel extends JPanel {
         }
         JList<DatabaseManager.AreaProjectInfo> list = new JList<>(model);
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.setFixedCellHeight(28);
+        list.setFixedCellHeight(46);
         list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                           boolean isSelected, boolean cellHasFocus) {
                 Component component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof DatabaseManager.AreaProjectInfo) {
-                    setText(((DatabaseManager.AreaProjectInfo) value).getName());
+                    DatabaseManager.AreaProjectInfo project = (DatabaseManager.AreaProjectInfo) value;
+                    String author = project.getCreatedBy() == null || project.getCreatedBy().isBlank()
+                            ? "автор не указан"
+                            : project.getCreatedBy();
+                    String date = shortProjectDate(project.getCreatedAt());
+                    String lock = project.getLockOwner() == null || project.getLockOwner().isBlank()
+                            ? ""
+                            : " · редактирует: " + project.getLockOwner();
+                    setText("<html><b>" + escapeProjectHtml(project.getName()) + "</b><br>"
+                            + escapeProjectHtml(author + (date.isBlank() ? "" : " · " + date) + lock)
+                            + "</html>");
                 }
                 return component;
             }
@@ -3265,7 +3414,14 @@ public class AreaProtocolPanel extends JPanel {
             return;
         }
         try {
-            DatabaseManager.deleteAreaProject(project.getId());
+            DatabaseManager.deleteAreaProject(project.getId(), editSessionId);
+            if (project.getId() == loadedProjectId) {
+                loadedProjectId = 0;
+                loadedProjectRevision = 0;
+                projectReadOnly = false;
+                projectLockOwner = "";
+                notifyProjectStatus();
+            }
             int index = list.getSelectedIndex();
             model.remove(index);
             if (!model.isEmpty()) {
@@ -3281,6 +3437,23 @@ public class AreaProtocolPanel extends JPanel {
                     "Ошибка",
                     JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private static String shortProjectDate(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String normalized = value.replace('T', ' ');
+        return normalized.length() > 16 ? normalized.substring(0, 16) : normalized;
+    }
+
+    private static String escapeProjectHtml(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     private String generateAreaProjectVersionName(String baseName) {
@@ -3480,7 +3653,7 @@ public class AreaProtocolPanel extends JPanel {
     }
 
     private void chooseImage() {
-        JFileChooser chooser = new JFileChooser(resolveLastSketchDirectory());
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(resolveLastSketchDirectory());
         chooser.setDialogTitle("Добавить эскиз");
         FileNameExtensionFilter jpgFilter = new FileNameExtensionFilter("JPG (*.jpg, *.jpeg)", "jpg", "jpeg");
         chooser.setFileFilter(jpgFilter);
@@ -3533,7 +3706,7 @@ public class AreaProtocolPanel extends JPanel {
     }
 
     private void importTechnicalAssignment() {
-        JFileChooser chooser = new JFileChooser(resolveTechnicalAssignmentDirectory());
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(resolveTechnicalAssignmentDirectory());
         chooser.setDialogTitle("Загрузить ТЗ (Word)");
         chooser.setFileFilter(new FileNameExtensionFilter("Word document (*.docx)", "docx"));
 
@@ -3541,7 +3714,17 @@ public class AreaProtocolPanel extends JPanel {
             return;
         }
 
-        File file = chooser.getSelectedFile();
+        importTechnicalAssignment(chooser.getSelectedFile());
+    }
+
+    private void importTechnicalAssignmentFromDatabase() {
+        java.nio.file.Path file = ApprovedContractSelector.choose(this, ContractTemplateType.AREA);
+        if (file != null) {
+            importTechnicalAssignment(file.toFile());
+        }
+    }
+
+    private void importTechnicalAssignment(File file) {
         try {
             List<TitlePageImportData> dataList = TechnicalAssignmentImporter.importAllFromFile(file);
             if (dataList.isEmpty()) {

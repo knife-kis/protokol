@@ -567,7 +567,7 @@ public class ProtocolMapPanel extends JPanel {
                 return;
             }
 
-            JFileChooser chooser = new JFileChooser(generatedMapFile.getParentFile());
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(generatedMapFile.getParentFile());
             chooser.setSelectedFile(new File(generatedMapFile.getName()));
             int result = chooser.showSaveDialog(this);
             if (result != JFileChooser.APPROVE_OPTION) {

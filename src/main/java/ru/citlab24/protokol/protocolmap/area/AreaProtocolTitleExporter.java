@@ -1511,7 +1511,7 @@ final class AreaProtocolTitleExporter {
 
     private static void saveWorkbook(Workbook workbook, Component parent) throws Exception {
         File initialDir = resolveProtocolExportDirectory();
-        JFileChooser chooser = new JFileChooser(initialDir);
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(initialDir);
         chooser.setDialogTitle("Сохранить протокол участка");
         chooser.setSelectedFile(new File(initialDir, "Протокол_участок.xlsx"));
         chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));

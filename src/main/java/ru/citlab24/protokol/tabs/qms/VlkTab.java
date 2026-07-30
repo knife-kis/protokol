@@ -277,7 +277,7 @@ public class VlkTab extends JPanel {
             return;
         }
 
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
         chooser.setDialogTitle("Выберите папку для документов ВЛК");
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         chooser.setSelectedFile(new File("ВЛК " + year));

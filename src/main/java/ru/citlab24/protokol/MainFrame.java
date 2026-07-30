@@ -13,9 +13,15 @@ import ru.citlab24.protokol.tabs.titleTab.TitlePageTab;
 import ru.citlab24.protokol.protocolmap.area.AreaPrimaryPanel;
 import ru.citlab24.protokol.protocolmap.area.AreaProtocolPanel;
 import ru.citlab24.protokol.protocolmap.house.ProtocolMapPanel;
+import ru.citlab24.protokol.requests.RequestRegistryTab;
+import ru.citlab24.protokol.requests.RequestEstimatesTab;
 import ru.citlab24.protokol.tabs.resourceTab.EquipmentTab;
 import ru.citlab24.protokol.tabs.resourceTab.CalendarTab;
 import ru.citlab24.protokol.tabs.resourceTab.PersonnelTab;
+import ru.citlab24.protokol.tabs.resourceTab.AppUsersTab;
+import ru.citlab24.protokol.tabs.resourceTab.SiteVisitsTab;
+import ru.citlab24.protokol.db.AppUserRecord;
+import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.tabs.qms.ShewhartMapTab;
 import ru.citlab24.protokol.tabs.qms.VlkTab;
 
@@ -24,23 +30,45 @@ import com.formdev.flatlaf.FlatClientProperties;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.sql.SQLException;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class MainFrame extends JFrame {
 
+    private final AppUserRecord currentUser;
+    private final String projectEditSessionId = UUID.randomUUID().toString();
     private final Building building = new Building();
     private final JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cardPanel = new JPanel(cardLayout);
     private BuildingTab buildingTab;
     private AreaProtocolPanel areaProtocolPanel;
+    private AppUsersTab appUsersTab;
+    private EquipmentTab equipmentTab;
+    private SiteVisitsTab siteVisitsTab;
+    private CalendarTab calendarTab;
+    private RequestRegistryTab requestRegistryTab;
+    private RequestEstimatesTab requestEstimatesTab;
     private String currentCard;
     private Component lastSelectedMainTab;
+    private JLabel projectEditingStatusLabel;
+    private JMenuItem saveProjectMenuItem;
+    private ScheduledExecutorService projectLockHeartbeatExecutor;
 
     private static final String CARD_PROTOCOL_HOME = "protocol-home";
     private static final String CARD_PROTOCOL_AREA = "protocol-area";
     private static final String CARD_PROTOCOL_MAP = "protocol-map";
     private static final String CARD_PROTOCOL_REQUEST = "protocol-request";
+    private static final String CARD_REQUEST_REGISTRY = "request-registry";
+    private static final String CARD_REQUEST_ESTIMATES = "request-estimates";
+    private static final String CARD_REQUEST_VISITS = "request-visits";
     private static final String CARD_RESOURCE_PERSONNEL = "resource-personnel";
+    private static final String CARD_RESOURCE_USERS = "resource-users";
     private static final String CARD_RESOURCE_EQUIPMENT = "resource-equipment";
     private static final String CARD_RESOURCE_CALENDAR = "resource-calendar";
     private static final String CARD_QMS_AUDIT = "qms-audit";
@@ -49,8 +77,11 @@ public class MainFrame extends JFrame {
     private static final String CARD_QMS_SHEWHART_MAP = "qms-shewhart-map";
 
 
-    public MainFrame() {
+    public MainFrame(AppUserRecord currentUser) {
         super();
+        this.currentUser = currentUser;
+        setIconImage(Toolkit.getDefaultToolkit().getImage(
+                MainFrame.class.getResource("/icons/protokol.png")));
         setProjectTitle(building.getName());
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         setMinimumSize(new Dimension(1100, 720));
@@ -59,9 +90,17 @@ public class MainFrame extends JFrame {
         // Современные оконные декорации (если FlatLaf активен)
         getRootPane().putClientProperty("JRootPane.titleBarBackground", AppTheme.MENU);
         getRootPane().putClientProperty("JRootPane.titleBarForeground", Color.WHITE);
+        getRootPane().putClientProperty(FlatClientProperties.TITLE_BAR_SHOW_ICON, Boolean.FALSE);
 
         configureTabbedPane();
         initUI();
+        startProjectLockHeartbeat();
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                releaseProjectLocks();
+            }
+        });
 
         pack();
         setLocationRelativeTo(null);
@@ -74,19 +113,48 @@ public class MainFrame extends JFrame {
         menuBar.setBackground(AppTheme.MENU);
         menuBar.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
 
+        menuBar.add(createBrandLabel());
+        menuBar.add(Box.createHorizontalStrut(6));
         menuBar.add(styleTopMenu(createFileMenu()));
         menuBar.add(Box.createHorizontalStrut(8));
         menuBar.add(styleTopMenu(createProjectMenu(onLoadProject, onSaveProject)));
         menuBar.add(Box.createHorizontalStrut(8));
+        menuBar.add(styleTopMenu(createRequestMenu()));
+        menuBar.add(Box.createHorizontalStrut(8));
         menuBar.add(styleTopMenu(createResourceMenu()));
         menuBar.add(Box.createHorizontalStrut(8));
         menuBar.add(styleTopMenu(createQmsMenu()));
-        menuBar.add(Box.createHorizontalStrut(12));
-        JLabel versionLabel = new JLabel("v 1.4.3");
+        menuBar.add(Box.createHorizontalGlue());
+        projectEditingStatusLabel = new JLabel("Новый проект");
+        projectEditingStatusLabel.setForeground(new Color(0xC6D2DC));
+        menuBar.add(projectEditingStatusLabel);
+        menuBar.add(Box.createHorizontalStrut(14));
+        JLabel versionLabel = new JLabel("v 1.5.102");
         versionLabel.setForeground(new Color(0xC6D2DC));
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
         menuBar.add(versionLabel);
+        if (currentUser != null) {
+            menuBar.add(Box.createHorizontalStrut(14));
+            JLabel userLabel = new JLabel(currentUser.getShortLogin() + " · " + currentUser.getRole().getTitle());
+            userLabel.setForeground(Color.WHITE);
+            userLabel.setToolTipText(currentUser.getDisplayName() + " — " + currentUser.getWindowsLogin());
+            menuBar.add(userLabel);
+        }
         return menuBar;
+    }
+
+    private JLabel createBrandLabel() {
+        JLabel label = new JLabel();
+        java.net.URL resource = MainFrame.class.getResource("/icons/citlab-mark.png");
+        if (resource != null) {
+            Image image = new ImageIcon(resource).getImage()
+                    .getScaledInstance(24, 24, Image.SCALE_SMOOTH);
+            label.setIcon(new ImageIcon(image));
+        }
+        label.setPreferredSize(new Dimension(26, 26));
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+        label.setToolTipText("Центр исследовательских технологий");
+        return label;
     }
 
     private JMenu styleTopMenu(JMenu menu) {
@@ -108,8 +176,8 @@ public class MainFrame extends JFrame {
     }
 
     private void initUI() {
-        buildingTab = new BuildingTab(building);
-        areaProtocolPanel = new AreaProtocolPanel();
+        buildingTab = new BuildingTab(building, currentUser, projectEditSessionId);
+        areaProtocolPanel = new AreaProtocolPanel(currentUser, projectEditSessionId);
         setJMenuBar(createMenuBar(this::requestLoadProject, this::requestSaveProject));
 
         tabbedPane.addTab("Титульная страница",    new TitlePageTab(building));
@@ -133,16 +201,28 @@ public class MainFrame extends JFrame {
         AreaPrimaryPanel areaPrimaryPanel = new AreaPrimaryPanel();
         AppTheme.decorateWorkspace(areaPrimaryPanel);
         cardPanel.add(createScenePanel(areaPrimaryPanel), CARD_PROTOCOL_REQUEST);
-        CalendarTab calendarTab = new CalendarTab();
+        requestRegistryTab = new RequestRegistryTab(currentUser);
+        AppTheme.decorateWorkspace(requestRegistryTab);
+        cardPanel.add(createScenePanel(requestRegistryTab), CARD_REQUEST_REGISTRY);
+        requestEstimatesTab = new RequestEstimatesTab();
+        AppTheme.decorateWorkspace(requestEstimatesTab);
+        cardPanel.add(createScenePanel(requestEstimatesTab), CARD_REQUEST_ESTIMATES);
+        siteVisitsTab = new SiteVisitsTab(currentUser);
+        AppTheme.decorateWorkspace(siteVisitsTab);
+        cardPanel.add(createScenePanel(siteVisitsTab), CARD_REQUEST_VISITS);
+        calendarTab = new CalendarTab();
         VlkTab vlkTab = new VlkTab(calendarTab::refreshEvents);
 
         PersonnelTab personnelTab = new PersonnelTab();
-        EquipmentTab equipmentTab = new EquipmentTab();
+        appUsersTab = new AppUsersTab(currentUser);
+        equipmentTab = new EquipmentTab(currentUser);
         AppTheme.decorateWorkspace(personnelTab);
+        AppTheme.decorateWorkspace(appUsersTab);
         AppTheme.decorateWorkspace(equipmentTab);
         AppTheme.decorateWorkspace(calendarTab);
         AppTheme.decorateWorkspace(vlkTab);
         cardPanel.add(createScenePanel(personnelTab), CARD_RESOURCE_PERSONNEL);
+        cardPanel.add(createScenePanel(appUsersTab), CARD_RESOURCE_USERS);
         cardPanel.add(createScenePanel(equipmentTab), CARD_RESOURCE_EQUIPMENT);
         cardPanel.add(createScenePanel(calendarTab), CARD_RESOURCE_CALENDAR);
         cardPanel.add(createPlaceholderScene(), CARD_QMS_AUDIT);
@@ -173,7 +253,11 @@ public class MainFrame extends JFrame {
 
     private void showCard(String cardName) {
         currentCard = cardName;
+        if (CARD_RESOURCE_CALENDAR.equals(cardName) && calendarTab != null) {
+            calendarTab.refreshEvents();
+        }
         cardLayout.show(cardPanel, cardName);
+        refreshProjectEditingStatus();
     }
 
     private void requestLoadProject() {
@@ -315,6 +399,54 @@ public class MainFrame extends JFrame {
         setTitle(title);
     }
 
+    public void setProjectEditingStatus(String text, boolean editable) {
+        if (projectEditingStatusLabel != null) {
+            projectEditingStatusLabel.setText(text == null ? "" : text);
+            projectEditingStatusLabel.setForeground(editable
+                    ? new Color(0xC6D2DC)
+                    : new Color(0xFFD180));
+        }
+        if (saveProjectMenuItem != null) {
+            saveProjectMenuItem.setEnabled(editable);
+        }
+    }
+
+    private void refreshProjectEditingStatus() {
+        if (CARD_PROTOCOL_AREA.equals(currentCard) && areaProtocolPanel != null) {
+            setProjectEditingStatus(
+                    areaProtocolPanel.getEditingStatusText(), !areaProtocolPanel.isProjectReadOnly());
+        } else if (CARD_PROTOCOL_HOME.equals(currentCard) && buildingTab != null) {
+            setProjectEditingStatus(
+                    buildingTab.getEditingStatusText(), !buildingTab.isProjectReadOnly());
+        } else {
+            setProjectEditingStatus("", true);
+        }
+    }
+
+    private void startProjectLockHeartbeat() {
+        projectLockHeartbeatExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "project-lock-heartbeat");
+            thread.setDaemon(true);
+            return thread;
+        });
+        projectLockHeartbeatExecutor.scheduleAtFixedRate(() -> {
+            try {
+                DatabaseManager.refreshProjectLocks(projectEditSessionId);
+            } catch (SQLException ignored) {
+            }
+        }, 30, 30, TimeUnit.SECONDS);
+    }
+
+    private void releaseProjectLocks() {
+        if (projectLockHeartbeatExecutor != null) {
+            projectLockHeartbeatExecutor.shutdownNow();
+        }
+        try {
+            DatabaseManager.releaseAllProjectLocks(projectEditSessionId);
+        } catch (SQLException ignored) {
+        }
+    }
+
 
     private JMenu createResourceMenu() {
         JMenu resourceMenu = new JMenu("Ресурс");
@@ -322,16 +454,61 @@ public class MainFrame extends JFrame {
         JMenuItem personnelItem = new JMenuItem("Персонал");
         personnelItem.addActionListener(e -> showCard(CARD_RESOURCE_PERSONNEL));
 
+        JMenuItem usersItem = new JMenuItem("Пользователи программы");
+        usersItem.addActionListener(e -> {
+            if (appUsersTab != null) {
+                appUsersTab.reloadUsers();
+            }
+            showCard(CARD_RESOURCE_USERS);
+        });
+
         JMenuItem equipmentItem = new JMenuItem("Оборудование");
-        equipmentItem.addActionListener(e -> showCard(CARD_RESOURCE_EQUIPMENT));
+        equipmentItem.setIcon(org.kordamp.ikonli.swing.FontIcon.of(
+                org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.MICROSCOPE, 14));
+        equipmentItem.addActionListener(e -> {
+            if (equipmentTab != null) {
+                equipmentTab.reloadData();
+            }
+            showCard(CARD_RESOURCE_EQUIPMENT);
+        });
 
         JMenuItem calendarItem = new JMenuItem("Календарь");
         calendarItem.addActionListener(e -> showCard(CARD_RESOURCE_CALENDAR));
 
         resourceMenu.add(personnelItem);
+        resourceMenu.add(usersItem);
         resourceMenu.add(equipmentItem);
         resourceMenu.add(calendarItem);
         return resourceMenu;
+    }
+
+    private JMenu createRequestMenu() {
+        JMenu requestMenu = new JMenu("Заявки");
+        JMenuItem registryItem = new JMenuItem("Реестр заявок");
+        registryItem.addActionListener(e -> {
+            if (requestRegistryTab != null) {
+                requestRegistryTab.reloadData();
+            }
+            showCard(CARD_REQUEST_REGISTRY);
+        });
+        requestMenu.add(registryItem);
+        JMenuItem estimatesItem = new JMenuItem("Сметы");
+        estimatesItem.addActionListener(e -> {
+            if (requestEstimatesTab != null) {
+                requestEstimatesTab.reloadData();
+            }
+            showCard(CARD_REQUEST_ESTIMATES);
+        });
+        requestMenu.add(estimatesItem);
+        JMenuItem visitsItem = new JMenuItem("Выезд");
+        visitsItem.addActionListener(e -> {
+            if (siteVisitsTab != null) {
+                siteVisitsTab.refreshData();
+            }
+            showCard(CARD_REQUEST_VISITS);
+        });
+        requestMenu.add(visitsItem);
+        return requestMenu;
     }
 
     private JMenu createProjectMenu(Runnable onLoadProject, Runnable onSaveProject) {
@@ -343,7 +520,7 @@ public class MainFrame extends JFrame {
                         14
                 )
         );
-        JMenuItem saveItem = new JMenuItem(
+        saveProjectMenuItem = new JMenuItem(
                 "Сохранить проект",
                 org.kordamp.ikonli.swing.FontIcon.of(
                         org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.SAVE,
@@ -355,13 +532,13 @@ public class MainFrame extends JFrame {
             Runnable action = (onLoadProject != null) ? onLoadProject : () -> {};
             action.run();
         });
-        saveItem.addActionListener(event -> {
+        saveProjectMenuItem.addActionListener(event -> {
             Runnable action = (onSaveProject != null) ? onSaveProject : () -> {};
             action.run();
         });
 
         projectMenu.add(loadItem);
-        projectMenu.add(saveItem);
+        projectMenu.add(saveProjectMenuItem);
         return projectMenu;
     }
 

@@ -40,7 +40,7 @@ public final class StreetLightingExcelExporter {
         try (Workbook wb = new XSSFWorkbook()) {
             appendToWorkbook(rows, wb);
 
-            JFileChooser chooser = new JFileChooser();
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
             chooser.setDialogTitle("Сохранить Excel (Иск освещение (2))");
             chooser.setSelectedFile(new File("Освещение_улица.xlsx"));
             if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {

@@ -13,24 +13,39 @@ import java.util.List;
 public class LoadProjectDialog extends JDialog {
     private final DefaultListModel<Building> model = new DefaultListModel<>();
     private final JList<Building> list = new JList<>(model);
+    private final String sessionId;
     private Building selectedProject;
 
     public LoadProjectDialog(JFrame parent, List<Building> projects) {
+        this(parent, projects, null);
+    }
+
+    public LoadProjectDialog(JFrame parent, List<Building> projects, String sessionId) {
         super(parent, "Загрузить проект", true);
+        this.sessionId = sessionId;
         setSize(520, 420);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout(10, 10));
 
         // Список проектов
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.setFixedCellHeight(28);
+        list.setFixedCellHeight(46);
         list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                           boolean isSelected, boolean cellHasFocus) {
                 Component c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof Building) {
-                    setText(((Building) value).getName());
+                    Building building = (Building) value;
+                    String author = building.getCreatedBy() == null || building.getCreatedBy().isBlank()
+                            ? "автор не указан"
+                            : building.getCreatedBy();
+                    String date = shortDate(building.getCreatedAt());
+                    String lock = building.getLockOwner() == null || building.getLockOwner().isBlank()
+                            ? ""
+                            : " · редактирует: " + building.getLockOwner();
+                    setText("<html><b>" + escapeHtml(building.getName()) + "</b><br>"
+                            + escapeHtml(author + (date.isBlank() ? "" : " · " + date) + lock) + "</html>");
                 }
                 return c;
             }
@@ -101,7 +116,7 @@ public class LoadProjectDialog extends JDialog {
         if (ans != JOptionPane.YES_OPTION) return;
 
         try {
-            DatabaseManager.deleteBuilding(b.getId());
+            DatabaseManager.deleteBuilding(b.getId(), sessionId);
             // Убираем удалённый элемент из списка
             int idx = list.getSelectedIndex();
             model.remove(idx);
@@ -118,5 +133,22 @@ public class LoadProjectDialog extends JDialog {
 
     public Building getSelectedProject() {
         return selectedProject;
+    }
+
+    private static String shortDate(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String normalized = value.replace('T', ' ');
+        return normalized.length() > 16 ? normalized.substring(0, 16) : normalized;
+    }
+
+    private static String escapeHtml(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 }

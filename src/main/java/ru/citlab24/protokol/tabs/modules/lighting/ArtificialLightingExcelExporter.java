@@ -40,7 +40,7 @@ public final class ArtificialLightingExcelExporter {
         try (Workbook wb = new XSSFWorkbook()) {
             appendToWorkbook(building, sectionIndex, wb, selectionMap);
 
-            JFileChooser chooser = new JFileChooser();
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
             chooser.setDialogTitle("Сохранить Excel");
             chooser.setSelectedFile(new File("Освещение_искусственное.xlsx"));
             if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
@@ -67,7 +67,7 @@ public final class ArtificialLightingExcelExporter {
         try (Workbook wb = new XSSFWorkbook()) {
             appendToWorkbook(building, sectionIndex, wb, null); // fallback на Room.isSelected()
 
-            JFileChooser chooser = new JFileChooser();
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
             chooser.setDialogTitle("Сохранить Excel");
             chooser.setSelectedFile(new File("Освещение_искусственное.xlsx"));
             if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {

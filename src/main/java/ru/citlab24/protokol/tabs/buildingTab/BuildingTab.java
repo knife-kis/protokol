@@ -7,6 +7,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ru.citlab24.protokol.MainFrame;
+import ru.citlab24.protokol.db.AppUserRecord;
 import ru.citlab24.protokol.db.DatabaseManager;
 import ru.citlab24.protokol.db.ProjectFileService;
 import ru.citlab24.protokol.export.AllExcelExporter;
@@ -29,11 +30,14 @@ import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.tree.DefaultMutableTreeNode;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.*;
+import java.io.File;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -55,6 +59,12 @@ public class BuildingTab extends JPanel {
 
     private Building building;
     private BuildingModelOps ops;
+    private final AppUserRecord currentUser;
+    private final String editSessionId;
+    private int loadedProjectId;
+    private int loadedProjectRevision;
+    private boolean projectReadOnly;
+    private String projectLockOwner = "";
     private final DefaultListModel<Floor> floorListModel = new DefaultListModel<>();
     private final DefaultListModel<Space> spaceListModel = new DefaultListModel<>();
     private final DefaultListModel<Room> roomListModel = new DefaultListModel<>();
@@ -65,6 +75,7 @@ public class BuildingTab extends JPanel {
     private JList<Space> spaceList;
     private JList<Room> roomList;
     private JTextField projectNameField;
+    private File structureTemplateDirectory = preferredStructureTemplateDirectory();
     // === Фильтр типов помещений (Жилые / Офисные / Общественные) ===
     private JToggleButton filterApartmentBtn;
     private JToggleButton filterOfficeBtn;
@@ -73,8 +84,16 @@ public class BuildingTab extends JPanel {
     private boolean[] savedFilters = new boolean[]{true, true, true, true}; // 4 флага
 
     public BuildingTab(Building building) {
+        this(building, null, null);
+    }
+
+    public BuildingTab(Building building, AppUserRecord currentUser, String editSessionId) {
         // 1) сохраняем в поле, 2) создаём дефолт, если пришёл null
         this.building = (building != null) ? building : new Building();
+        this.currentUser = currentUser;
+        this.editSessionId = editSessionId;
+        this.loadedProjectId = this.building.getId();
+        this.loadedProjectRevision = this.building.getRevision();
         if (this.building.getSections().isEmpty()) {
             this.building.addSection(new Section("Секция 1", 0));
         }
@@ -315,27 +334,39 @@ public class BuildingTab extends JPanel {
             javafx.scene.control.Button btnExport  = new javafx.scene.control.Button("Экспорт в файл");
             javafx.scene.control.Button btnImport  = new javafx.scene.control.Button("Импорт из файла");
             javafx.scene.control.Button btnSummary = new javafx.scene.control.Button("Сводка квартир");
+            javafx.scene.control.Button btnTemplate = new javafx.scene.control.Button("Скачать шаблон");
+            javafx.scene.control.Button btnStructure = new javafx.scene.control.Button("Загрузить структуру");
 
             // Иконки (Ikonli JavaFX)
             org.kordamp.ikonli.javafx.FontIcon icExport  = new org.kordamp.ikonli.javafx.FontIcon("fas-file-export");
             org.kordamp.ikonli.javafx.FontIcon icImport  = new org.kordamp.ikonli.javafx.FontIcon("fas-file-import");
             org.kordamp.ikonli.javafx.FontIcon icSummary = new org.kordamp.ikonli.javafx.FontIcon("fas-table");
+            org.kordamp.ikonli.javafx.FontIcon icTemplate = new org.kordamp.ikonli.javafx.FontIcon("fas-file-export");
+            org.kordamp.ikonli.javafx.FontIcon icStructure = new org.kordamp.ikonli.javafx.FontIcon("fas-file-import");
             icExport.setIconSize(16);
             icImport.setIconSize(16);
             icSummary.setIconSize(16);
+            icTemplate.setIconSize(16);
+            icStructure.setIconSize(16);
             btnExport.setGraphic(icExport);
             btnImport.setGraphic(icImport);
             btnSummary.setGraphic(icSummary);
+            btnTemplate.setGraphic(icTemplate);
+            btnStructure.setGraphic(icStructure);
 
             // CSS-классы для цветов/hover
             btnExport.getStyleClass().addAll("button", "btn-save");
             btnImport.getStyleClass().addAll("button", "btn-load");
             btnSummary.getStyleClass().addAll("button", "btn-summary");
+            btnTemplate.getStyleClass().addAll("button", "btn-save");
+            btnStructure.getStyleClass().addAll("button", "btn-load");
 
             // Растягиваем равномерно
-            javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(10, btnExport, btnImport, btnSummary);
+            javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(
+                    10, btnExport, btnImport, btnSummary, btnTemplate, btnStructure);
             box.getStyleClass().addAll("controls-bar", "theme-light");
-            for (javafx.scene.control.Button b : java.util.List.of(btnExport, btnImport, btnSummary)) {
+            for (javafx.scene.control.Button b :
+                    java.util.List.of(btnExport, btnImport, btnSummary, btnTemplate, btnStructure)) {
                 b.setMaxWidth(Double.MAX_VALUE);
                 javafx.scene.layout.HBox.setHgrow(b, javafx.scene.layout.Priority.ALWAYS);
             }
@@ -365,9 +396,11 @@ public class BuildingTab extends JPanel {
             final String COL_EXPORT  = "#00897b";
             final String COL_IMPORT  = "#6d4c41";
             final String COL_SUMMARY = "#00897b";
+            final String COL_TEMPLATE = "#1565c0";
+            final String COL_STRUCTURE = "#6d4c41";
 
             final java.util.List<javafx.scene.control.Button> all =
-                    java.util.List.of(btnExport, btnImport, btnSummary);
+                    java.util.List.of(btnExport, btnImport, btnSummary, btnTemplate, btnStructure);
 
             final java.util.function.BiConsumer<javafx.scene.control.Button, String> markActive =
                     (btn, hex) -> {
@@ -389,9 +422,222 @@ public class BuildingTab extends JPanel {
                 markActive.accept(btnSummary, COL_SUMMARY);
                 javax.swing.SwingUtilities.invokeLater(() -> showApartmentSummary(null));
             });
+            btnTemplate.setOnAction(ev -> {
+                markActive.accept(btnTemplate, COL_TEMPLATE);
+                javax.swing.SwingUtilities.invokeLater(this::downloadBuildingStructureTemplate);
+            });
+            btnStructure.setOnAction(ev -> {
+                markActive.accept(btnStructure, COL_STRUCTURE);
+                javax.swing.SwingUtilities.invokeLater(this::importBuildingStructure);
+            });
         });
 
         return wrap;
+    }
+
+    private void downloadBuildingStructureTemplate() {
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(structureTemplateDirectory);
+        chooser.setDialogTitle("Сохранить шаблон характеристик здания");
+        chooser.setFileFilter(new FileNameExtensionFilter("Книга Excel (*.xlsx)", "xlsx"));
+        chooser.setSelectedFile(new File(structureTemplateDirectory,
+                BuildingStructureTemplateService.TEMPLATE_FILE_NAME));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File selected = ensureXlsxExtension(chooser.getSelectedFile());
+        if (selected.exists()) {
+            int overwrite = JOptionPane.showConfirmDialog(
+                    this,
+                    "Файл уже существует. Заменить его?",
+                    "Сохранение шаблона",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE
+            );
+            if (overwrite != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+
+        try {
+            BuildingStructureTemplateService.writeTemplate(selected);
+            structureTemplateDirectory = selected.getParentFile();
+            showMessage(
+                    "Шаблон сохранён:\n" + selected.getAbsolutePath(),
+                    "Шаблон готов",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        } catch (Exception ex) {
+            handleError("Не удалось создать шаблон: " + ex.getMessage(), "Ошибка");
+        }
+    }
+
+    private void importBuildingStructure() {
+        if (projectReadOnly) {
+            showMessage(
+                    "Проект редактирует " + projectLockOwner
+                            + ". В режиме просмотра импорт недоступен.",
+                    "Проект занят",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(structureTemplateDirectory);
+        chooser.setDialogTitle("Загрузить структуру здания");
+        chooser.setFileFilter(new FileNameExtensionFilter("Книга Excel (*.xlsx)", "xlsx"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File selected = chooser.getSelectedFile();
+        structureTemplateDirectory = selected.getParentFile();
+        try {
+            BuildingStructureTemplateService.ImportResult result =
+                    BuildingStructureTemplateService.readTemplate(selected);
+            if (!showBuildingStructurePreview(result)) {
+                return;
+            }
+            applyImportedBuildingStructure(result.getStructure());
+            showMessage(
+                    "Структура импортирована: секций — "
+                            + result.getStructure().getSections().size()
+                            + ", этажей — " + result.getFloorCount()
+                            + ", помещений — " + result.getSpaceCount()
+                            + ", комнат — " + result.getRoomCount()
+                            + ".\nДля записи в общую базу сохраните проект.",
+                    "Импорт завершён",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        } catch (Exception ex) {
+            handleError("Не удалось загрузить структуру: " + ex.getMessage(), "Ошибка");
+        }
+    }
+
+    private boolean showBuildingStructurePreview(
+            BuildingStructureTemplateService.ImportResult result
+    ) {
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("Структура здания");
+        if (!result.getErrors().isEmpty()) {
+            DefaultMutableTreeNode errors = new DefaultMutableTreeNode(
+                    "Ошибки: " + result.getErrors().size());
+            for (String error : result.getErrors()) {
+                errors.add(new DefaultMutableTreeNode(error));
+            }
+            root.add(errors);
+        }
+
+        Building structure = result.getStructure();
+        for (int sectionIndex = 0;
+             sectionIndex < structure.getSections().size();
+             sectionIndex++) {
+            Section section = structure.getSections().get(sectionIndex);
+            DefaultMutableTreeNode sectionNode = new DefaultMutableTreeNode(section.getName());
+            root.add(sectionNode);
+            for (Floor floor : structure.getFloors()) {
+                if (floor.getSectionIndex() != sectionIndex) {
+                    continue;
+                }
+                DefaultMutableTreeNode floorNode = new DefaultMutableTreeNode(
+                        floor.getName() + " [" + floor.getType() + "]");
+                sectionNode.add(floorNode);
+                for (Space space : floor.getSpaces()) {
+                    DefaultMutableTreeNode spaceNode = new DefaultMutableTreeNode(
+                            space.getIdentifier() + " (" + space.getType() + ")");
+                    floorNode.add(spaceNode);
+                    for (Room room : space.getRooms()) {
+                        spaceNode.add(new DefaultMutableTreeNode(room.getName()));
+                    }
+                }
+            }
+        }
+
+        JTree tree = new JTree(root);
+        tree.setRootVisible(true);
+        for (int row = 0; row < tree.getRowCount(); row++) {
+            tree.expandRow(row);
+        }
+
+        JPanel panel = new JPanel(new BorderLayout(0, 10));
+        String summary = "Строк в файле: " + result.getSourceRows()
+                + " · секций: " + structure.getSections().size()
+                + " · этажей: " + result.getFloorCount()
+                + " · помещений: " + result.getSpaceCount()
+                + " · комнат: " + result.getRoomCount();
+        JLabel summaryLabel = new JLabel(summary);
+        summaryLabel.setFont(summaryLabel.getFont().deriveFont(Font.BOLD));
+        panel.add(summaryLabel, BorderLayout.NORTH);
+
+        JScrollPane scrollPane = new JScrollPane(tree);
+        scrollPane.setPreferredSize(new Dimension(760, 500));
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        JLabel message;
+        if (!result.getErrors().isEmpty()) {
+            message = new JLabel("Исправьте ошибки в Excel и загрузите файл снова.");
+            message.setForeground(new Color(183, 28, 28));
+        } else if (!building.getFloors().isEmpty()) {
+            message = new JLabel(
+                    "После подтверждения текущие секции, этажи, помещения и комнаты будут заменены.");
+            message.setForeground(new Color(230, 81, 0));
+        } else {
+            message = new JLabel("Проверьте дерево перед импортом.");
+        }
+        panel.add(message, BorderLayout.SOUTH);
+
+        Object[] options = result.getErrors().isEmpty()
+                ? new Object[]{"Импортировать", "Отмена"}
+                : new Object[]{"Закрыть"};
+        int choice = JOptionPane.showOptionDialog(
+                this,
+                panel,
+                "Предпросмотр структуры здания",
+                JOptionPane.DEFAULT_OPTION,
+                result.getErrors().isEmpty()
+                        ? JOptionPane.QUESTION_MESSAGE
+                        : JOptionPane.ERROR_MESSAGE,
+                null,
+                options,
+                options[0]
+        );
+        return result.getErrors().isEmpty() && choice == 0;
+    }
+
+    private void applyImportedBuildingStructure(Building structure) {
+        building.setSections(new ArrayList<>(structure.getSections()));
+        building.getFloors().clear();
+        building.getFloors().addAll(structure.getFloors());
+        ops.setBuilding(building);
+
+        refreshAllLists();
+        if (!sectionListModel.isEmpty()) {
+            sectionList.setSelectedIndex(0);
+        }
+        refreshFloorListForSelectedSection();
+        updateSpaceList();
+        updateRoomList();
+        updateVentilationTab(building);
+        updateRadiationTab(building, false, true);
+        updateLightingTab(building, true);
+        updateMicroclimateTab(building, false);
+        updateNoiseTabNow();
+    }
+
+    private static File ensureXlsxExtension(File file) {
+        if (file.getName().toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
+            return file;
+        }
+        return new File(file.getParentFile(), file.getName() + ".xlsx");
+    }
+
+    private static File preferredStructureTemplateDirectory() {
+        File desktop = new File(System.getProperty("user.home"), "Desktop");
+        File demonstration = new File(desktop, "Демонстрация");
+        if (demonstration.isDirectory()) {
+            return demonstration;
+        }
+        File documents = new File(System.getProperty("user.home"), "Documents");
+        return documents.isDirectory() ? documents : new File(System.getProperty("user.home"));
     }
 
     private void copySection(ActionEvent e) {
@@ -728,6 +974,56 @@ public class BuildingTab extends JPanel {
         saveProject(null);
     }
 
+    public void releaseProjectLock() {
+        releasePreviousProjectLock(0);
+        loadedProjectId = 0;
+        loadedProjectRevision = 0;
+        projectReadOnly = false;
+        projectLockOwner = "";
+    }
+
+    public boolean isProjectReadOnly() {
+        return projectReadOnly;
+    }
+
+    public String getEditingStatusText() {
+        if (projectReadOnly) {
+            return "Только просмотр · редактирует: " + projectLockOwner;
+        }
+        if (loadedProjectId > 0) {
+            return "Проект открыт для редактирования";
+        }
+        return "Новый проект";
+    }
+
+    private DatabaseManager.ProjectLockInfo acquireProjectLock(int projectId) throws SQLException {
+        if (currentUser == null || editSessionId == null || editSessionId.isBlank()) {
+            return null;
+        }
+        return DatabaseManager.acquireProjectLock(
+                DatabaseManager.PROJECT_TYPE_BUILDING, projectId, currentUser.getId(), editSessionId);
+    }
+
+    private void releasePreviousProjectLock(int nextProjectId) {
+        if (loadedProjectId <= 0 || loadedProjectId == nextProjectId || projectReadOnly
+                || editSessionId == null || editSessionId.isBlank()) {
+            return;
+        }
+        try {
+            DatabaseManager.releaseProjectLock(
+                    DatabaseManager.PROJECT_TYPE_BUILDING, loadedProjectId, editSessionId);
+        } catch (SQLException ex) {
+            logger.warn("Не удалось освободить блокировку проекта дома {}", loadedProjectId, ex);
+        }
+    }
+
+    private void notifyProjectStatus() {
+        Window window = SwingUtilities.getWindowAncestor(this);
+        if (window instanceof MainFrame) {
+            ((MainFrame) window).setProjectEditingStatus(getEditingStatusText(), !projectReadOnly);
+        }
+    }
+
     private void loadProject(ActionEvent e) {
         try {
             List<Building> projects = DatabaseManager.getAllBuildings();
@@ -737,7 +1033,7 @@ public class BuildingTab extends JPanel {
             }
 
             LoadProjectDialog dialog = new LoadProjectDialog(
-                    (JFrame) SwingUtilities.getWindowAncestor(this), projects);
+                    (JFrame) SwingUtilities.getWindowAncestor(this), projects, editSessionId);
             dialog.setVisible(true);
 
             Building selectedProject = dialog.getSelectedProject();
@@ -771,7 +1067,37 @@ public class BuildingTab extends JPanel {
     }
 
     private void loadSelectedProject(Building selectedProject) throws SQLException {
-        Building loadedBuilding = DatabaseManager.loadBuilding(selectedProject.getId());
+        boolean alreadyOwned = selectedProject.getId() == loadedProjectId && !projectReadOnly;
+        DatabaseManager.ProjectLockInfo lockInfo = acquireProjectLock(selectedProject.getId());
+        if (lockInfo != null && !lockInfo.isEditable()) {
+            int answer = JOptionPane.showConfirmDialog(
+                    this,
+                    "Проект сейчас редактирует " + lockInfo.getOwnerLabel()
+                            + ".\nОткрыть проект только для просмотра?",
+                    "Проект занят",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+            if (answer != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+
+        Building loadedBuilding;
+        try {
+            loadedBuilding = DatabaseManager.loadBuilding(selectedProject.getId());
+        } catch (SQLException ex) {
+            if (!alreadyOwned && lockInfo != null && lockInfo.isEditable()) {
+                DatabaseManager.releaseProjectLock(
+                        DatabaseManager.PROJECT_TYPE_BUILDING, selectedProject.getId(), editSessionId);
+            }
+            throw ex;
+        }
+        releasePreviousProjectLock(selectedProject.getId());
+        loadedProjectId = loadedBuilding.getId();
+        loadedProjectRevision = loadedBuilding.getRevision();
+        projectReadOnly = lockInfo != null && !lockInfo.isEditable();
+        projectLockOwner = projectReadOnly ? lockInfo.getOwnerLabel() : "";
         this.building = loadedBuilding;
         this.ops.setBuilding(this.building);
         projectNameField.setText(loadedBuilding.getName());
@@ -832,12 +1158,22 @@ public class BuildingTab extends JPanel {
             handleError("Не удалось загрузить настройки 'Шумы': " + ex.getMessage(), "Ошибка");
         }
 
-        showMessage("Проект '" + loadedBuilding.getName() + "' успешно загружен",
+        notifyProjectStatus();
+        String loadMessage = projectReadOnly
+                ? "Проект '" + loadedBuilding.getName() + "' открыт только для просмотра."
+                : "Проект '" + loadedBuilding.getName() + "' успешно загружен";
+        showMessage(loadMessage,
                 "Загрузка", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void saveProject(ActionEvent e) {
         logger.info("BuildingTab.saveProject() - Начало сохранения проекта");
+        if (projectReadOnly) {
+            showMessage("Проект редактирует " + projectLockOwner
+                            + ". В режиме просмотра сохранение недоступно.",
+                    "Проект занят", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
         // 0) Финализируем активное редактирование таблиц
         try {
@@ -915,7 +1251,8 @@ public class BuildingTab extends JPanel {
 
         // 4) Сохранение в БД
         try {
-            DatabaseManager.saveBuilding(newProject);
+            DatabaseManager.saveBuildingVersion(
+                    newProject, loadedProjectId, loadedProjectRevision, editSessionId);
         } catch (SQLException ex) {
             handleError("Ошибка сохранения: " + ex.getMessage(), "Ошибка");
             return;
@@ -985,6 +1322,13 @@ public class BuildingTab extends JPanel {
             noise.applyThresholds(snapNoiseThresholds);
             noise.refreshData();
         }
+
+        releasePreviousProjectLock(newProject.getId());
+        loadedProjectId = newProject.getId();
+        loadedProjectRevision = newProject.getRevision();
+        projectReadOnly = false;
+        projectLockOwner = "";
+        notifyProjectStatus();
 
         logger.info("Проект успешно сохранен");
         showMessage("Проект успешно сохранен", "Сохранение", JOptionPane.INFORMATION_MESSAGE);

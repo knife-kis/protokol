@@ -36,7 +36,7 @@ public final class ProjectFileService {
             return;
         }
 
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
         chooser.setDialogTitle("Экспорт проекта");
         chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
                 "Файл проекта", DEFAULT_EXTENSION
@@ -70,7 +70,7 @@ public final class ProjectFileService {
      */
     public static Building importProject(Component parent)
             throws IOException, ClassNotFoundException, SQLException {
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
         chooser.setDialogTitle("Импорт проекта");
         chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
                 "Файл проекта", DEFAULT_EXTENSION

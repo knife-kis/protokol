@@ -614,7 +614,7 @@ final class AreaNoiseProtocolExporter {
 
     private static void saveWorkbook(Workbook workbook, Component parent) throws Exception {
         File initialDir = resolveProtocolExportDirectory();
-        JFileChooser chooser = new JFileChooser(initialDir);
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(initialDir);
         chooser.setDialogTitle("Сохранить протокол ШУМ участка");
         chooser.setSelectedFile(new File(initialDir, "Протокол_участок_шум.xlsx"));
         chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));

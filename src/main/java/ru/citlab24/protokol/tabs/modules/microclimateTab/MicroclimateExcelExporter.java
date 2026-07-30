@@ -60,7 +60,7 @@ public final class MicroclimateExcelExporter {
             buildMicroclimateSheets(wb, building, sectionIndex, mode);
 
             // ===== сохранение =====
-            JFileChooser chooser = new JFileChooser();
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
             chooser.setDialogTitle("Сохранить Excel");
             chooser.setSelectedFile(new File("Микроклимат.xlsx"));
             if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {

@@ -96,7 +96,7 @@ final class NoisePeriodsExcelIO {
                 sheet.autoSizeColumn(i);
             }
 
-            JFileChooser chooser = new JFileChooser();
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
             chooser.setDialogTitle("Сохранить периоды измерений");
             chooser.setSelectedFile(new File(DEFAULT_FILE));
             chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));
@@ -115,7 +115,7 @@ final class NoisePeriodsExcelIO {
     }
 
     static Map<NoiseTestKind, NoisePeriod> importPeriods(Component parent) {
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
         chooser.setDialogTitle("Загрузить периоды измерений");
         chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));
         if (chooser.showOpenDialog(parent) != JFileChooser.APPROVE_OPTION) {

@@ -119,7 +119,7 @@ public final class AllExcelExporter {
             applyTitleFooter(wb, frame);
 
             // 7) Диалог сохранения
-            JFileChooser chooser = new JFileChooser();
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
             chooser.setDialogTitle("Сохранить общий Excel");
             chooser.setSelectedFile(new File("Отчет_все_модули.xlsx"));
             if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {

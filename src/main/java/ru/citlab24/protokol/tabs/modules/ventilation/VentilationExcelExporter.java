@@ -722,7 +722,7 @@ public class VentilationExcelExporter {
     }
 
     private static void saveWorkbook(Workbook workbook, java.awt.Component parent) {
-        JFileChooser fileChooser = new JFileChooser();
+        JFileChooser fileChooser = new ru.citlab24.protokol.ui.PathFileChooser();
         fileChooser.setDialogTitle("Сохранить отчет");
         fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Excel Files", "xlsx"));
 

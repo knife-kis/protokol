@@ -22,6 +22,8 @@ import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 import ru.citlab24.protokol.MainFrame;
 import ru.citlab24.protokol.export.AllExcelExporter;
+import ru.citlab24.protokol.requests.ApprovedContractSelector;
+import ru.citlab24.protokol.requests.ContractTemplateType;
 import ru.citlab24.protokol.tabs.modules.lighting.ArtificialLightingTab;
 import ru.citlab24.protokol.tabs.modules.lighting.LightingTab;
 import ru.citlab24.protokol.tabs.modules.microclimateTab.MicroclimateTab;
@@ -279,6 +281,27 @@ public class TitlePageTab extends JPanel {
         });
         btnLoad.addActionListener(e -> importTechnicalAssignment());
 
+        JButton btnLoadFromDatabase = new JButton(
+                "Загрузить из БД",
+                FontIcon.of(FontAwesomeSolid.FILE_UPLOAD, 16, Color.WHITE)
+        );
+        btnLoadFromDatabase.setFocusPainted(false);
+        btnLoadFromDatabase.setBackground(new Color(46, 125, 50));
+        btnLoadFromDatabase.setForeground(Color.WHITE);
+        btnLoadFromDatabase.setFont(UIManager.getFont("Button.font"));
+        btnLoadFromDatabase.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                btnLoadFromDatabase.setBackground(new Color(56, 142, 60));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                btnLoadFromDatabase.setBackground(new Color(46, 125, 50));
+            }
+        });
+        btnLoadFromDatabase.addActionListener(e -> importTechnicalAssignmentFromDatabase());
+
         JButton btnExport = new JButton(
                 "Экспорт: все модули (одной книгой)",
                 FontIcon.of(FontAwesomeSolid.FILE_EXCEL, 16, Color.WHITE)
@@ -335,6 +358,7 @@ public class TitlePageTab extends JPanel {
         });
 
         panel.add(btnLoad);
+        panel.add(btnLoadFromDatabase);
         panel.add(btnExport);
         return panel;
     }
@@ -688,7 +712,7 @@ public class TitlePageTab extends JPanel {
     }
 
     private void importTechnicalAssignment() {
-        JFileChooser chooser = new JFileChooser(resolveTechnicalAssignmentDirectory());
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser(resolveTechnicalAssignmentDirectory());
         chooser.setDialogTitle("Загрузить ТЗ (Word)");
         chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
                 "Word document (*.docx)", "docx"));
@@ -697,7 +721,17 @@ public class TitlePageTab extends JPanel {
             return;
         }
 
-        File file = chooser.getSelectedFile();
+        importTechnicalAssignment(chooser.getSelectedFile());
+    }
+
+    private void importTechnicalAssignmentFromDatabase() {
+        java.nio.file.Path file = ApprovedContractSelector.choose(this, ContractTemplateType.HOUSE);
+        if (file != null) {
+            importTechnicalAssignment(file.toFile());
+        }
+    }
+
+    private void importTechnicalAssignment(File file) {
         try {
             List<TitlePageImportData> dataList = TechnicalAssignmentImporter.importAllFromFile(file);
             if (dataList.isEmpty()) {

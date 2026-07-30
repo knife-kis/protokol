@@ -143,7 +143,7 @@ public final class NoiseExcelExporter {
             applyNoiseWorkbookFooters(wb);
 
             File initialDir = resolveNoiseExportDirectory();
-            JFileChooser fc = new JFileChooser(initialDir);
+            JFileChooser fc = new ru.citlab24.protokol.ui.PathFileChooser(initialDir);
             fc.setDialogTitle("Сохранить Excel (шумы)");
             fc.setSelectedFile(new File(initialDir, "шумы.xlsx"));
             if (fc.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {

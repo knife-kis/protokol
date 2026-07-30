@@ -133,7 +133,7 @@ public class ShewhartMapTab extends JPanel {
     }
 
     private void chooseFiles() {
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
         chooser.setDialogTitle("Выберите Excel-файлы");
         chooser.setMultiSelectionEnabled(true);
         chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xls", "xlsx", "xlsm"));
@@ -183,7 +183,7 @@ public class ShewhartMapTab extends JPanel {
             inputFiles.add(inputFilesModel.get(i));
         }
 
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
         chooser.setDialogTitle("Сохранить результат в формате XLSX");
         chooser.setSelectedFile(new File("Карта_Шухарта.xlsx"));
         chooser.setFileFilter(new FileNameExtensionFilter("Excel Workbook", "xlsx"));

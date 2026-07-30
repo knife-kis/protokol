@@ -82,7 +82,7 @@ final class NoiseThresholdsExcelIO {
                 sheet.autoSizeColumn(i);
             }
 
-            JFileChooser chooser = new JFileChooser();
+            JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
             chooser.setDialogTitle("Сохранить шаблон пороговых значений");
             chooser.setSelectedFile(new File(DEFAULT_FILE));
             chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));
@@ -101,7 +101,7 @@ final class NoiseThresholdsExcelIO {
     }
 
     static Map<String, double[]> importTemplate(Component parent) {
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new ru.citlab24.protokol.ui.PathFileChooser();
         chooser.setDialogTitle("Загрузить пороговые значения");
         chooser.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));
         if (chooser.showOpenDialog(parent) != JFileChooser.APPROVE_OPTION) {
